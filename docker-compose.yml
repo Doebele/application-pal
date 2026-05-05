@@ -25,7 +25,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       PORT: ${PORT:-3000}
     ports:
-      - "${PORT:-3000}:3000"
+      - "${PORT:-3000}:${PORT:-3000}"
     command: sh -c "npm install && npm run dev --workspace backend"
     volumes:
       - .:/app
@@ -44,7 +44,7 @@ services:
     environment:
       VITE_API_URL: ${VITE_API_URL}
     ports:
-      - "${FRONTEND_PORT:-5173}:5173"
+      - "${FRONTEND_PORT:-5173}:${FRONTEND_PORT:-5173}"
     command: sh -c "npm install && npm run dev --workspace frontend -- --host 0.0.0.0 --port ${FRONTEND_PORT:-5173}"
     volumes:
       - .:/app
