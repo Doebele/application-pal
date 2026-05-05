@@ -1,4 +1,5 @@
 import { z } from "zod";
+export * from "./schema.js";
 
 export const healthSchema = z.object({
   status: z.literal("ok"),
