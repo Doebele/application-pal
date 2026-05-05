@@ -1,60 +1,65 @@
 services:
   db:
     image: postgres:16-alpine
-    container_name: application-pal-db
+    restart: unless-stopped
     env_file:
       - .env
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    expose:
+      - "5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-application_pal}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   backend:
-    image: node:20-alpine
-    container_name: application-pal-backend
-    working_dir: /app
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
     env_file:
       - .env
     environment:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
-      PORT: ${PORT:-3000}
-    ports:
-      - "${PORT:-3000}:${PORT:-3000}"
-    command: sh -c "npm install && npm run dev --workspace backend"
-    volumes:
-      - .:/app
-      - backend_node_modules:/app/backend/node_modules
-      - root_node_modules:/app/node_modules
+      PORT: ${PORT}
+    expose:
+      - "${PORT:-3300}"
     depends_on:
       db:
         condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:'+process.env.PORT+'/health').then((r)=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   frontend:
-    image: node:20-alpine
-    container_name: application-pal-frontend
-    working_dir: /app
-    env_file:
-      - .env
-    environment:
-      VITE_API_URL: ${VITE_API_URL}
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
+    restart: unless-stopped
     ports:
-      - "${FRONTEND_PORT:-5173}:${FRONTEND_PORT:-5173}"
-    command: sh -c "npm install && npm run dev --workspace frontend -- --host 0.0.0.0 --port ${FRONTEND_PORT:-5173}"
-    volumes:
-      - .:/app
-      - frontend_node_modules:/app/frontend/node_modules
-      - root_node_modules:/app/node_modules
+      - "80:80"
+      - "443:443"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
 
 volumes:
   postgres_data:
-  root_node_modules:
-  backend_node_modules:
-  frontend_node_modules:
