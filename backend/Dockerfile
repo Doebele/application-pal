@@ -29,6 +29,7 @@ COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/backend/drizzle ./backend/drizzle
 COPY --from=builder /app/backend/drizzle.config.ts ./backend/drizzle.config.ts
 COPY --from=builder /app/shared/dist ./shared/dist
+COPY backend/scripts/docker-healthcheck.mjs ./backend/scripts/docker-healthcheck.mjs
 
 EXPOSE 3300
 

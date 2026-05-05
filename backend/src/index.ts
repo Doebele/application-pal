@@ -169,7 +169,9 @@ app.get("/api/applications/:id/letter", (c) =>
 serve(
   {
     fetch: app.fetch,
-    port: env.PORT
+    port: env.PORT,
+    // In Docker muss der Server auf allen Interfaces lauschen (Nginx im Compose-Netz).
+    hostname: "0.0.0.0"
   },
   (info) => {
     console.log(`backend listening on http://localhost:${info.port}`);
