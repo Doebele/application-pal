@@ -1,4 +1,4 @@
-import { pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -23,11 +23,82 @@ export const applications = pgTable("applications", {
   description: text("description"),
   notes: text("notes"),
   stage: applicationStageEnum("stage").notNull().default("import_validating"),
+  priority: text("priority"),
+  source: text("source"),
+  salary: text("salary"),
+  tags: text("tags"),
+  nextDeadline: text("next_deadline"),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
 
+// ─── User Profile ─────────────────────────────────────────────
+export const userProfile = pgTable("user_profile", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name"),
+  email: text("email"),
+  phone: text("phone"),
+  location: text("location"),
+  headline: text("headline"),
+  linkedinUrl: text("linkedin_url"),
+  linkedinBio: text("linkedin_bio"),
+  photoUrl: text("photo_url"),
+  masterCv: text("master_cv"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+// ─── Application Documents ────────────────────────────────────
+export const applicationDocuments = pgTable("application_documents", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  applicationId: uuid("application_id").notNull(),
+  type: text("type").notNull(),       // 'cv' | 'letter' | 'other'
+  name: text("name").notNull(),
+  status: text("status").default("draft"), // 'draft' | 'in_progress' | 'final' | 'sent'
+  googleDocId: text("google_doc_id"),
+  googleDocUrl: text("google_doc_url"),
+  fileUrl: text("file_url"),
+  version: integer("version").default(1),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+// ─── Application Activities ───────────────────────────────────
+export const applicationActivities = pgTable("application_activities", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  applicationId: uuid("application_id").notNull(),
+  type: text("type").notNull(), // 'note' | 'email' | 'call' | 'interview' | 'deadline' | 'stage_change' | 'document'
+  title: text("title").notNull(),
+  description: text("description"),
+  activityDate: timestamp("activity_date", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+// ─── Application Contacts ─────────────────────────────────────
+export const applicationContacts = pgTable("application_contacts", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  applicationId: uuid("application_id").notNull(),
+  name: text("name").notNull(),
+  role: text("role"),   // 'recruiter' | 'hiring_manager' | 'other'
+  email: text("email"),
+  linkedinUrl: text("linkedin_url"),
+  phone: text("phone"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+// ─── Google OAuth Tokens ──────────────────────────────────────
+export const googleOAuthTokens = pgTable("google_oauth_tokens", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  scope: text("scope"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+// ─── Schemas & Types ──────────────────────────────────────────
 export const applicationSelectSchema = createSelectSchema(applications);
 export const applicationInsertSchema = createInsertSchema(applications, {
   company: z.string().trim().min(1),
@@ -35,27 +106,61 @@ export const applicationInsertSchema = createInsertSchema(applications, {
 });
 
 export const applicationPatchSchema = applicationInsertSchema
-  .omit({
-    id: true,
-    createdAt: true,
-    updatedAt: true
-  })
+  .omit({ id: true, createdAt: true, updatedAt: true })
   .partial();
+
+export const userProfileSelectSchema = createSelectSchema(userProfile);
+export const userProfileInsertSchema = createInsertSchema(userProfile).omit({ id: true, createdAt: true, updatedAt: true }).partial();
+
+export const applicationDocumentSelectSchema = createSelectSchema(applicationDocuments);
+export const applicationDocumentInsertSchema = createInsertSchema(applicationDocuments, {
+  applicationId: z.string().uuid(),
+  type: z.enum(["cv", "letter", "other"]),
+  name: z.string().trim().min(1)
+}).omit({ id: true, createdAt: true, updatedAt: true });
+export const applicationDocumentPatchSchema = applicationDocumentInsertSchema.partial();
+
+export const applicationActivitySelectSchema = createSelectSchema(applicationActivities);
+export const applicationActivityInsertSchema = createInsertSchema(applicationActivities, {
+  applicationId: z.string().uuid(),
+  type: z.enum(["note", "email", "call", "interview", "deadline", "stage_change", "document"]),
+  title: z.string().trim().min(1)
+}).omit({ id: true, createdAt: true });
+
+export const applicationContactSelectSchema = createSelectSchema(applicationContacts);
+export const applicationContactInsertSchema = createInsertSchema(applicationContacts, {
+  applicationId: z.string().uuid(),
+  name: z.string().trim().min(1)
+}).omit({ id: true, createdAt: true });
+export const applicationContactPatchSchema = applicationContactInsertSchema.omit({ applicationId: true }).partial();
+
+export const aiConfigSchema = z.object({
+  provider: z.enum(["none", "lm-studio", "anthropic"]).default("none"),
+  anthropicApiKey: z.string().optional(),
+  lmStudioUrl: z.string().optional(),
+  lmStudioModel: z.string().optional()
+});
 
 export const applicationImportRequestSchema = z
   .object({
     url: z.string().trim().url().optional(),
-    text: z.string().trim().min(1).optional()
+    text: z.string().trim().min(1).optional(),
+    ai: aiConfigSchema.optional()
   })
   .refine((value) => Boolean(value.url || value.text), {
     message: "Either url or text must be provided."
   });
 
+export type AiConfig = z.infer<typeof aiConfigSchema>;
+
 export const applicationImportResponseSchema = z.object({
   company: z.string().nullable(),
   role: z.string().nullable(),
   location: z.string().nullable(),
-  description: z.string()
+  description: z.string(),
+  salary: z.string().nullable().optional(),
+  tags: z.string().nullable().optional(),
+  source: z.string().nullable().optional()
 });
 
 export const stubDocumentResponseSchema = z.object({
@@ -64,6 +169,10 @@ export const stubDocumentResponseSchema = z.object({
 
 export type ApplicationStage = (typeof applicationStageEnum.enumValues)[number];
 export type Application = z.infer<typeof applicationSelectSchema>;
+export type UserProfile = z.infer<typeof userProfileSelectSchema>;
+export type ApplicationDocument = z.infer<typeof applicationDocumentSelectSchema>;
+export type ApplicationActivity = z.infer<typeof applicationActivitySelectSchema>;
+export type ApplicationContact = z.infer<typeof applicationContactSelectSchema>;
 export type CreateApplicationInput = z.infer<typeof applicationInsertSchema>;
 export type PatchApplicationInput = z.infer<typeof applicationPatchSchema>;
 export type ImportApplicationInput = z.infer<typeof applicationImportRequestSchema>;
