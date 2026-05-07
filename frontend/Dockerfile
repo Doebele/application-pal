@@ -18,7 +18,12 @@ RUN npm run build --workspace shared && npm run build --workspace frontend
 
 FROM nginx:1.27-alpine AS runner
 
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/nginx.conf /etc/nginx/default.conf.tpl
+COPY frontend/docker-entrypoint.d/99-render-nginx-conf.sh /docker-entrypoint.d/99-render-nginx-conf.sh
+RUN chmod +x /docker-entrypoint.d/99-render-nginx-conf.sh
+
+ENV BACKEND_PORT=3300
+
 COPY --from=builder /app/frontend/dist /usr/share/nginx/html
 
 EXPOSE 80

@@ -22,6 +22,9 @@ Phase-1-Scaffold fuer Job-Pal mit Hono-Backend, React-Frontend und gemeinsamen T
 
 Hinweis: Der Frontend-Container (Nginx) published Ports `80` und `443`; der Backend-Container bleibt intern und wird ueber Nginx erreichbar gemacht.
 
+Beim ersten Start braucht Postgres bis zu ~2 Minuten fuer Init/Migrations-Jitter bis alle Services `healthy` sind.
+Kaputtes Postgres-Volume (symptomatisch z.B. via Migration-/Login-Fehlern): `docker compose down -v` und `.env` erneut pruefen (Datenbank-Inhalt wird dabei geloescht).
+
 ## Struktur
 
 - `frontend` - React 19 + Vite + Tailwind + React Router
