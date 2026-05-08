@@ -510,6 +510,7 @@ app.delete("/api/applications/:id/contacts/:cId", async (c) => {
 const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID ?? "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
 const GOOGLE_REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI ?? "http://localhost/api/google/callback";
+const GOOGLE_FRONTEND_URL  = process.env.GOOGLE_FRONTEND_URL ?? "http://localhost";
 const GOOGLE_SCOPES        = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents";
 
 app.get("/api/google/auth-url", (c) => {
@@ -526,7 +527,7 @@ app.get("/api/google/auth-url", (c) => {
 
 app.get("/api/google/callback", async (c) => {
   const code = c.req.query("code");
-  if (!code) return c.redirect("/?google_error=no_code");
+  if (!code) return c.redirect(`${GOOGLE_FRONTEND_URL}/settings?google_error=no_code`);
   try {
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -537,7 +538,7 @@ app.get("/api/google/callback", async (c) => {
       })
     });
     const data = await res.json() as { access_token: string; refresh_token?: string; expires_in?: number; scope?: string };
-    if (!data.access_token) return c.redirect("/?google_error=token_failed");
+    if (!data.access_token) return c.redirect(`${GOOGLE_FRONTEND_URL}/?google_error=token_failed`);
     const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null;
     await db.delete(googleOAuthTokens);
     await db.insert(googleOAuthTokens).values({
@@ -546,9 +547,9 @@ app.get("/api/google/callback", async (c) => {
       expiresAt,
       scope: data.scope ?? GOOGLE_SCOPES
     });
-    return c.redirect("/?google_connected=1");
+    return c.redirect(`${GOOGLE_FRONTEND_URL}/settings?google_connected=1`);
   } catch {
-    return c.redirect("/?google_error=exception");
+    return c.redirect(`${GOOGLE_FRONTEND_URL}/settings?google_error=exception`);
   }
 });
 
