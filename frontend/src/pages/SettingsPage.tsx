@@ -318,19 +318,19 @@ export function SettingsPage() {
           <div className="eyebrow" style={{ marginBottom: 12 }}>Profile</div>
           <div className="settings-group">
             <div className="settings-row">
-              <div style={{ flex: 1 }}>
+              <div style={{ width: 80, flexShrink: 0 }}>
                 <div className="settings-row-label">Name</div>
               </div>
-              <div className="settings-row-right">
-                <input defaultValue="User" style={{ ...INPUT_STYLE, width: 180 }} />
+              <div style={{ flex: 1 }}>
+                <input className="input-line" defaultValue="User" placeholder="Dein Name" />
               </div>
             </div>
             <div className="settings-row">
-              <div style={{ flex: 1 }}>
+              <div style={{ width: 80, flexShrink: 0 }}>
                 <div className="settings-row-label">Email</div>
               </div>
-              <div className="settings-row-right">
-                <input defaultValue="" placeholder="you@example.com" type="email" style={{ ...INPUT_STYLE, width: 200 }} />
+              <div style={{ flex: 1 }}>
+                <input className="input-line" defaultValue="" placeholder="you@example.com" type="email" />
               </div>
             </div>
           </div>
