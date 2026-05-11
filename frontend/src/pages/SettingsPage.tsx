@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { RefreshCw, CheckCircle, AlertCircle, Loader, Link2, Unlink } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { RefreshCw, CheckCircle, AlertCircle, Loader, Link2, Unlink, Download, Upload, Database } from "lucide-react";
 import { Topbar } from "../components/Topbar";
 import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider } from "../lib/store";
 import { api } from "../lib/api";
@@ -398,7 +398,191 @@ export function SettingsPage() {
           </div>
         </div>
 
+        {/* Data & Backup */}
+        <BackupSection />
+
       </div>
     </>
+  );
+}
+
+// ─── Backup Section ────────────────────────────────────────────
+function BackupSection() {
+  const [exporting, setExporting]   = useState(false);
+  const [importing, setImporting]   = useState(false);
+  const [mode, setMode]             = useState<"replace" | "merge">("replace");
+  const [file, setFile]             = useState<File | null>(null);
+  const [result, setResult]         = useState<{ ok: boolean; msg: string } | null>(null);
+  const [confirm, setConfirm]       = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const doExport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get("/api/export", { responseType: "blob" });
+      const date = new Date().toISOString().slice(0, 10);
+      const url  = URL.createObjectURL(res.data as Blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `application-pal-export-${date}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setResult({ ok: false, msg: "Export fehlgeschlagen." });
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const doImport = async () => {
+    if (!file) return;
+    setImporting(true);
+    setConfirm(false);
+    setResult(null);
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (data?.meta?.app !== "application-pal" || data?.meta?.version !== 1) {
+        setResult({ ok: false, msg: "Ungültige Export-Datei — falsches Format." });
+        return;
+      }
+      const res = await api.post<{ ok: boolean; imported: Record<string, number> }>("/api/import", { mode, data });
+      const imp = res.data.imported;
+      setResult({ ok: true, msg: `Import erfolgreich: ${imp.applications} Bewerbungen, ${imp.documents} Dokumente, ${imp.userDocuments} Bibliotheks-Dokumente.` });
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = "";
+      // Reload page data after short delay
+      setTimeout(() => window.location.reload(), 1500);
+    } catch {
+      setResult({ ok: false, msg: "Import fehlgeschlagen — Datei prüfen." });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <Database size={13} style={{ color: "var(--fg-3)" }} />
+        <div className="eyebrow">Daten & Backup</div>
+      </div>
+      <div className="settings-group">
+
+        {/* Export */}
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">Export</div>
+            <div className="settings-row-sub">Alle Daten als JSON-Datei herunterladen</div>
+          </div>
+          <div className="settings-row-right">
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 12, gap: 6 }}
+              onClick={doExport}
+              disabled={exporting}
+            >
+              {exporting
+                ? <Loader size={12} style={{ animation: "spin 1s linear infinite" }} />
+                : <Download size={12} />}
+              Exportieren
+            </button>
+          </div>
+        </div>
+
+        {/* Import */}
+        <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center" }}>
+            <div style={{ flex: 1 }}>
+              <div className="settings-row-label">Import</div>
+              <div className="settings-row-sub">JSON-Backup wiederherstellen</div>
+            </div>
+          </div>
+
+          {/* Mode toggle */}
+          <div style={{ display: "flex", gap: 6 }}>
+            {(["replace", "merge"] as const).map((m) => (
+              <button key={m} onClick={() => setMode(m)} style={{
+                padding: "4px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                border: `1px solid ${mode === m ? "var(--accent)" : "var(--border)"}`,
+                background: mode === m ? "var(--accent-08)" : "transparent",
+                color: mode === m ? "var(--accent)" : "var(--fg-3)",
+                fontFamily: "var(--font-sans)"
+              }}>
+                {m === "replace" ? "Ersetzen" : "Zusammenführen"}
+              </button>
+            ))}
+            <span style={{ fontSize: 11, color: "var(--fg-3)", alignSelf: "center" }}>
+              {mode === "replace" ? "— löscht alle bestehenden Daten" : "— fügt hinzu / überschreibt"}
+            </span>
+          </div>
+
+          {/* File picker + import button */}
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".json"
+              onChange={(e) => { setFile(e.target.files?.[0] ?? null); setResult(null); }}
+              style={{ flex: 1, fontSize: 12, color: "var(--fg-2)" }}
+            />
+            <button
+              className="btn btn-primary"
+              style={{ fontSize: 12, gap: 6, flexShrink: 0 }}
+              disabled={!file || importing}
+              onClick={() => mode === "replace" ? setConfirm(true) : doImport()}
+            >
+              {importing
+                ? <Loader size={12} style={{ animation: "spin 1s linear infinite" }} />
+                : <Upload size={12} />}
+              Importieren
+            </button>
+          </div>
+
+          {/* Result message */}
+          {result && (
+            <div style={{
+              padding: "8px 12px", borderRadius: 8, fontSize: 12,
+              background: result.ok ? "rgba(52,211,153,0.1)" : "rgba(244,63,94,0.1)",
+              border: `1px solid ${result.ok ? "#34d399" : "#f43f5e"}`,
+              color: result.ok ? "#34d399" : "#f43f5e"
+            }}>
+              {result.ok ? "✓ " : "✗ "}{result.msg}
+            </div>
+          )}
+        </div>
+
+        {/* Docker hint */}
+        <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
+          <div className="settings-row-label" style={{ marginBottom: 6 }}>Direkter PostgreSQL-Dump</div>
+          <div style={{ background: "var(--surface-3, var(--bg))", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--fg-2)", lineHeight: 1.9 }}>
+            <div style={{ color: "var(--fg-3)", marginBottom: 4, fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>Backup</div>
+            docker exec application-pal-db-1 pg_dump -U postgres application_pal {">"} backup.sql
+            <div style={{ color: "var(--fg-3)", marginTop: 8, marginBottom: 4, fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>Restore</div>
+            docker exec -i application-pal-db-1 psql -U postgres application_pal {"<"} backup.sql
+          </div>
+        </div>
+
+      </div>
+
+      {/* Confirm dialog */}
+      {confirm && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}
+          onClick={() => setConfirm(false)}>
+          <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 28, width: 400, display: "flex", flexDirection: "column", gap: 16 }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Daten ersetzen?</div>
+            <div style={{ fontSize: 13, color: "var(--fg-2)", lineHeight: 1.6 }}>
+              Alle bestehenden Bewerbungen, Dokumente und Profilangaben werden gelöscht und durch die Backup-Daten ersetzt. Diese Aktion kann nicht rückgängig gemacht werden.
+            </div>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setConfirm(false)}>Abbrechen</button>
+              <button className="btn btn-primary" style={{ fontSize: 12, background: "#f43f5e", borderColor: "#f43f5e" }} onClick={doImport}>
+                Ja, ersetzen
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

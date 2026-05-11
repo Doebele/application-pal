@@ -28,6 +28,7 @@ export const applications = pgTable("applications", {
   salary: text("salary"),
   tags: text("tags"),
   nextDeadline: text("next_deadline"),
+  logoUrl: text("logo_url"),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -59,6 +60,7 @@ export const applicationDocuments = pgTable("application_documents", {
   googleDocId: text("google_doc_id"),
   googleDocUrl: text("google_doc_url"),
   fileUrl: text("file_url"),
+  userDocumentId: text("user_document_id"),   // reference to user_documents.id when linked from library
   version: integer("version").default(1),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -133,6 +135,28 @@ export const applicationContactInsertSchema = createInsertSchema(applicationCont
   name: z.string().trim().min(1)
 }).omit({ id: true, createdAt: true });
 export const applicationContactPatchSchema = applicationContactInsertSchema.omit({ applicationId: true }).partial();
+
+// ─── User Documents (global document vault) ───────────────────
+export const userDocuments = pgTable("user_documents", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("sonstiges"), // 'zeugnis' | 'referenz' | 'zertifikat' | 'figma' | 'portfolio' | 'sonstiges'
+  fileType: text("file_type").notNull().default("link"),     // 'pdf' | 'link' | 'figma' | 'image'
+  url: text("url"),
+  description: text("description"),
+  tags: text("tags"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+export const userDocumentSelectSchema = createSelectSchema(userDocuments);
+export const userDocumentInsertSchema = createInsertSchema(userDocuments, {
+  name: z.string().trim().min(1),
+  category: z.enum(["lebenslauf", "motivationsschreiben", "zeugnis", "referenz", "zertifikat", "figma", "portfolio", "sonstiges"]).default("sonstiges"),
+  fileType: z.enum(["pdf", "link", "figma", "image", "gdoc"]).default("link"),
+}).omit({ id: true, createdAt: true, updatedAt: true });
+export const userDocumentPatchSchema = userDocumentInsertSchema.partial();
+export type UserDocument = z.infer<typeof userDocumentSelectSchema>;
 
 export const aiConfigSchema = z.object({
   provider: z.enum(["none", "lm-studio", "anthropic"]).default("none"),

@@ -11,11 +11,14 @@ import {
   applicationContactInsertSchema,
   applicationContactPatchSchema,
   userProfileInsertSchema,
+  userDocumentInsertSchema,
+  userDocumentPatchSchema,
   applications,
   applicationDocuments,
   applicationActivities,
   applicationContacts,
   userProfile,
+  userDocuments,
   googleOAuthTokens,
   applicationStageEnum,
   stubDocumentResponseSchema,
@@ -307,9 +310,25 @@ app.delete("/api/applications/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// Derive a logo URL from the job posting URL domain using Clearbit
+function logoUrlFromJobUrl(jobUrl: string | undefined): string | null {
+  if (!jobUrl) return null;
+  try {
+    const { hostname } = new URL(jobUrl);
+    // Strip leading "www." and use root domain
+    const domain = hostname.replace(/^www\./, "");
+    return `https://logo.clearbit.com/${domain}`;
+  } catch {
+    return null;
+  }
+}
+
 app.post("/api/applications/import", zValidator("json", applicationImportRequestSchema), async (c) => {
   const payload = c.req.valid("json");
   let text = payload.text ?? "";
+
+  // Derive logo from the job URL domain (Clearbit)
+  const logoUrl = logoUrlFromJobUrl(payload.url ?? undefined);
 
   if (payload.url) {
     try {
@@ -337,7 +356,8 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
           description: llm.description || normalized.slice(0, 500),
           salary:      llm.salary,
           tags:        llm.tags.length > 0 ? JSON.stringify(llm.tags) : null,
-          source:      null
+          source:      null,
+          logoUrl,
         });
       }
     } catch (error) {
@@ -353,7 +373,8 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
     description: normalized.slice(0, 1000),
     salary:      null,
     tags:        null,
-    source:      null
+    source:      null,
+    logoUrl,
   });
 });
 
@@ -399,6 +420,37 @@ app.put("/api/profile", zValidator("json", userProfileInsertSchema), async (c) =
     .where(eq(userProfile.id, existing[0].id))
     .returning();
   return c.json(updated);
+});
+
+// ─────────────────────────────────────────────────────────────────
+// User Documents (global document vault)
+// ─────────────────────────────────────────────────────────────────
+app.get("/api/documents", async (c) => {
+  const rows = await db.select().from(userDocuments).orderBy(desc(userDocuments.createdAt));
+  return c.json(rows);
+});
+
+app.post("/api/documents", zValidator("json", userDocumentInsertSchema), async (c) => {
+  const payload = c.req.valid("json");
+  const [doc] = await db.insert(userDocuments).values(payload).returning();
+  return c.json(doc, 201);
+});
+
+app.patch("/api/documents/:id", zValidator("json", userDocumentPatchSchema), async (c) => {
+  const id = c.req.param("id");
+  const payload = c.req.valid("json");
+  const [doc] = await db.update(userDocuments)
+    .set({ ...payload, updatedAt: new Date() })
+    .where(eq(userDocuments.id, id))
+    .returning();
+  if (!doc) return c.json({ error: "Not found" }, 404);
+  return c.json(doc);
+});
+
+app.delete("/api/documents/:id", async (c) => {
+  const id = c.req.param("id");
+  await db.delete(userDocuments).where(eq(userDocuments.id, id));
+  return c.json({ ok: true });
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -583,6 +635,123 @@ app.post("/api/google/docs/create", async (c) => {
 app.delete("/api/google/disconnect", async (c) => {
   await db.delete(googleOAuthTokens);
   return c.json({ ok: true });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Export / Import
+// ─────────────────────────────────────────────────────────────────
+app.get("/api/export", async (c) => {
+  const [apps, docs, activities, contacts, profiles, userDocs] = await Promise.all([
+    db.select().from(applications).orderBy(applications.createdAt),
+    db.select().from(applicationDocuments).orderBy(applicationDocuments.createdAt),
+    db.select().from(applicationActivities).orderBy(applicationActivities.createdAt),
+    db.select().from(applicationContacts).orderBy(applicationContacts.createdAt),
+    db.select().from(userProfile).limit(1),
+    db.select().from(userDocuments).orderBy(userDocuments.createdAt),
+  ]);
+
+  const payload = {
+    meta: { version: 1, exportedAt: new Date().toISOString(), app: "application-pal" },
+    applications: apps,
+    applicationDocuments: docs,
+    applicationActivities: activities,
+    applicationContacts: contacts,
+    userProfile: profiles[0] ?? null,
+    userDocuments: userDocs,
+  };
+
+  const date = new Date().toISOString().slice(0, 10);
+  c.header("Content-Disposition", `attachment; filename="application-pal-export-${date}.json"`);
+  c.header("Content-Type", "application/json");
+  return c.body(JSON.stringify(payload, null, 2));
+});
+
+app.post("/api/import", async (c) => {
+  const body = await c.req.json<{
+    mode?: "replace" | "merge";
+    data: {
+      meta: { app: string; version: number };
+      applications?: Record<string, unknown>[];
+      applicationDocuments?: Record<string, unknown>[];
+      applicationActivities?: Record<string, unknown>[];
+      applicationContacts?: Record<string, unknown>[];
+      userProfile?: Record<string, unknown> | null;
+      userDocuments?: Record<string, unknown>[];
+    };
+  }>();
+
+  const { mode = "replace", data } = body;
+
+  if (data?.meta?.app !== "application-pal" || data?.meta?.version !== 1) {
+    return c.json({ error: "Ungültige Export-Datei" }, 400);
+  }
+
+  if (mode === "replace") {
+    // Delete in FK-safe order
+    await db.delete(applicationActivities);
+    await db.delete(applicationContacts);
+    await db.delete(applicationDocuments);
+    await db.delete(applications);
+    await db.delete(userDocuments);
+    await db.delete(userProfile);
+  }
+
+  // Insert all records — skip duplicates on conflict (for merge mode)
+  if (data.applications?.length) {
+    for (const row of data.applications) {
+      await db.insert(applications).values(row as never).onConflictDoUpdate({
+        target: applications.id,
+        set: row as never,
+      });
+    }
+  }
+  if (data.applicationDocuments?.length) {
+    for (const row of data.applicationDocuments) {
+      await db.insert(applicationDocuments).values(row as never).onConflictDoUpdate({
+        target: applicationDocuments.id,
+        set: row as never,
+      });
+    }
+  }
+  if (data.applicationActivities?.length) {
+    for (const row of data.applicationActivities) {
+      await db.insert(applicationActivities).values(row as never).onConflictDoUpdate({
+        target: applicationActivities.id,
+        set: row as never,
+      });
+    }
+  }
+  if (data.applicationContacts?.length) {
+    for (const row of data.applicationContacts) {
+      await db.insert(applicationContacts).values(row as never).onConflictDoUpdate({
+        target: applicationContacts.id,
+        set: row as never,
+      });
+    }
+  }
+  if (data.userDocuments?.length) {
+    for (const row of data.userDocuments) {
+      await db.insert(userDocuments).values(row as never).onConflictDoUpdate({
+        target: userDocuments.id,
+        set: row as never,
+      });
+    }
+  }
+  if (data.userProfile) {
+    await db.insert(userProfile).values(data.userProfile as never).onConflictDoUpdate({
+      target: userProfile.id,
+      set: data.userProfile as never,
+    });
+  }
+
+  return c.json({ ok: true, mode, imported: {
+    applications: data.applications?.length ?? 0,
+    documents: data.applicationDocuments?.length ?? 0,
+    activities: data.applicationActivities?.length ?? 0,
+    contacts: data.applicationContacts?.length ?? 0,
+    userDocuments: data.userDocuments?.length ?? 0,
+    userProfile: data.userProfile ? 1 : 0,
+  }});
 });
 
 serve(

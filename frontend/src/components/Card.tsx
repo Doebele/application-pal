@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Clock, Pin, MoreHorizontal, ExternalLink } from "lucide-react";
 import type { Application } from "@application-pal/shared";
 import type { CardVariant } from "../lib/store";
@@ -27,13 +28,34 @@ function daysInStage(updatedAt: Date | string): number {
 
 type CardProps = { app: Application; onClick?: () => void };
 
-function Avatar({ company, size = "sm" }: { company: string; size?: "sm" | "lg" }) {
+function Avatar({ company, logoUrl, size = "sm" }: { company: string; logoUrl?: string | null; size?: "sm" | "lg" }) {
+  const [imgOk, setImgOk] = useState(false);
+  const cls = size === "lg" ? "avatar avatar-lg" : "avatar avatar-sm";
+
   return (
     <div
-      className={size === "lg" ? "avatar avatar-lg" : "avatar avatar-sm"}
-      style={{ background: getCompanyColor(company), border: "none" }}
+      className={cls}
+      style={{
+        background: imgOk ? "#fff" : getCompanyColor(company),
+        border: "none",
+        padding: imgOk ? 3 : 0,
+        overflow: "hidden"
+      }}
     >
-      {getInitials(company)}
+      {logoUrl && (
+        <img
+          src={logoUrl}
+          alt=""
+          onLoad={() => setImgOk(true)}
+          onError={() => setImgOk(false)}
+          style={{
+            display: imgOk ? "block" : "none",
+            width: "100%", height: "100%",
+            objectFit: "contain", borderRadius: 4
+          }}
+        />
+      )}
+      {!imgOk && getInitials(company)}
     </div>
   );
 }
@@ -78,7 +100,7 @@ export function CardRich({ app, onClick }: CardProps) {
       <PriorityBar priority={app.priority} />
       {/* Row 1: Avatar + company/role + Stage chip */}
       <div className="job-head">
-        <Avatar company={app.company} size="sm" />
+        <Avatar company={app.company} logoUrl={app.logoUrl} size="sm" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="job-title">{app.role}</div>
           <div className="job-company">{app.company}{app.location ? ` · ${app.location.split("·")[0].trim()}` : ""}</div>
@@ -130,7 +152,7 @@ export function CardCompact({ app, onClick }: CardProps) {
     <div className="job-card" onClick={onClick} style={{ padding: 10, gap: 6 }}>
       <PriorityBar priority={app.priority} />
       <div className="job-head" style={{ alignItems: "center" }}>
-        <Avatar company={app.company} size="sm" />
+        <Avatar company={app.company} logoUrl={app.logoUrl} size="sm" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="job-title" style={{ fontSize: 12.5 }}>{app.role}</div>
           <div className="job-company">{app.company}</div>
@@ -148,7 +170,7 @@ export function CardMinimal({ app, onClick }: CardProps) {
       onClick={onClick}
       style={{ padding: "10px 12px", gap: 4, flexDirection: "row", alignItems: "center" }}
     >
-      <Avatar company={app.company} size="sm" />
+      <Avatar company={app.company} logoUrl={app.logoUrl} size="sm" />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
           style={{
@@ -180,7 +202,7 @@ export function CardEditorial({ app, onClick }: CardProps) {
     <div className="job-card" onClick={onClick} style={{ padding: 14, gap: 10 }}>
       <PriorityBar priority={app.priority} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-        <Avatar company={app.company} size="lg" />
+        <Avatar company={app.company} logoUrl={app.logoUrl} size="lg" />
         <SourceDot source={app.source} />
       </div>
       <div>

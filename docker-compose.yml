@@ -1,6 +1,7 @@
 services:
   db:
     image: postgres:16-alpine
+    container_name: application-pal-db
     restart: unless-stopped
     env_file:
       - .env
@@ -14,8 +15,8 @@ services:
       - hba_file=/etc/postgresql/pg_hba.conf
       - -c
       - listen_addresses=*
-    expose:
-      - "5432"
+    ports:
+      - "15436:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
@@ -27,9 +28,11 @@ services:
       start_period: 120s
 
   backend:
+    image: application-pal-backend
     build:
       context: .
       dockerfile: backend/Dockerfile
+    container_name: application-pal-backend
     restart: unless-stopped
     env_file:
       - .env
@@ -37,8 +40,8 @@ services:
       DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET}
       PORT: ${PORT}
-    expose:
-      - "${PORT:-3300}"
+    ports:
+      - "8071:${PORT:-3000}"
     depends_on:
       db:
         condition: service_healthy
@@ -50,17 +53,18 @@ services:
       start_period: 40s
 
   frontend:
+    image: application-pal-frontend
     build:
       context: .
       dockerfile: frontend/Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL:-/api}
+    container_name: application-pal-frontend
     environment:
-      BACKEND_PORT: ${PORT:-3300}
+      BACKEND_PORT: ${PORT:-3000}
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "443:443"
+      - "8070:80"
     depends_on:
       backend:
         condition: service_healthy
