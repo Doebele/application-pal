@@ -1,0 +1,23 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Frontend (Vite)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "frontend"],
+      "port": 5174
+    },
+    {
+      "name": "Backend (tsx watch)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "backend"],
+      "port": 3300
+    },
+    {
+      "name": "Full Stack (Docker)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 80
+    }
+  ]
+}

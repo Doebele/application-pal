@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import {
   LayoutDashboard, Calendar, List, Files, Settings,
-  PanelLeft, Sun, Moon, Gauge, Armchair, UserCircle
+  PanelLeft, Sun, Moon, Gauge, Armchair, UserCircle, FolderOpen
 } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import type { Application } from "@application-pal/shared";
@@ -125,12 +125,13 @@ export function Rail({ applications }: Props) {
   const countByStage = (id: string) => applications.filter((a) => a.stage === id).length;
 
   const navItems = [
-    { to: "/",          label: "Board",     icon: <LayoutDashboard size={15} />, count: applications.length },
-    { to: "/profile",   label: "Profil",    icon: <UserCircle size={15} /> },
-    { to: "/calendar",  label: "Calendar",  icon: <Calendar size={15} /> },
-    { to: "/timeline",  label: "Timeline",  icon: <List size={15} /> },
-    { to: "/templates", label: "Templates", icon: <Files size={15} /> },
-    { to: "/settings",  label: "Settings",  icon: <Settings size={15} /> },
+    { to: "/",           label: "Board",      icon: <LayoutDashboard size={15} />, count: applications.length },
+    { to: "/profile",    label: "Profil",     icon: <UserCircle size={15} /> },
+    { to: "/documents",  label: "Dokumente",  icon: <FolderOpen size={15} /> },
+    { to: "/calendar",   label: "Calendar",   icon: <Calendar size={15} /> },
+    { to: "/timeline",   label: "Timeline",   icon: <List size={15} /> },
+    { to: "/templates",  label: "Templates",  icon: <Files size={15} /> },
+    { to: "/settings",   label: "Settings",   icon: <Settings size={15} /> },
   ];
 
   return (

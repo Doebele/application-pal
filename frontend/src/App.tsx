@@ -11,6 +11,7 @@ import { TemplatesPage } from "./pages/TemplatesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { TimelinePage } from "./pages/TimelinePage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { DocumentsPage } from "./pages/DocumentsPage";
 
 export function App() {
   const { theme, accent, density } = useUiStore();
@@ -37,7 +38,8 @@ export function App() {
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/settings"  element={<SettingsPage />} />
           <Route path="/timeline"  element={<TimelinePage />} />
-          <Route path="/profile"   element={<ProfilePage />} />
+          <Route path="/profile"    element={<ProfilePage />} />
+          <Route path="/documents"  element={<DocumentsPage />} />
         </Routes>
       </div>
     </div>

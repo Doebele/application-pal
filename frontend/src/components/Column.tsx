@@ -69,9 +69,6 @@ export function Column({ stageId, applications, cardVariant, onCardClick }: Prop
               </Draggable>
             ))}
             {provided.placeholder}
-            <button className="col-add-card">
-              <Plus size={13} /> Add card
-            </button>
           </div>
         )}
       </Droppable>
