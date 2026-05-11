@@ -21,22 +21,26 @@ export const kbInsightEntityTypeEnum = pgEnum("kb_insight_entity_type", ["compan
 // ─── Knowledge Base ────────────────────────────────────────────
 export const kbCompanies = pgTable("kb_companies", {
   id: uuid("id").defaultRandom().primaryKey(),
+  slug: text("slug"),
   name: text("name").notNull(),
   website: text("website"),
   industry: text("industry"),
   size: text("size"),
   headquarters: text("headquarters"),
   cultureNotes: text("culture_notes"),
+  agentFilePath: text("agent_file_path"),
   extractedAt: timestamp("extracted_at", { withTimezone: true }).notNull().defaultNow()
 });
 
 export const kbRoles = pgTable("kb_roles", {
   id: uuid("id").defaultRandom().primaryKey(),
+  slug: text("slug"),
   companyId: uuid("company_id").references(() => kbCompanies.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   seniority: text("seniority"),
   requirements: text("requirements").array(),
   salaryRange: text("salary_range"),
+  agentFilePath: text("agent_file_path"),
   extractedAt: timestamp("extracted_at", { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -47,6 +51,7 @@ export const kbSources = pgTable("kb_sources", {
   status: kbSourceStatusEnum("status").notNull().default("pending"),
   rawText: text("raw_text"),
   errorMessage: text("error_message"),
+  agentFilePath: text("agent_file_path"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 

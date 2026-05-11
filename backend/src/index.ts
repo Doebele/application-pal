@@ -1,6 +1,8 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import {
   applicationImportRequestSchema,
   applicationInsertSchema,
@@ -33,7 +35,7 @@ import { PDFParse } from "pdf-parse";
 import { and, desc, eq, ilike, inArray, ne, or, isNull, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
-import { env } from "./env.js";
+import { env, KB_BASE_PATH } from "./env.js";
 
 const app = new Hono();
 
@@ -427,6 +429,163 @@ async function extractKnowledgeBase(text: string, ai?: AiConfig, sourceUrl?: str
   return fallbackKnowledgeBaseExtraction(text, sourceUrl);
 }
 
+type KbAgentFilePaths = {
+  basePath: string;
+  indexPath: string;
+  sourcePath: string;
+  companyPath: string | null;
+  rolePath: string | null;
+};
+
+function slugify(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "entry";
+}
+
+function yamlValue(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "null";
+  return JSON.stringify(value);
+}
+
+function yamlList(values: string[]): string {
+  return values.length > 0
+    ? values.map((value) => `  - ${yamlValue(value)}`).join("\n")
+    : "  []";
+}
+
+async function ensureKbTree(): Promise<void> {
+  await Promise.all([
+    mkdir(path.join(KB_BASE_PATH, "companies"), { recursive: true }),
+    mkdir(path.join(KB_BASE_PATH, "roles"), { recursive: true }),
+    mkdir(path.join(KB_BASE_PATH, "sources"), { recursive: true })
+  ]);
+}
+
+async function markdownLinks(dirName: "companies" | "roles"): Promise<string[]> {
+  const dir = path.join(KB_BASE_PATH, dirName);
+  const files = await readdir(dir).catch(() => []);
+  const links: string[] = [];
+
+  for (const file of files.filter((name) => name.endsWith(".md")).sort()) {
+    const body = await readFile(path.join(dir, file), "utf8").catch(() => "");
+    const title = body.match(/^#\s+(.+)$/m)?.[1] ?? file.replace(/\.md$/, "");
+    links.push(`- [${title}](${dirName}/${file})`);
+  }
+
+  return links;
+}
+
+async function regenerateKbIndex(): Promise<string> {
+  const indexPath = path.join(KB_BASE_PATH, "index.md");
+  const [companyLinks, roleLinks] = await Promise.all([
+    markdownLinks("companies"),
+    markdownLinks("roles")
+  ]);
+
+  await writeFile(indexPath, [
+    "# Application Knowledge Base",
+    "",
+    `Generated: ${new Date().toISOString()}`,
+    "",
+    "## Companies",
+    "",
+    companyLinks.length > 0 ? companyLinks.join("\n") : "_No companies yet._",
+    "",
+    "## Roles",
+    "",
+    roleLinks.length > 0 ? roleLinks.join("\n") : "_No roles yet._",
+    ""
+  ].join("\n"), "utf8");
+
+  return indexPath;
+}
+
+async function writeKbFiles(args: {
+  extracted: KbExtracted;
+  sourceId: string;
+  kind: "url" | "pdf";
+  urlOrPath: string;
+  rawText: string;
+}): Promise<KbAgentFilePaths & { companySlug: string | null; roleSlug: string | null }> {
+  await ensureKbTree();
+
+  const companySlug = args.extracted.company ? slugify(args.extracted.company.name) : null;
+  const roleSlug = args.extracted.role
+    ? slugify(`${args.extracted.company?.name ?? "role"}-${args.extracted.role.title}`)
+    : null;
+
+  const companyPath = companySlug ? path.join(KB_BASE_PATH, "companies", `${companySlug}.md`) : null;
+  const rolePath = roleSlug ? path.join(KB_BASE_PATH, "roles", `${roleSlug}.md`) : null;
+  const sourcePath = path.join(KB_BASE_PATH, "sources", `${args.sourceId}.md`);
+
+  if (args.extracted.company && companyPath) {
+    await writeFile(companyPath, [
+      "---",
+      `slug: ${yamlValue(companySlug)}`,
+      `name: ${yamlValue(args.extracted.company.name)}`,
+      `website: ${yamlValue(args.extracted.company.website)}`,
+      `industry: ${yamlValue(args.extracted.company.industry)}`,
+      `size: ${yamlValue(args.extracted.company.size)}`,
+      `headquarters: ${yamlValue(args.extracted.company.headquarters)}`,
+      `source_id: ${yamlValue(args.sourceId)}`,
+      "---",
+      "",
+      `# ${args.extracted.company.name}`,
+      "",
+      args.extracted.company.cultureNotes ?? "_No culture notes extracted._",
+      ""
+    ].join("\n"), "utf8");
+  }
+
+  if (args.extracted.role && rolePath) {
+    await writeFile(rolePath, [
+      "---",
+      `slug: ${yamlValue(roleSlug)}`,
+      `company_slug: ${yamlValue(companySlug)}`,
+      `title: ${yamlValue(args.extracted.role.title)}`,
+      `seniority: ${yamlValue(args.extracted.role.seniority)}`,
+      `salary_range: ${yamlValue(args.extracted.role.salaryRange)}`,
+      `source_id: ${yamlValue(args.sourceId)}`,
+      "requirements:",
+      yamlList(args.extracted.role.requirements),
+      "---",
+      "",
+      `# ${args.extracted.role.title}`,
+      "",
+      "## Requirements",
+      "",
+      args.extracted.role.requirements.length > 0
+        ? args.extracted.role.requirements.map((item) => `- ${item}`).join("\n")
+        : "_No requirements extracted._",
+      ""
+    ].join("\n"), "utf8");
+  }
+
+  await writeFile(sourcePath, [
+    "---",
+    `id: ${yamlValue(args.sourceId)}`,
+    `kind: ${yamlValue(args.kind)}`,
+    `url_or_path: ${yamlValue(args.urlOrPath)}`,
+    `company_slug: ${yamlValue(companySlug)}`,
+    `role_slug: ${yamlValue(roleSlug)}`,
+    `created_at: ${yamlValue(new Date().toISOString())}`,
+    "---",
+    "",
+    `# Source ${args.sourceId}`,
+    "",
+    args.rawText,
+    ""
+  ].join("\n"), "utf8");
+
+  const indexPath = await regenerateKbIndex();
+  return { basePath: KB_BASE_PATH, indexPath, sourcePath, companyPath, rolePath, companySlug, roleSlug };
+}
+
 async function persistKnowledgeBaseSource(args: {
   kind: "url" | "pdf";
   urlOrPath: string;
@@ -446,11 +605,28 @@ async function persistKnowledgeBaseSource(args: {
       throw new Error("No company or role could be extracted.");
     }
 
+    const fileInfo = await writeKbFiles({
+      extracted,
+      sourceId: source.id,
+      kind: args.kind,
+      urlOrPath: args.urlOrPath,
+      rawText: args.rawText
+    });
+
     const [company] = extracted.company
-      ? await db.insert(kbCompanies).values(extracted.company).returning()
+      ? await db.insert(kbCompanies).values({
+          ...extracted.company,
+          slug: fileInfo.companySlug,
+          agentFilePath: fileInfo.companyPath
+        }).returning()
       : [null];
     const [role] = extracted.role
-      ? await db.insert(kbRoles).values({ ...extracted.role, companyId: company?.id ?? null }).returning()
+      ? await db.insert(kbRoles).values({
+          ...extracted.role,
+          companyId: company?.id ?? null,
+          slug: fileInfo.roleSlug,
+          agentFilePath: fileInfo.rolePath
+        }).returning()
       : [null];
 
     const insightRows = [
@@ -471,9 +647,23 @@ async function persistKnowledgeBaseSource(args: {
     ].filter((row): row is NonNullable<typeof row> => row !== null);
 
     if (insightRows.length > 0) await db.insert(kbInsights).values(insightRows);
-    await db.update(kbSources).set({ status: "done", errorMessage: null }).where(eq(kbSources.id, source.id));
+    await db.update(kbSources).set({
+      status: "done",
+      errorMessage: null,
+      agentFilePath: fileInfo.sourcePath
+    }).where(eq(kbSources.id, source.id));
 
-    return { companyId: company?.id ?? null, roleId: role?.id ?? null, sourceId: source.id };
+    return {
+      companyId: company?.id ?? null,
+      roleId: role?.id ?? null,
+      sourceId: source.id,
+      agentFilePaths: {
+        company: fileInfo.companyPath,
+        role: fileInfo.rolePath,
+        source: fileInfo.sourcePath,
+        index: fileInfo.indexPath
+      }
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Knowledge base ingestion failed.";
     await db.update(kbSources).set({ status: "error", errorMessage: message }).where(eq(kbSources.id, source.id));
@@ -1163,6 +1353,10 @@ app.post("/api/import", async (c) => {
     userProfile: data.userProfile ? 1 : 0,
   }});
 });
+
+void ensureKbTree()
+  .then(regenerateKbIndex)
+  .catch((error) => console.warn("Knowledge base bootstrap failed:", error));
 
 serve(
   {
