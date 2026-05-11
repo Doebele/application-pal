@@ -2,11 +2,11 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import {
   X, ExternalLink, MoreHorizontal, Check, Sparkles, RefreshCw,
   ChevronRight, Link2, Plus, Mail, Phone, Calendar, FileText,
-  Loader, Trash2, Edit3, MessageSquare, Clock
+  Loader, Trash2, Edit3, MessageSquare, Clock, ChevronDown
 } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import type {
-  Application, ApplicationDocument, ApplicationActivity, ApplicationContact
+  Application, ApplicationDocument, ApplicationActivity, ApplicationContact, UserDocument
 } from "@application-pal/shared";
 import { api } from "../lib/api";
 
@@ -35,6 +35,70 @@ const STAGES = [
 ];
 
 const STAGE_LABELS: Record<string, string> = Object.fromEntries(STAGES.map((s) => [s.id, s.label]));
+const STAGE_COLORS: Record<string, string> = {
+  import_validating: "#94a3b8", preparing_cv: "#60a5fa", preparing_letter: "#22d3ee",
+  application_sent: "#a78bfa", pending: "#fbbf24", interview_1: "#34d399",
+  interview_2: "#10b981", rejected: "#f87171", accepted: "#84cc16"
+};
+
+// ─── Stage Picker (header) ────────────────────────────────────
+function StagePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const color = STAGE_COLORS[value] ?? "#94a3b8";
+  const label = STAGE_LABELS[value] ?? value;
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  return (
+    <div ref={ref} style={{ position: "relative", flexShrink: 0 }}>
+      <button onClick={() => setOpen((v) => !v)} style={{
+        display: "flex", alignItems: "center", gap: 6,
+        padding: "4px 10px", borderRadius: 999,
+        border: `1px solid ${color}55`, background: `${color}14`,
+        color, fontSize: 11, fontWeight: 700, cursor: "pointer",
+        fontFamily: "var(--font-sans)", whiteSpace: "nowrap"
+      }}>
+        <span style={{ width: 7, height: 7, borderRadius: 999, background: color, flexShrink: 0 }} />
+        {label}
+        <ChevronDown size={11} style={{ opacity: 0.7, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 60,
+          background: "var(--bg)", border: "1px solid var(--border)",
+          borderRadius: 10, padding: 4, minWidth: 180,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.18)"
+        }}>
+          {STAGES.map((s) => {
+            const sc = STAGE_COLORS[s.id] ?? "#94a3b8";
+            return (
+              <button key={s.id} onClick={() => { onChange(s.id); setOpen(false); }} style={{
+                display: "flex", alignItems: "center", gap: 8, width: "100%",
+                padding: "6px 10px", borderRadius: 7, border: "none",
+                background: value === s.id ? `${sc}14` : "transparent",
+                color: value === s.id ? sc : "var(--fg-1)",
+                fontSize: 12, fontWeight: value === s.id ? 700 : 500,
+                cursor: "pointer", fontFamily: "var(--font-sans)", textAlign: "left"
+              }}>
+                <span style={{ width: 8, height: 8, borderRadius: 999, background: sc, flexShrink: 0 }} />
+                {s.label}
+                {value === s.id && <Check size={11} style={{ marginLeft: "auto", color: sc }} />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function daysAgo(date: Date | string): number {
   return Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000);
@@ -131,11 +195,10 @@ function StageProgressBar({ stage }: { stage: string }) {
 }
 
 // ─── Overview Tab ──────────────────────────────────────────────
-function OverviewTab({ app, onSave }: { app: Application; onSave: (patch: Partial<Application>) => void }) {
+function OverviewTab({ app, stage, onSave }: { app: Application; stage: string; onSave: (patch: Partial<Application>) => void }) {
   const [company, setCompany] = useState(app.company);
   const [role, setRole]       = useState(app.role);
   const [location, setLocation] = useState(app.location ?? "");
-  const [stage, setStage]     = useState(app.stage);
   const [salary, setSalary]   = useState(app.salary ?? "");
   const [url, setUrl]         = useState(app.url ?? "");
   const [tags, setTags]       = useState<string[]>(parseTags(app.tags));
@@ -192,10 +255,8 @@ function OverviewTab({ app, onSave }: { app: Application; onSave: (patch: Partia
           <input value={location} onChange={(e) => setLocation(e.target.value)} onBlur={() => save({ location })} />
         </div>
         <div className="field">
-          <label>Stage</label>
-          <select value={stage} onChange={(e) => { setStage(e.target.value as Application["stage"]); save({ stage: e.target.value as Application["stage"] }); }}>
-            {STAGES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
+          <label>Nächster Schritt</label>
+          <input value={app.nextDeadline ?? ""} onChange={(e) => save({ nextDeadline: e.target.value })} placeholder="z.B. Interview 15. Mai" />
         </div>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -272,18 +333,77 @@ const DOC_STATUS_STYLES: Record<string, { bg: string; color: string; label: stri
   sent:        { bg: "rgba(96,165,250,0.12)",  color: "#60a5fa", label: "Gesendet" },
 };
 
+const LIB_CATEGORIES: { value: string; label: string; color: string }[] = [
+  { value: "lebenslauf",           label: "Lebenslauf",           color: "#4285f4" },
+  { value: "motivationsschreiben", label: "Motivationsschreiben", color: "#0f9d58" },
+  { value: "zeugnis",              label: "Zeugnisse",            color: "#3b82f6" },
+  { value: "referenz",             label: "Referenzen",           color: "#10b981" },
+  { value: "zertifikat",           label: "Zertifikate",          color: "#f59e0b" },
+  { value: "portfolio",            label: "Portfolio",            color: "#8b5cf6" },
+  { value: "figma",                label: "Figma",                color: "#f24e1e" },
+  { value: "sonstiges",            label: "Sonstiges",            color: "var(--fg-3)" },
+];
+
+function catToDocType(cat: string): "cv" | "letter" | "other" {
+  if (cat === "lebenslauf")           return "cv";
+  if (cat === "motivationsschreiben") return "letter";
+  return "other";
+}
+
+const GDocIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <rect x="4" y="2" width="16" height="20" rx="2" fill="#4285f4" opacity="0.15" stroke="#4285f4" strokeWidth="1.5"/>
+    <path d="M14 2v5h5" stroke="#4285f4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <line x1="8" y1="13" x2="16" y2="13" stroke="#4285f4" strokeWidth="1.5" strokeLinecap="round"/>
+    <line x1="8" y1="17" x2="14" y2="17" stroke="#4285f4" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
 function DocumentsTab({ app }: { app: Application }) {
-  const { data: docs = [], refetch } = useQuery<ApplicationDocument[]>({
+  const { data: appDocs = [], refetch } = useQuery<ApplicationDocument[]>({
     queryKey: ["documents", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/documents`).then((r) => r.data)
   });
+  const { data: library = [] } = useQuery<UserDocument[]>({
+    queryKey: ["user-documents"],
+    queryFn: () => api.get("/api/documents").then((r) => r.data)
+  });
+
   const [creating, setCreating] = useState<"cv" | "letter" | null>(null);
-  const [newName, setNewName] = useState("");
+  const [newName, setNewName]   = useState("");
   const [googleConnected, setGoogleConnected] = useState(false);
+  const [libOpen, setLibOpen]   = useState(true);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get<{ connected: boolean }>("/api/google/status").then((r) => setGoogleConnected(r.data.connected)).catch(() => {});
+    api.get<{ connected: boolean }>("/api/google/status")
+      .then((r) => setGoogleConnected(r.data.connected)).catch(() => {});
   }, []);
+
+  // Set of user_document_ids already linked to this application
+  const linkedIds = new Set(appDocs.map((d) => d.userDocumentId).filter(Boolean) as string[]);
+
+  const toggleLibDoc = async (libDoc: UserDocument) => {
+    setTogglingId(libDoc.id);
+    if (linkedIds.has(libDoc.id)) {
+      // Unlink: delete the application_document
+      const match = appDocs.find((d) => d.userDocumentId === libDoc.id);
+      if (match) await api.delete(`/api/applications/${app.id}/documents/${match.id}`).catch(() => {});
+    } else {
+      // Link: create application_document from library entry
+      const isGDoc = libDoc.fileType === "gdoc";
+      await api.post(`/api/applications/${app.id}/documents`, {
+        type: catToDocType(libDoc.category),
+        name: libDoc.name,
+        status: "draft",
+        googleDocUrl: isGDoc ? libDoc.url : undefined,
+        fileUrl: !isGDoc ? libDoc.url : undefined,
+        userDocumentId: libDoc.id,
+      }).catch(() => {});
+    }
+    setTogglingId(null);
+    refetch();
+  };
 
   const create = async (type: "cv" | "letter") => {
     const name = newName.trim() || (type === "cv" ? "Lebenslauf" : "Anschreiben");
@@ -294,81 +414,103 @@ function DocumentsTab({ app }: { app: Application }) {
         const res = await api.post<{ docId: string; docUrl: string }>("/api/google/docs/create", { title: `${name} — ${app.company}` });
         googleDocId = res.data.docId;
         googleDocUrl = res.data.docUrl;
-      } catch { /* fall through without Google Doc */ }
+      } catch { /* fall through */ }
     }
     await api.post(`/api/applications/${app.id}/documents`, { type, name, status: "draft", googleDocId, googleDocUrl });
-    setNewName("");
-    setCreating(null);
-    refetch();
+    setNewName(""); setCreating(null); refetch();
   };
 
   const updateStatus = async (docId: string, status: string) => {
     await api.patch(`/api/applications/${app.id}/documents/${docId}`, { status });
     refetch();
   };
-
   const deleteDoc = async (docId: string) => {
     await api.delete(`/api/applications/${app.id}/documents/${docId}`);
     refetch();
   };
 
-  const grouped = { cv: docs.filter((d) => d.type === "cv"), letter: docs.filter((d) => d.type === "letter") };
+  // ─── Linked docs (already assigned) ──────────────────────────
+  const linkedDocs = appDocs;
 
   return (
     <>
-      {!googleConnected && (
-        <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", fontSize: 12, color: "#fbbf24", marginBottom: 12 }}>
-          Google Drive nicht verbunden — Dokumente werden lokal ohne Google Docs gespeichert.{" "}
-          <a href="/settings" style={{ color: "inherit", fontWeight: 700 }}>Verbinden →</a>
+      {/* ── Section 1: Zugewiesene Dokumente ── */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 10, gap: 8 }}>
+          <div className="eyebrow" style={{ flex: 1 }}>Zugewiesen</div>
+          <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }}
+            onClick={() => setCreating(creating ? null : "cv")}>
+            <Plus size={11} /> Neu erstellen
+          </button>
         </div>
-      )}
 
-      {(["cv", "letter"] as const).map((type) => (
-        <div key={type} style={{ marginBottom: 20 }}>
-          <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-            <div className="eyebrow" style={{ flex: 1 }}>{type === "cv" ? "Lebenslauf" : "Anschreiben"}</div>
-            <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }}
-              onClick={() => setCreating(creating === type ? null : type)}>
-              <Plus size={11} /> Neu
-            </button>
+        {!googleConnected && (
+          <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)", fontSize: 11, color: "#fbbf24", marginBottom: 10 }}>
+            Google Drive nicht verbunden.{" "}
+            <a href="/settings" style={{ color: "inherit", fontWeight: 700 }}>Verbinden →</a>
           </div>
+        )}
 
-          {creating === type && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 10, padding: 10, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-              <input value={newName} onChange={(e) => setNewName(e.target.value)}
-                placeholder={type === "cv" ? "Lebenslauf v1" : "Anschreiben v1"}
-                style={{ flex: 1, border: "none", background: "transparent", color: "var(--fg-1)", fontSize: 12, outline: "none" }}
-                onKeyDown={(e) => e.key === "Enter" && create(type)} autoFocus />
-              <button className="btn btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => create(type)}>
-                {googleConnected ? "Erstellen + Google Doc" : "Erstellen"}
-              </button>
-              <button className="btn btn-ghost btn-icon" onClick={() => setCreating(null)}><X size={13} /></button>
+        {creating && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 10, padding: 10, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["cv", "letter"] as const).map((t) => (
+                <button key={t} onClick={() => setCreating(t)} style={{
+                  padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  border: `1px solid ${creating === t ? "var(--accent)" : "var(--border)"}`,
+                  background: creating === t ? "var(--accent-08)" : "transparent",
+                  color: creating === t ? "var(--accent)" : "var(--fg-3)",
+                  fontFamily: "var(--font-sans)"
+                }}>{t === "cv" ? "Lebenslauf" : "Anschreiben"}</button>
+              ))}
             </div>
-          )}
+            <input value={newName} onChange={(e) => setNewName(e.target.value)}
+              placeholder={creating === "cv" ? "Lebenslauf v1" : "Anschreiben v1"}
+              style={{ flex: 1, minWidth: 120, border: "none", background: "transparent", color: "var(--fg-1)", fontSize: 12, outline: "none" }}
+              onKeyDown={(e) => e.key === "Enter" && create(creating)} autoFocus />
+            <button className="btn btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => create(creating)}>
+              {googleConnected ? "Erstellen + Google Doc" : "Erstellen"}
+            </button>
+            <button className="btn btn-ghost btn-icon" onClick={() => setCreating(null)}><X size={13} /></button>
+          </div>
+        )}
 
-          {grouped[type].length === 0 && (
-            <div style={{ color: "var(--fg-3)", fontSize: 12, padding: "12px 0", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 8 }}>
-              Noch keine {type === "cv" ? "Lebensläufe" : "Anschreiben"}
-            </div>
-          )}
-
+        {linkedDocs.length === 0 && !creating ? (
+          <div style={{ color: "var(--fg-3)", fontSize: 12, padding: "14px 0", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 8 }}>
+            Noch keine Dokumente zugewiesen
+          </div>
+        ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {grouped[type].map((doc) => {
+            {linkedDocs.map((doc) => {
               const status = DOC_STATUS_STYLES[doc.status ?? "draft"] ?? DOC_STATUS_STYLES.draft;
+              const url = doc.googleDocUrl ?? doc.fileUrl;
+              const isGDoc = !!doc.googleDocUrl;
               return (
-                <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)" }}>
-                  <FileText size={14} style={{ color: "var(--fg-3)", flexShrink: 0 }} />
+                <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
+                  <div style={{ color: isGDoc ? "#4285f4" : "var(--fg-3)", flexShrink: 0 }}>
+                    {isGDoc ? <GDocIcon size={14} /> : <FileText size={14} />}
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)" }}>{doc.name}</div>
-                    <div style={{ fontSize: 10, color: "var(--fg-3)", fontFamily: "var(--font-mono)" }}>v{doc.version ?? 1}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{doc.name}</div>
+                    <div style={{ fontSize: 10, color: "var(--fg-3)" }}>
+                      {doc.type === "cv" ? "Lebenslauf" : doc.type === "letter" ? "Anschreiben" : "Dokument"}
+                      {doc.userDocumentId && <span style={{ marginLeft: 4, color: "var(--accent)" }}>· Bibliothek</span>}
+                    </div>
                   </div>
                   <select value={doc.status ?? "draft"} onChange={(e) => updateStatus(doc.id, e.target.value)}
                     style={{ fontSize: 10, fontWeight: 700, padding: "2px 6px", borderRadius: 999, border: "1px solid", borderColor: status.color, background: status.bg, color: status.color, cursor: "pointer", fontFamily: "var(--font-sans)" }}>
                     {Object.entries(DOC_STATUS_STYLES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                   </select>
-                  {doc.googleDocUrl && (
-                    <a href={doc.googleDocUrl} target="_blank" rel="noreferrer" className="btn btn-secondary" style={{ fontSize: 11, padding: "4px 8px", gap: 4 }}>
-                      <ExternalLink size={11} /> Docs
+                  {url && (
+                    <a href={url} target="_blank" rel="noreferrer" style={{
+                      display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", borderRadius: 6,
+                      border: `1px solid ${isGDoc ? "#4285f4" : "var(--border)"}`,
+                      background: isGDoc ? "rgba(66,133,244,0.08)" : "transparent",
+                      color: isGDoc ? "#4285f4" : "var(--fg-2)", fontSize: 11, fontWeight: 600,
+                      textDecoration: "none", whiteSpace: "nowrap"
+                    }}>
+                      {isGDoc ? <GDocIcon size={11} /> : <ExternalLink size={11} />}
+                      {isGDoc ? "Öffnen" : "Link"}
                     </a>
                   )}
                   <button className="btn btn-ghost btn-icon" onClick={() => deleteDoc(doc.id)}><Trash2 size={12} /></button>
@@ -376,8 +518,88 @@ function DocumentsTab({ app }: { app: Application }) {
               );
             })}
           </div>
-        </div>
-      ))}
+        )}
+      </div>
+
+      {/* ── Section 2: Bibliothek ── */}
+      <div>
+        <button
+          onClick={() => setLibOpen((v) => !v)}
+          style={{
+            display: "flex", alignItems: "center", gap: 6, width: "100%",
+            background: "none", border: "none", cursor: "pointer", padding: "4px 0 10px",
+            color: "var(--fg-2)", fontFamily: "var(--font-sans)"
+          }}
+        >
+          <ChevronRight size={13} style={{ transform: libOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
+          <div className="eyebrow" style={{ flex: 1, textAlign: "left" }}>Aus Bibliothek zuweisen</div>
+          {library.length > 0 && (
+            <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{library.length} Dokumente</span>
+          )}
+        </button>
+
+        {libOpen && (
+          library.length === 0 ? (
+            <div style={{ fontSize: 12, color: "var(--fg-3)", padding: "12px 0", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 8 }}>
+              Keine Dokumente in der Bibliothek —{" "}
+              <a href="/documents" style={{ color: "var(--accent)", fontWeight: 600 }}>Dokumente hinzufügen →</a>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {LIB_CATEGORIES.map((cat) => {
+                const catDocs = library.filter((d) => d.category === cat.value);
+                if (catDocs.length === 0) return null;
+                return (
+                  <div key={cat.value}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: cat.color, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+                      {cat.label}
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                      {catDocs.map((libDoc) => {
+                        const isLinked  = linkedIds.has(libDoc.id);
+                        const isLoading = togglingId === libDoc.id;
+                        const isGDoc    = libDoc.fileType === "gdoc";
+                        return (
+                          <div
+                            key={libDoc.id}
+                            onClick={() => !isLoading && toggleLibDoc(libDoc)}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 10,
+                              padding: "9px 12px", borderRadius: 8, cursor: isLoading ? "wait" : "pointer",
+                              border: `1px solid ${isLinked ? "var(--accent)" : "var(--border)"}`,
+                              background: isLinked ? "var(--accent-08)" : "var(--surface-2)",
+                              transition: "all 0.15s ease"
+                            }}
+                          >
+                            <div style={{ color: isLinked ? "var(--accent)" : (isGDoc ? "#4285f4" : "var(--fg-3)"), flexShrink: 0 }}>
+                              {isGDoc ? <GDocIcon size={14} /> : <FileText size={14} />}
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: isLinked ? "var(--accent)" : "var(--fg-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {libDoc.name}
+                              </div>
+                              {libDoc.description && (
+                                <div style={{ fontSize: 10, color: "var(--fg-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{libDoc.description}</div>
+                              )}
+                            </div>
+                            <div style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 6, border: `1.5px solid ${isLinked ? "var(--accent)" : "var(--border)"}`, background: isLinked ? "var(--accent)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
+                              {isLoading
+                                ? <Loader size={11} style={{ animation: "spin 1s linear infinite", color: isLinked ? "#fff" : "var(--fg-3)" }} />
+                                : isLinked
+                                  ? <Check size={11} style={{ color: "#fff" }} />
+                                  : <Plus size={11} style={{ color: "var(--fg-3)" }} />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        )}
+      </div>
     </>
   );
 }
@@ -682,6 +904,7 @@ type Props = { app: Application; onClose: () => void };
 
 export function DetailDrawer({ app, onClose }: Props) {
   const [tab, setTab] = useState<Tab>("overview");
+  const [stage, setStage] = useState<Application["stage"]>(app.stage);
   const queryClient = useQueryClient();
 
   const patchMutation = useMutation({
@@ -689,6 +912,11 @@ export function DetailDrawer({ app, onClose }: Props) {
       api.patch(`/api/applications/${app.id}`, patch).then((r) => r.data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["applications"] })
   });
+
+  const handleStageChange = (s: string) => {
+    setStage(s as Application["stage"]);
+    patchMutation.mutate({ stage: s as Application["stage"] });
+  };
 
   const color = getCompanyColor(app.company);
 
@@ -708,9 +936,6 @@ export function DetailDrawer({ app, onClose }: Props) {
                 {app.role}
               </h2>
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-                <span className={`chip chip-stage stage-${app.stage}`}>
-                  <span className="dot" />{STAGE_LABELS[app.stage] ?? app.stage}
-                </span>
                 {app.priority && app.priority !== "low" && (
                   <span className={`chip chip-priority-${app.priority}`}>{app.priority.charAt(0).toUpperCase() + app.priority.slice(1)}</span>
                 )}
@@ -718,7 +943,8 @@ export function DetailDrawer({ app, onClose }: Props) {
                 {app.salary && <span className="tag mono">{app.salary}</span>}
               </div>
             </div>
-            <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
+              <StagePicker value={stage} onChange={handleStageChange} />
               {app.url && <a href={app.url} target="_blank" rel="noreferrer" className="btn btn-secondary"><ExternalLink size={13} /> Job</a>}
               <button className="btn btn-ghost btn-icon"><MoreHorizontal size={14} /></button>
               <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
@@ -736,7 +962,7 @@ export function DetailDrawer({ app, onClose }: Props) {
         </div>
 
         <div className="drawer-body" style={{ paddingTop: 16 }}>
-          {tab === "overview"     && <OverviewTab     app={app} onSave={(p) => patchMutation.mutate(p)} />}
+          {tab === "overview"     && <OverviewTab     app={app} stage={stage} onSave={(p) => patchMutation.mutate(p)} />}
           {tab === "description"  && <DescriptionTab  app={app} onSave={(p) => patchMutation.mutate(p)} />}
           {tab === "documents"    && <DocumentsTab    app={app} />}
           {tab === "process"      && <ProcessTab      app={app} />}

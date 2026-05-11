@@ -850,22 +850,40 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
-.field input, .field textarea, .field select {
+.field input, .field textarea {
   width: 100%;
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface-2);
+  padding: 6px 2px;
+  border: none;
+  border-bottom: 1px solid transparent;
+  border-radius: 0;
+  background: transparent;
   color: var(--fg-1);
   font-size: 13px;
   font-family: var(--font-sans);
   outline: none;
-  transition: border-color 0.12s ease;
+  transition: border-color 0.15s ease;
   resize: vertical;
 }
-.field input:focus, .field textarea:focus, .field select:focus { border-color: var(--accent); }
+.field input:hover,    .field textarea:hover    { border-bottom-color: var(--border-strong); }
+.field input:focus,    .field textarea:focus    { border-bottom-color: var(--accent); }
 .field input::placeholder, .field textarea::placeholder { color: var(--fg-3); }
-.field select { cursor: pointer; }
+.field input:disabled, .field textarea:disabled { opacity: 0.5; }
+
+/* Selects keep a subtle box — underline doesn't work well with dropdowns */
+.field select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--fg-1);
+  font-size: 12px;
+  font-family: var(--font-sans);
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.12s ease;
+}
+.field select:focus { border-color: var(--accent); }
 
 /* Notion-style underline inputs — in-place editing, no box */
 .input-line {
