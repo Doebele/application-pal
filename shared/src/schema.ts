@@ -1,4 +1,4 @@
-import { integer, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -13,6 +13,51 @@ export const applicationStageEnum = pgEnum("application_stage", [
   "rejected",
   "accepted"
 ]);
+
+export const kbSourceKindEnum = pgEnum("kb_source_kind", ["url", "pdf"]);
+export const kbSourceStatusEnum = pgEnum("kb_source_status", ["pending", "done", "error"]);
+export const kbInsightEntityTypeEnum = pgEnum("kb_insight_entity_type", ["company", "role"]);
+
+// ─── Knowledge Base ────────────────────────────────────────────
+export const kbCompanies = pgTable("kb_companies", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  name: text("name").notNull(),
+  website: text("website"),
+  industry: text("industry"),
+  size: text("size"),
+  headquarters: text("headquarters"),
+  cultureNotes: text("culture_notes"),
+  extractedAt: timestamp("extracted_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+export const kbRoles = pgTable("kb_roles", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  companyId: uuid("company_id").references(() => kbCompanies.id, { onDelete: "set null" }),
+  title: text("title").notNull(),
+  seniority: text("seniority"),
+  requirements: text("requirements").array(),
+  salaryRange: text("salary_range"),
+  extractedAt: timestamp("extracted_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+export const kbSources = pgTable("kb_sources", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  urlOrPath: text("url_or_path").notNull(),
+  kind: kbSourceKindEnum("kind").notNull(),
+  status: kbSourceStatusEnum("status").notNull().default("pending"),
+  rawText: text("raw_text"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+export const kbInsights = pgTable("kb_insights", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  sourceId: uuid("source_id").references(() => kbSources.id, { onDelete: "cascade" }),
+  entityType: kbInsightEntityTypeEnum("entity_type").notNull(),
+  entityId: uuid("entity_id").notNull(),
+  confidence: numeric("confidence", { precision: 3, scale: 2 }).notNull().default("0.50"),
+  notes: text("notes")
+});
 
 export const applications = pgTable("applications", {
   id: uuid("id").defaultRandom().primaryKey(),
@@ -29,6 +74,8 @@ export const applications = pgTable("applications", {
   tags: text("tags"),
   nextDeadline: text("next_deadline"),
   logoUrl: text("logo_url"),
+  kbRoleId: uuid("kb_role_id").references(() => kbRoles.id, { onDelete: "set null" }),
+  archived: text("archived").default("false"),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -101,6 +148,28 @@ export const googleOAuthTokens = pgTable("google_oauth_tokens", {
 });
 
 // ─── Schemas & Types ──────────────────────────────────────────
+export const kbCompanySelectSchema = createSelectSchema(kbCompanies);
+export const kbCompanyInsertSchema = createInsertSchema(kbCompanies, {
+  name: z.string().trim().min(1)
+}).omit({ id: true, extractedAt: true });
+
+export const kbRoleSelectSchema = createSelectSchema(kbRoles);
+export const kbRoleInsertSchema = createInsertSchema(kbRoles, {
+  title: z.string().trim().min(1)
+}).omit({ id: true, extractedAt: true });
+
+export const kbSourceSelectSchema = createSelectSchema(kbSources);
+export const kbSourceInsertSchema = createInsertSchema(kbSources, {
+  urlOrPath: z.string().trim().min(1),
+  kind: z.enum(["url", "pdf"]),
+  status: z.enum(["pending", "done", "error"]).default("pending")
+}).omit({ id: true, createdAt: true });
+
+export const kbInsightSelectSchema = createSelectSchema(kbInsights);
+export const kbInsightInsertSchema = createInsertSchema(kbInsights, {
+  entityType: z.enum(["company", "role"])
+}).omit({ id: true });
+
 export const applicationSelectSchema = createSelectSchema(applications);
 export const applicationInsertSchema = createInsertSchema(applications, {
   company: z.string().trim().min(1),
@@ -165,6 +234,11 @@ export const aiConfigSchema = z.object({
   lmStudioModel: z.string().optional()
 });
 
+export const kbIngestUrlRequestSchema = z.object({
+  url: z.string().trim().url(),
+  ai: aiConfigSchema.optional()
+});
+
 export const applicationImportRequestSchema = z
   .object({
     url: z.string().trim().url().optional(),
@@ -192,6 +266,10 @@ export const stubDocumentResponseSchema = z.object({
 });
 
 export type ApplicationStage = (typeof applicationStageEnum.enumValues)[number];
+export type KbCompany = z.infer<typeof kbCompanySelectSchema>;
+export type KbRole = z.infer<typeof kbRoleSelectSchema>;
+export type KbSource = z.infer<typeof kbSourceSelectSchema>;
+export type KbInsight = z.infer<typeof kbInsightSelectSchema>;
 export type Application = z.infer<typeof applicationSelectSchema>;
 export type UserProfile = z.infer<typeof userProfileSelectSchema>;
 export type ApplicationDocument = z.infer<typeof applicationDocumentSelectSchema>;
@@ -200,3 +278,4 @@ export type ApplicationContact = z.infer<typeof applicationContactSelectSchema>;
 export type CreateApplicationInput = z.infer<typeof applicationInsertSchema>;
 export type PatchApplicationInput = z.infer<typeof applicationPatchSchema>;
 export type ImportApplicationInput = z.infer<typeof applicationImportRequestSchema>;
+export type KbIngestUrlInput = z.infer<typeof kbIngestUrlRequestSchema>;

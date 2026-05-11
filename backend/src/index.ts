@@ -5,6 +5,7 @@ import {
   applicationImportRequestSchema,
   applicationInsertSchema,
   applicationPatchSchema,
+  kbIngestUrlRequestSchema,
   applicationDocumentInsertSchema,
   applicationDocumentPatchSchema,
   applicationActivityInsertSchema,
@@ -20,11 +21,16 @@ import {
   userProfile,
   userDocuments,
   googleOAuthTokens,
+  kbCompanies,
+  kbRoles,
+  kbSources,
+  kbInsights,
   applicationStageEnum,
   stubDocumentResponseSchema,
   type AiConfig
 } from "@application-pal/shared";
-import { desc, eq } from "drizzle-orm";
+import { PDFParse } from "pdf-parse";
+import { and, desc, eq, ilike, inArray, ne, or, isNull, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
 import { env } from "./env.js";
@@ -35,6 +41,10 @@ const roleKeywords = [
   "entwickler",
   "developer",
   "software engineer",
+  "ux",
+  "ui",
+  "designer",
+  "product design",
   "frontend",
   "backend",
   "full stack",
@@ -53,6 +63,49 @@ const namedEntityPattern =
   /\b([A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9&.-]{2,}(?:[ \t]+[A-ZÄÖÜ][A-Za-zÄÖÜäöüß0-9&.-]{2,}){0,3})\b/;
 
 const stageTriggersAppliedAt = new Set(["application_sent"]);
+
+// ─── Work-type tag detection ──────────────────────────────────────────────────
+function pickWorkTags(text: string): string[] {
+  const tags: string[] = [];
+
+  // Work location — mutually exclusive (Hybrid > Remote > On-site)
+  const isRemote = /\b(remote|homeoffice|home[ -]office|work from home|wfh|dezentral)\b/i.test(text);
+  const isHybrid = /\b(hybrid|hybrides?\s+arbeiten|teilweise\s+remote|remote.*flexibel|flexibel.*remote)\b/i.test(text);
+  const isOnsite = /\b(vor[ -]ort|on[ -]?site|onsite|in[ -]?office|präsenz(?:arbeit)?|im\s+büro)\b/i.test(text);
+
+  if (isHybrid)      tags.push("Hybrid");
+  else if (isRemote) tags.push("Remote");
+  else if (isOnsite) tags.push("On-site");
+
+  // Work time — "80-100%", "80%", "60%", etc.
+  const VALID_PCTS = new Set([40, 50, 60, 70, 80, 90, 100]);
+
+  // Try range first: "80-100%"
+  const rangeMatch = text.match(/\b(\d{2,3})[–\-](\d{2,3})\s*%/);
+  if (rangeMatch) {
+    const lo = parseInt(rangeMatch[1]);
+    const hi = parseInt(rangeMatch[2]);
+    if (VALID_PCTS.has(lo) || VALID_PCTS.has(hi)) {
+      tags.push(`${rangeMatch[1]}-${rangeMatch[2]}%`);
+    }
+  }
+
+  // Single percentage if no range found
+  if (!tags.some((t) => t.includes("%"))) {
+    const singles = text.matchAll(/\b(\d{2,3})\s*%/g);
+    for (const m of singles) {
+      const num = parseInt(m[1]);
+      if (VALID_PCTS.has(num)) { tags.push(`${num}%`); break; }
+    }
+  }
+
+  // Vollzeit / Fulltime fallback if no % found
+  if (!tags.some((t) => t.includes("%"))) {
+    if (/\b(vollzeit|full[- ]?time|fulltime)\b/i.test(text)) tags.push("Fulltime");
+  }
+
+  return tags;
+}
 
 const extractTextFromHtml = (html: string): string =>
   html
@@ -89,7 +142,7 @@ Rules:
 - role: job title only, e.g. "Digital Experience Designer 80-100%"
 - location: city only, e.g. "Sankt Gallen"
 - salary: numeric range only or null
-- tags: 4-6 skills from the requirements, e.g. ["Figma","UX/UI","Wireframing","Agile"]
+- tags: 4-6 skills from the requirements, e.g. ["Figma","UX/UI","Wireframing","Agile"]. Also include one work-location tag if detectable ("Remote", "Hybrid", or "On-site") and the work-time if mentioned ("80-100%", "80%", "Fulltime", etc.)
 - description: 2 sentences summarizing what the person will do (not company overview, not ratings)
 - IGNORE: ratings, percentages, "bewerben" buttons, review scores, company size, revenue data`;
 
@@ -166,7 +219,7 @@ async function extractWithAnthropic(text: string, ai: AiConfig): Promise<LlmExtr
   return parseJsonResponse(raw);
 }
 
-function parseJsonResponse(raw: string): LlmExtracted | null {
+function extractJsonObject(raw: string): Record<string, unknown> | null {
   try {
     // strip Qwen3 thinking block <think>...</think>
     let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
@@ -176,13 +229,24 @@ function parseJsonResponse(raw: string): LlmExtracted | null {
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return null;
     const parsed = JSON.parse(jsonMatch[0]);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return null;
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function parseJsonResponse(raw: string): LlmExtracted | null {
+  try {
+    const parsed = extractJsonObject(raw);
+    if (!parsed) return null;
     return {
-      company:     parsed.company     ?? null,
-      role:        parsed.role        ?? null,
-      location:    parsed.location    ?? null,
-      salary:      parsed.salary      ?? null,
-      tags:        Array.isArray(parsed.tags) ? parsed.tags.slice(0, 6) : [],
-      description: parsed.description ?? ""
+      company:     typeof parsed.company === "string" ? parsed.company : null,
+      role:        typeof parsed.role === "string" ? parsed.role : null,
+      location:    typeof parsed.location === "string" ? parsed.location : null,
+      salary:      typeof parsed.salary === "string" ? parsed.salary : null,
+      tags:        Array.isArray(parsed.tags) ? parsed.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 6) : [],
+      description: typeof parsed.description === "string" ? parsed.description : ""
     };
   } catch {
     return null;
@@ -225,6 +289,198 @@ async function extractWithAi(text: string, ai: AiConfig): Promise<LlmExtracted |
   return null;
 }
 
+type KbExtracted = {
+  company: {
+    name: string;
+    website: string | null;
+    industry: string | null;
+    size: string | null;
+    headquarters: string | null;
+    cultureNotes: string | null;
+  } | null;
+  role: {
+    title: string;
+    seniority: string | null;
+    requirements: string[];
+    salaryRange: string | null;
+  } | null;
+  confidence: number;
+  notes: string | null;
+};
+
+const KB_EXTRACTION_PROMPT = `Extract a job/company knowledge base entry. Return ONLY this JSON object, nothing else:
+{"company":{"name":"<company name>","website":"<url or null>","industry":"<industry or null>","size":"<company size or null>","headquarters":"<city or null>","cultureNotes":"<short notes or null>"},"role":{"title":"<role title>","seniority":"<entry/junior/mid/senior or null>","requirements":["<requirement>"],"salaryRange":"<range or null>"},"confidence":0.0,"notes":"<short extraction note or null>"}
+
+Rules:
+- Keep company null if the source only describes a role without a clear employer.
+- Keep role null if the source only describes a company.
+- requirements must be short, concrete skill or qualification bullets.
+- confidence must be between 0 and 1.`;
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean).slice(0, 12)
+    : [];
+}
+
+function parseKbJsonResponse(raw: string): KbExtracted | null {
+  const parsed = extractJsonObject(raw);
+  if (!parsed) return null;
+
+  const companyRaw = parsed.company && typeof parsed.company === "object" && !Array.isArray(parsed.company)
+    ? parsed.company as Record<string, unknown>
+    : null;
+  const roleRaw = parsed.role && typeof parsed.role === "object" && !Array.isArray(parsed.role)
+    ? parsed.role as Record<string, unknown>
+    : null;
+
+  const companyName = asString(companyRaw?.name);
+  const roleTitle = asString(roleRaw?.title);
+  const confidence = typeof parsed.confidence === "number" ? Math.min(1, Math.max(0, parsed.confidence)) : 0.5;
+
+  return {
+    company: companyName ? {
+      name: companyName,
+      website: asString(companyRaw?.website),
+      industry: asString(companyRaw?.industry),
+      size: asString(companyRaw?.size),
+      headquarters: asString(companyRaw?.headquarters),
+      cultureNotes: asString(companyRaw?.cultureNotes)
+    } : null,
+    role: roleTitle ? {
+      title: roleTitle,
+      seniority: asString(roleRaw?.seniority),
+      requirements: asStringArray(roleRaw?.requirements),
+      salaryRange: asString(roleRaw?.salaryRange)
+    } : null,
+    confidence,
+    notes: asString(parsed.notes)
+  };
+}
+
+async function extractKnowledgeBaseWithAnthropic(text: string, ai?: AiConfig): Promise<KbExtracted | null> {
+  const apiKey = ai?.anthropicApiKey ?? process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+
+  const res = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 900,
+      system: KB_EXTRACTION_PROMPT,
+      messages: [{ role: "user", content: `Extract from this source:\n\n${cleanJobText(text).slice(0, 8000)}` }]
+    }),
+    signal: AbortSignal.timeout(120_000)
+  });
+
+  if (!res.ok) {
+    console.warn("Anthropic KB extraction failed:", res.status, await res.text());
+    return null;
+  }
+
+  const json = await res.json() as { content?: { type: string; text: string }[] };
+  const raw = json.content?.find((b) => b.type === "text")?.text ?? "";
+  return parseKbJsonResponse(raw);
+}
+
+function fallbackKnowledgeBaseExtraction(text: string, sourceUrl?: string): KbExtracted {
+  const cleaned = cleanJobText(text);
+  const company = pickCompany(cleaned);
+  const role = pickRole(cleaned);
+
+  return {
+    company: company ? {
+      name: company,
+      website: sourceUrl ?? null,
+      industry: null,
+      size: null,
+      headquarters: pickLocation(cleaned),
+      cultureNotes: cleaned.slice(0, 500) || null
+    } : null,
+    role: role ? {
+      title: role.slice(0, 160),
+      seniority: /\b(berufsanfänger|junior|entry|trainee|praktikant)\b/i.test(cleaned) ? "junior" : null,
+      requirements: pickWorkTags(cleaned),
+      salaryRange: null
+    } : null,
+    confidence: 0.35,
+    notes: "Fallback extraction without Anthropic response"
+  };
+}
+
+async function extractKnowledgeBase(text: string, ai?: AiConfig, sourceUrl?: string): Promise<KbExtracted> {
+  try {
+    const llm = await extractKnowledgeBaseWithAnthropic(text, ai);
+    if (llm?.company || llm?.role) return llm;
+  } catch (error) {
+    console.warn("KB LLM extraction failed, falling back to regex:", error);
+  }
+  return fallbackKnowledgeBaseExtraction(text, sourceUrl);
+}
+
+async function persistKnowledgeBaseSource(args: {
+  kind: "url" | "pdf";
+  urlOrPath: string;
+  rawText: string;
+  ai?: AiConfig;
+}) {
+  const [source] = await db.insert(kbSources).values({
+    kind: args.kind,
+    urlOrPath: args.urlOrPath,
+    status: "pending",
+    rawText: args.rawText
+  }).returning();
+
+  try {
+    const extracted = await extractKnowledgeBase(args.rawText, args.ai, args.kind === "url" ? args.urlOrPath : undefined);
+    if (!extracted.company && !extracted.role) {
+      throw new Error("No company or role could be extracted.");
+    }
+
+    const [company] = extracted.company
+      ? await db.insert(kbCompanies).values(extracted.company).returning()
+      : [null];
+    const [role] = extracted.role
+      ? await db.insert(kbRoles).values({ ...extracted.role, companyId: company?.id ?? null }).returning()
+      : [null];
+
+    const insightRows = [
+      company ? {
+        sourceId: source.id,
+        entityType: "company" as const,
+        entityId: company.id,
+        confidence: extracted.confidence.toFixed(2),
+        notes: extracted.notes
+      } : null,
+      role ? {
+        sourceId: source.id,
+        entityType: "role" as const,
+        entityId: role.id,
+        confidence: extracted.confidence.toFixed(2),
+        notes: extracted.notes
+      } : null
+    ].filter((row): row is NonNullable<typeof row> => row !== null);
+
+    if (insightRows.length > 0) await db.insert(kbInsights).values(insightRows);
+    await db.update(kbSources).set({ status: "done", errorMessage: null }).where(eq(kbSources.id, source.id));
+
+    return { companyId: company?.id ?? null, roleId: role?.id ?? null, sourceId: source.id };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Knowledge base ingestion failed.";
+    await db.update(kbSources).set({ status: "error", errorMessage: message }).where(eq(kbSources.id, source.id));
+    throw error;
+  }
+}
+
 app.onError((error, c) => {
   if (error instanceof ZodError) {
     return c.json({ error: "Validation failed", details: error.flatten() }, 400);
@@ -242,7 +498,13 @@ app.get("/health", (c) =>
 );
 
 app.get("/api/applications", async (c) => {
-  const rows = await db.select().from(applications).orderBy(desc(applications.updatedAt));
+  const showArchived = c.req.query("archived") === "true";
+  const rows = await db.select().from(applications)
+    .where(showArchived
+      ? eq(applications.archived, "true")
+      : or(isNull(applications.archived), ne(applications.archived, "true"))
+    )
+    .orderBy(desc(applications.updatedAt));
   return c.json(rows);
 });
 
@@ -310,14 +572,22 @@ app.delete("/api/applications/:id", async (c) => {
   return c.json({ ok: true });
 });
 
-// Derive a logo URL from the job posting URL domain using Clearbit
-function logoUrlFromJobUrl(jobUrl: string | undefined): string | null {
-  if (!jobUrl) return null;
+// Resolve company logo:
+// 1. Use Clearbit autocomplete to find the company domain
+// 2. Construct Google favicon URL from the domain (Clearbit logo service is no longer available)
+async function resolveCompanyLogo(companyName: string | null): Promise<string | null> {
+  if (!companyName) return null;
   try {
-    const { hostname } = new URL(jobUrl);
-    // Strip leading "www." and use root domain
-    const domain = hostname.replace(/^www\./, "");
-    return `https://logo.clearbit.com/${domain}`;
+    const res = await fetch(
+      `https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(companyName)}`,
+      { signal: AbortSignal.timeout(4_000) }
+    );
+    if (!res.ok) return null;
+    const companies = await res.json() as Array<{ name: string; domain: string; logo?: string | null }>;
+    const domain = companies[0]?.domain;
+    if (!domain) return null;
+    // Google favicon service — reliable, follows 301 redirect in browser automatically
+    return `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
   } catch {
     return null;
   }
@@ -326,9 +596,6 @@ function logoUrlFromJobUrl(jobUrl: string | undefined): string | null {
 app.post("/api/applications/import", zValidator("json", applicationImportRequestSchema), async (c) => {
   const payload = c.req.valid("json");
   let text = payload.text ?? "";
-
-  // Derive logo from the job URL domain (Clearbit)
-  const logoUrl = logoUrlFromJobUrl(payload.url ?? undefined);
 
   if (payload.url) {
     try {
@@ -344,18 +611,29 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
 
   const normalized = text.trim();
 
+  // Detect work-type tags from raw text (runs for both AI and regex paths)
+  const workTags = pickWorkTags(normalized);
+
+  const mergeTags = (aiTags: string[]): string => {
+    const lower = aiTags.map((t) => t.toLowerCase());
+    const extra = workTags.filter((wt) => !lower.some((t) => t.includes(wt.toLowerCase())));
+    return JSON.stringify([...aiTags, ...extra]);
+  };
+
   // Try LLM extraction if AI config provided
   if (payload.ai && payload.ai.provider !== "none") {
     try {
       const llm = await extractWithAi(normalized, payload.ai);
       if (llm) {
+        const allTags = mergeTags(llm.tags);
+        const logoUrl = await resolveCompanyLogo(llm.company);
         return c.json({
           company:     llm.company,
           role:        llm.role,
           location:    llm.location,
           description: llm.description || normalized.slice(0, 500),
           salary:      llm.salary,
-          tags:        llm.tags.length > 0 ? JSON.stringify(llm.tags) : null,
+          tags:        JSON.parse(allTags).length > 0 ? allTags : null,
           source:      null,
           logoUrl,
         });
@@ -366,16 +644,148 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
   }
 
   // Regex fallback
+  const company = pickCompany(normalized);
+  const logoUrl = await resolveCompanyLogo(company);
   return c.json({
-    company:     pickCompany(normalized),
+    company,
     role:        pickRole(normalized),
     location:    pickLocation(normalized),
     description: normalized.slice(0, 1000),
     salary:      null,
-    tags:        null,
+    tags:        workTags.length > 0 ? JSON.stringify(workTags) : null,
     source:      null,
     logoUrl,
   });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Knowledge Base
+// ─────────────────────────────────────────────────────────────────
+function parseListLimit(value: string | undefined): number {
+  const parsed = Number(value ?? 25);
+  if (!Number.isFinite(parsed)) return 25;
+  return Math.min(Math.max(Math.trunc(parsed), 1), 100);
+}
+
+app.post("/api/kb/ingest/url", zValidator("json", kbIngestUrlRequestSchema), async (c) => {
+  const payload = c.req.valid("json");
+  const response = await fetch(payload.url, { signal: AbortSignal.timeout(30_000) });
+  if (!response.ok) {
+    return c.json({ error: "Source URL could not be fetched." }, 502);
+  }
+
+  const html = await response.text();
+  const rawText = extractTextFromHtml(html);
+  if (!rawText) return c.json({ error: "Source URL did not contain readable text." }, 422);
+
+  const result = await persistKnowledgeBaseSource({
+    kind: "url",
+    urlOrPath: payload.url,
+    rawText,
+    ai: payload.ai
+  });
+
+  return c.json(result, 201);
+});
+
+app.post("/api/kb/ingest/pdf", async (c) => {
+  const body = await c.req.parseBody();
+  const file = body.file;
+  if (!(file instanceof File)) {
+    return c.json({ error: "Multipart field 'file' is required." }, 400);
+  }
+
+  const parser = new PDFParse({ data: Buffer.from(await file.arrayBuffer()) });
+  const parsed = await parser.getText();
+  await parser.destroy();
+  const rawText = parsed.text.trim();
+  if (!rawText) return c.json({ error: "PDF did not contain readable text." }, 422);
+
+  const result = await persistKnowledgeBaseSource({
+    kind: "pdf",
+    urlOrPath: file.name || "uploaded.pdf",
+    rawText
+  });
+
+  return c.json(result, 201);
+});
+
+app.get("/api/kb/companies", async (c) => {
+  const q = c.req.query("q")?.trim();
+  const industry = c.req.query("industry")?.trim();
+  const limit = parseListLimit(c.req.query("limit"));
+  const conditions: SQL[] = [];
+
+  if (q) conditions.push(or(ilike(kbCompanies.name, `%${q}%`), ilike(kbCompanies.industry, `%${q}%`))!);
+  if (industry) conditions.push(ilike(kbCompanies.industry, `%${industry}%`));
+  const where = conditions.length === 0 ? undefined : conditions.length === 1 ? conditions[0] : and(...conditions);
+
+  const rows = where
+    ? await db.select().from(kbCompanies).where(where).orderBy(desc(kbCompanies.extractedAt)).limit(limit)
+    : await db.select().from(kbCompanies).orderBy(desc(kbCompanies.extractedAt)).limit(limit);
+
+  return c.json({ data: rows, limit });
+});
+
+app.get("/api/kb/companies/:id", async (c) => {
+  const id = c.req.param("id");
+  const [company] = await db.select().from(kbCompanies).where(eq(kbCompanies.id, id)).limit(1);
+  if (!company) return c.json({ error: "Company not found" }, 404);
+
+  const roles = await db.select().from(kbRoles).where(eq(kbRoles.companyId, id)).orderBy(desc(kbRoles.extractedAt));
+  const insightConditions: SQL[] = [
+    and(eq(kbInsights.entityType, "company"), eq(kbInsights.entityId, id))!
+  ];
+
+  for (const role of roles) {
+    insightConditions.push(and(eq(kbInsights.entityType, "role"), eq(kbInsights.entityId, role.id))!);
+  }
+
+  const insights = await db.select().from(kbInsights).where(or(...insightConditions)!);
+  const sourceIds = Array.from(new Set(insights.map((insight) => insight.sourceId).filter((sourceId): sourceId is string => Boolean(sourceId))));
+  const sources = sourceIds.length > 0
+    ? await db.select().from(kbSources).where(inArray(kbSources.id, sourceIds)).orderBy(desc(kbSources.createdAt))
+    : [];
+
+  return c.json({ ...company, roles, sources, insights });
+});
+
+app.get("/api/kb/roles", async (c) => {
+  const q = c.req.query("q")?.trim();
+  const companyId = c.req.query("companyId")?.trim();
+  const seniority = c.req.query("seniority")?.trim();
+  const limit = parseListLimit(c.req.query("limit"));
+  const conditions: SQL[] = [];
+
+  if (q) conditions.push(ilike(kbRoles.title, `%${q}%`));
+  if (companyId) conditions.push(eq(kbRoles.companyId, companyId));
+  if (seniority) conditions.push(ilike(kbRoles.seniority, `%${seniority}%`));
+  const where = conditions.length === 0 ? undefined : conditions.length === 1 ? conditions[0] : and(...conditions);
+
+  const rows = where
+    ? await db.select().from(kbRoles).where(where).orderBy(desc(kbRoles.extractedAt)).limit(limit)
+    : await db.select().from(kbRoles).orderBy(desc(kbRoles.extractedAt)).limit(limit);
+
+  return c.json({ data: rows, limit });
+});
+
+app.get("/api/kb/roles/:id", async (c) => {
+  const id = c.req.param("id");
+  const [role] = await db.select().from(kbRoles).where(eq(kbRoles.id, id)).limit(1);
+  if (!role) return c.json({ error: "Role not found" }, 404);
+
+  const company = role.companyId
+    ? (await db.select().from(kbCompanies).where(eq(kbCompanies.id, role.companyId)).limit(1))[0] ?? null
+    : null;
+  const insights = await db.select().from(kbInsights)
+    .where(and(eq(kbInsights.entityType, "role"), eq(kbInsights.entityId, id)))
+    .orderBy(desc(kbInsights.id));
+  const sourceIds = Array.from(new Set(insights.map((insight) => insight.sourceId).filter((sourceId): sourceId is string => Boolean(sourceId))));
+  const sources = sourceIds.length > 0
+    ? await db.select().from(kbSources).where(inArray(kbSources.id, sourceIds)).orderBy(desc(kbSources.createdAt))
+    : [];
+
+  return c.json({ ...role, company, sources, insights });
 });
 
 // Proxy LM Studio model list to avoid CORS issues from the browser

@@ -12,6 +12,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { TimelinePage } from "./pages/TimelinePage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { DocumentsPage } from "./pages/DocumentsPage";
+import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 
 export function App() {
   const { theme, accent, density } = useUiStore();
@@ -40,6 +41,7 @@ export function App() {
           <Route path="/timeline"  element={<TimelinePage />} />
           <Route path="/profile"    element={<ProfilePage />} />
           <Route path="/documents"  element={<DocumentsPage />} />
+          <Route path="/knowledge"  element={<KnowledgeBasePage />} />
         </Routes>
       </div>
     </div>
