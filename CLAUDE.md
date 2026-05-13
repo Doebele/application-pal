@@ -12,84 +12,98 @@ npm run typecheck
 npm run typecheck --workspace frontend
 npm run typecheck --workspace backend
 
-# Dev: full stack via Docker (app on http://localhost:8070)
-docker compose up --build
-
 # Dev: Vite frontend only (port 5174, proxies /api → localhost:8070)
 npm run dev --workspace frontend
 
 # Dev: backend only with hot-reload (port 3000)
 npm run dev --workspace backend
 
-# Rebuild Docker after source changes
+# Rebuild Docker after source changes — always required, containers do NOT hot-reload
+cd /Users/clausmedvesek/Developer/projects/application-pal
 docker compose build frontend && docker compose up -d frontend
 docker compose build backend  && docker compose up -d backend
 
-# Run DB migrations (inside running container)
-docker compose exec backend npm run db:migrate --workspace backend
+# Apply DB migration manually to running container
+docker exec application-pal-db psql -U postgres -d application_pal -c "ALTER TABLE ..."
 
-# Generate new Drizzle migration after schema change
+# Generate new Drizzle migration file after schema change
 npm run db:generate --workspace backend
 ```
 
+## Critical Pitfalls
+
+**Stale JS artifacts**: If `frontend/src/` contains `.js` files (e.g. `App.js`, `main.js`), Vite resolves them before `.tsx` and serves old compiled code. Delete any such files immediately.
+
+**Docker TypeScript errors**: `tsc -b` runs inside the Dockerfile — errors the Vite dev server ignores will break the Docker build. Always run `npm run typecheck` before rebuilding Docker.
+
+**Preview server directory**: The preview tool starts Vite from `.claude/launch.json`. The `launch.json` in both the main project and any worktrees must use `sh -c "cd /abs/path && npm run dev --workspace frontend"` to ensure the correct source is served.
+
+**Schema changes**: Edit `shared/src/schema.ts` → run `npm run build --workspace shared` to compile → then typecheck passes. DB migrations must be applied manually with `docker exec` (no auto-migration on startup).
+
 ## Architecture
 
-npm workspaces monorepo with three packages: `shared`, `backend`, `frontend`.
+npm workspaces monorepo: `shared`, `backend`, `frontend`.
 
 ```
 shared/src/schema.ts   ← single source of truth: Drizzle tables + Zod schemas + TS types
-backend/src/index.ts   ← entire Hono API (all routes in one file, no router splitting)
+backend/src/index.ts   ← entire Hono API (all routes in one file, no sub-routers)
 frontend/src/          ← React 19 + Vite SPA
 ```
 
 ### Data flow
 
-`shared` is built first (`tsc`), then both `backend` and `frontend` import its compiled output.
-When adding a new DB column or table: edit `shared/src/schema.ts` → run `db:generate` → add migration SQL to `backend/drizzle/` → run `db:migrate` (or apply SQL directly to the running container with `docker exec`).
+`shared` compiles first (`tsc`). Both `backend` and `frontend` import from `@application-pal/shared`.
 
 ### Backend (`backend/src/index.ts`)
 
-Single Hono app, no sub-routers. All endpoints in one file. Uses `drizzle-orm/node-postgres` against Postgres. No ORM migrations at startup — migrations are applied manually via `drizzle-kit migrate`.
+Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No auto-migrations.
 
 Key patterns:
-- Route handlers use `zValidator("json", schema)` from `@hono/zod-validator` for request validation
-- Zod schemas come from `@application-pal/shared`, never defined in the backend
-- AI extraction uses two providers: LM Studio (local, proxied via `/api/lm-studio/models`) and Anthropic claude-haiku — both via fetch, no SDK
-- Google OAuth tokens stored in `google_oauth_tokens` table; Clearbit used for company logos
+- Validation: `zValidator("json", schema)` from `@hono/zod-validator`; schemas from `@application-pal/shared` only
+- AI extraction: LM Studio + Anthropic claude-haiku via raw `fetch`, no SDK
+- `pickWorkTags(text)`: regex-detects Remote/Hybrid/On-site and work-time % from job text, appended to AI tags
+- `resolveCompanyLogo(name)`: queries Clearbit autocomplete for domain, returns `https://www.google.com/s2/favicons?domain=X&sz=128` (Clearbit logo service is defunct)
+- Export: `GET /api/export` returns all tables as JSON; `POST /api/import` with `{mode, data}` restores them
 
 ### Frontend (`frontend/src/`)
 
-- **State**: Zustand `useUiStore` (persisted to localStorage) for UI preferences (theme, accent, density, AI config, rail state). Server data via React Query with key `["applications"]`
-- **API**: `api` from `lib/api.ts` — plain Axios instance with empty `baseURL` (relies on Vite proxy in dev, nginx in production)
-- **Styling**: single `index.css` with CSS custom properties (`--fg-1`, `--accent`, `--surface-2`, etc.). No Tailwind at runtime. `.input-line` for Notion-style underline inputs, `.field` for labelled form fields
-- **Expand-Logik**: sections that expand to fill `.app-main` use `position: absolute; top: 57px; left: 0; right: 0; bottom: 0; z-index: 10` — `.app-main` has `position: relative`
+- **State**: Zustand `useUiStore` (persisted to localStorage) — theme, accent, density, AI config. Server data via React Query `["applications"]` and `["applications", showArchived]`
+- **API**: `api` from `lib/api.ts` — Axios with empty `baseURL`
+- **Styling**: single `index.css`, CSS custom properties. No Tailwind. `.input-line` = Notion-style underline input (no box). `.field` = labelled form field (gap 1px, padding 2px 0)
+- **Expand-Logik**: expandable sections use `position: absolute; top: 57px; left/right/bottom: 0; z-index: 10` within `.app-main` (`position: relative`)
 
-### Ports
+### Ports & Container Names
 
-| Service | Docker port | Dev port |
-|---|---|---|
-| Frontend (nginx) | 8070 | 5174 (Vite) |
-| Backend (Hono) | 8071 | 3000 |
-| Postgres | 15436 | — |
+| Service | Docker port | Container name | Dev port |
+|---|---|---|---|
+| Frontend (nginx) | 8070 | `application-pal-frontend` | 5174 (Vite) |
+| Backend (Hono) | 8071 | `application-pal-backend` | 3000 |
+| Postgres | 15436 | `application-pal-db` | — |
 
-Vite dev server proxies `/api` → `http://localhost:8070` (nginx), which in turn proxies to the backend container. The `BACKEND_PORT` env var is injected into nginx via `sed` in the frontend Dockerfile to replace `__BACKEND_PORT__` in `nginx.conf`.
+Vite dev proxies `/api` → `http://localhost:8070` (nginx) → backend container internally.
 
-### DB tables
+### DB Tables
 
 | Table | Purpose |
 |---|---|
-| `applications` | Core job applications with stage, tags, salary, logoUrl |
-| `user_profile` | Single-row personal profile + Master-CV |
-| `user_documents` | Global document library (Zeugnisse, Figma links, etc.) |
-| `application_documents` | Per-application CV/letter docs; `userDocumentId` links to library |
-| `application_activities` | Timeline events per application |
-| `application_contacts` | Contacts per application |
+| `applications` | Jobs: stage, tags, salary, logoUrl, archived |
+| `user_profile` | Single-row profile + Master-CV |
+| `user_documents` | Global document library (Zeugnisse, Figma, etc.) |
+| `application_documents` | Per-job docs; `userDocumentId` links to library |
+| `application_activities` | Timeline events per job |
+| `application_contacts` | Contacts per job |
 | `google_oauth_tokens` | Google Drive OAuth token (single row) |
+
+**Archive pattern**: `applications.archived = "true"` hides from main board. `GET /api/applications?archived=true` fetches archived. Default query filters `archived != "true"`.
+
+### Key Frontend Patterns
+
+**DetailDrawer state lifting**: `stage` and `url` are lifted to `DetailDrawer` so the header Stage-Picker and Job-button update immediately when edited in `OverviewTab`.
+
+**Board filter**: `BoardPage` manages `visibleStages: string[]` (empty = all). Passed to `Board` which filters its `STAGES` array. `FilterDropdown` in the Topbar actions handles multi-select.
+
+**Logo avatar**: `LogoAvatar` in `DetailDrawer` and `Avatar` in `Card.tsx` both try loading `logoUrl` via `<img>` with `onError` fallback to colored initials. Google Favicon URLs (`/s2/favicons?domain=X&sz=128`) may 301-redirect but browsers follow automatically.
 
 ### Google OAuth
 
-Flow: Settings → `/api/google/auth-url` → Google consent → `/api/google/callback` → token stored in DB. Redirect target controlled by `GOOGLE_FRONTEND_URL` env var (default: `http://localhost:8070`). The redirect URI registered in Google Cloud Console must match `GOOGLE_REDIRECT_URI` in `.env`.
-
-### After Docker changes
-
-After editing source files, Docker images need explicit rebuilds — the containers do **not** hot-reload from the host filesystem. Always run `docker compose build <service> && docker compose up -d <service>` after changes. TypeScript errors that the Vite dev server ignores will **fail** the Docker build (`tsc -b` runs in the Dockerfile).
+Flow: Settings → `/api/google/auth-url` → consent → `/api/google/callback` → DB. `GOOGLE_FRONTEND_URL` controls redirect target (default `http://localhost:8070`). Must match registered URI in Google Cloud Console.
