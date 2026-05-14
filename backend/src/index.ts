@@ -1,8 +1,21 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
+import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
+import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
+import nodemailer from "nodemailer";
+import {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+  type RegistrationResponseJSON,
+  type AuthenticationResponseJSON,
+} from "@simplewebauthn/server";
 import {
   applicationImportRequestSchema,
   applicationInsertSchema,
@@ -13,6 +26,9 @@ import {
   applicationActivityInsertSchema,
   applicationContactInsertSchema,
   applicationContactPatchSchema,
+  applicationTaskInsertSchema,
+  applicationTaskPatchSchema,
+  applicationTasks,
   userProfileInsertSchema,
   userDocumentInsertSchema,
   userDocumentPatchSchema,
@@ -29,15 +45,400 @@ import {
   kbInsights,
   applicationStageEnum,
   stubDocumentResponseSchema,
+  users,
+  webauthnCredentials,
+  passwordResetTokens,
   type AiConfig
 } from "@application-pal/shared";
 import { PDFParse } from "pdf-parse";
-import { and, desc, eq, ilike, inArray, ne, or, isNull, type SQL } from "drizzle-orm";
+import { and, desc, eq, ilike, inArray, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
 import { env, KB_BASE_PATH } from "./env.js";
 
 const app = new Hono();
+
+// ─── JWT Secret (auto-generate if not set in env) ─────────────
+let _jwtSecret: string | null = null;
+function getJwtSecret(): string {
+  if (_jwtSecret) return _jwtSecret;
+  if (env.JWT_SECRET) { _jwtSecret = env.JWT_SECRET; return _jwtSecret; }
+  // Auto-generate and cache in memory (persists until container restart)
+  _jwtSecret = crypto.randomBytes(32).toString("hex");
+  console.warn("[auth] JWT_SECRET not set — generated ephemeral secret. Sessions will reset on container restart. Set JWT_SECRET in .env for persistence.");
+  return _jwtSecret;
+}
+
+// ─── Auth helpers ─────────────────────────────────────────────
+function issueTokens(c: Parameters<typeof setCookie>[0], userId: string, rememberMe = false) {
+  const access  = jwt.sign({ userId }, getJwtSecret(), { expiresIn: "15m" });
+  const refreshExpiry = rememberMe ? "90d" : "1d";
+  const refresh = jwt.sign({ userId }, getJwtSecret(), { expiresIn: refreshExpiry });
+  const secure  = env.APP_URL.startsWith("https");
+  setCookie(c, "access_token",  access,  { httpOnly: true, sameSite: "Lax", path: "/", secure, maxAge: 60 * 15 });
+  setCookie(c, "refresh_token", refresh, { httpOnly: true, sameSite: "Lax", path: "/", secure, ...(rememberMe ? { maxAge: 60 * 60 * 24 * 90 } : {}) });
+}
+
+function clearTokens(c: Parameters<typeof deleteCookie>[0]) {
+  deleteCookie(c, "access_token",  { path: "/" });
+  deleteCookie(c, "refresh_token", { path: "/" });
+}
+
+async function sendOtpEmail(to: string, code: string) {
+  if (!env.SMTP_HOST || !env.SMTP_USER || !env.SMTP_PASS) {
+    console.warn("[auth] SMTP not configured — OTP code:", code);
+    return;
+  }
+  const transport = nodemailer.createTransport({
+    host: env.SMTP_HOST, port: env.SMTP_PORT, secure: false,
+    auth: { user: env.SMTP_USER, pass: env.SMTP_PASS }
+  });
+  await transport.sendMail({
+    from: env.SMTP_USER,
+    to,
+    subject: "Application Pal — Passwort zurücksetzen",
+    text: `Dein Code: ${code}\n\nGültig für 15 Minuten.`,
+    html: `<p>Dein Code: <strong style="font-size:24px;letter-spacing:4px">${code}</strong></p><p>Gültig für 15 Minuten.</p>`
+  });
+}
+
+// In-memory store for WebAuthn challenges (keyed by user id or "login")
+const webauthnChallenges = new Map<string, string>();
+
+// ─── Auth Middleware ──────────────────────────────────────────
+app.use("/api/*", async (c, next) => {
+  const p = c.req.path;
+  // Public routes: auth endpoints + google callback + health
+  if (p.startsWith("/api/auth/") || p === "/api/google/callback" || p === "/health") {
+    return next();
+  }
+  const token = getCookie(c, "access_token");
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
+  try {
+    const payload = jwt.verify(token, getJwtSecret()) as { userId: string };
+    c.set("userId" as never, payload.userId);
+    return next();
+  } catch {
+    // Try refresh token silently
+    const refresh = getCookie(c, "refresh_token");
+    if (refresh) {
+      try {
+        const rp = jwt.verify(refresh, getJwtSecret()) as { userId: string };
+        issueTokens(c, rp.userId);
+        c.set("userId" as never, rp.userId);
+        return next();
+      } catch { /* fall through */ }
+    }
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+});
+
+// ─── Auth Routes ──────────────────────────────────────────────
+
+// Check if first-run setup is needed
+app.get("/api/auth/status", async (c) => {
+  const [u] = await db.select({ id: users.id }).from(users).limit(1);
+  return c.json({ setup: !!u });
+});
+
+// First-run: create the single user account
+app.post("/api/auth/setup", async (c) => {
+  const [existing] = await db.select({ id: users.id }).from(users).limit(1);
+  if (existing) return c.json({ error: "Account bereits eingerichtet" }, 409);
+  const { email, password, rememberMe } = await c.req.json<{ email: string; password: string; rememberMe?: boolean }>();
+  if (!email || !password || password.length < 8) {
+    return c.json({ error: "E-Mail und Passwort (min. 8 Zeichen) erforderlich" }, 400);
+  }
+  const passwordHash = await bcrypt.hash(password, 12);
+  const [user] = await db.insert(users).values({ email: email.toLowerCase().trim(), passwordHash }).returning();
+  issueTokens(c, user.id, rememberMe === true);
+  return c.json({ email: user.email });
+});
+
+// Login with email + password
+app.post("/api/auth/login", async (c) => {
+  const { email, password, rememberMe } = await c.req.json<{ email: string; password: string; rememberMe?: boolean }>();
+  const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
+  if (!user || !user.passwordHash) return c.json({ error: "Ungültige Anmeldedaten" }, 401);
+  const ok = await bcrypt.compare(password, user.passwordHash);
+  if (!ok) return c.json({ error: "Ungültige Anmeldedaten" }, 401);
+  issueTokens(c, user.id, rememberMe === true);
+  return c.json({ email: user.email });
+});
+
+// Logout
+app.post("/api/auth/logout", (c) => {
+  clearTokens(c);
+  return c.json({ ok: true });
+});
+
+// Current user
+app.get("/api/auth/me", async (c) => {
+  const token = getCookie(c, "access_token");
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
+  try {
+    const { userId } = jwt.verify(token, getJwtSecret()) as { userId: string };
+    const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
+    if (!user) return c.json({ error: "Unauthorized" }, 401);
+    return c.json({ email: user.email });
+  } catch {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+});
+
+// Refresh access token
+app.post("/api/auth/refresh", (c) => {
+  const refresh = getCookie(c, "refresh_token");
+  if (!refresh) return c.json({ error: "Unauthorized" }, 401);
+  try {
+    const { userId } = jwt.verify(refresh, getJwtSecret()) as { userId: string };
+    issueTokens(c, userId);
+    return c.json({ ok: true });
+  } catch {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+});
+
+// Forgot password — send OTP
+app.post("/api/auth/forgot-password", async (c) => {
+  const { email } = await c.req.json<{ email: string }>();
+  const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
+  // Always return ok to not reveal if email exists
+  if (!user) return c.json({ ok: true });
+  // Expire old tokens for this user
+  await db.delete(passwordResetTokens).where(and(eq(passwordResetTokens.userId, user.id), eq(passwordResetTokens.used, false)));
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const codeHash = await bcrypt.hash(code, 10);
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  await db.insert(passwordResetTokens).values({ userId: user.id, code: codeHash, expiresAt });
+  await sendOtpEmail(user.email, code);
+  return c.json({ ok: true });
+});
+
+// Reset password with OTP
+app.post("/api/auth/reset-password", async (c) => {
+  const { email, code, newPassword } = await c.req.json<{ email: string; code: string; newPassword: string }>();
+  if (!newPassword || newPassword.length < 8) return c.json({ error: "Passwort zu kurz (min. 8 Zeichen)" }, 400);
+  const [user] = await db.select().from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
+  if (!user) return c.json({ error: "Ungültiger Code" }, 400);
+  const [token] = await db.select().from(passwordResetTokens)
+    .where(and(eq(passwordResetTokens.userId, user.id), eq(passwordResetTokens.used, false)))
+    .orderBy(desc(passwordResetTokens.createdAt)).limit(1);
+  if (!token || token.expiresAt < new Date()) return c.json({ error: "Code abgelaufen" }, 400);
+  const valid = await bcrypt.compare(code, token.code);
+  if (!valid) return c.json({ error: "Ungültiger Code" }, 400);
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await db.update(users).set({ passwordHash }).where(eq(users.id, user.id));
+  await db.update(passwordResetTokens).set({ used: true }).where(eq(passwordResetTokens.id, token.id));
+  return c.json({ ok: true });
+});
+
+// Change password (while logged in)
+app.post("/api/auth/change-password", async (c) => {
+  const token = getCookie(c, "access_token");
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
+  let userId: string;
+  try { userId = (jwt.verify(token, getJwtSecret()) as { userId: string }).userId; }
+  catch { return c.json({ error: "Unauthorized" }, 401); }
+  const { currentPassword, newPassword } = await c.req.json<{ currentPassword: string; newPassword: string }>();
+  if (!newPassword || newPassword.length < 8) return c.json({ error: "Neues Passwort muss min. 8 Zeichen haben" }, 400);
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user || !user.passwordHash) return c.json({ error: "Kein Passwort hinterlegt" }, 400);
+  const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!ok) return c.json({ error: "Aktuelles Passwort falsch" }, 401);
+  await db.update(users).set({ passwordHash: await bcrypt.hash(newPassword, 12) }).where(eq(users.id, userId));
+  return c.json({ ok: true });
+});
+
+// ─── WebAuthn / Passkey Routes ────────────────────────────────
+const RP_NAME = "Application Pal";
+function getRpId(): string {
+  try { return new URL(env.APP_URL).hostname; } catch { return "localhost"; }
+}
+
+// Generate registration options
+app.get("/api/auth/webauthn/register-options", async (c) => {
+  const token = getCookie(c, "access_token");
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
+  let userId: string;
+  try { userId = (jwt.verify(token, getJwtSecret()) as { userId: string }).userId; }
+  catch { return c.json({ error: "Unauthorized" }, 401); }
+  const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const existingCreds = await db.select().from(webauthnCredentials).where(eq(webauthnCredentials.userId, userId));
+  const options = await generateRegistrationOptions({
+    rpName: RP_NAME, rpID: getRpId(),
+    userName: user.email, userDisplayName: user.email,
+    excludeCredentials: existingCreds.map(c => ({ id: c.credentialId, type: "public-key" as const })),
+    authenticatorSelection: { residentKey: "preferred", userVerification: "preferred" }
+  });
+  webauthnChallenges.set(userId, options.challenge);
+  return c.json(options);
+});
+
+// Complete registration
+app.post("/api/auth/webauthn/register", async (c) => {
+  const token = getCookie(c, "access_token");
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
+  let userId: string;
+  try { userId = (jwt.verify(token, getJwtSecret()) as { userId: string }).userId; }
+  catch { return c.json({ error: "Unauthorized" }, 401); }
+  const { response, deviceName } = await c.req.json<{ response: RegistrationResponseJSON; deviceName?: string }>();
+  const challenge = webauthnChallenges.get(userId);
+  if (!challenge) return c.json({ error: "Challenge abgelaufen" }, 400);
+  try {
+    const verification = await verifyRegistrationResponse({
+      response, expectedChallenge: challenge,
+      expectedOrigin: env.APP_URL, expectedRPID: getRpId(),
+      requireUserVerification: false   // allow authenticators without biometric UV
+    });
+    if (!verification.verified || !verification.registrationInfo) return c.json({ error: "Verifizierung fehlgeschlagen" }, 400);
+    const { credential } = verification.registrationInfo;
+    await db.insert(webauthnCredentials).values({
+      userId, deviceName: deviceName ?? null,
+      credentialId: credential.id,
+      publicKey: Buffer.from(credential.publicKey).toString("base64"),
+      counter: credential.counter
+    });
+    webauthnChallenges.delete(userId);
+    return c.json({ ok: true });
+  } catch (err) {
+    return c.json({ error: "Registrierung fehlgeschlagen: " + String(err) }, 400);
+  }
+});
+
+// Generate login options
+app.get("/api/auth/webauthn/login-options", async (c) => {
+  const options = await generateAuthenticationOptions({
+    rpID: getRpId(), userVerification: "preferred"
+  });
+  webauthnChallenges.set("login", options.challenge);
+  return c.json(options);
+});
+
+// Complete login with passkey
+app.post("/api/auth/webauthn/login", async (c) => {
+  const { response } = await c.req.json<{ response: AuthenticationResponseJSON }>();
+  const challenge = webauthnChallenges.get("login");
+  if (!challenge) return c.json({ error: "Challenge abgelaufen" }, 400);
+  const [cred] = await db.select().from(webauthnCredentials).where(eq(webauthnCredentials.credentialId, response.id)).limit(1);
+  if (!cred) return c.json({ error: "Passkey nicht gefunden" }, 404);
+  try {
+    const verification = await verifyAuthenticationResponse({
+      response, expectedChallenge: challenge,
+      expectedOrigin: env.APP_URL, expectedRPID: getRpId(),
+      requireUserVerification: false,  // allow authenticators without biometric UV
+      credential: {
+        id: cred.credentialId,
+        publicKey: new Uint8Array(Buffer.from(cred.publicKey, "base64")),
+        counter: cred.counter
+      }
+    });
+    if (!verification.verified) return c.json({ error: "Passkey-Verifizierung fehlgeschlagen" }, 401);
+    await db.update(webauthnCredentials).set({ counter: verification.authenticationInfo.newCounter }).where(eq(webauthnCredentials.id, cred.id));
+    issueTokens(c, cred.userId);
+    webauthnChallenges.delete("login");
+    return c.json({ ok: true });
+  } catch (err) {
+    return c.json({ error: "Anmeldung fehlgeschlagen: " + String(err) }, 400);
+  }
+});
+
+// List credentials
+app.get("/api/auth/webauthn/credentials", async (c) => {
+  const token = getCookie(c, "access_token");
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
+  let userId: string;
+  try { userId = (jwt.verify(token, getJwtSecret()) as { userId: string }).userId; }
+  catch { return c.json({ error: "Unauthorized" }, 401); }
+  const creds = await db.select({ id: webauthnCredentials.id, deviceName: webauthnCredentials.deviceName, createdAt: webauthnCredentials.createdAt })
+    .from(webauthnCredentials).where(eq(webauthnCredentials.userId, userId)).orderBy(desc(webauthnCredentials.createdAt));
+  return c.json(creds);
+});
+
+// Delete credential
+app.delete("/api/auth/webauthn/credentials/:credId", async (c) => {
+  const token = getCookie(c, "access_token");
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
+  let userId: string;
+  try { userId = (jwt.verify(token, getJwtSecret()) as { userId: string }).userId; }
+  catch { return c.json({ error: "Unauthorized" }, 401); }
+  const credId = c.req.param("credId");
+  await db.delete(webauthnCredentials).where(and(eq(webauthnCredentials.id, credId), eq(webauthnCredentials.userId, userId)));
+  return c.json({ ok: true });
+});
+
+// ─── Stage Task Templates ─────────────────────────────────────
+const STAGE_TASK_TEMPLATES: Record<string, string[]> = {
+  import_validating: [
+    "Stellenbeschreibung vollständig erfasst",
+    "KI Match Score ausgeführt",
+    "Relevanz entschieden"
+  ],
+  preparing_cv: [
+    "Master-CV aktualisiert",
+    "Relevante Erfahrungen identifiziert",
+    "CV-Dokument erstellt",
+    "Formatierung geprüft"
+  ],
+  preparing_letter: [
+    "Anschreiben-Entwurf erstellt",
+    "Auf Unternehmen personalisiert",
+    "Rechtschreibung kontrolliert",
+    "Länge angemessen (max. 1 Seite)"
+  ],
+  application_sent: [
+    "Bewerbung vollständig eingereicht",
+    "Bestätigung erhalten",
+    "Follow-up-Termin gesetzt",
+    "HR-Kontakt notiert"
+  ],
+  pending: [
+    "Unternehmenswebseite analysiert",
+    "Glassdoor-Bewertungen geprüft",
+    "LinkedIn-Profile der Kontakte angeschaut",
+    "Aktuelle News zum Unternehmen gelesen"
+  ],
+  interview_1: [
+    "Logistik bestätigt (Zeit / Ort / Format)",
+    "Unterlagen vorbereitet",
+    "Rollenspezifische Fragen vorbereitet",
+    "STAR-Beispiele aus Erfahrungen notiert",
+    "Eigene Rückfragen formuliert"
+  ],
+  interview_2: [
+    "Learnings aus Interview 1 notiert",
+    "Gehaltsverhandlung vorbereitet",
+    "Referenzen bereit",
+    "Fortgeschrittene Fachfragen recherchiert"
+  ],
+  rejected: [
+    "Absage-Grund (falls bekannt) notiert",
+    "Learnings für nächste Bewerbungen festgehalten"
+  ],
+  accepted: [
+    "Vertragsdetails geprüft",
+    "Startdatum bestätigt",
+    "Andere laufende Bewerbungen informiert",
+    "Absagen für andere Stellen vorbereitet"
+  ]
+};
+
+async function initTasksForStage(applicationId: string, stage: string): Promise<void> {
+  const templates = STAGE_TASK_TEMPLATES[stage];
+  if (!templates?.length) return;
+  // Check which default tasks for this stage already exist (avoid duplicates)
+  const existing = await db.select({ title: applicationTasks.title })
+    .from(applicationTasks)
+    .where(and(eq(applicationTasks.applicationId, applicationId), eq(applicationTasks.stage, stage), eq(applicationTasks.isDefault, true)));
+  const existingTitles = new Set(existing.map((t) => t.title));
+  const newTasks = templates
+    .filter((t) => !existingTitles.has(t))
+    .map((title, i) => ({ applicationId, stage, title, sortOrder: i, isDefault: true }));
+  if (newTasks.length > 0) {
+    await db.insert(applicationTasks).values(newTasks);
+  }
+}
 
 const roleKeywords = [
   "entwickler",
@@ -159,8 +560,13 @@ type LlmExtracted = {
   description: string;
 };
 
+/** In Docker, localhost points to the container itself. Rewrite to host.docker.internal so LM Studio on the host is reachable. */
+function resolveHostUrl(url: string): string {
+  return url.replace(/^(https?:\/\/)localhost(:\d+)?/, "$1host.docker.internal$2");
+}
+
 async function extractWithLmStudio(text: string, ai: AiConfig): Promise<LlmExtracted | null> {
-  const baseUrl = (ai.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, "");
+  const baseUrl = resolveHostUrl((ai.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
   const model = ai.lmStudioModel || undefined;
 
   const body = {
@@ -170,7 +576,7 @@ async function extractWithLmStudio(text: string, ai: AiConfig): Promise<LlmExtra
       { role: "user",   content: EXTRACTION_PROMPT_USER_PREFIX + text.slice(0, 6000) }
     ],
     temperature: 0.05,
-    max_tokens: 4096  // Qwen3 needs space for its <think> block before JSON output
+    max_tokens: 16384  // Qwen3 needs space for its <think> block before JSON output
   };
 
   const res = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -747,6 +1153,8 @@ app.patch("/api/applications/:id", zValidator("json", applicationPatchSchema), a
       type: "stage_change",
       title: `Stage → ${stageLabels[stage] ?? stage}`
     });
+    // Auto-create tasks for the new stage
+    await initTasksForStage(id, stage);
   }
 
   return c.json(updated);
@@ -980,7 +1388,7 @@ app.get("/api/kb/roles/:id", async (c) => {
 
 // Proxy LM Studio model list to avoid CORS issues from the browser
 app.get("/api/lm-studio/models", async (c) => {
-  const baseUrl = (c.req.query("url") ?? "http://localhost:1234").replace(/\/$/, "");
+  const baseUrl = resolveHostUrl((c.req.query("url") ?? "http://localhost:1234").replace(/\/$/, ""));
   try {
     const res = await fetch(`${baseUrl}/v1/models`, {
       signal: AbortSignal.timeout(5_000)
@@ -1051,6 +1459,140 @@ app.delete("/api/documents/:id", async (c) => {
   const id = c.req.param("id");
   await db.delete(userDocuments).where(eq(userDocuments.id, id));
   return c.json({ ok: true });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Match Score
+// ─────────────────────────────────────────────────────────────────
+const MATCH_SCORE_SYSTEM_PROMPT = `Du bist ein erfahrener Karriere-Coach. Analysiere die Übereinstimmung zwischen dem Kandidatenprofil und der Stellenbeschreibung. Antworte NUR mit genau diesem JSON-Objekt, nichts anderes davor oder danach:
+{"score":<0-100>,"breakdown":{"fachkompetenz":<0-100>,"erfahrung":<0-100>,"soft_skills":<0-100>,"kulturelle_passung":<0-100>},"staerken":["<Stärke 1>","<Stärke 2>","<Stärke 3>"],"luecken":["<Lücke 1>","<Lücke 2>"],"reasoning":"<Ausführliche Begründung in 4-6 Sätzen: Gesamtbewertung, wichtigste Übereinstimmungen, kritische Lücken, Empfehlung>"}
+
+Regeln:
+- score: Gesamtübereinstimmung 0-100
+- breakdown: Teilbereiche je 0-100
+- staerken: max 4 konkrete Stärken des Kandidaten für diese Stelle
+- luecken: max 3 Punkte die fehlen oder schwach sind
+- reasoning: vollständige Erklärung wie der Score zustande kommt`;
+
+app.post("/api/applications/:id/match-score", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json<{ ai?: AiConfig }>();
+  const aiConfig = body.ai;
+
+  if (!aiConfig || aiConfig.provider === "none") {
+    return c.json({ error: "AI-Modell erforderlich. Bitte in Settings konfigurieren." }, 400);
+  }
+
+  // Load application
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Bewerbung nicht gefunden" }, 404);
+  if (!app_.description?.trim()) return c.json({ error: "Keine Stellenbeschreibung vorhanden" }, 400);
+
+  // Load profile
+  const [profile] = await db.select().from(userProfile).limit(1);
+
+  // Load relevant documents (skills/certs/references)
+  const docs = await db.select().from(userDocuments)
+    .where(inArray(userDocuments.category, ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"]));
+
+  // Build profile context
+  const profileParts: string[] = [];
+  if (profile?.masterCv?.trim()) profileParts.push(`## Master-Lebenslauf\n${profile.masterCv.slice(0, 3000)}`);
+  if (profile?.linkedinBio?.trim()) profileParts.push(`## LinkedIn Bio\n${profile.linkedinBio.slice(0, 800)}`);
+  if (profile?.headline?.trim()) profileParts.push(`## Expertise\n${profile.headline}`);
+  if (profile?.personalNotes?.trim()) profileParts.push(`## Persönliche Prioritäten & Gesprächspunkte\n${profile.personalNotes.slice(0, 600)}`);
+  if (docs.length > 0) {
+    const docTexts = docs.map((d) => `- ${d.name}${d.description ? `: ${d.description}` : ""}${d.tags ? ` [${d.tags}]` : ""}`).join("\n");
+    profileParts.push(`## Zeugnisse / Zertifikate / Referenzen\n${docTexts}`);
+  }
+
+  if (profileParts.length === 0) {
+    return c.json({ error: "Profil ist leer. Bitte Master-CV im Profil ausfüllen." }, 400);
+  }
+
+  const profileText = profileParts.join("\n\n");
+  const userMessage = `${profileText}\n\n## Stellenbeschreibung\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\n${app_.description.slice(0, 2000)}`;
+
+  // Call AI
+  let raw = "";
+  try {
+    if (aiConfig.provider === "lm-studio") {
+      const baseUrl = resolveHostUrl((aiConfig.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
+      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: aiConfig.lmStudioModel || undefined,
+          messages: [
+            { role: "system", content: MATCH_SCORE_SYSTEM_PROMPT },
+            { role: "user", content: userMessage }
+          ],
+          temperature: 0.1,
+          max_tokens: 16384
+        }),
+        signal: AbortSignal.timeout(120_000)
+      });
+      if (!res.ok) throw new Error(`LM Studio error: ${res.status}`);
+      const json = await res.json() as { choices?: { message?: { content?: string } }[] };
+      raw = json.choices?.[0]?.message?.content ?? "";
+    } else if (aiConfig.provider === "anthropic") {
+      if (!aiConfig.anthropicApiKey) return c.json({ error: "Anthropic API Key fehlt" }, 400);
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": aiConfig.anthropicApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-haiku-4-5-20251001",
+          max_tokens: 1024,
+          system: MATCH_SCORE_SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userMessage }]
+        }),
+        signal: AbortSignal.timeout(120_000)
+      });
+      if (!res.ok) throw new Error(`Anthropic error: ${res.status}`);
+      const json = await res.json() as { content?: { type: string; text: string }[] };
+      raw = json.content?.find((b) => b.type === "text")?.text ?? "";
+    }
+  } catch (err) {
+    console.error("Match score AI call failed:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+
+  // Parse response — use dedicated parser (parseJsonResponse only handles LlmExtracted shape)
+  let result: { score: number; breakdown: { fachkompetenz: number; erfahrung: number; soft_skills: number; kulturelle_passung: number }; staerken: string[]; luecken: string[]; reasoning: string } | null = null;
+  try {
+    let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+    cleaned = cleaned.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const p = JSON.parse(jsonMatch[0]);
+      if (typeof p.score === "number") {
+        result = {
+          score: Math.min(100, Math.max(0, Math.round(p.score))),
+          breakdown: {
+            fachkompetenz:     Math.round(p.breakdown?.fachkompetenz     ?? p.score),
+            erfahrung:         Math.round(p.breakdown?.erfahrung         ?? p.score),
+            soft_skills:       Math.round(p.breakdown?.soft_skills       ?? p.score),
+            kulturelle_passung: Math.round(p.breakdown?.kulturelle_passung ?? p.score),
+          },
+          staerken: Array.isArray(p.staerken) ? p.staerken : [],
+          luecken:  Array.isArray(p.luecken)  ? p.luecken  : [],
+          reasoning: typeof p.reasoning === "string" ? p.reasoning : ""
+        };
+      }
+    }
+  } catch { /* handled below */ }
+
+  if (!result) {
+    console.error("Invalid match score response:", raw.slice(0, 500));
+    return c.json({ error: "KI hat kein gültiges Ergebnis zurückgegeben" }, 502);
+  }
+
+  // Persist
+  await db.update(applications)
+    .set({ matchScore: result.score, matchDetails: JSON.stringify(result), updatedAt: new Date() })
+    .where(eq(applications.id, id));
+
+  return c.json(result);
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -1156,6 +1698,313 @@ app.delete("/api/applications/:id/contacts/:cId", async (c) => {
   return c.json({ ok: true });
 });
 
+// ─── Application Tasks ────────────────────────────────────────
+app.get("/api/applications/:id/tasks", async (c) => {
+  const id = c.req.param("id");
+  const rows = await db.select().from(applicationTasks)
+    .where(eq(applicationTasks.applicationId, id))
+    .orderBy(applicationTasks.stage, applicationTasks.sortOrder, applicationTasks.createdAt);
+  return c.json(rows);
+});
+
+// Initialize tasks for a specific stage (called explicitly if needed)
+app.post("/api/applications/:id/tasks/init", async (c) => {
+  const id = c.req.param("id");
+  const { stage } = await c.req.json<{ stage: string }>();
+  await initTasksForStage(id, stage);
+  const rows = await db.select().from(applicationTasks)
+    .where(and(eq(applicationTasks.applicationId, id), eq(applicationTasks.stage, stage)))
+    .orderBy(applicationTasks.sortOrder);
+  return c.json(rows);
+});
+
+app.post("/api/applications/:id/tasks", zValidator("json", applicationTaskInsertSchema), async (c) => {
+  const id = c.req.param("id");
+  const payload = c.req.valid("json");
+  const [created] = await db.insert(applicationTasks)
+    .values({ ...payload, applicationId: id, isDefault: false })
+    .returning();
+  return c.json(created, 201);
+});
+
+app.patch("/api/applications/:id/tasks/:taskId", zValidator("json", applicationTaskPatchSchema), async (c) => {
+  const taskId = c.req.param("taskId");
+  const payload = c.req.valid("json");
+  const [updated] = await db.update(applicationTasks)
+    .set(payload).where(eq(applicationTasks.id, taskId)).returning();
+  if (!updated) return c.json({ error: "Task not found" }, 404);
+  return c.json(updated);
+});
+
+app.delete("/api/applications/:id/tasks/:taskId", async (c) => {
+  const taskId = c.req.param("taskId");
+  await db.delete(applicationTasks).where(eq(applicationTasks.id, taskId));
+  return c.json({ ok: true });
+});
+
+// ─── Stage AI Actions ─────────────────────────────────────────
+/** Shared helper: call AI with a system + user prompt, return raw text */
+async function callAi(system: string, user: string, ai: AiConfig): Promise<string> {
+  if (ai.provider === "lm-studio") {
+    const baseUrl = resolveHostUrl((ai.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: ai.lmStudioModel || undefined,
+        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        temperature: 0.15,
+        max_tokens: 16384
+      }),
+      signal: AbortSignal.timeout(120_000)
+    });
+    if (!res.ok) throw new Error(`LM Studio error: ${res.status}`);
+    const json = await res.json() as { choices?: { message?: { content?: string } }[] };
+    return json.choices?.[0]?.message?.content ?? "";
+  } else if (ai.provider === "anthropic") {
+    if (!ai.anthropicApiKey) throw new Error("Anthropic API Key fehlt");
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": ai.anthropicApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 4096, system, messages: [{ role: "user", content: user }] }),
+      signal: AbortSignal.timeout(60_000)
+    });
+    if (!res.ok) throw new Error(`Anthropic error: ${res.status}`);
+    const json = await res.json() as { content?: { type: string; text: string }[] };
+    return json.content?.find((b) => b.type === "text")?.text ?? "";
+  }
+  throw new Error("Kein KI-Modell konfiguriert");
+}
+
+/** Strip <think> block + markdown fences, extract JSON object */
+function extractJson(raw: string): unknown {
+  let s = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const m = s.match(/\{[\s\S]*\}/);
+  if (!m) throw new Error("No JSON found in response");
+  return JSON.parse(m[0]);
+}
+
+// CV Highlights
+app.post("/api/applications/:id/ai/cv-highlights", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [profile] = await db.select().from(userProfile).limit(1);
+  if (!profile?.masterCv?.trim()) return c.json({ error: "Kein Master-CV im Profil hinterlegt" }, 400);
+  const system = `Du bist ein Karriere-Coach. Analysiere den Lebenslauf des Kandidaten und die Stellenbeschreibung.
+Antworte NUR mit diesem JSON:
+{
+  "highlights": ["<Erfahrung/Skill besonders relevant>", ...],  // 5-8 Punkte
+  "keywords": ["<Keyword aus Stellenbeschreibung das im CV vorkommt>", ...],  // 3-6
+  "gaps": ["<Anforderung im Job die nicht oder schwach im CV steht>", ...]  // 2-4
+}`;
+  const user = `## Lebenslauf\n${profile.masterCv.slice(0, 4000)}\n\n## Stellenbeschreibung\nRolle: ${app_.role}\n${app_.description?.slice(0, 2000) ?? ""}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { highlights: string[]; keywords: string[]; gaps: string[] };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("cv-highlights error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// CV Google Doc — creates a Google Doc from Master-CV with a "Für diese Stelle relevant" section
+app.post("/api/applications/:id/ai/cv-doc", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [profile] = await db.select().from(userProfile).limit(1);
+  if (!profile?.masterCv?.trim()) return c.json({ error: "Kein Master-CV im Profil hinterlegt" }, 400);
+  const [token] = await db.select().from(googleOAuthTokens).limit(1);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  // Generate highlights to prepend
+  let highlightText = "";
+  try {
+    const system = `Analysiere den Lebenslauf und die Stellenbeschreibung. Antworte NUR mit JSON:
+{"highlights":["<Erfahrung besonders relevant>"],"keywords":["<Keyword>"]}`;
+    const user = `Lebenslauf:\n${profile.masterCv.slice(0, 3000)}\n\nStelle: ${app_.role} bei ${app_.company}\n${app_.description?.slice(0, 1500) ?? ""}`;
+    const raw = await callAi(system, user, ai);
+    const p = extractJson(raw) as { highlights: string[]; keywords: string[] };
+    highlightText = `═══ FÜR DIESE STELLE BESONDERS RELEVANT: ${app_.role} @ ${app_.company} ═══\n\n`;
+    if (p.highlights?.length) {
+      highlightText += p.highlights.map((h: string) => `✓ ${h}`).join("\n") + "\n";
+    }
+    if (p.keywords?.length) {
+      highlightText += `\nSchlüsselbegriffe: ${p.keywords.join(", ")}\n`;
+    }
+    highlightText += "\n════════════════════════════════════════════════════════\n\n";
+  } catch { /* skip highlights if AI fails */ }
+
+  const docTitle = `CV – ${app_.role} @ ${app_.company}`;
+  const docContent = highlightText + profile.masterCv;
+
+  try {
+    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: docTitle })
+    });
+    if (!docRes.ok) return c.json({ error: "Google Doc konnte nicht erstellt werden" }, 502);
+    const doc = await docRes.json() as { documentId: string };
+    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+
+    // Insert content
+    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: docContent } }] })
+    });
+
+    return c.json({ docUrl, title: docTitle });
+  } catch (err) {
+    console.error("cv-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
+  }
+});
+
+// Cover Letter generation (+ optional Google Doc)
+app.post("/api/applications/:id/ai/cover-letter", async (c) => {
+  const id = c.req.param("id");
+  const { ai, createDoc } = await c.req.json<{ ai: AiConfig; createDoc?: boolean }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [profile] = await db.select().from(userProfile).limit(1);
+  const system = `Du bist ein erfahrener HR-Berater. Schreibe ein professionelles, prägnantes Bewerbungsanschreiben (max. 350 Wörter).
+Erkenne automatisch die Sprache der Stellenbeschreibung und verwende dieselbe Sprache.
+Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Text mit Absätzen durch \\n\\n getrennt>" }`;
+  const candidateParts = [];
+  if (profile?.headline) candidateParts.push(`Expertise: ${profile.headline}`);
+  if (profile?.masterCv) candidateParts.push(`Lebenslauf:\n${profile.masterCv.slice(0, 3000)}`);
+  if (profile?.personalNotes) candidateParts.push(`Persönliche Stichpunkte: ${profile.personalNotes.slice(0, 400)}`);
+  const user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\nOrt: ${app_.location ?? ""}\nGehalt: ${app_.salary ?? ""}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { subject: string; body: string };
+    let docUrl: string | null = null;
+    if (createDoc) {
+      const [token] = await db.select().from(googleOAuthTokens).limit(1);
+      if (token) {
+        const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ title: `Anschreiben – ${app_.role} @ ${app_.company}` })
+        });
+        if (docRes.ok) {
+          const doc = await docRes.json() as { documentId: string };
+          docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+          // Insert text into the doc
+          await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: `${parsed.subject}\n\n${parsed.body}` } }] })
+          });
+        }
+      }
+    }
+    return c.json({ ...parsed, docUrl });
+  } catch (err) {
+    console.error("cover-letter error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Email Draft
+app.post("/api/applications/:id/ai/email-draft", async (c) => {
+  const id = c.req.param("id");
+  const { ai, type } = await c.req.json<{ ai: AiConfig; type: "application" | "followup" | "decline" }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [profile] = await db.select().from(userProfile).limit(1);
+  const typeDescriptions = {
+    application: "eine Bewerbungs-Email (kurze Begleit-Email zur Bewerbung)",
+    followup: "eine freundliche Follow-up-Email (3-4 Wochen nach Bewerbung, höflich nach Stand fragen)",
+    decline: "eine höfliche Absage-Email (du hast eine andere Stelle angenommen)"
+  };
+  const system = `Schreibe ${typeDescriptions[type]}. Professionell, klar, nicht zu lang (max. 150 Wörter im Body).
+Erkenne die Sprache der Stellenbeschreibung und schreibe in dieser Sprache.
+Antworte NUR mit JSON: { "subject": "<Betreff>", "body": "<Email-Text>" }`;
+  const contacts = await db.select().from(applicationContacts).where(eq(applicationContacts.applicationId, id)).limit(1);
+  const contact = contacts[0];
+  const user = `Absender: ${profile?.name ?? ""} (${profile?.email ?? ""})\nEmpfänger: ${contact ? `${contact.name}${contact.role ? ` (${contact.role})` : ""}` : "HR-Team"} bei ${app_.company}\nStelle: ${app_.role}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { subject: string; body: string };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("email-draft error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Interview Preparation (Chris Voss method + STAR + role-specific)
+app.post("/api/applications/:id/ai/interview-prep", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [profile] = await db.select().from(userProfile).limit(1);
+  const system = `Du bist ein erfahrener Interview-Coach und kennst die Methoden von Chris Voss ("Never Split the Difference").
+Erstelle eine umfassende Interviewvorbereitung basierend auf der Rolle und dem Kandidatenprofil.
+Antworte NUR mit diesem JSON:
+{
+  "rollenFragen": ["<Frage 1>", ...],
+  "starBeispiele": [
+    { "frage": "<typische Verhaltensfrage>", "situation": "<aus dem CV>", "aufgabe": "<Aufgabe>", "aktion": "<konkrete Aktion>", "ergebnis": "<messbares Ergebnis>" }
+  ],
+  "vossFragenWhatHow": ["<What/How-Frage 1>", ...],
+  "rueckfragen": ["<Rückfrage an Interviewer 1>", ...]
+}
+Regeln:
+- rollenFragen: 8-10 rollenspezifische Fragen (keine allgemeinen wie "Stellen Sie sich vor")
+- starBeispiele: 3 STAR-Beispiele, nutze konkrete Erfahrungen aus dem Lebenslauf
+- vossFragenWhatHow: 5-6 Fragen die mit "Was" oder "Wie" (oder "What"/"How") beginnen, taktisch intelligent (nach Erwartungen, Entscheidungsprozessen, Erfolgsmetriken fragen)
+- rueckfragen: 5 gute Rückfragen die Interesse und Vorbereitung zeigen`;
+  const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nBeschreibung: ${app_.description?.slice(0, 2000) ?? ""}\n\nKandidatenprofil:\n${profile?.masterCv?.slice(0, 2500) ?? "Kein Profil hinterlegt"}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as {
+      rollenFragen: string[];
+      starBeispiele: { frage: string; situation: string; aufgabe: string; aktion: string; ergebnis: string }[];
+      vossFragenWhatHow: string[];
+      rueckfragen: string[];
+    };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("interview-prep error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Salary Negotiation Tips
+app.post("/api/applications/:id/ai/salary-tips", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const system = `Du bist ein Gehaltsverhandlungs-Coach mit Chris Voss Methodik. Gib konkrete, taktische Tipps.
+Antworte NUR mit JSON:
+{
+  "markteinschätzung": "<1-2 Sätze zum Marktgehalt für diese Rolle>",
+  "taktiken": ["<Taktik 1>", ...],
+  "formulierungen": ["<konkrete Formulierung>", ...],
+  "vossAnker": "<Chris Voss Taktik: Wie man einen hohen Anker setzt ohne zu bluffen>"
+}`;
+  const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nGenanntes Gehalt in Stellenanzeige: ${app_.salary ?? "nicht angegeben"}\nLocation: ${app_.location ?? ""}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { markteinschätzung: string; taktiken: string[]; formulierungen: string[]; vossAnker: string };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("salary-tips error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
 // ─────────────────────────────────────────────────────────────────
 // Google OAuth
 // ─────────────────────────────────────────────────────────────────
@@ -1163,7 +2012,9 @@ const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID ?? "";
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
 const GOOGLE_REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI ?? "http://localhost/api/google/callback";
 const GOOGLE_FRONTEND_URL  = process.env.GOOGLE_FRONTEND_URL ?? "http://localhost";
-const GOOGLE_SCOPES        = "https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents";
+// Scopes include openid+email so Google Sign-In + Drive work in one consent
+const GOOGLE_SCOPES = (process.env.GOOGLE_SCOPES ?? "") ||
+  "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents";
 
 app.get("/api/google/auth-url", (c) => {
   if (!GOOGLE_CLIENT_ID) return c.json({ error: "Google credentials not configured" }, 503);
@@ -1179,7 +2030,7 @@ app.get("/api/google/auth-url", (c) => {
 
 app.get("/api/google/callback", async (c) => {
   const code = c.req.query("code");
-  if (!code) return c.redirect(`${GOOGLE_FRONTEND_URL}/settings?google_error=no_code`);
+  if (!code) return c.redirect(`${GOOGLE_FRONTEND_URL}/?google_error=no_code`);
   try {
     const res = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
@@ -1189,19 +2040,46 @@ app.get("/api/google/callback", async (c) => {
         redirect_uri: GOOGLE_REDIRECT_URI, grant_type: "authorization_code"
       })
     });
-    const data = await res.json() as { access_token: string; refresh_token?: string; expires_in?: number; scope?: string };
+    const data = await res.json() as { access_token: string; refresh_token?: string; expires_in?: number; scope?: string; id_token?: string };
     if (!data.access_token) return c.redirect(`${GOOGLE_FRONTEND_URL}/?google_error=token_failed`);
+
+    // Decode Google email from id_token for login
+    let googleEmail: string | null = null;
+    if (data.id_token) {
+      try {
+        const payload = JSON.parse(Buffer.from(data.id_token.split(".")[1], "base64").toString());
+        googleEmail = payload.email ?? null;
+      } catch { /* ignore */ }
+    }
+
+    // Store Google Drive tokens (linked to user if known)
+    const [existingUser] = googleEmail
+      ? await db.select().from(users).where(eq(users.email, googleEmail.toLowerCase())).limit(1)
+      : [];
+
     const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null;
     await db.delete(googleOAuthTokens);
     await db.insert(googleOAuthTokens).values({
       accessToken: data.access_token,
       refreshToken: data.refresh_token ?? null,
       expiresAt,
-      scope: data.scope ?? GOOGLE_SCOPES
+      scope: data.scope ?? GOOGLE_SCOPES,
+      userId: existingUser?.id ?? null
     });
+
+    // If this is a Google Sign-In (we have their email), log them in or create account
+    if (googleEmail) {
+      const [appUser] = existingUser
+        ? [existingUser]
+        : await db.insert(users).values({ email: googleEmail.toLowerCase() }).returning();
+      issueTokens(c, appUser.id);
+      return c.redirect(`${GOOGLE_FRONTEND_URL}/?google_connected=1`);
+    }
+
     return c.redirect(`${GOOGLE_FRONTEND_URL}/settings?google_connected=1`);
-  } catch {
-    return c.redirect(`${GOOGLE_FRONTEND_URL}/settings?google_error=exception`);
+  } catch (err) {
+    console.error("Google callback error:", err);
+    return c.redirect(`${GOOGLE_FRONTEND_URL}/?google_error=exception`);
   }
 });
 
@@ -1237,10 +2115,293 @@ app.delete("/api/google/disconnect", async (c) => {
   return c.json({ ok: true });
 });
 
+// ─── Google Drive Folder Structure ───────────────────────────
+/** Replace {placeholders} in a naming rule with actual values */
+function applyNameRule(rule: string, vars: Record<string, string>): string {
+  return rule.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? k);
+}
+
+async function getDriveAccessToken(): Promise<string | null> {
+  const [token] = await db.select().from(googleOAuthTokens).limit(1);
+  return token?.accessToken ?? null;
+}
+
+// Create/get Drive folder for an application
+app.post("/api/applications/:id/drive/init-folder", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json<{ folderRule?: string; parentFolderId?: string }>().catch(() => ({ folderRule: undefined, parentFolderId: undefined }));
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+
+  // Idempotent: return existing folder
+  if (app_.googleFolderId) {
+    return c.json({ folderId: app_.googleFolderId, folderUrl: app_.googleFolderUrl });
+  }
+
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  // Build folder name from rule
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const vars = {
+    firma:  app_.company ?? "Firma",
+    rolle:  app_.role ?? "Stelle",
+    datum:  `${String(now.getFullYear()).slice(2)}${pad(now.getMonth() + 1)}${pad(now.getDate())}`,
+    jahr:   String(now.getFullYear()),
+    monat:  pad(now.getMonth() + 1),
+    name:   "", // profile name added below
+    doc:    ""
+  };
+  const [profile] = await db.select({ name: userProfile.name }).from(userProfile).limit(1);
+  vars.name = profile?.name ?? "";
+
+  const rule = body.folderRule || "{firma} – {rolle} – {datum}";
+  const folderName = applyNameRule(rule, vars);
+
+  // Create folder in Drive
+  const body2: Record<string, unknown> = {
+    name: folderName,
+    mimeType: "application/vnd.google-apps.folder"
+  };
+  const parentId = body.parentFolderId || env.GOOGLE_APPLICATIONS_FOLDER_ID;
+  if (parentId) {
+    body2.parents = [parentId];
+  }
+
+  const res = await fetch("https://www.googleapis.com/drive/v3/files", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body2)
+  });
+  if (!res.ok) {
+    const err = await res.json() as { error?: { message?: string } };
+    return c.json({ error: `Drive API: ${err.error?.message ?? res.status}` }, 502);
+  }
+  const folder = await res.json() as { id: string };
+  const folderId = folder.id;
+  const folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
+
+  await db.update(applications).set({ googleFolderId: folderId, googleFolderUrl: folderUrl, updatedAt: new Date() }).where(eq(applications.id, id));
+
+  return c.json({ folderId, folderUrl, name: folderName });
+});
+
+// List template files from master folder
+// Mime types allowed as templates (excludes folders, JSON, etc.)
+const TEMPLATE_MIME_ALLOWLIST = new Set([
+  "application/vnd.google-apps.document",
+  "application/vnd.google-apps.spreadsheet",
+  "application/vnd.google-apps.presentation",
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+]);
+
+// Validate a Drive folder ID and return its name
+// List all files in an application's Drive folder (live from Drive, not DB)
+app.get("/api/applications/:id/drive/files", async (c) => {
+  const id = c.req.param("id");
+  const [app_] = await db.select({ googleFolderId: applications.googleFolderId })
+    .from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_?.googleFolderId) return c.json({ error: "Kein Drive-Ordner für diese Bewerbung" }, 400);
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const files = await listDriveFiles(accessToken, app_.googleFolderId);
+  // Return only non-folder files
+  return c.json(files.filter(f => f.mimeType !== "application/vnd.google-apps.folder"));
+});
+
+// Delete a file from Drive AND optionally from applicationDocuments
+app.delete("/api/applications/:id/drive/files/:fileId", async (c) => {
+  const id = c.req.param("id");
+  const fileId = c.req.param("fileId");
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  // Delete from Drive
+  const delRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+    method: "DELETE",
+    headers: { "Authorization": `Bearer ${accessToken}` }
+  });
+  if (!delRes.ok && delRes.status !== 404) {
+    return c.json({ error: `Drive delete: HTTP ${delRes.status}` }, 502);
+  }
+  // Remove from applicationDocuments if there's a matching googleDocId
+  await db.delete(applicationDocuments)
+    .where(and(eq(applicationDocuments.applicationId, id), eq(applicationDocuments.googleDocId, fileId)));
+  return c.json({ ok: true });
+});
+
+app.get("/api/drive/folder-info", async (c) => {
+  const folderId = c.req.query("folderId");
+  if (!folderId) return c.json({ error: "folderId required" }, 400);
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name,mimeType`, {
+    headers: { "Authorization": `Bearer ${accessToken}` }
+  });
+  if (!res.ok) return c.json({ error: "Ordner nicht gefunden oder kein Zugriff" }, 404);
+  const f = await res.json() as { id: string; name: string; mimeType: string };
+  if (f.mimeType !== "application/vnd.google-apps.folder") return c.json({ error: "Das ist kein Ordner" }, 400);
+  return c.json({ id: f.id, name: f.name, url: `https://drive.google.com/drive/folders/${f.id}` });
+});
+
+type DriveFile = { id: string; name: string; mimeType: string; webViewLink: string; capabilities?: { canCopy?: boolean } };
+
+async function listDriveFiles(accessToken: string, folderId: string): Promise<DriveFile[]> {
+  const query = encodeURIComponent(
+    `'${folderId}' in parents and trashed = false ` +
+    `and mimeType != 'application/json'`
+  );
+  const fields = encodeURIComponent("files(id,name,mimeType,webViewLink,capabilities/canCopy)");
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${query}&fields=${fields}&orderBy=name&pageSize=50`, {
+    headers: { "Authorization": `Bearer ${accessToken}` }
+  });
+  if (!res.ok) return [];
+  const data = await res.json() as { files?: DriveFile[] };
+  return data.files ?? [];
+}
+
+app.get("/api/drive/templates", async (c) => {
+  const masterFolderId = env.GOOGLE_MASTER_FOLDER_ID;
+  if (!masterFolderId) return c.json({ error: "GOOGLE_MASTER_FOLDER_ID nicht konfiguriert" }, 400);
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const allFiles = await listDriveFiles(accessToken, masterFolderId);
+  const docFiles = allFiles.filter(f => TEMPLATE_MIME_ALLOWLIST.has(f.mimeType));
+  const subfolders = allFiles.filter(f => f.mimeType === "application/vnd.google-apps.folder");
+
+  // If no direct doc files, look one level into subfolders
+  if (docFiles.length === 0 && subfolders.length > 0) {
+    const nested = await Promise.all(
+      subfolders.map(sf => listDriveFiles(accessToken, sf.id))
+    );
+    const nestedDocs = nested.flat().filter(f => TEMPLATE_MIME_ALLOWLIST.has(f.mimeType));
+    return c.json(nestedDocs);
+  }
+
+  // Also include docs from subfolders alongside direct docs
+  if (subfolders.length > 0) {
+    const nested = await Promise.all(
+      subfolders.map(sf => listDriveFiles(accessToken, sf.id))
+    );
+    const nestedDocs = nested.flat().filter(f => TEMPLATE_MIME_ALLOWLIST.has(f.mimeType));
+    const combined = [...docFiles, ...nestedDocs];
+    // Deduplicate by ID
+    return c.json(combined.filter((f, i, arr) => arr.findIndex(x => x.id === f.id) === i));
+  }
+
+  return c.json(docFiles);
+});
+
+// Copy a template file into an application's Drive folder
+app.post("/api/applications/:id/drive/copy-template", async (c) => {
+  const id = c.req.param("id");
+  const { templateFileId, docRule } = await c.req.json<{ templateFileId: string; docRule?: string }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  if (!app_.googleFolderId) return c.json({ error: "Bitte zuerst einen Drive-Ordner erstellen" }, 400);
+
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  // Get original file name for the rule
+  const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${templateFileId}?fields=name,mimeType`, {
+    headers: { "Authorization": `Bearer ${accessToken}` }
+  });
+  if (!metaRes.ok) return c.json({ error: "Vorlage nicht gefunden" }, 404);
+  const meta = await metaRes.json() as { name: string; mimeType: string };
+
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const [profile] = await db.select({ name: userProfile.name }).from(userProfile).limit(1);
+  const vars = {
+    doc:    meta.name,
+    firma:  app_.company ?? "Firma",
+    rolle:  app_.role ?? "Stelle",
+    name:   profile?.name ?? "",
+    datum:  `${String(now.getFullYear()).slice(2)}${pad(now.getMonth() + 1)}${pad(now.getDate())}`,
+    jahr:   String(now.getFullYear()),
+    monat:  pad(now.getMonth() + 1),
+  };
+  const rule = docRule || "{doc} – {name} – {firma} – {datum}";
+  const newName = applyNameRule(rule, vars);
+
+  // Try copy via Drive API
+  let copied: { id: string; mimeType: string } | null = null;
+  const copyRes = await fetch(`https://www.googleapis.com/drive/v3/files/${templateFileId}/copy`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: newName, parents: [app_.googleFolderId] })
+  });
+
+  if (!copyRes.ok) {
+    // Fallback for copy-restricted Google Docs: export as docx → upload as new Google Doc
+    if (meta.mimeType === "application/vnd.google-apps.document") {
+      try {
+        const exportRes = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${templateFileId}/export?mimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
+          { headers: { "Authorization": `Bearer ${accessToken}` } }
+        );
+        if (exportRes.ok) {
+          const docxBuffer = await exportRes.arrayBuffer();
+          // Re-upload as Google Doc (Drive will convert .docx → Google Doc preserving most formatting)
+          const boundary = "----UploadBoundary";
+          const metadata = JSON.stringify({ name: newName, mimeType: "application/vnd.google-apps.document", parents: [app_.googleFolderId] });
+          const multipartBody = Buffer.concat([
+            Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n`),
+            Buffer.from(docxBuffer),
+            Buffer.from(`\r\n--${boundary}--`)
+          ]);
+          const uploadRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+            method: "POST",
+            headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+            body: multipartBody
+          });
+          if (uploadRes.ok) {
+            copied = await uploadRes.json() as { id: string; mimeType: string };
+          }
+        }
+      } catch { /* fall through to original error */ }
+    }
+    if (!copied) {
+      const err = await copyRes.json() as { error?: { message?: string } };
+      return c.json({ error: `Kopieren fehlgeschlagen: ${err.error?.message ?? copyRes.status}. Tipp: Öffne das Original-Dokument in Google Drive → Mehr Optionen → Berechtigungen → Kopieren erlauben.` }, 502);
+    }
+  } else {
+    copied = await copyRes.json() as { id: string; mimeType: string };
+  }
+  const isDoc = copied.mimeType === "application/vnd.google-apps.document";
+  const fileUrl = isDoc
+    ? `https://docs.google.com/document/d/${copied.id}/edit`
+    : `https://drive.google.com/file/d/${copied.id}/view`;
+
+  // Detect document type from name
+  const nameLower = meta.name.toLowerCase();
+  const docType = nameLower.includes("letter") || nameLower.includes("anschreiben") || nameLower.includes("motivat")
+    ? "letter"
+    : nameLower.includes("cv") || nameLower.includes("lebenslauf") || nameLower.includes("resume")
+    ? "cv"
+    : "other";
+
+  // Store in applicationDocuments
+  const [saved] = await db.insert(applicationDocuments).values({
+    applicationId: id,
+    type: docType,
+    name: newName,
+    googleDocId: copied.id,
+    googleDocUrl: fileUrl,
+    status: "draft"
+  }).returning();
+
+  return c.json({ fileId: copied.id, fileUrl, docId: saved.id, name: newName });
+});
+
 // ─────────────────────────────────────────────────────────────────
 // Export / Import
 // ─────────────────────────────────────────────────────────────────
-app.get("/api/export", async (c) => {
+async function buildExportPayload() {
   const [apps, docs, activities, contacts, profiles, userDocs] = await Promise.all([
     db.select().from(applications).orderBy(applications.createdAt),
     db.select().from(applicationDocuments).orderBy(applicationDocuments.createdAt),
@@ -1249,8 +2410,7 @@ app.get("/api/export", async (c) => {
     db.select().from(userProfile).limit(1),
     db.select().from(userDocuments).orderBy(userDocuments.createdAt),
   ]);
-
-  const payload = {
+  return {
     meta: { version: 1, exportedAt: new Date().toISOString(), app: "application-pal" },
     applications: apps,
     applicationDocuments: docs,
@@ -1259,11 +2419,274 @@ app.get("/api/export", async (c) => {
     userProfile: profiles[0] ?? null,
     userDocuments: userDocs,
   };
+}
 
+// Find or create a named folder inside a parent (or root if no parent)
+async function findOrCreateDriveFolder(accessToken: string, name: string, parentId?: string): Promise<string> {
+  const parentQuery = parentId ? ` and '${parentId}' in parents` : " and 'root' in parents";
+  const q = encodeURIComponent(`name='${name}' and mimeType='application/vnd.google-apps.folder' and trashed=false${parentQuery}`);
+  const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)&pageSize=1`, {
+    headers: { "Authorization": `Bearer ${accessToken}` }
+  });
+  if (listRes.ok) {
+    const data = await listRes.json() as { files?: { id: string }[] };
+    if (data.files?.[0]?.id) return data.files[0].id;
+  }
+  // Not found → create
+  const body: Record<string, unknown> = { name, mimeType: "application/vnd.google-apps.folder" };
+  if (parentId) body.parents = [parentId];
+  const createRes = await fetch("https://www.googleapis.com/drive/v3/files", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!createRes.ok) throw new Error(`Could not create Drive folder "${name}"`);
+  const folder = await createRes.json() as { id: string };
+  return folder.id;
+}
+
+// Upload a PDF from an existing URL to Google Drive "Application-PDF" folder
+app.post("/api/drive/upload-pdf-from-url", async (c) => {
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const { url, fileName, parentFolderId } = await c.req.json<{ url: string; fileName: string; parentFolderId?: string }>();
+  if (!url) return c.json({ error: "Keine URL angegeben" }, 400);
+
+  // Fetch the PDF — Google Drive URLs need auth-download via Drive API
+  let fileBuffer: ArrayBuffer;
+  try {
+    // Detect Google Drive file IDs from view/share URLs
+    const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (driveMatch) {
+      // Use Drive API to download with auth token
+      const fileId = driveMatch[1];
+      const fetchRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { "Authorization": `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(60_000)
+      });
+      if (!fetchRes.ok) return c.json({ error: `Drive Download: HTTP ${fetchRes.status}` }, 502);
+      fileBuffer = await fetchRes.arrayBuffer();
+    } else {
+      // Regular URL — fetch directly
+      const fetchRes = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+      if (!fetchRes.ok) return c.json({ error: `Datei konnte nicht geladen werden: HTTP ${fetchRes.status}` }, 502);
+      fileBuffer = await fetchRes.arrayBuffer();
+    }
+  } catch {
+    return c.json({ error: "Datei-URL nicht erreichbar" }, 502);
+  }
+
+  const parent = parentFolderId || env.GOOGLE_APPLICATIONS_FOLDER_ID || undefined;
+  const pdfFolderId = await findOrCreateDriveFolder(accessToken, "Application-PDF", parent);
+  const safeName = fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`;
+
+  const boundary = "----PdfUrlUploadBoundary";
+  const metadata = JSON.stringify({ name: safeName, mimeType: "application/pdf", parents: [pdfFolderId] });
+  const multipartBody = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`),
+    Buffer.from(fileBuffer),
+    Buffer.from(`\r\n--${boundary}--`)
+  ]);
+
+  const uploadRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+    body: multipartBody
+  });
+
+  if (!uploadRes.ok) {
+    const err = await uploadRes.json() as { error?: { message?: string } };
+    return c.json({ error: `Drive Upload: ${err.error?.message ?? uploadRes.status}` }, 502);
+  }
+
+  const uploaded = await uploadRes.json() as { id: string; name: string };
+  return c.json({ ok: true, fileId: uploaded.id, fileUrl: `https://drive.google.com/file/d/${uploaded.id}/view`, fileName: uploaded.name });
+});
+
+// Upload a PDF file to Google Drive "Application-PDF" folder
+app.post("/api/drive/upload-pdf", async (c) => {
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const formData = await c.req.formData();
+  const file = formData.get("file") as File | null;
+  const parentFolderId = (formData.get("parentFolderId") as string | null) || env.GOOGLE_APPLICATIONS_FOLDER_ID || undefined;
+
+  if (!file) return c.json({ error: "Keine Datei übermittelt" }, 400);
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+    return c.json({ error: "Nur PDF-Dateien werden unterstützt" }, 400);
+  }
+
+  try {
+    // Find or create "Application-PDF" folder
+    const pdfFolderId = await findOrCreateDriveFolder(accessToken, "Application-PDF", parentFolderId);
+
+    // Multipart upload
+    const boundary = "----PdfUploadBoundary";
+    const metadata = JSON.stringify({ name: file.name, mimeType: "application/pdf", parents: [pdfFolderId] });
+    const fileBuffer = await file.arrayBuffer();
+    const multipartBody = Buffer.concat([
+      Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`),
+      Buffer.from(fileBuffer),
+      Buffer.from(`\r\n--${boundary}--`)
+    ]);
+
+    const uploadRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${accessToken}`,
+        "Content-Type": `multipart/related; boundary=${boundary}`
+      },
+      body: multipartBody
+    });
+
+    if (!uploadRes.ok) {
+      const err = await uploadRes.json() as { error?: { message?: string } };
+      return c.json({ error: `Drive Upload: ${err.error?.message ?? uploadRes.status}` }, 502);
+    }
+
+    const uploaded = await uploadRes.json() as { id: string; name: string };
+    const fileUrl = `https://drive.google.com/file/d/${uploaded.id}/view`;
+    return c.json({ ok: true, fileId: uploaded.id, fileUrl, fileName: uploaded.name });
+  } catch (err) {
+    console.error("PDF upload error:", err);
+    return c.json({ error: "PDF-Upload fehlgeschlagen" }, 502);
+  }
+});
+
+// Copy a user-library document (by userDocumentId) into the application's Drive folder
+app.post("/api/applications/:id/drive/copy-doc", async (c) => {
+  const id = c.req.param("id");
+  const { userDocumentId, docRule } = await c.req.json<{ userDocumentId: string; docRule?: string }>();
+
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Bewerbung nicht gefunden" }, 404);
+  if (!app_.googleFolderId) return c.json({ error: "Kein Drive-Ordner für diese Bewerbung" }, 400);
+
+  const [libDoc] = await db.select().from(userDocuments).where(eq(userDocuments.id, userDocumentId)).limit(1);
+  if (!libDoc) return c.json({ error: "Dokument nicht gefunden" }, 404);
+  if (!libDoc.url) return c.json({ error: "Dokument hat keine URL" }, 400);
+
+  // Only Google Docs can be copied via Drive API
+  if (libDoc.fileType !== "gdoc") {
+    return c.json({ error: "Nur Google Docs können in Drive kopiert werden" }, 400);
+  }
+
+  // Extract Google Doc file ID from URL
+  const docIdMatch = libDoc.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (!docIdMatch) return c.json({ error: "Ungültige Google Docs URL" }, 400);
+  const fileId = docIdMatch[1];
+
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const [profile] = await db.select({ name: userProfile.name }).from(userProfile).limit(1);
+  const vars = {
+    doc:    libDoc.name,
+    firma:  app_.company ?? "Firma",
+    rolle:  app_.role ?? "Stelle",
+    name:   profile?.name ?? "",
+    datum:  `${String(now.getFullYear()).slice(2)}${pad(now.getMonth() + 1)}${pad(now.getDate())}`,
+    jahr:   String(now.getFullYear()),
+    monat:  pad(now.getMonth() + 1),
+  };
+  const rule = docRule || "{doc} – {name} – {firma} – {datum}";
+  const newName = applyNameRule(rule, vars);
+
+  // Try direct copy first
+  let newFileId: string | null = null;
+  const copyRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/copy`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: newName, parents: [app_.googleFolderId] })
+  });
+
+  if (copyRes.ok) {
+    const copied = await copyRes.json() as { id: string };
+    newFileId = copied.id;
+  } else {
+    // Fallback: export as docx → upload
+    const exportRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=application/vnd.openxmlformats-officedocument.wordprocessingml.document`,
+      { headers: { "Authorization": `Bearer ${accessToken}` } }
+    );
+    if (exportRes.ok) {
+      const docxBuffer = await exportRes.arrayBuffer();
+      const boundary = "----DocCopyBoundary";
+      const metadata = JSON.stringify({ name: newName, mimeType: "application/vnd.google-apps.document", parents: [app_.googleFolderId] });
+      const multipartBody = Buffer.concat([
+        Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: application/vnd.openxmlformats-officedocument.wordprocessingml.document\r\n\r\n`),
+        Buffer.from(docxBuffer),
+        Buffer.from(`\r\n--${boundary}--`)
+      ]);
+      const uploadRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+        body: multipartBody
+      });
+      if (uploadRes.ok) {
+        const uploaded = await uploadRes.json() as { id: string };
+        newFileId = uploaded.id;
+      }
+    }
+  }
+
+  if (!newFileId) return c.json({ error: "Kopieren fehlgeschlagen. Prüfe Kopierberechtigung im Originaldokument." }, 502);
+  const driveUrl = `https://docs.google.com/document/d/${newFileId}/edit`;
+  return c.json({ ok: true, fileId: newFileId, driveUrl, name: newName });
+});
+
+app.get("/api/export", async (c) => {
+  const payload = await buildExportPayload();
   const date = new Date().toISOString().slice(0, 10);
   c.header("Content-Disposition", `attachment; filename="application-pal-export-${date}.json"`);
   c.header("Content-Type", "application/json");
   return c.body(JSON.stringify(payload, null, 2));
+});
+
+// Save export to Google Drive
+app.post("/api/export/drive", async (c) => {
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const payload = await buildExportPayload();
+  const date     = new Date().toISOString().slice(0, 10);
+  const fileName = `application-pal-backup-${date}.json`;
+  const content  = JSON.stringify(payload, null, 2);
+
+  // Multipart upload to Drive
+  const boundary = "----ExportBoundary";
+  const metadata = JSON.stringify({ name: fileName, mimeType: "application/json" });
+  const body = [
+    `--${boundary}`,
+    "Content-Type: application/json; charset=UTF-8",
+    "",
+    metadata,
+    `--${boundary}`,
+    "Content-Type: application/json",
+    "",
+    content,
+    `--${boundary}--`
+  ].join("\r\n");
+
+  const res = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${accessToken}`,
+      "Content-Type": `multipart/related; boundary=${boundary}`
+    },
+    body
+  });
+
+  if (!res.ok) {
+    const err = await res.json() as { error?: { message?: string } };
+    return c.json({ error: `Drive Upload: ${err.error?.message ?? res.status}` }, 502);
+  }
+  const file = await res.json() as { id: string; name: string };
+  return c.json({ ok: true, fileId: file.id, fileName, fileUrl: `https://drive.google.com/file/d/${file.id}/view` });
 });
 
 app.post("/api/import", async (c) => {

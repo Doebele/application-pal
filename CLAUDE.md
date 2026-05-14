@@ -12,6 +12,9 @@ npm run typecheck
 npm run typecheck --workspace frontend
 npm run typecheck --workspace backend
 
+# Build shared package (required after schema changes before typecheck passes)
+npm run build --workspace shared
+
 # Dev: Vite frontend only (port 5174, proxies /api → localhost:8070)
 npm run dev --workspace frontend
 
@@ -25,9 +28,6 @@ docker compose build backend  && docker compose up -d backend
 
 # Apply DB migration manually to running container
 docker exec application-pal-db psql -U postgres -d application_pal -c "ALTER TABLE ..."
-
-# Generate new Drizzle migration file after schema change
-npm run db:generate --workspace backend
 ```
 
 ## Critical Pitfalls
@@ -36,9 +36,19 @@ npm run db:generate --workspace backend
 
 **Docker TypeScript errors**: `tsc -b` runs inside the Dockerfile — errors the Vite dev server ignores will break the Docker build. Always run `npm run typecheck` before rebuilding Docker.
 
-**Preview server directory**: The preview tool starts Vite from `.claude/launch.json`. The `launch.json` in both the main project and any worktrees must use `sh -c "cd /abs/path && npm run dev --workspace frontend"` to ensure the correct source is served.
+**Schema changes**: Edit `shared/src/schema.ts` → run `npm run build --workspace shared` → then typecheck passes. DB migrations must be applied manually with `docker exec` (no auto-migration on startup).
 
-**Schema changes**: Edit `shared/src/schema.ts` → run `npm run build --workspace shared` to compile → then typecheck passes. DB migrations must be applied manually with `docker exec` (no auto-migration on startup).
+**LM Studio in Docker**: The backend runs inside Docker. `localhost:1234` inside Docker ≠ the host machine. `resolveHostUrl()` in `backend/src/index.ts` rewrites `localhost` → `host.docker.internal` for all LM Studio calls. Never hardcode `localhost` for LM Studio URLs.
+
+**Qwen3 max_tokens**: Always set `max_tokens: 16384` for LM Studio calls. Qwen3 emits a long `<think>…</think>` block before the JSON answer. `extractJson()` strips `<think>` blocks before parsing.
+
+**nginx proxy timeout**: `frontend/nginx.conf` sets `proxy_read_timeout 180s`. AI endpoints can take up to 120s. Never reduce this timeout.
+
+**Preview server directory**: `.claude/launch.json` must use `sh -c "cd /abs/path && npm run dev --workspace frontend"` so the preview tool serves the main project, not a worktree.
+
+**axios withCredentials**: `frontend/src/lib/api.ts` sets `withCredentials: true`. This is required for the httpOnly auth cookies to be sent with every API request. Never remove this.
+
+**Docker working directory**: Always `cd /Users/clausmedvesek/Developer/projects/application-pal` before `docker compose` commands — the CWD persists between Bash tool calls and may drift to a worktree.
 
 ## Architecture
 
@@ -46,7 +56,7 @@ npm workspaces monorepo: `shared`, `backend`, `frontend`.
 
 ```
 shared/src/schema.ts   ← single source of truth: Drizzle tables + Zod schemas + TS types
-backend/src/index.ts   ← entire Hono API (all routes in one file, no sub-routers)
+backend/src/index.ts   ← entire Hono API (all routes in one file, no sub-routers, ~2600 lines)
 frontend/src/          ← React 19 + Vite SPA
 ```
 
@@ -58,18 +68,30 @@ frontend/src/          ← React 19 + Vite SPA
 
 Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No auto-migrations.
 
-Key patterns:
-- Validation: `zValidator("json", schema)` from `@hono/zod-validator`; schemas from `@application-pal/shared` only
-- AI extraction: LM Studio + Anthropic claude-haiku via raw `fetch`, no SDK
-- `pickWorkTags(text)`: regex-detects Remote/Hybrid/On-site and work-time % from job text, appended to AI tags
-- `resolveCompanyLogo(name)`: queries Clearbit autocomplete for domain, returns `https://www.google.com/s2/favicons?domain=X&sz=128` (Clearbit logo service is defunct)
-- Export: `GET /api/export` returns all tables as JSON; `POST /api/import` with `{mode, data}` restores them
+**Key helper functions** (defined before routes):
+- `resolveHostUrl(url)` — rewrites `localhost` → `host.docker.internal` for Docker networking
+- `getJwtSecret()` — returns JWT secret; auto-generates ephemeral secret if `JWT_SECRET` env is empty
+- `issueTokens(c, userId)` — sets `access_token` (15min) + `refresh_token` (30d) as httpOnly cookies
+- `STAGE_TASK_TEMPLATES` — predefined task lists per stage; `initTasksForStage(appId, stage)` inserts them (idempotent, no duplicates)
+- `callAi(system, user, ai)` — generic AI caller for LM Studio or Anthropic; used by all coaching endpoints
+- `extractJson(raw)` — strips `<think>` blocks + markdown fences, returns parsed JSON
+- `applyNameRule(rule, vars)` — replaces `{firma}`, `{rolle}`, `{datum}` etc. in Drive naming rules
+- `buildExportPayload()` — assembles all user-data tables for export; used by both download and Drive-save endpoints
+- `getDriveAccessToken()` — retrieves stored Google OAuth access token from DB
+
+**Validation**: `zValidator("json", schema)` from `@hono/zod-validator`; schemas from `@application-pal/shared` only.
+
+**Auth middleware** (runs before all `/api/*` except `/api/auth/*`, `/api/google/callback`, `/health`):
+Verifies `access_token` cookie via JWT; silently refreshes via `refresh_token` cookie if access token expired.
+
+**Stage-change hook**: `PATCH /api/applications/:id` detects stage changes → calls `initTasksForStage()` and logs a `stage_change` activity automatically.
 
 ### Frontend (`frontend/src/`)
 
-- **State**: Zustand `useUiStore` (persisted to localStorage) — theme, accent, density, AI config. Server data via React Query `["applications"]` and `["applications", showArchived]`
-- **API**: `api` from `lib/api.ts` — Axios with empty `baseURL`
-- **Styling**: single `index.css`, CSS custom properties. No Tailwind. `.input-line` = Notion-style underline input (no box). `.field` = labelled form field (gap 1px, padding 2px 0)
+- **State**: Zustand `useUiStore` (persisted localStorage, key `app-pal-ui-v2`) — theme, accent, density, cardVariant, AI config, Drive naming rules (`driveNameFolder`, `driveNameDoc`), Drive parent folder ID (`driveApplicationsFolderId`)
+- **Auth**: `AuthProvider` + `useAuth()` in `lib/auth.tsx`. Calls `/api/auth/me` on mount. No token in localStorage — cookies are httpOnly. All routes wrapped in `ProtectedRoute` in `App.tsx`.
+- **API**: `api` from `lib/api.ts` — Axios, `withCredentials: true`, empty `baseURL`
+- **Styling**: single `index.css`, CSS custom properties. No Tailwind. `.input-line` = Notion-style underline input. `.field` = labelled form field. `.hide-scrollbar` = cross-browser scrollbar hiding.
 - **Expand-Logik**: expandable sections use `position: absolute; top: 57px; left/right/bottom: 0; z-index: 10` within `.app-main` (`position: relative`)
 
 ### Ports & Container Names
@@ -80,30 +102,74 @@ Key patterns:
 | Backend (Hono) | 8071 | `application-pal-backend` | 3000 |
 | Postgres | 15436 | `application-pal-db` | — |
 
-Vite dev proxies `/api` → `http://localhost:8070` (nginx) → backend container internally.
-
 ### DB Tables
 
-| Table | Purpose |
-|---|---|
-| `applications` | Jobs: stage, tags, salary, logoUrl, archived |
-| `user_profile` | Single-row profile + Master-CV |
-| `user_documents` | Global document library (Zeugnisse, Figma, etc.) |
-| `application_documents` | Per-job docs; `userDocumentId` links to library |
-| `application_activities` | Timeline events per job |
-| `application_contacts` | Contacts per job |
-| `google_oauth_tokens` | Google Drive OAuth token (single row) |
+| Table | Purpose | Exported |
+|---|---|---|
+| `applications` | Jobs: stage, tags, salary, logoUrl, archived, archiveReason, matchScore, matchDetails, googleFolderId, googleFolderUrl, portalUrl | ✅ |
+| `user_profile` | Single-row profile: masterCv, linkedinBio, headline, personalNotes | ✅ |
+| `user_documents` | Global document library (CV, Zeugnisse, Figma, etc.) | ✅ |
+| `application_documents` | Per-job docs; `userDocumentId` links to library; `googleDocId`/`googleDocUrl` for Drive | ✅ |
+| `application_activities` | Timeline events per job | ✅ |
+| `application_contacts` | Contacts per job | ✅ |
+| `application_tasks` | Stage-specific checklists per job; `isDefault` = auto-created, `stage` = which phase | ✅ |
+| `users` | Single user account (email + bcrypt hash) | ❌ auth data |
+| `webauthn_credentials` | Passkey/WebAuthn credentials per user | ❌ auth data |
+| `password_reset_tokens` | OTP codes for password recovery | ❌ auth data |
+| `google_oauth_tokens` | Google Drive/Docs OAuth token (single row) | ❌ credentials |
+| `kb_companies`, `kb_roles`, `kb_sources`, `kb_insights` | Knowledge-base cache | ❌ auto-generated |
 
-**Archive pattern**: `applications.archived = "true"` hides from main board. `GET /api/applications?archived=true` fetches archived. Default query filters `archived != "true"`.
+**Archive pattern**: `applications.archived = "true"` hides from board. `archived != "true"` is the default filter. `archiveReason` stores one of `unavailable | irrelevant | taken | other` or free text.
+
+### Export/Import rules
+
+`GET /api/export` uses `db.select().from(table)` with no column list → new columns are automatically included. When adding a new user-data **table**, add it to both `/api/export` (via `buildExportPayload()`) and `/api/import`. Never export `users`, `webauthn_credentials`, `password_reset_tokens`, `googleOAuthTokens`, or `kb_*` tables. Version = 1; only bump on breaking structural changes.
+
+### AI Endpoints (all require `{ ai: AiConfig }` body)
+
+All use `callAi()` + `extractJson()` pattern, `resolveHostUrl()`, and `max_tokens: 16384` for LM Studio.
+
+| Endpoint | Returns |
+|---|---|
+| `POST /api/applications/:id/match-score` | `{ score, breakdown, staerken, luecken, reasoning }` |
+| `POST /api/applications/:id/ai/cv-highlights` | `{ highlights, keywords, gaps }` |
+| `POST /api/applications/:id/ai/cv-doc` | Creates Google Doc from Master-CV + highlights; returns `{ docUrl }` |
+| `POST /api/applications/:id/ai/cover-letter` | `{ subject, body, docUrl? }` — `createDoc: true` also creates Google Doc |
+| `POST /api/applications/:id/ai/email-draft` | `{ subject, body }` — body: `{ type: "application"|"followup"|"decline" }` |
+| `POST /api/applications/:id/ai/interview-prep` | `{ rollenFragen, starBeispiele, vossFragenWhatHow, rueckfragen }` |
+| `POST /api/applications/:id/ai/salary-tips` | `{ markteinschätzung, taktiken, formulierungen, vossAnker }` |
+
+### Google Drive Endpoints
+
+All require Google OAuth token in DB (`drive` scope — NOT `drive.file`).
+
+| Endpoint | Function |
+|---|---|
+| `POST /api/applications/:id/drive/init-folder` | Creates Drive folder; body `{ folderRule?, parentFolderId? }` |
+| `GET /api/drive/templates` | Lists files from `GOOGLE_MASTER_FOLDER_ID`; filters to docs/sheets/PDFs only |
+| `POST /api/applications/:id/drive/copy-template` | Copies master-folder file to app folder; fallback: export-as-docx → reupload |
+| `POST /api/applications/:id/drive/copy-doc` | Copies a user-library Google Doc to app folder; same fallback |
+| `GET /api/drive/folder-info?folderId=` | Validates a folder ID and returns its name |
+| `POST /api/export/drive` | Saves JSON backup to Drive root as `application-pal-backup-YYYY-MM-DD.json` |
+
+**Drive naming rules** (`applyNameRule`): placeholders `{firma}`, `{rolle}`, `{name}`, `{datum}` (YYMMDD), `{jahr}`, `{monat}`, `{doc}`. Defaults: folder = `{firma} – {rolle} – {datum}`, doc = `{doc} – {name} – {firma} – {datum}`. Stored in `useUiStore` (`driveNameFolder`, `driveNameDoc`). Parent folder stored as `driveApplicationsFolderId` in store; sent as `parentFolderId` in `init-folder` request.
 
 ### Key Frontend Patterns
 
-**DetailDrawer state lifting**: `stage` and `url` are lifted to `DetailDrawer` so the header Stage-Picker and Job-button update immediately when edited in `OverviewTab`.
+**DetailDrawer**: The main job detail view. `stage` and `url` are lifted to `DetailDrawer` component state so the header Stage-Picker updates immediately. Tab type: `"overview" | "description" | "documents" | "process" | "agent" | "contacts" | "notes"`.
 
-**Board filter**: `BoardPage` manages `visibleStages: string[]` (empty = all). Passed to `Board` which filters its `STAGES` array. `FilterDropdown` in the Topbar actions handles multi-select.
+**ProcessTab**: Three sections top-to-bottom: `TaskChecklist` (current-stage tasks with progress bar) → `StageAiActions` (contextual AI actions per stage) → activity timeline. `StageAiActions` only renders for stages with relevant actions (`preparing_cv`, `preparing_letter`, `application_sent`, `pending`, `interview_1`, `interview_2`, `accepted`).
 
-**Logo avatar**: `LogoAvatar` in `DetailDrawer` and `Avatar` in `Card.tsx` both try loading `logoUrl` via `<img>` with `onError` fallback to colored initials. Google Favicon URLs (`/s2/favicons?domain=X&sz=128`) may 301-redirect but browsers follow automatically.
+**DocumentsTab**: Three sections: Google Drive folder panel (top, only if connected) → Zugewiesen list → library grid (2-column). Library docs show 3 states: not linked / linked-no-Drive / linked-with-Drive-copy. Adding a Google Doc from library auto-copies to Drive folder if one exists.
+
+**Board filters** (`BoardPage`): `visibleStages[]` + `timeFilter` (TimeFilter type) for the main board; `reasonFilter` (ReasonFilter) + `archiveTime` for the archive view. All filtering is client-side after fetch.
+
+**Logo avatar**: `LogoAvatar` in `DetailDrawer` and `Avatar` in `Card.tsx` try `logoUrl` via `<img>` with `onError` fallback to colored initials.
+
+### Authentication
+
+Single-user design. JWT in httpOnly cookies (no localStorage). `GET /api/auth/status` returns `{ setup: bool }` — if `false`, SetupPage is shown. Google Sign-In doubles as Drive authorization (one OAuth consent for both). WebAuthn passkeys supported via `@simplewebauthn/server` with `requireUserVerification: false` for broad authenticator compatibility.
 
 ### Google OAuth
 
-Flow: Settings → `/api/google/auth-url` → consent → `/api/google/callback` → DB. `GOOGLE_FRONTEND_URL` controls redirect target (default `http://localhost:8070`). Must match registered URI in Google Cloud Console.
+Scope required: `https://www.googleapis.com/auth/drive` (NOT `drive.file`) + `documents` + `openid email profile`. The broader `drive` scope is needed to copy user-owned template files. Re-authentication is required when upgrading from older `drive.file` scope. Flow: Settings → `/api/google/auth-url` → consent → `/api/google/callback` → DB + auto-login.

@@ -842,17 +842,27 @@ body {
 }
 
 /* Form fields */
-.field { display: flex; flex-direction: column; gap: 6px; }
+.field { display: flex; flex-direction: column; gap: 1px; }
 .field label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   color: var(--fg-3);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
+/* All textareas default to block + full width + theme colors */
+textarea {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  background: transparent;
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+}
+
 .field input, .field textarea {
   width: 100%;
-  padding: 6px 2px;
+  padding: 2px 0;
   border: none;
   border-bottom: 1px solid transparent;
   border-radius: 0;
@@ -888,7 +898,7 @@ body {
 /* Notion-style underline inputs — in-place editing, no box */
 .input-line {
   width: 100%;
-  padding: 6px 2px;
+  padding: 2px 0;
   border: none;
   border-bottom: 1px solid transparent;
   border-radius: 0;
@@ -1264,3 +1274,16 @@ body {
   outline: none;
 }
 .regen-bar input::placeholder { color: var(--fg-3); }
+
+
+/* Task checklist row */
+.task-row:hover .task-del { opacity: 1 !important; }
+.task-row:hover { background: var(--surface-2); }
+
+/* Hide scrollbar but keep scrollability */
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+
+/* Notion-style doc row in Drive section */
+.notion-doc-row:hover { background: var(--surface-2) !important; }
+.notion-doc-row:hover a, .notion-doc-row:hover button { opacity: 1 !important; }

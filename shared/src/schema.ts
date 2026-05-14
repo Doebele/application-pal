@@ -1,4 +1,4 @@
-import { integer, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, bigint, integer, numeric, pgEnum, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -78,9 +78,15 @@ export const applications = pgTable("applications", {
   salary: text("salary"),
   tags: text("tags"),
   nextDeadline: text("next_deadline"),
+  portalUrl: text("portal_url"),   // Bewerbungsportal URL (separate from job posting url)
   logoUrl: text("logo_url"),
   kbRoleId: uuid("kb_role_id").references(() => kbRoles.id, { onDelete: "set null" }),
   archived: text("archived").default("false"),
+  archiveReason: text("archive_reason"),  // 'unavailable' | 'irrelevant' | 'taken' | 'other' | free text
+  matchScore: integer("match_score"),
+  matchDetails: text("match_details"),   // JSON: {breakdown, staerken, luecken, reasoning}
+  googleFolderId: text("google_folder_id"),
+  googleFolderUrl: text("google_folder_url"),
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -98,6 +104,7 @@ export const userProfile = pgTable("user_profile", {
   linkedinBio: text("linkedin_bio"),
   photoUrl: text("photo_url"),
   masterCv: text("master_cv"),
+  personalNotes: text("personal_notes"),   // Interview-relevant personal priorities/talking points
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
@@ -149,6 +156,36 @@ export const googleOAuthTokens = pgTable("google_oauth_tokens", {
   refreshToken: text("refresh_token"),
   expiresAt: timestamp("expires_at", { withTimezone: true }),
   scope: text("scope"),
+  userId: uuid("user_id"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+// ─── Auth: Users ───────────────────────────────────────────────
+export const users = pgTable("users", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+// ─── Auth: WebAuthn / Passkey Credentials ─────────────────────
+export const webauthnCredentials = pgTable("webauthn_credentials", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull(),
+  credentialId: text("credential_id").notNull().unique(),
+  publicKey: text("public_key").notNull(),
+  counter: bigint("counter", { mode: "number" }).notNull().default(0),
+  deviceName: text("device_name"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+// ─── Auth: Password Reset OTP ─────────────────────────────────
+export const passwordResetTokens = pgTable("password_reset_tokens", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull(),
+  code: text("code").notNull(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  used: boolean("used").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -205,10 +242,28 @@ export const applicationActivityInsertSchema = createInsertSchema(applicationAct
 
 export const applicationContactSelectSchema = createSelectSchema(applicationContacts);
 export const applicationContactInsertSchema = createInsertSchema(applicationContacts, {
-  applicationId: z.string().uuid(),
   name: z.string().trim().min(1)
-}).omit({ id: true, createdAt: true });
-export const applicationContactPatchSchema = applicationContactInsertSchema.omit({ applicationId: true }).partial();
+}).omit({ id: true, createdAt: true, applicationId: true });
+export const applicationContactPatchSchema = applicationContactInsertSchema.partial();
+
+// ─── Application Tasks (stage-specific checklists) ───────────
+export const applicationTasks = pgTable("application_tasks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  applicationId: uuid("application_id").notNull(),
+  stage: text("stage").notNull(),
+  title: text("title").notNull(),
+  done: boolean("done").notNull().default(false),
+  isDefault: boolean("is_default").notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+export const applicationTaskSelectSchema = createSelectSchema(applicationTasks);
+export const applicationTaskInsertSchema = createInsertSchema(applicationTasks, {
+  title: z.string().trim().min(1)
+}).omit({ id: true, createdAt: true, applicationId: true });
+export const applicationTaskPatchSchema = applicationTaskInsertSchema.partial();
+export type ApplicationTask = z.infer<typeof applicationTaskSelectSchema>;
 
 // ─── User Documents (global document vault) ───────────────────
 export const userDocuments = pgTable("user_documents", {
@@ -284,3 +339,5 @@ export type CreateApplicationInput = z.infer<typeof applicationInsertSchema>;
 export type PatchApplicationInput = z.infer<typeof applicationPatchSchema>;
 export type ImportApplicationInput = z.infer<typeof applicationImportRequestSchema>;
 export type KbIngestUrlInput = z.infer<typeof kbIngestUrlRequestSchema>;
+export type User = { id: string; email: string; createdAt: Date };
+export type WebauthnCredential = { id: string; userId: string; credentialId: string; publicKey: string; counter: number; deviceName: string | null; createdAt: Date };

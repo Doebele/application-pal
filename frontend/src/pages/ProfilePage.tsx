@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ExternalLink, Save, User, Linkedin, FileText, Loader, Maximize2, Minimize2 } from "lucide-react";
+import { ExternalLink, Save, User, Linkedin, FileText, Loader, Maximize2, Minimize2, Lightbulb } from "lucide-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 import type { UserProfile } from "@application-pal/shared";
@@ -24,7 +24,7 @@ function AutoResizeTextarea({ value, onChange, placeholder, minRows = 4 }: {
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       rows={minRows}
-      style={{ resize: "none", overflow: "hidden" }}
+      style={{ resize: "none", overflow: "hidden", background: "transparent", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none" }}
     />
   );
 }
@@ -34,8 +34,9 @@ function AutoResizeTextarea({ value, onChange, placeholder, minRows = 4 }: {
 export function ProfilePage() {
   const [profile, setProfile] = useState<Partial<UserProfile>>({
     name: "", email: "", phone: "", location: "", headline: "",
-    linkedinUrl: "", linkedinBio: "", photoUrl: "", masterCv: ""
+    linkedinUrl: "", linkedinBio: "", photoUrl: "", masterCv: "", personalNotes: ""
   });
+  const [notesExpanded, setNotesExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -260,6 +261,63 @@ export function ProfilePage() {
                     onChange={(v) => setProfile((p) => ({ ...p, masterCv: v }))}
                     placeholder={`# [Dein Name]\n\n## Berufserfahrung\n\n**Senior UX Designer** · Firma GmbH (2021–heute)\n- Verantwortlich für…\n\n## Ausbildung\n\n## Skills\n\nFigma, UX Research, Prototyping, Design Systems…`}
                     minRows={12}
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Personal Notes — für Match-Score & Interview */}
+        <div style={{
+          marginBottom: 32,
+          ...(notesExpanded ? {
+            position: "absolute", top: 57, left: 0, right: 0, bottom: 0,
+            zIndex: 10, background: "var(--bg)", padding: "24px 32px",
+            display: "flex", flexDirection: "column", overflow: "auto"
+          } : {})
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <Lightbulb size={14} style={{ color: "#f59e0b" }} />
+            <div className="eyebrow" style={{ flex: 1 }}>Persönliche Stichpunkte</div>
+            <button
+              className="btn btn-ghost btn-icon"
+              onClick={() => setNotesExpanded((v) => !v)}
+              title={notesExpanded ? "Minimieren" : "Maximieren"}
+              style={{ padding: 4 }}
+            >
+              {notesExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            </button>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 14, lineHeight: 1.6 }}>
+            <span style={{ color: "#f59e0b", fontWeight: 600 }}>Für Match-Score & Interviews:</span>{" "}
+            Notiere hier persönliche Prioritäten, Gehaltsvorstellungen, bevorzugte Arbeitsweise, besondere Stärken oder Punkte die dir in Bewerbungsgesprächen wichtig sind. Diese Informationen fliessen in die KI-Analyse ein.
+          </div>
+          <div className="settings-group" style={notesExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
+            <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", ...(notesExpanded ? { flex: 1 } : {}) }}>
+              <div className="field" style={notesExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
+                <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>Stichpunkte (Freitext)</span>
+                  <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 400 }}>
+                    {(profile.personalNotes?.length ?? 0).toLocaleString()} Zeichen
+                  </span>
+                </label>
+                {notesExpanded ? (
+                  <textarea
+                    value={profile.personalNotes ?? ""}
+                    onChange={(e) => setProfile((p) => ({ ...p, personalNotes: e.target.value }))}
+                    onBlur={() => save({ personalNotes: profile.personalNotes })}
+                    placeholder={`- Gehaltsvorstellung: CHF 110–130k\n- Remote-first bevorzugt, gerne 1–2 Tage Büro\n- Stärken: UX Research, Design Systems, Team-Führung\n- Wichtig: flache Hierarchien, agiles Umfeld\n- Sprachen: Deutsch (Muttersprache), Englisch (C1)`}
+                    style={{ flex: 1, resize: "none", minHeight: 200, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none" }}
+                  />
+                ) : (
+                  <textarea
+                    value={profile.personalNotes ?? ""}
+                    onChange={(e) => setProfile((p) => ({ ...p, personalNotes: e.target.value }))}
+                    onBlur={() => save({ personalNotes: profile.personalNotes })}
+                    placeholder={`- Gehaltsvorstellung: CHF 110–130k\n- Remote-first bevorzugt\n- Stärken: UX Research, Design Systems\n- Wichtig: flache Hierarchien, agiles Umfeld`}
+                    rows={4}
+                    style={{ resize: "vertical", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none", width: "100%" }}
                   />
                 )}
               </div>

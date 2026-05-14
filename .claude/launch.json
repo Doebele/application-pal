@@ -3,21 +3,21 @@
   "configurations": [
     {
       "name": "Frontend (Vite)",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace", "frontend"],
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/clausmedvesek/Developer/projects/application-pal && npm run dev --workspace frontend"],
       "port": 5174
     },
     {
       "name": "Backend (tsx watch)",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace", "backend"],
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/clausmedvesek/Developer/projects/application-pal && npm run dev --workspace backend"],
       "port": 3300
     },
     {
       "name": "Full Stack (Docker)",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
-      "port": 80
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd /Users/clausmedvesek/Developer/projects/application-pal && docker compose up --build"],
+      "port": 8070
     }
   ]
 }

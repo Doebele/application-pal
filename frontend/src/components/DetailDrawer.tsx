@@ -2,13 +2,14 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import {
   X, ExternalLink, MoreHorizontal, Check, Sparkles, RefreshCw,
   ChevronRight, Link2, Plus, Mail, Phone, Calendar, FileText,
-  Loader, Trash2, Edit3, MessageSquare, Clock, ChevronDown
+  Loader, Trash2, Edit3, MessageSquare, Clock, ChevronDown, Archive, Pencil
 } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import type {
   Application, ApplicationDocument, ApplicationActivity, ApplicationContact, UserDocument
 } from "@application-pal/shared";
 import { api } from "../lib/api";
+import { useUiStore } from "../lib/store";
 
 type Tab = "overview" | "description" | "documents" | "process" | "agent" | "contacts" | "notes";
 
@@ -35,6 +36,14 @@ const STAGES = [
 ];
 
 const STAGE_LABELS: Record<string, string> = Object.fromEntries(STAGES.map((s) => [s.id, s.label]));
+
+export const ARCHIVE_REASON_LABELS: Record<string, string> = {
+  unavailable: "Stelle nicht mehr verfügbar",
+  irrelevant:  "Nicht relevant",
+  taken:       "Bereits vergeben",
+  other:       "Sonstiger Grund",
+};
+
 const STAGE_COLORS: Record<string, string> = {
   import_validating: "#94a3b8", preparing_cv: "#60a5fa", preparing_letter: "#22d3ee",
   application_sent: "#a78bfa", pending: "#fbbf24", interview_1: "#34d399",
@@ -124,7 +133,7 @@ function AutoTextarea({ value, onChange, onBlur, placeholder, minRows = 3 }: {
     el.style.height = "auto"; el.style.height = el.scrollHeight + "px";
   }, [value]);
   return <textarea ref={ref} value={value} onChange={onChange} onBlur={onBlur}
-    placeholder={placeholder} rows={minRows} style={{ resize: "none", overflow: "hidden" }} />;
+    placeholder={placeholder} rows={minRows} style={{ resize: "none", overflow: "hidden", background: "transparent", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none" }} />;
 }
 
 function AgentStep({ done, active, label, meta }: { done: boolean; active: boolean; label: string; meta?: string }) {
@@ -194,13 +203,38 @@ function StageProgressBar({ stage }: { stage: string }) {
   );
 }
 
+// ─── Logo Avatar (header) ─────────────────────────────────────
+function LogoAvatar({ company, logoUrl, size = 44 }: { company: string; logoUrl?: string | null; size?: number }) {
+  const [imgOk, setImgOk] = useState(false);
+  const color = getCompanyColor(company);
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: 10, flexShrink: 0,
+      background: imgOk ? "#fff" : color,
+      border: imgOk ? "1px solid var(--border)" : "none",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontSize: size * 0.4, fontWeight: 700, color: "#fff",
+      overflow: "hidden", padding: imgOk ? 4 : 0, boxSizing: "border-box"
+    }}>
+      {logoUrl && (
+        <img src={logoUrl} alt="" onLoad={() => setImgOk(true)} onError={() => setImgOk(false)}
+          style={{ display: imgOk ? "block" : "none", width: "100%", height: "100%", objectFit: "contain" }} />
+      )}
+      {!imgOk && company.slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
+
 // ─── Overview Tab ──────────────────────────────────────────────
-function OverviewTab({ app, stage, onSave }: { app: Application; stage: string; onSave: (patch: Partial<Application>) => void }) {
+function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
+  app: Application; stage: string;
+  url: string; onUrlChange: (url: string) => void;
+  onSave: (patch: Partial<Application>) => void
+}) {
   const [company, setCompany] = useState(app.company);
   const [role, setRole]       = useState(app.role);
   const [location, setLocation] = useState(app.location ?? "");
   const [salary, setSalary]   = useState(app.salary ?? "");
-  const [url, setUrl]         = useState(app.url ?? "");
   const [tags, setTags]       = useState<string[]>(parseTags(app.tags));
   const [newTag, setNewTag]   = useState("");
   const [saved, setSaved]     = useState(false);
@@ -223,8 +257,6 @@ function OverviewTab({ app, stage, onSave }: { app: Application; stage: string; 
 
   return (
     <>
-      <StageProgressBar stage={stage} />
-
       {/* Compact stats */}
       <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
         {[
@@ -241,37 +273,55 @@ function OverviewTab({ app, stage, onSave }: { app: Application; stage: string; 
       </div>
 
       {/* Fields */}
-      <div className="field">
-        <label>Firma</label>
-        <input value={company} onChange={(e) => setCompany(e.target.value)} onBlur={() => save({ company })} />
-      </div>
-      <div className="field">
-        <label>Rolle</label>
-        <input value={role} onChange={(e) => setRole(e.target.value)} onBlur={() => save({ role })} />
-      </div>
+      {/* Row 1: Firma + Ort */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="field">
+          <label>Firma</label>
+          <input value={company} onChange={(e) => setCompany(e.target.value)} onBlur={() => save({ company })} />
+        </div>
         <div className="field">
           <label>Ort</label>
           <input value={location} onChange={(e) => setLocation(e.target.value)} onBlur={() => save({ location })} />
         </div>
+      </div>
+
+      {/* Row 2: Rolle (full width) */}
+      <div className="field">
+        <label>Rolle</label>
+        <input value={role} onChange={(e) => setRole(e.target.value)} onBlur={() => save({ role })} />
+      </div>
+
+      {/* Row 3: Original URL + Bewerbungsportal */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div className="field">
-          <label>Nächster Schritt</label>
-          <input value={app.nextDeadline ?? ""} onChange={(e) => save({ nextDeadline: e.target.value })} placeholder="z.B. Interview 15. Mai" />
+          <label>Original URL</label>
+          <div style={{ position: "relative" }}>
+            <Link2 size={12} style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
+            <input value={url} onChange={(e) => onUrlChange(e.target.value)} onBlur={() => save({ url })}
+              placeholder="https://…" style={{ paddingLeft: 18, paddingRight: url ? 20 : undefined }} />
+            {url && <a href={url} target="_blank" rel="noreferrer" style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", color: "var(--accent)", display: "flex" }}><ExternalLink size={12} /></a>}
+          </div>
+        </div>
+        <div className="field">
+          <label>Bewerbungsportal</label>
+          <div style={{ position: "relative" }}>
+            <ExternalLink size={12} style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
+            <input value={app.portalUrl ?? ""} onChange={(e) => save({ portalUrl: e.target.value })} onBlur={(e) => save({ portalUrl: e.target.value })}
+              placeholder="https://apply.firma.com/…" style={{ paddingLeft: 18, paddingRight: app.portalUrl ? 20 : undefined }} />
+            {app.portalUrl && <a href={app.portalUrl} target="_blank" rel="noreferrer" style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", color: "var(--accent)", display: "flex" }}><ExternalLink size={12} /></a>}
+          </div>
         </div>
       </div>
+
+      {/* Row 4: Salary + Nächster Schritt */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div className="field">
           <label>Salary</label>
           <input value={salary} onChange={(e) => setSalary(e.target.value)} onBlur={() => save({ salary })} placeholder="e.g. €80–100k" />
         </div>
         <div className="field">
-          <label>Original URL</label>
-          <div style={{ position: "relative" }}>
-            <Link2 size={12} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
-            <input value={url} onChange={(e) => setUrl(e.target.value)} onBlur={() => save({ url })}
-              placeholder="https://…" style={{ paddingLeft: 28, paddingRight: url ? 28 : undefined }} />
-            {url && <a href={url} target="_blank" rel="noreferrer" style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: "var(--accent)", display: "flex" }}><ExternalLink size={12} /></a>}
-          </div>
+          <label>Nächster Schritt</label>
+          <input value={app.nextDeadline ?? ""} onChange={(e) => save({ nextDeadline: e.target.value })} placeholder="z.B. Interview 15. Mai" />
         </div>
       </div>
 
@@ -350,6 +400,7 @@ function catToDocType(cat: string): "cv" | "letter" | "other" {
   return "other";
 }
 
+// ─── File-type icons ──────────────────────────────────────────
 const GDocIcon = ({ size = 12 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
     <rect x="4" y="2" width="16" height="20" rx="2" fill="#4285f4" opacity="0.15" stroke="#4285f4" strokeWidth="1.5"/>
@@ -359,7 +410,73 @@ const GDocIcon = ({ size = 12 }: { size?: number }) => (
   </svg>
 );
 
+const PdfIcon = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+    <rect width="32" height="32" rx="6" fill="#EA4335" opacity="0.12"/>
+    <path d="M8 4h12l6 6v18a2 2 0 01-2 2H8a2 2 0 01-2-2V6a2 2 0 012-2z" fill="#EA4335" opacity="0.2" stroke="#EA4335" strokeWidth="1.5"/>
+    <path d="M20 4v6h6" stroke="#EA4335" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <text x="16" y="24" fontSize="8" fontWeight="800" fill="#EA4335" textAnchor="middle" fontFamily="Arial,sans-serif">PDF</text>
+  </svg>
+);
+
+const GoogleDocIconLarge = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+    <rect width="32" height="32" rx="6" fill="#4285F4" opacity="0.1"/>
+    <path d="M9 4h10l7 7v17a2 2 0 01-2 2H9a2 2 0 01-2-2V6a2 2 0 012-2z" fill="white" stroke="#4285F4" strokeWidth="1.5"/>
+    <path d="M19 4v7h7" stroke="#4285F4" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+    <line x1="10" y1="17" x2="22" y2="17" stroke="#4285F4" strokeWidth="1.5" strokeLinecap="round"/>
+    <line x1="10" y1="21" x2="18" y2="21" stroke="#4285F4" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
+const FigmaIconLarge = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+    <rect width="32" height="32" rx="6" fill="#1ABCFE" opacity="0.1"/>
+    <circle cx="20" cy="16" r="4" fill="#1ABCFE"/>
+    <path d="M8 24a4 4 0 004-4v-4H8a4 4 0 000 8z" fill="#0ACF83"/>
+    <path d="M8 16h4V8H8a4 4 0 000 8z" fill="#FF7262"/>
+    <path d="M12 8h4a4 4 0 010 8h-4V8z" fill="#F24E1E"/>
+    <path d="M12 16h4a4 4 0 010 8h-4v-8z" fill="#A259FF"/>
+  </svg>
+);
+
+const ImageIconLarge = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+    <rect width="32" height="32" rx="6" fill="#F59E0B" opacity="0.1"/>
+    <rect x="5" y="7" width="22" height="18" rx="3" stroke="#F59E0B" strokeWidth="1.5"/>
+    <circle cx="11" cy="13" r="2.5" fill="#F59E0B" opacity="0.7"/>
+    <path d="M5 22l7-7 5 5 3-3 7 7" stroke="#F59E0B" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+);
+
+const LinkIconLarge = ({ size = 24 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 32 32" fill="none">
+    <rect width="32" height="32" rx="6" fill="#6B7280" opacity="0.1"/>
+    <path d="M13 19a5 5 0 007.07 0l3-3a5 5 0 00-7.07-7.07l-1.5 1.5" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round"/>
+    <path d="M19 13a5 5 0 00-7.07 0l-3 3a5 5 0 007.07 7.07l1.5-1.5" stroke="#6B7280" strokeWidth="1.5" strokeLinecap="round"/>
+  </svg>
+);
+
+function DocTileIcon({ fileType, size = 28 }: { fileType: string; size?: number }) {
+  if (fileType === "pdf")   return <PdfIcon size={size} />;
+  if (fileType === "gdoc")  return <GoogleDocIconLarge size={size} />;
+  if (fileType === "figma") return <FigmaIconLarge size={size} />;
+  if (fileType === "image") return <ImageIconLarge size={size} />;
+  return <LinkIconLarge size={size} />;
+}
+
+function docTileAccent(fileType: string): string {
+  if (fileType === "pdf")   return "#EA4335";
+  if (fileType === "gdoc")  return "#4285F4";
+  if (fileType === "figma") return "#1ABCFE";
+  if (fileType === "image") return "#F59E0B";
+  return "#6B7280";
+}
+
+type DriveTemplate = { id: string; name: string; mimeType: string; webViewLink: string; capabilities?: { canCopy?: boolean } };
+
 function DocumentsTab({ app }: { app: Application }) {
+  const { driveNameFolder, driveNameDoc, driveApplicationsFolderId } = useUiStore();
   const { data: appDocs = [], refetch } = useQuery<ApplicationDocument[]>({
     queryKey: ["documents", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/documents`).then((r) => r.data)
@@ -373,12 +490,98 @@ function DocumentsTab({ app }: { app: Application }) {
   const [newName, setNewName]   = useState("");
   const [googleConnected, setGoogleConnected] = useState(false);
   const [libOpen, setLibOpen]   = useState(true);
-  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId]     = useState<string | null>(null);
+  const [copyingLibId, setCopyingLibId] = useState<string | null>(null);
+  const [copyLibErr, setCopyLibErr]     = useState<string | null>(null);
+  // Map of userDocumentId → drive URL (for docs already copied to this app's folder)
+  const [libDriveUrls, setLibDriveUrls] = useState<Record<string, string>>({});
+
+  // Drive folder state
+  const [folderState, setFolderState] = useState<{ folderId: string; folderUrl: string } | null>(
+    app.googleFolderId ? { folderId: app.googleFolderId, folderUrl: app.googleFolderUrl ?? "" } : null
+  );
+  const [folderCreating, setFolderCreating] = useState(false);
+  const [templates, setTemplates] = useState<DriveTemplate[] | null>(null);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [copyingId, setCopyingId] = useState<string | null>(null);
+  const [driveErr, setDriveErr] = useState<string | null>(null);
+  // Live Drive folder contents
+  const [driveFiles, setDriveFiles]               = useState<DriveTemplate[] | null>(null);
+  const [driveFilesLoading, setDriveFilesLoading] = useState(false);
+  const [deletingFileId, setDeletingFileId]       = useState<string | null>(null);
 
   useEffect(() => {
     api.get<{ connected: boolean }>("/api/google/status")
       .then((r) => setGoogleConnected(r.data.connected)).catch(() => {});
   }, []);
+
+  // Load templates when folder exists
+  useEffect(() => {
+    if (!folderState || templates !== null) return;
+    setTemplatesLoading(true);
+    api.get<DriveTemplate[]>("/api/drive/templates")
+      .then(r => setTemplates(r.data))
+      .catch(() => setTemplates([]))
+      .finally(() => setTemplatesLoading(false));
+  }, [folderState, templates]);
+
+  // Load live Drive folder contents
+  const loadDriveFiles = async () => {
+    if (!folderState) return;
+    setDriveFilesLoading(true);
+    try {
+      const r = await api.get<DriveTemplate[]>(`/api/applications/${app.id}/drive/files`);
+      setDriveFiles(r.data);
+    } catch { setDriveFiles([]); }
+    finally { setDriveFilesLoading(false); }
+  };
+
+  useEffect(() => {
+    if (folderState && driveFiles === null) void loadDriveFiles();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [folderState]);
+
+  const deleteDriveFile = async (fileId: string) => {
+    setDeletingFileId(fileId);
+    try {
+      await api.delete(`/api/applications/${app.id}/drive/files/${fileId}`);
+      setDriveFiles(prev => prev?.filter(f => f.id !== fileId) ?? null);
+      refetch();
+    } catch { /* ignore */ }
+    setDeletingFileId(null);
+  };
+
+  const createFolder = async () => {
+    setFolderCreating(true); setDriveErr(null);
+    try {
+      const r = await api.post<{ folderId: string; folderUrl: string; name: string }>(
+        `/api/applications/${app.id}/drive/init-folder`,
+        { folderRule: driveNameFolder, parentFolderId: driveApplicationsFolderId || undefined }
+      );
+      setFolderState({ folderId: r.data.folderId, folderUrl: r.data.folderUrl });
+      setTemplates(null);   // trigger template load
+      setDriveFiles(null);  // trigger drive files load
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Fehler";
+      setDriveErr(msg);
+    } finally { setFolderCreating(false); }
+  };
+
+  const copyTemplate = async (tmpl: DriveTemplate) => {
+    if (!folderState) return;
+    setCopyingId(tmpl.id); setDriveErr(null);
+    try {
+      await api.post(`/api/applications/${app.id}/drive/copy-template`, {
+        templateFileId: tmpl.id,
+        docRule: driveNameDoc
+      });
+      refetch();
+      void loadDriveFiles();  // refresh Drive list after copy
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Fehler";
+      setDriveErr(msg);
+    } finally { setCopyingId(null); }
+  };
 
   // Set of user_document_ids already linked to this application
   const linkedIds = new Set(appDocs.map((d) => d.userDocumentId).filter(Boolean) as string[]);
@@ -386,23 +589,72 @@ function DocumentsTab({ app }: { app: Application }) {
   const toggleLibDoc = async (libDoc: UserDocument) => {
     setTogglingId(libDoc.id);
     if (linkedIds.has(libDoc.id)) {
-      // Unlink: delete the application_document
       const match = appDocs.find((d) => d.userDocumentId === libDoc.id);
       if (match) await api.delete(`/api/applications/${app.id}/documents/${match.id}`).catch(() => {});
     } else {
-      // Link: create application_document from library entry
       const isGDoc = libDoc.fileType === "gdoc";
+      const isPdf  = libDoc.fileType === "pdf";
+      // If Drive folder exists and it's a Google Doc → copy to Drive first
+      let googleDocUrl = isGDoc ? libDoc.url : undefined;
+      setCopyLibErr(null);
+      // Copy Google Docs to Drive folder
+      if (folderState && isGDoc && libDoc.url) {
+        try {
+          const r = await api.post<{ driveUrl: string; name: string }>(
+            `/api/applications/${app.id}/drive/copy-doc`,
+            { userDocumentId: libDoc.id, docRule: driveNameDoc }
+          );
+          googleDocUrl = r.data.driveUrl;
+          setLibDriveUrls(prev => ({ ...prev, [libDoc.id]: r.data.driveUrl }));
+        } catch (e: unknown) {
+          const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          setCopyLibErr(msg ?? null);
+        }
+      }
+      // Copy PDFs to Drive folder (upload from URL)
+      let finalFileUrl = !isGDoc ? libDoc.url : undefined;
+      if (folderState && isPdf && libDoc.url) {
+        try {
+          const r = await api.post<{ fileUrl: string }>(
+            `/api/applications/${app.id}/drive/upload-pdf-from-url`,
+            { url: libDoc.url, fileName: libDoc.name, parentFolderId: driveApplicationsFolderId || undefined }
+          );
+          finalFileUrl = r.data.fileUrl;
+          setLibDriveUrls(prev => ({ ...prev, [libDoc.id]: r.data.fileUrl }));
+        } catch { /* fall through — use original URL */ }
+      }
       await api.post(`/api/applications/${app.id}/documents`, {
         type: catToDocType(libDoc.category),
         name: libDoc.name,
         status: "draft",
-        googleDocUrl: isGDoc ? libDoc.url : undefined,
-        fileUrl: !isGDoc ? libDoc.url : undefined,
+        googleDocUrl,
+        fileUrl: finalFileUrl,
         userDocumentId: libDoc.id,
       }).catch(() => {});
+      // Refresh Drive file list
+      void loadDriveFiles();
     }
     setTogglingId(null);
     refetch();
+  };
+
+  const copyLibDocToDrive = async (libDoc: UserDocument) => {
+    if (!folderState || libDoc.fileType !== "gdoc") return;
+    setCopyingLibId(libDoc.id);
+    try {
+      const r = await api.post<{ driveUrl: string }>(
+        `/api/applications/${app.id}/drive/copy-doc`,
+        { userDocumentId: libDoc.id, docRule: driveNameDoc }
+      );
+      setLibDriveUrls(prev => ({ ...prev, [libDoc.id]: r.data.driveUrl }));
+      // Update the linked applicationDocument with new Drive URL
+      const match = appDocs.find((d) => d.userDocumentId === libDoc.id);
+      if (match) {
+        await api.patch(`/api/applications/${app.id}/documents/${match.id}`, { googleDocUrl: r.data.driveUrl }).catch(() => {});
+        refetch();
+      }
+    } catch { /* ignore */ }
+    setCopyingLibId(null);
   };
 
   const create = async (type: "cv" | "letter") => {
@@ -434,6 +686,85 @@ function DocumentsTab({ app }: { app: Application }) {
 
   return (
     <>
+      {/* ── Google Drive Ordner — Notion-style ── */}
+      {googleConnected && (
+        <div style={{ marginBottom: 20 }}>
+          {/* Header row */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" stroke="var(--fg-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-2)", flex: 1 }}>Google Drive</span>
+            {folderState && (
+              <>
+                <button onClick={() => { setDriveFiles(null); }} title="Aktualisieren"
+                  style={{ background: "none", border: "none", cursor: driveFilesLoading ? "wait" : "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
+                  <RefreshCw size={11} style={{ animation: driveFilesLoading ? "spin 1s linear infinite" : "none" }} />
+                </button>
+                <a href={folderState.folderUrl} target="_blank" rel="noreferrer"
+                  style={{ fontSize: 11, color: "var(--fg-3)", textDecoration: "none", display: "flex", alignItems: "center", gap: 3 }}>
+                  <ExternalLink size={10} /> Ordner öffnen
+                </a>
+              </>
+            )}
+          </div>
+
+          {driveErr && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>{driveErr}</div>}
+
+          {!folderState ? (
+            <button onClick={createFolder} disabled={folderCreating}
+              style={{ fontSize: 11, color: "var(--fg-3)", background: "none", border: "none", cursor: folderCreating ? "wait" : "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 5, padding: "4px 0" }}>
+              {folderCreating
+                ? <><Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> Erstelle Ordner…</>
+                : <><Plus size={11} /> Bewerbungsordner erstellen</>}
+            </button>
+          ) : (
+            <>
+              {/* Live Drive folder contents */}
+              {driveFiles === null && driveFilesLoading && (
+                <div style={{ fontSize: 11, color: "var(--fg-3)", display: "flex", alignItems: "center", gap: 5, marginBottom: 8 }}>
+                  <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> Lade Ordner-Inhalt…
+                </div>
+              )}
+              {driveFiles !== null && driveFiles.length === 0 && (
+                <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8 }}>Ordner ist leer</div>
+              )}
+              {driveFiles !== null && driveFiles.length > 0 && (
+                <div style={{ marginBottom: 4 }}>
+                  {driveFiles.map((f) => {
+                    const fileType = f.mimeType.includes("document") ? "gdoc"
+                      : f.mimeType.includes("pdf") ? "pdf"
+                      : f.mimeType.includes("spreadsheet") ? "link"
+                      : "link";
+                    const isDeleting = deletingFileId === f.id;
+                    return (
+                      <div key={f.id} className="notion-doc-row" style={{
+                        display: "flex", alignItems: "center", gap: 7,
+                        padding: "4px 4px 4px 2px", borderRadius: 5, transition: "background 0.1s"
+                      }}>
+                        <DocTileIcon fileType={fileType} size={18} />
+                        <span style={{ flex: 1, fontSize: 12, color: "var(--fg-1)", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis" }}>
+                          {f.name}
+                        </span>
+                        <a href={f.webViewLink} target="_blank" rel="noreferrer"
+                          style={{ color: "var(--fg-3)", display: "flex", flexShrink: 0, opacity: 0.6 }} title="Öffnen">
+                          <ExternalLink size={10} />
+                        </a>
+                        <button className="btn btn-ghost btn-icon" style={{ padding: 2, flexShrink: 0, opacity: 0.5 }}
+                          title="Aus Drive löschen" disabled={isDeleting} onClick={() => deleteDriveFile(f.id)}>
+                          {isDeleting
+                            ? <Loader size={10} style={{ animation: "spin 1s linear infinite" }} />
+                            : <Trash2 size={10} />}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+            </>
+          )}
+        </div>
+      )}
+
       {/* ── Section 1: Zugewiesene Dokumente ── */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10, gap: 8 }}>
@@ -525,14 +856,11 @@ function DocumentsTab({ app }: { app: Application }) {
       <div>
         <button
           onClick={() => setLibOpen((v) => !v)}
-          style={{
-            display: "flex", alignItems: "center", gap: 6, width: "100%",
-            background: "none", border: "none", cursor: "pointer", padding: "4px 0 10px",
-            color: "var(--fg-2)", fontFamily: "var(--font-sans)"
-          }}
+          style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", background: "none", border: "none", cursor: "pointer", padding: "4px 0 10px", color: "var(--fg-2)", fontFamily: "var(--font-sans)" }}
         >
           <ChevronRight size={13} style={{ transform: libOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
           <div className="eyebrow" style={{ flex: 1, textAlign: "left" }}>Aus Bibliothek zuweisen</div>
+          {copyLibErr && <span style={{ fontSize: 10, color: "#f87171", maxWidth: 160, textAlign: "right", lineHeight: 1.3 }}>{copyLibErr}</span>}
           {library.length > 0 && (
             <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{library.length} Dokumente</span>
           )}
@@ -551,44 +879,112 @@ function DocumentsTab({ app }: { app: Application }) {
                 if (catDocs.length === 0) return null;
                 return (
                   <div key={cat.value}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: cat.color, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: cat.color, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
                       {cat.label}
                     </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    {/* Mini document tiles grid */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))", gap: 8 }}>
                       {catDocs.map((libDoc) => {
-                        const isLinked  = linkedIds.has(libDoc.id);
-                        const isLoading = togglingId === libDoc.id;
-                        const isGDoc    = libDoc.fileType === "gdoc";
+                        const isLinked   = linkedIds.has(libDoc.id);
+                        const isToggling = togglingId === libDoc.id;
+                        const isCopying  = copyingLibId === libDoc.id;
+                        const isGDoc     = libDoc.fileType === "gdoc";
+                        const isPdf      = libDoc.fileType === "pdf";
+                        // Figma, link, image can't be copied to Drive → only link-copy action
+                        const canDriveCopy = isGDoc || isPdf;
+                        const hasDriveCopy = !!libDriveUrls[libDoc.id] ||
+                          (isLinked && !!appDocs.find(d => d.userDocumentId === libDoc.id)?.googleDocUrl &&
+                           appDocs.find(d => d.userDocumentId === libDoc.id)?.googleDocUrl !== libDoc.url);
+                        const driveUrl = libDriveUrls[libDoc.id] ||
+                          (isLinked ? appDocs.find(d => d.userDocumentId === libDoc.id)?.googleDocUrl : undefined);
+                        const canCopyToDrive = folderState && isGDoc && isLinked && !hasDriveCopy;
+
+                        const fileAccent = docTileAccent(libDoc.fileType);
+                        const borderColor = isLinked
+                          ? (hasDriveCopy ? "#34d399" : fileAccent)
+                          : "var(--border)";
+                        const bgColor = isLinked
+                          ? (hasDriveCopy ? "rgba(52,211,153,0.07)" : `${fileAccent}12`)
+                          : "var(--surface-2)";
+
                         return (
-                          <div
-                            key={libDoc.id}
-                            onClick={() => !isLoading && toggleLibDoc(libDoc)}
+                          <div key={libDoc.id}
+                            onClick={() => !isToggling && !isCopying && toggleLibDoc(libDoc)}
                             style={{
-                              display: "flex", alignItems: "center", gap: 10,
-                              padding: "9px 12px", borderRadius: 8, cursor: isLoading ? "wait" : "pointer",
-                              border: `1px solid ${isLinked ? "var(--accent)" : "var(--border)"}`,
-                              background: isLinked ? "var(--accent-08)" : "var(--surface-2)",
-                              transition: "all 0.15s ease"
-                            }}
-                          >
-                            <div style={{ color: isLinked ? "var(--accent)" : (isGDoc ? "#4285f4" : "var(--fg-3)"), flexShrink: 0 }}>
-                              {isGDoc ? <GDocIcon size={14} /> : <FileText size={14} />}
-                            </div>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 12, fontWeight: 600, color: isLinked ? "var(--accent)" : "var(--fg-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              position: "relative", borderRadius: 10, cursor: isToggling ? "wait" : "pointer",
+                              border: `1.5px solid ${borderColor}`, background: bgColor,
+                              transition: "all 0.15s", overflow: "hidden",
+                              display: "flex", flexDirection: "column", minHeight: 110
+                            }}>
+                            {/* Document tile top area */}
+                            <div style={{ flex: 1, padding: "12px 8px 6px", display: "flex", flexDirection: "column", alignItems: "center", gap: 7 }}>
+                              {/* Branded icon */}
+                              <DocTileIcon fileType={libDoc.fileType} size={32} />
+                              {/* Name */}
+                              <div style={{
+                                fontSize: 10, fontWeight: 600, lineHeight: 1.3, textAlign: "center",
+                                color: isLinked ? (hasDriveCopy ? "#34d399" : fileAccent) : "var(--fg-1)",
+                                overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical" as const,
+                                wordBreak: "break-word"
+                              }}>
                                 {libDoc.name}
                               </div>
-                              {libDoc.description && (
-                                <div style={{ fontSize: 10, color: "var(--fg-3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{libDoc.description}</div>
+                            </div>
+
+                            {/* Status bar at bottom */}
+                            <div style={{
+                              padding: "4px 6px", borderTop: `1px solid ${borderColor}40`,
+                              display: "flex", alignItems: "center", justifyContent: "center", gap: 4, minHeight: 24
+                            }}>
+                              {isToggling ? (
+                                <Loader size={10} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />
+                              ) : isLinked ? (
+                                hasDriveCopy ? (
+                                  <span style={{ fontSize: 9, color: "#34d399", fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
+                                    <Check size={9} /> Drive ✓
+                                  </span>
+                                ) : canCopyToDrive ? (
+                                  <button onClick={(e) => { e.stopPropagation(); copyLibDocToDrive(libDoc); }} disabled={isCopying}
+                                    style={{ fontSize: 9, color: "#4285f4", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 2, padding: 0 }}>
+                                    {isCopying ? <Loader size={9} style={{ animation: "spin 1s linear infinite" }} /> : <GDocIcon size={9} />}
+                                    {isCopying ? "…" : "→ Drive"}
+                                  </button>
+                                ) : (
+                                  <span style={{ fontSize: 9, color: fileAccent, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
+                                    <Check size={9} /> Hinzugefügt
+                                  </span>
+                                )
+                              ) : canDriveCopy ? (
+                                <span style={{ fontSize: 9, color: "var(--fg-3)" }}>+ Hinzufügen</span>
+                              ) : (
+                                /* Figma / link / image — can't copy, offer link-copy instead */
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (libDoc.url) navigator.clipboard.writeText(libDoc.url);
+                                  }}
+                                  style={{ fontSize: 9, color: fileAccent, background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 2, padding: 0 }}>
+                                  <Link2 size={9} /> Link kopieren
+                                </button>
                               )}
                             </div>
-                            <div style={{ flexShrink: 0, width: 22, height: 22, borderRadius: 6, border: `1.5px solid ${isLinked ? "var(--accent)" : "var(--border)"}`, background: isLinked ? "var(--accent)" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s" }}>
-                              {isLoading
-                                ? <Loader size={11} style={{ animation: "spin 1s linear infinite", color: isLinked ? "#fff" : "var(--fg-3)" }} />
-                                : isLinked
-                                  ? <Check size={11} style={{ color: "#fff" }} />
-                                  : <Plus size={11} style={{ color: "var(--fg-3)" }} />}
-                            </div>
+
+                            {/* Open link top-right: Drive copy URL if available, otherwise original URL */}
+                            {(hasDriveCopy ? driveUrl : libDoc.url) && (
+                              <a href={(hasDriveCopy ? driveUrl : libDoc.url)!} target="_blank" rel="noreferrer"
+                                onClick={e => e.stopPropagation()}
+                                style={{
+                                  position: "absolute", top: 4, right: 4,
+                                  width: 18, height: 18, borderRadius: 4,
+                                  background: hasDriveCopy ? "rgba(66,133,244,0.12)" : "var(--surface-2)",
+                                  border: `1px solid ${hasDriveCopy ? "rgba(66,133,244,0.25)" : "var(--border)"}`,
+                                  color: hasDriveCopy ? "#4285f4" : "var(--fg-3)",
+                                  display: "flex", alignItems: "center", justifyContent: "center"
+                                }}
+                                title={hasDriveCopy ? "In Drive öffnen" : "Öffnen"}>
+                                <ExternalLink size={9} />
+                              </a>
+                            )}
                           </div>
                         );
                       })}
@@ -604,7 +1000,7 @@ function DocumentsTab({ app }: { app: Application }) {
   );
 }
 
-// ─── Process Tab (Timeline) ───────────────────────────────────
+// ─── Process Tab (Tasks + AI + Timeline) ──────────────────────
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   note:         <MessageSquare size={13} />,
   email:        <Mail size={13} />,
@@ -619,6 +1015,363 @@ const ACTIVITY_TYPES = [
   { id: "call", label: "Anruf" }, { id: "interview", label: "Interview" },
   { id: "deadline", label: "Deadline" },
 ];
+
+type Task = { id: string; stage: string; title: string; done: boolean; isDefault: boolean; sortOrder: number; createdAt: string };
+type CvHighlights = { highlights: string[]; keywords: string[]; gaps: string[] };
+type InterviewPrep = { rollenFragen: string[]; starBeispiele: { frage: string; situation: string; aufgabe: string; aktion: string; ergebnis: string }[]; vossFragenWhatHow: string[]; rueckfragen: string[] };
+type EmailDraft = { subject: string; body: string };
+type SalaryTips = { "markteinschätzung": string; taktiken: string[]; formulierungen: string[]; vossAnker: string };
+
+const STAGE_LABELS_DE: Record<string, string> = {
+  import_validating: "Inbox", preparing_cv: "CV vorbereiten", preparing_letter: "Anschreiben",
+  application_sent: "Beworben", pending: "Wartend", interview_1: "Interview 1",
+  interview_2: "Interview 2", rejected: "Abgelehnt", accepted: "Zugesagt"
+};
+
+// ── Accordion helper ──
+function Accordion({ title, count, color, children }: { title: string; count: number; color?: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div style={{ marginBottom: 10 }}>
+      <button onClick={() => setOpen(v => !v)} style={{
+        display: "flex", alignItems: "center", gap: 8, width: "100%",
+        background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)",
+        padding: "6px 0", borderBottom: "1px solid var(--border)"
+      }}>
+        <ChevronRight size={12} style={{ color: "var(--fg-3)", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
+        <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: color ?? "var(--fg-2)", textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "left" }}>{title}</span>
+        <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{count}</span>
+      </button>
+      {open && <div style={{ paddingTop: 8 }}>{children}</div>}
+    </div>
+  );
+}
+
+// ── Email Modal ──
+function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => { navigator.clipboard.writeText(`${draft.subject}\n\n${draft.body}`); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}>
+      <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 28, width: 520, maxHeight: "80vh", overflow: "auto", display: "flex", flexDirection: "column", gap: 14 }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "var(--fg-1)" }}>Email-Entwurf</div>
+        <div className="field" style={{ margin: 0 }}>
+          <label>Betreff</label>
+          <div style={{ fontSize: 13, color: "var(--fg-1)", padding: "4px 0", borderBottom: "1px solid var(--border)" }}>{draft.subject}</div>
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <label>Nachricht</label>
+          <div style={{ fontSize: 13, color: "var(--fg-1)", whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "8px 0" }}>{draft.body}</div>
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button className="btn btn-secondary" onClick={onClose}><X size={12} /> Schliessen</button>
+          <button className="btn btn-primary" onClick={copy}>{copied ? "✓ Kopiert!" : "Text kopieren"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Stage AI Actions ──
+function StageAiActions({ app }: { app: Application }) {
+  const { ai } = useUiStore();
+  const stage = app.stage;
+  const [loading, setLoading] = useState<string | null>(null);
+  const [cvHighlights, setCvHighlights] = useState<CvHighlights | null>(null);
+  const [interviewPrep, setInterviewPrep] = useState<InterviewPrep | null>(null);
+  const [salaryTips, setSalaryTips] = useState<SalaryTips | null>(null);
+  const [emailModal, setEmailModal] = useState<EmailDraft | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+
+  const run = async (key: string, fn: () => Promise<void>) => {
+    if (ai.provider === "none") { setErr("KI-Modell in Settings konfigurieren"); return; }
+    setErr(null); setLoading(key);
+    try { await fn(); } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Fehler";
+      setErr(msg);
+    } finally { setLoading(null); }
+  };
+
+  const AiBtn = ({ id, label, icon }: { id: string; label: string; icon: string }) => (
+    <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={!!loading}
+      onClick={() => run(id, async () => {
+        if (id === "cv-doc") {
+          const r = await api.post<{ docUrl?: string }>(`/api/applications/${app.id}/ai/cv-doc`, aiBody);
+          if (r.data.docUrl) window.open(r.data.docUrl, "_blank");
+          else setErr("Google Drive nicht verbunden. Bitte in Settings → Integrationen verbinden.");
+        } else if (id === "cv-highlights") {
+          const r = await api.post<CvHighlights>(`/api/applications/${app.id}/ai/cv-highlights`, aiBody);
+          setCvHighlights(r.data);
+        } else if (id === "cover-letter") {
+          const r = await api.post<EmailDraft & { docUrl?: string }>(`/api/applications/${app.id}/ai/cover-letter`, aiBody);
+          setEmailModal({ subject: r.data.subject, body: r.data.body });
+        } else if (id === "cover-letter-doc") {
+          const r = await api.post<EmailDraft & { docUrl?: string }>(`/api/applications/${app.id}/ai/cover-letter`, { ...aiBody, createDoc: true });
+          if (r.data.docUrl) window.open(r.data.docUrl, "_blank");
+        } else if (id === "email-app") {
+          const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "application" });
+          setEmailModal(r.data);
+        } else if (id === "email-follow") {
+          const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "followup" });
+          setEmailModal(r.data);
+        } else if (id === "email-decline") {
+          const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "decline" });
+          setEmailModal(r.data);
+        } else if (id === "interview-prep") {
+          const r = await api.post<InterviewPrep>(`/api/applications/${app.id}/ai/interview-prep`, aiBody);
+          setInterviewPrep(r.data);
+        } else if (id === "salary-tips") {
+          const r = await api.post<SalaryTips>(`/api/applications/${app.id}/ai/salary-tips`, aiBody);
+          setSalaryTips(r.data);
+        }
+      })}>
+      {loading === id ? <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> : <span>{icon}</span>}
+      {label}
+    </button>
+  );
+
+  const showCv     = ["preparing_cv"].includes(stage);
+  const showLetter = ["preparing_letter"].includes(stage);
+  const showEmail  = ["application_sent", "pending", "accepted"].includes(stage);
+  const showIv     = ["interview_1", "interview_2"].includes(stage);
+  const showSalary = ["interview_2", "accepted"].includes(stage);
+
+  if (!showCv && !showLetter && !showEmail && !showIv && !showSalary) return null;
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
+        KI-Aktionen
+      </div>
+
+      {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>{err}</div>}
+
+      {/* CV Phase */}
+      {showCv && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <AiBtn id="cv-highlights" icon="🤖" label="CV-Highlights analysieren" />
+          <AiBtn id="cv-doc" icon="📄" label="Google Doc aus Master-CV" />
+        </div>
+      )}
+      {cvHighlights && (
+        <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 12 }}>
+          <Accordion title="Besonders relevant" count={cvHighlights.highlights.length} color="#34d399">
+            {cvHighlights.highlights.map((h, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0", borderBottom: i < cvHighlights.highlights.length - 1 ? "1px solid var(--border)" : "none" }}>✓ {h}</div>)}
+          </Accordion>
+          <Accordion title="Keywords Match" count={cvHighlights.keywords.length} color="#60a5fa">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+              {cvHighlights.keywords.map((k, i) => <span key={i} className="tag" style={{ background: "rgba(96,165,250,0.1)", color: "#60a5fa", borderColor: "rgba(96,165,250,0.3)" }}>{k}</span>)}
+            </div>
+          </Accordion>
+          <Accordion title="Lücken" count={cvHighlights.gaps.length} color="#f87171">
+            {cvHighlights.gaps.map((g, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-2)", padding: "3px 0" }}>⚠ {g}</div>)}
+          </Accordion>
+        </div>
+      )}
+
+      {/* Letter Phase */}
+      {showLetter && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          <AiBtn id="cover-letter" icon="✍️" label="Anschreiben generieren" />
+          <AiBtn id="cover-letter-doc" icon="📄" label="Als Google Doc" />
+        </div>
+      )}
+
+      {/* Email Phase */}
+      {showEmail && (
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+          {stage === "application_sent" && <AiBtn id="email-app" icon="✉️" label="Bewerbungs-Email" />}
+          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-follow" icon="📨" label="Follow-up-Email" />}
+          {stage === "accepted" && <AiBtn id="email-decline" icon="🙏" label="Absage-Email (andere Stellen)" />}
+        </div>
+      )}
+
+      {/* Interview Phase */}
+      {showIv && (
+        <div style={{ marginBottom: 12 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: interviewPrep ? 10 : 0 }}>
+            <AiBtn id="interview-prep" icon="🎯" label={interviewPrep ? "Neu generieren" : "Interview-Vorbereitung generieren"} />
+            {showSalary && <AiBtn id="salary-tips" icon="💰" label="Gehaltsverhandlung" />}
+          </div>
+          {interviewPrep && (
+            <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14 }}>
+              <Accordion title="Rollenspezifische Fragen" count={interviewPrep.rollenFragen.length} color="#a78bfa">
+                {interviewPrep.rollenFragen.map((q, i) => (
+                  <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
+                    <span style={{ color: "var(--fg-3)", marginRight: 6 }}>{i + 1}.</span>{q}
+                  </div>
+                ))}
+              </Accordion>
+              <Accordion title='🤝 Chris Voss "What / How"-Fragen' count={interviewPrep.vossFragenWhatHow.length} color="#34d399">
+                <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>
+                {interviewPrep.vossFragenWhatHow.map((q, i) => (
+                  <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.vossFragenWhatHow.length - 1 ? "1px solid var(--border)" : "none" }}>
+                    <span style={{ color: "#34d399", marginRight: 6 }}>→</span>{q}
+                  </div>
+                ))}
+              </Accordion>
+              <Accordion title="STAR-Beispiele" count={interviewPrep.starBeispiele.length} color="#fbbf24">
+                {interviewPrep.starBeispiele.map((s, i) => (
+                  <div key={i} style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 6 }}>❓ {s.frage}</div>
+                    {[["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]].map(([k, v]) => (
+                      <div key={k} style={{ fontSize: 11, color: "var(--fg-2)", padding: "2px 0" }}>
+                        <span style={{ fontWeight: 700, color: "#fbbf24", marginRight: 6 }}>{k}:</span>{v}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </Accordion>
+              <Accordion title="Meine Rückfragen" count={interviewPrep.rueckfragen.length} color="#60a5fa">
+                {interviewPrep.rueckfragen.map((q, i) => (
+                  <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.rueckfragen.length - 1 ? "1px solid var(--border)" : "none" }}>
+                    <span style={{ color: "#60a5fa", marginRight: 6 }}>?</span>{q}
+                  </div>
+                ))}
+              </Accordion>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Salary tips */}
+      {salaryTips && (
+        <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 12 }}>
+          <div style={{ fontSize: 11, color: "var(--fg-2)", marginBottom: 10, lineHeight: 1.6 }}>{salaryTips["markteinschätzung"]}</div>
+          <Accordion title="Taktiken" count={salaryTips.taktiken.length} color="#34d399">
+            {salaryTips.taktiken.map((t, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>• {t}</div>)}
+          </Accordion>
+          <Accordion title="Formulierungen" count={salaryTips.formulierungen.length} color="#60a5fa">
+            {salaryTips.formulierungen.map((f, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "4px 0", fontStyle: "italic", borderBottom: i < salaryTips.formulierungen.length - 1 ? "1px solid var(--border)" : "none" }}>„{f}"</div>)}
+          </Accordion>
+          <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.2)" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "#34d399", marginBottom: 4 }}>🤝 CHRIS VOSS ANKER-TAKTIK</div>
+            <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6 }}>{salaryTips.vossAnker}</div>
+          </div>
+        </div>
+      )}
+
+      {emailModal && <EmailModal draft={emailModal} onClose={() => setEmailModal(null)} />}
+    </div>
+  );
+}
+
+// ── Task Checklist ──
+function TaskChecklist({ app }: { app: Application }) {
+  const { data: tasks = [], refetch } = useQuery<Task[]>({
+    queryKey: ["tasks", app.id],
+    queryFn: () => api.get(`/api/applications/${app.id}/tasks`).then(r => r.data)
+  });
+  const [addText, setAddText] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const stageTasks = tasks.filter(t => t.stage === app.stage);
+  const done = stageTasks.filter(t => t.done).length;
+  const total = stageTasks.length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const color = pct === 100 ? "#34d399" : pct >= 50 ? "#fbbf24" : "var(--accent)";
+
+  const toggle = async (t: Task) => {
+    await api.patch(`/api/applications/${app.id}/tasks/${t.id}`, { done: !t.done });
+    refetch();
+  };
+  const del = async (t: Task) => {
+    await api.delete(`/api/applications/${app.id}/tasks/${t.id}`);
+    refetch();
+  };
+  const addTask = async () => {
+    if (!addText.trim()) return;
+    await api.post(`/api/applications/${app.id}/tasks`, { stage: app.stage, title: addText.trim(), isDefault: false });
+    setAddText(""); setShowAdd(false); refetch();
+  };
+
+  useEffect(() => { if (showAdd) inputRef.current?.focus(); }, [showAdd]);
+
+  return (
+    <div style={{ marginBottom: 20, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: "14px 16px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
+            Aufgaben — {STAGE_LABELS_DE[app.stage] ?? app.stage}
+          </div>
+        </div>
+        {total > 0 && (
+          <span style={{
+            padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+            background: pct === 100 ? "rgba(52,211,153,0.15)" : "var(--surface)",
+            color: pct === 100 ? "#34d399" : "var(--fg-2)",
+            border: `1px solid ${pct === 100 ? "rgba(52,211,153,0.3)" : "var(--border)"}`
+          }}>
+            {done} / {total}
+          </span>
+        )}
+      </div>
+
+      {/* Progress bar */}
+      {total > 0 && (
+        <div style={{ height: 3, borderRadius: 999, background: "var(--border)", marginBottom: 12, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 999, transition: "width 0.4s ease" }} />
+        </div>
+      )}
+
+      {/* Task list */}
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        {stageTasks.length === 0 && !showAdd && (
+          <div style={{ fontSize: 12, color: "var(--fg-3)", padding: "8px 0" }}>Keine Aufgaben für diese Phase</div>
+        )}
+        {stageTasks.map((t) => (
+          <div key={t.id} className="task-row" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderRadius: 6 }}>
+            <button
+              onClick={() => toggle(t)}
+              style={{
+                width: 17, height: 17, borderRadius: 4, border: `1.5px solid ${t.done ? "#34d399" : "var(--border-strong)"}`,
+                background: t.done ? "#34d399" : "transparent", flexShrink: 0, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s"
+              }}>
+              {t.done && <Check size={10} style={{ color: "#fff" }} />}
+            </button>
+            <span style={{ flex: 1, fontSize: 13, color: t.done ? "var(--fg-3)" : "var(--fg-1)", textDecoration: t.done ? "line-through" : "none", transition: "all 0.15s" }}>
+              {t.title}
+            </span>
+            <button className="btn btn-ghost btn-icon task-del" style={{ padding: 2, opacity: 0 }} onClick={() => del(t)}>
+              <Trash2 size={11} />
+            </button>
+          </div>
+        ))}
+
+        {/* Inline add */}
+        {showAdd && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
+            <div style={{ width: 17, height: 17, borderRadius: 4, border: "1.5px solid var(--border-strong)", flexShrink: 0 }} />
+            <input
+              ref={inputRef}
+              value={addText}
+              onChange={e => setAddText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") setShowAdd(false); }}
+              onBlur={() => { if (!addText.trim()) setShowAdd(false); }}
+              placeholder="Neue Aufgabe…"
+              style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 13, color: "var(--fg-1)", fontFamily: "var(--font-sans)" }}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Add button */}
+      <button
+        onClick={() => setShowAdd(true)}
+        style={{ marginTop: 8, fontSize: 11, color: "var(--fg-3)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 4, padding: "2px 0" }}
+      >
+        <Plus size={11} /> Aufgabe hinzufügen
+      </button>
+    </div>
+  );
+}
 
 function ProcessTab({ app }: { app: Application }) {
   const { data: activities = [], refetch } = useQuery<ApplicationActivity[]>({
@@ -642,8 +1395,16 @@ function ProcessTab({ app }: { app: Application }) {
 
   return (
     <>
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, padding: "5px 10px" }} onClick={() => setAdding((v) => !v)}>
+      {/* Stage Tasks Checklist */}
+      <TaskChecklist app={app} />
+
+      {/* Stage AI Actions */}
+      <StageAiActions app={app} />
+
+      {/* Activity Timeline */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Aktivitäten</div>
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} onClick={() => setAdding((v) => !v)}>
           <Plus size={11} /> Aktivität
         </button>
       </div>
@@ -675,8 +1436,8 @@ function ProcessTab({ app }: { app: Application }) {
       )}
 
       {activities.length === 0 && (
-        <div style={{ color: "var(--fg-3)", fontSize: 12, textAlign: "center", padding: "40px 0", border: "1px dashed var(--border)", borderRadius: 8 }}>
-          Noch keine Aktivitäten. Füge Notizen, E-Mails oder Interview-Termine hinzu.
+        <div style={{ color: "var(--fg-3)", fontSize: 12, textAlign: "center", padding: "24px 0", border: "1px dashed var(--border)", borderRadius: 8 }}>
+          Noch keine Aktivitäten.
         </div>
       )}
 
@@ -717,142 +1478,293 @@ const MOCK_CV_DIFF = [
   { type: "context", text: "Strong Figma, UX Research, and design-systems background." },
 ];
 type AgentDoc = "cv" | "letter";
+type MatchResult = {
+  score: number;
+  breakdown: { fachkompetenz: number; erfahrung: number; soft_skills: number; kulturelle_passung: number };
+  staerken: string[];
+  luecken: string[];
+  reasoning: string;
+};
+
+function ScoreRing({ score }: { score: number }) {
+  const color = score >= 75 ? "#34d399" : score >= 50 ? "#fbbf24" : "#f87171";
+  const r = 36; const circ = 2 * Math.PI * r;
+  const progress = (score / 100) * circ;
+  return (
+    <div style={{ position: "relative", width: 96, height: 96, flexShrink: 0 }}>
+      <svg width="96" height="96" viewBox="0 0 96 96">
+        <circle cx="48" cy="48" r={r} fill="none" stroke="var(--border)" strokeWidth="7" />
+        <circle cx="48" cy="48" r={r} fill="none" stroke={color} strokeWidth="7"
+          strokeDasharray={`${progress} ${circ}`} strokeLinecap="round"
+          transform="rotate(-90 48 48)" style={{ transition: "stroke-dasharray 0.6s ease" }} />
+      </svg>
+      <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        <span style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1 }}>{score}</span>
+        <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>%</span>
+      </div>
+    </div>
+  );
+}
+
+function MiniBar({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div style={{ marginBottom: 8 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 3, fontSize: 11 }}>
+        <span style={{ color: "var(--fg-2)" }}>{label}</span>
+        <span style={{ fontWeight: 700, color }}>{value}%</span>
+      </div>
+      <div style={{ height: 5, borderRadius: 999, background: "var(--border)", overflow: "hidden" }}>
+        <div style={{ height: "100%", width: `${value}%`, background: color, borderRadius: 999, transition: "width 0.6s ease" }} />
+      </div>
+    </div>
+  );
+}
+
 function AgentTab({ app }: { app: Application }) {
-  const [doc, setDoc] = useState<AgentDoc>("cv");
-  const [activeVer, setActiveVer] = useState("v3");
-  const [prompt, setPrompt] = useState("");
+  const { ai } = useUiStore();
   const [running, setRunning] = useState(false);
-  const [stepN, setStepN] = useState(4);
-  const regen = () => {
-    setRunning(true); setStepN(0);
-    let s = 0; const tick = () => { s += 1; setStepN(s); if (s === 4) { setRunning(false); return; } setTimeout(tick, 700); };
-    setTimeout(tick, 400);
+  const [stepN, setStepN] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+
+  // Parse stored match details from app
+  const stored: MatchResult | null = (() => {
+    if (!app.matchScore || !app.matchDetails) return null;
+    try { return JSON.parse(app.matchDetails as string) as MatchResult; } catch { return null; }
+  })();
+
+  const [result, setResult] = useState<MatchResult | null>(stored);
+
+  const runAnalysis = async () => {
+    if (ai.provider === "none") {
+      setError("Bitte zuerst ein KI-Modell in den Settings konfigurieren (LM Studio oder Anthropic).");
+      return;
+    }
+    if (!app.description?.trim()) {
+      setError("Keine Stellenbeschreibung vorhanden. Bitte im Tab 'Beschreibung' einfuegen.");
+      return;
+    }
+    setError(null); setRunning(true); setStepN(0);
+    const advance = (n: number) => setTimeout(() => setStepN(n), n * 700);
+    advance(1); advance(2); advance(3);
+    try {
+      const res = await api.post<MatchResult>(`/api/applications/${app.id}/match-score`, {
+        ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel }
+      });
+      setResult(res.data);
+      setStepN(4);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Unbekannter Fehler";
+      setError(msg);
+    } finally {
+      setRunning(false);
+    }
   };
+
+  const scoreColor = result ? (result.score >= 75 ? "#34d399" : result.score >= 50 ? "#fbbf24" : "#f87171") : "var(--fg-3)";
+
   return (
     <>
-      <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-        {(["cv", "letter"] as AgentDoc[]).map((d) => (
-          <div key={d} className={`doc-tab-card${doc === d ? " active" : ""}`} onClick={() => setDoc(d)}>
-            <div className="doc-tab-title">{d === "cv" ? "Curriculum Vitae" : "Motivation Letter"}</div>
-            <div className="doc-tab-sub">{d === "cv" ? "3 sections tailored" : "Draft in progress"}</div>
-            <div className="doc-tab-badge">{d === "cv" ? "v3" : "v1"}</div>
-          </div>
-        ))}
-      </div>
-      <div className="card" style={{ background: "var(--surface-2)", padding: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-          <div className="eyebrow">Agent run · {running ? "in progress" : "completed"}</div>
-          <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>2.4s · 1,840 tokens</span>
+      {/* No AI warning */}
+      {ai.provider === "none" && (
+        <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", fontSize: 12, color: "#fbbf24", marginBottom: 14 }}>
+          Kein KI-Modell konfiguriert.{" "}
+          <a href="/settings" style={{ color: "inherit", fontWeight: 700 }}>Settings → AI Integration →</a>
         </div>
-        <AgentStep done={stepN >= 1} active={running && stepN === 0} label="Reading job description" meta="extracting key requirements" />
-        <AgentStep done={stepN >= 2} active={running && stepN === 1} label="Matching skills against base" meta="34 candidate bullets · 12 selected" />
-        <AgentStep done={stepN >= 3} active={running && stepN === 2} label="Drafting tailored sections" meta="Summary · Experience · Skills" />
-        <AgentStep done={stepN >= 4} active={running && stepN === 3} label="Polishing tone" meta="formal · concise · DACH-conventional" />
-      </div>
-      <div>
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-          <div className="eyebrow">Diff · base vs. tailored</div>
-          <div style={{ flex: 1 }} />
-          <div style={{ display: "flex", gap: 6 }}>
-            <button className="btn btn-secondary btn-icon" onClick={regen}><RefreshCw size={13} /></button>
-            <button className="btn btn-primary" style={{ gap: 5 }}><Check size={13} /> Approve</button>
-          </div>
+      )}
+
+      {error && (
+        <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.25)", fontSize: 12, color: "#f43f5e", marginBottom: 14 }}>
+          {error}
         </div>
-        <div className="card" style={{ padding: 14, lineHeight: 1.7, fontSize: 13 }}>
-          {MOCK_CV_DIFF.map((line, i) => (
-            <span key={i}>
-              {line.type === "remove"  && <span className="diff-removed">{line.text}</span>}
-              {line.type === "add"     && <span className="diff-added">{line.text}</span>}
-              {line.type === "context" && <span style={{ color: "var(--fg-2)" }}>{line.text} </span>}
-            </span>
-          ))}
-        </div>
-      </div>
-      <div>
-        <div className="eyebrow" style={{ marginBottom: 8 }}>Version history</div>
-        {MOCK_VERSIONS.map((v) => (
-          <div key={v.id} className={`version-item${activeVer === v.id ? " active" : ""}`} onClick={() => setActiveVer(v.id)}>
-            <div style={{ flex: 1 }}>
-              <div className="version-label">{v.label}</div>
-              <div className="version-meta">{v.when} · {v.note}</div>
+      )}
+
+      {/* Score + Bars */}
+      {result ? (
+        <div style={{ display: "flex", gap: 20, alignItems: "flex-start", marginBottom: 20 }}>
+          <ScoreRing score={result.score} />
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: scoreColor, marginBottom: 10 }}>
+              {result.score >= 75 ? "Starke Übereinstimmung" : result.score >= 50 ? "Moderate Übereinstimmung" : "Schwache Übereinstimmung"}
             </div>
-            <ChevronRight size={13} style={{ color: "var(--fg-3)" }} />
+            <MiniBar label="Fachkompetenz"      value={result.breakdown.fachkompetenz}      color={scoreColor} />
+            <MiniBar label="Erfahrung"           value={result.breakdown.erfahrung}           color={scoreColor} />
+            <MiniBar label="Soft Skills"         value={result.breakdown.soft_skills}         color={scoreColor} />
+            <MiniBar label="Kulturelle Passung"  value={result.breakdown.kulturelle_passung}  color={scoreColor} />
           </div>
-        ))}
-      </div>
-      <div>
-        <div className="eyebrow" style={{ marginBottom: 8 }}>Regenerate with prompt</div>
-        <div className="regen-bar">
-          <input value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="Lean harder into platform/DX work…" onKeyDown={(e) => { if (e.key === "Enter") regen(); }} />
-          <button className="btn btn-primary btn-icon" onClick={regen} disabled={running}><Sparkles size={13} /></button>
         </div>
-      </div>
+      ) : !running && (
+        <div style={{ textAlign: "center", padding: "24px 0", color: "var(--fg-3)", fontSize: 13, marginBottom: 16 }}>
+          Noch keine Analyse vorhanden
+        </div>
+      )}
+
+      {/* Live steps */}
+      {running && (
+        <div className="card" style={{ background: "var(--surface-2)", padding: 14, marginBottom: 14 }}>
+          <AgentStep done={stepN >= 1} active={stepN === 0} label="Profil laden" meta="Master-CV · Dokumente · Stichpunkte" />
+          <AgentStep done={stepN >= 2} active={stepN === 1} label="Stellenbeschreibung analysieren" meta="Anforderungen · Skills · Kontext" />
+          <AgentStep done={stepN >= 3} active={stepN === 2} label="Abgleich berechnen" meta="Fachkompetenz · Erfahrung · Culture Fit" />
+          <AgentStep done={stepN >= 4} active={stepN === 3} label="Bewertung finalisieren" meta="Score · Stärken · Lücken · Begründung" />
+        </div>
+      )}
+
+      {/* Stärken / Lücken */}
+      {result && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>✓ Stärken</div>
+            {result.staerken.map((s, i) => (
+              <div key={i} style={{ fontSize: 12, color: "var(--fg-2)", padding: "4px 0", borderBottom: "1px solid var(--border)", lineHeight: 1.5 }}>{s}</div>
+            ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "#f87171", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>✗ Lücken</div>
+            {result.luecken.map((l, i) => (
+              <div key={i} style={{ fontSize: 12, color: "var(--fg-2)", padding: "4px 0", borderBottom: "1px solid var(--border)", lineHeight: 1.5 }}>{l}</div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Begründung */}
+      {result?.reasoning && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>KI-Begründung</div>
+          <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.75, padding: "12px 14px", borderRadius: 10, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+            {result.reasoning}
+          </div>
+        </div>
+      )}
+
+      {/* Analyse button */}
+      <button
+        className="btn btn-primary"
+        onClick={runAnalysis}
+        disabled={running || ai.provider === "none"}
+        style={{ alignSelf: "flex-start" }}
+      >
+        {running
+          ? <><Loader size={13} style={{ animation: "spin 1s linear infinite" }} /> Analysiere…</>
+          : result
+            ? <><RefreshCw size={13} /> Neu analysieren</>
+            : <><Sparkles size={13} /> Analyse starten</>
+        }
+      </button>
     </>
   );
 }
 
 // ─── Contacts Tab ─────────────────────────────────────────────
+const EMPTY_CONTACT_FORM = { name: "", role: "", email: "", phone: "", linkedinUrl: "", notes: "" };
+type ContactForm = typeof EMPTY_CONTACT_FORM;
+
+function ContactForm({
+  form, onChange, onSave, onCancel, saveLabel
+}: {
+  form: ContactForm;
+  onChange: (f: ContactForm) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saveLabel: string;
+}) {
+  const set = (k: keyof ContactForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    onChange({ ...form, [k]: e.target.value });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <datalist id="contact-role-opts">
+        <option value="Recruiter" />
+        <option value="Hiring Manager" />
+        <option value="HR Business Partner" />
+        <option value="Teamleiter" />
+        <option value="CEO" />
+        <option value="CTO" />
+        <option value="Sonstiges" />
+      </datalist>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div className="field" style={{ margin: 0 }}>
+          <label>Name *</label>
+          <input value={form.name} onChange={set("name")} placeholder="Max Muster" autoFocus />
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <label>Rolle</label>
+          <input list="contact-role-opts" value={form.role} onChange={set("role")} placeholder="Recruiter, Teamleiter …" />
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <label>E-Mail</label>
+          <input value={form.email} onChange={set("email")} placeholder="kontakt@firma.de" type="email" />
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <label>Telefon</label>
+          <input value={form.phone} onChange={set("phone")} placeholder="+41 79 …" />
+        </div>
+      </div>
+      <div className="field" style={{ margin: 0 }}>
+        <label>LinkedIn URL</label>
+        <input value={form.linkedinUrl} onChange={set("linkedinUrl")} placeholder="https://linkedin.com/in/…" />
+      </div>
+      <div className="field" style={{ margin: 0 }}>
+        <label>Notizen</label>
+        <textarea value={form.notes} onChange={set("notes")} placeholder="Gesprächsnotizen, Eindrücke …" rows={3} style={{ resize: "vertical" }} />
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button className="btn btn-secondary" onClick={onCancel}>Abbrechen</button>
+        <button className="btn btn-primary" onClick={onSave} disabled={!form.name.trim()}>{saveLabel}</button>
+      </div>
+    </div>
+  );
+}
+
 function ContactsTab({ app }: { app: Application }) {
   const { data: contacts = [], refetch } = useQuery<ApplicationContact[]>({
     queryKey: ["contacts", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/contacts`).then((r) => r.data)
   });
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: "", role: "recruiter", email: "", phone: "", linkedinUrl: "", notes: "" });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [addForm, setAddForm] = useState<ContactForm>(EMPTY_CONTACT_FORM);
+  const [editForm, setEditForm] = useState<ContactForm>(EMPTY_CONTACT_FORM);
 
   const add = async () => {
-    if (!form.name.trim()) return;
-    await api.post(`/api/applications/${app.id}/contacts`, { ...form, name: form.name.trim() });
-    setForm({ name: "", role: "recruiter", email: "", phone: "", linkedinUrl: "", notes: "" });
-    setAdding(false); refetch();
+    if (!addForm.name.trim()) return;
+    await api.post(`/api/applications/${app.id}/contacts`, { ...addForm, name: addForm.name.trim() });
+    setAddForm(EMPTY_CONTACT_FORM);
+    setAdding(false);
+    refetch();
   };
 
-  const del = async (cId: string) => { await api.delete(`/api/applications/${app.id}/contacts/${cId}`); refetch(); };
+  const startEdit = (c: ApplicationContact) => {
+    setEditId(c.id);
+    setEditForm({ name: c.name, role: c.role ?? "", email: c.email ?? "", phone: c.phone ?? "", linkedinUrl: c.linkedinUrl ?? "", notes: c.notes ?? "" });
+  };
+
+  const saveEdit = async () => {
+    if (!editForm.name.trim() || !editId) return;
+    await api.patch(`/api/applications/${app.id}/contacts/${editId}`, { ...editForm, name: editForm.name.trim() });
+    setEditId(null);
+    refetch();
+  };
+
+  const del = async (cId: string) => {
+    await api.delete(`/api/applications/${app.id}/contacts/${cId}`);
+    refetch();
+  };
 
   return (
     <>
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, padding: "5px 10px" }} onClick={() => setAdding((v) => !v)}>
+        <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, padding: "5px 10px" }}
+          onClick={() => { setAdding((v) => !v); setEditId(null); }}>
           <Plus size={11} /> Kontakt
         </button>
       </div>
 
       {adding && (
-        <div style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", marginBottom: 14, display: "flex", flexDirection: "column", gap: 10 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <div className="field" style={{ margin: 0 }}>
-              <label>Name *</label>
-              <input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Max Muster" autoFocus />
-            </div>
-            <div className="field" style={{ margin: 0 }}>
-              <label>Rolle</label>
-              <select value={form.role} onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}>
-                <option value="recruiter">Recruiter</option>
-                <option value="hiring_manager">Hiring Manager</option>
-                <option value="other">Sonstiges</option>
-              </select>
-            </div>
-            <div className="field" style={{ margin: 0 }}>
-              <label>E-Mail</label>
-              <input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="kontakt@firma.de" type="email" />
-            </div>
-            <div className="field" style={{ margin: 0 }}>
-              <label>Telefon</label>
-              <input value={form.phone} onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))} placeholder="+41 79 …" />
-            </div>
-          </div>
-          <div className="field" style={{ margin: 0 }}>
-            <label>LinkedIn URL</label>
-            <input value={form.linkedinUrl} onChange={(e) => setForm((f) => ({ ...f, linkedinUrl: e.target.value }))} placeholder="https://linkedin.com/in/…" />
-          </div>
-          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button className="btn btn-secondary" onClick={() => setAdding(false)}>Abbrechen</button>
-            <button className="btn btn-primary" onClick={add}>Hinzufügen</button>
-          </div>
+        <div style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", marginBottom: 14 }}>
+          <ContactForm form={addForm} onChange={setAddForm} onSave={add} onCancel={() => setAdding(false)} saveLabel="Hinzufügen" />
         </div>
       )}
 
-      {contacts.length === 0 && (
+      {contacts.length === 0 && !adding && (
         <div style={{ color: "var(--fg-3)", fontSize: 12, textAlign: "center", padding: "40px 0", border: "1px dashed var(--border)", borderRadius: 8 }}>
           Noch keine Kontakte
         </div>
@@ -860,20 +1772,27 @@ function ContactsTab({ app }: { app: Application }) {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
         {contacts.map((c) => (
-          <div key={c.id} style={{ padding: "12px 14px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface)", display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <div style={{ width: 36, height: 36, borderRadius: "50%", background: "var(--accent-08)", border: "1px solid var(--accent-15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
-              {c.name.slice(0, 1).toUpperCase()}
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>{c.name}</div>
-              {c.role && <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{c.role === "recruiter" ? "Recruiter" : c.role === "hiring_manager" ? "Hiring Manager" : c.role}</div>}
-              <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                {c.email && <a href={`mailto:${c.email}`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 11, textDecoration: "none" }}><Mail size={11} />{c.email}</a>}
-                {c.phone && <a href={`tel:${c.phone}`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 11, textDecoration: "none" }}><Phone size={11} />{c.phone}</a>}
-                {c.linkedinUrl && <a href={c.linkedinUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 3, color: "#0a66c2", fontSize: 11, textDecoration: "none" }}><ExternalLink size={11} />LinkedIn</a>}
+          <div key={c.id} style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${editId === c.id ? "var(--accent-40)" : "var(--border)"}`, background: "var(--surface)" }}>
+            {editId === c.id ? (
+              <ContactForm form={editForm} onChange={setEditForm} onSave={saveEdit} onCancel={() => setEditId(null)} saveLabel="Speichern" />
+            ) : (
+              <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "var(--fg-1)" }}>{c.name}</div>
+                  {c.role && <div style={{ fontSize: 13, color: "var(--fg-3)", marginTop: 1 }}>{c.role}</div>}
+                  <div style={{ display: "flex", gap: 8, marginTop: 5, flexWrap: "wrap" }}>
+                    {c.email && <a href={`mailto:${c.email}`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 13, textDecoration: "none" }}><Mail size={12} />{c.email}</a>}
+                    {c.phone && <a href={`tel:${c.phone}`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 13, textDecoration: "none" }}><Phone size={12} />{c.phone}</a>}
+                    {c.linkedinUrl && <a href={c.linkedinUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 3, color: "#0a66c2", fontSize: 13, textDecoration: "none" }}><ExternalLink size={12} />LinkedIn</a>}
+                  </div>
+                  {c.notes && <div style={{ marginTop: 6, fontSize: 13, color: "var(--fg-2)", whiteSpace: "pre-wrap" }}>{c.notes}</div>}
+                </div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Bearbeiten" onClick={() => startEdit(c)}><Pencil size={11} /></button>
+                  <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Löschen" onClick={() => del(c.id)}><Trash2 size={12} /></button>
+                </div>
               </div>
-            </div>
-            <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} onClick={() => del(c.id)}><Trash2 size={12} /></button>
+            )}
           </div>
         ))}
       </div>
@@ -899,12 +1818,168 @@ function NotesTab({ app, onSave }: { app: Application; onSave: (patch: Partial<A
   );
 }
 
+// ─── Confirmation Modal (generic) ────────────────────────────
+function ConfirmModal({ title, description, confirmLabel, confirmColor = "var(--accent)", onConfirm, onClose, icon }: {
+  title: string; description: string; confirmLabel: string;
+  confirmColor?: string; icon: React.ReactNode;
+  onConfirm: () => void; onClose: () => void;
+}) {
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}>
+      <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 28, width: 380, display: "flex", flexDirection: "column", gap: 16 }}
+        onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "var(--fg-1)", display: "flex", alignItems: "center", gap: 8 }}>
+          {icon} {title}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--fg-2)", lineHeight: 1.6 }}>{description}</div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><X size={12} /> Abbrechen</button>
+          <button style={{
+            display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8,
+            border: "none", background: confirmColor, color: "#fff",
+            fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-sans)"
+          }} onClick={onConfirm}>
+            {icon} {confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Archive Reason Modal ─────────────────────────────────────
+const ARCHIVE_REASONS = [
+  { id: "unavailable", label: "Stelle nicht mehr verfügbar",   emoji: "🚫" },
+  { id: "irrelevant",  label: "Nicht relevant für mich",       emoji: "👎" },
+  { id: "taken",       label: "Stelle bereits vergeben",       emoji: "🔒" },
+  { id: "other",       label: "Sonstiger Grund",               emoji: "📝" },
+] as const;
+
+function ArchiveReasonModal({
+  role, company, onConfirm, onClose
+}: { role: string; company: string; onConfirm: (reason: string) => void; onClose: () => void }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const [customText, setCustomText] = useState("");
+
+  const confirm = () => {
+    if (!selected) return;
+    onConfirm(selected === "other" && customText.trim() ? customText.trim() : selected);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}
+      onClick={onClose}>
+      <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 28, width: 400, display: "flex", flexDirection: "column", gap: 16 }}
+        onClick={(e) => e.stopPropagation()}>
+        <div style={{ fontWeight: 700, fontSize: 16, color: "var(--fg-1)", display: "flex", alignItems: "center", gap: 8 }}>
+          <Archive size={15} /> Bewerbung archivieren
+        </div>
+        <div style={{ fontSize: 13, color: "var(--fg-3)" }}>
+          <strong style={{ color: "var(--fg-1)" }}>„{role}"</strong> bei {company} — warum wird diese Stelle archiviert?
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {ARCHIVE_REASONS.map((r) => (
+            <button key={r.id} onClick={() => setSelected(r.id)} style={{
+              display: "flex", alignItems: "center", gap: 10, width: "100%",
+              padding: "10px 14px", borderRadius: 10, border: `1px solid ${selected === r.id ? "var(--accent)" : "var(--border)"}`,
+              background: selected === r.id ? "var(--accent-08)" : "var(--surface-2)",
+              cursor: "pointer", fontFamily: "var(--font-sans)", textAlign: "left", transition: "all 0.12s"
+            }}>
+              <span style={{ fontSize: 16 }}>{r.emoji}</span>
+              <span style={{ fontSize: 13, fontWeight: selected === r.id ? 600 : 400, color: selected === r.id ? "var(--accent)" : "var(--fg-1)" }}>{r.label}</span>
+              {selected === r.id && <Check size={13} style={{ marginLeft: "auto", color: "var(--accent)" }} />}
+            </button>
+          ))}
+          {selected === "other" && (
+            <div className="field" style={{ margin: "4px 0 0" }}>
+              <input
+                autoFocus
+                value={customText}
+                onChange={(e) => setCustomText(e.target.value)}
+                placeholder="Kurze Begründung…"
+                onKeyDown={(e) => e.key === "Enter" && confirm()}
+              />
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><X size={12} /> Abbrechen</button>
+          <button
+            disabled={!selected}
+            style={{
+              display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8,
+              border: "none", background: selected ? "#6b7280" : "var(--border)", color: selected ? "#fff" : "var(--fg-3)",
+              fontSize: 12, fontWeight: 600, cursor: selected ? "pointer" : "not-allowed", fontFamily: "var(--font-sans)", transition: "all 0.12s"
+            }}
+            onClick={confirm}
+          >
+            <Archive size={12} /> Archivieren
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── More Menu ────────────────────────────────────────────────
+function MoreMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const menuItem = (label: string, icon: React.ReactNode, onClick: () => void, danger = false) => (
+    <button onClick={() => { setOpen(false); onClick(); }} style={{
+      display: "flex", alignItems: "center", gap: 8, width: "100%",
+      padding: "7px 12px", borderRadius: 7, border: "none",
+      background: "transparent", color: danger ? "var(--red, #f43f5e)" : "var(--fg-1)",
+      fontSize: 13, fontWeight: 500, cursor: "pointer",
+      fontFamily: "var(--font-sans)", textAlign: "left",
+    }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = danger ? "rgba(244,63,94,0.08)" : "var(--surface-2)"; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
+      {icon} {label}
+    </button>
+  );
+
+  return (
+    <div ref={ref} style={{ position: "relative" }}>
+      <button className="btn btn-ghost btn-icon" onClick={() => setOpen((v) => !v)}>
+        <MoreHorizontal size={14} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 60,
+          background: "var(--bg)", border: "1px solid var(--border)",
+          borderRadius: 10, padding: 4, minWidth: 200,
+          boxShadow: "0 8px 24px rgba(0,0,0,0.18)"
+        }}>
+          {menuItem("Archivieren", <Archive size={13} style={{ color: "var(--fg-3)" }} />, onArchive)}
+          <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
+          {menuItem("Entfernen", <Trash2 size={13} />, onDelete, true)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Main DetailDrawer ────────────────────────────────────────
 type Props = { app: Application; onClose: () => void };
 
 export function DetailDrawer({ app, onClose }: Props) {
-  const [tab, setTab] = useState<Tab>("overview");
-  const [stage, setStage] = useState<Application["stage"]>(app.stage);
+  const [tab, setTab]             = useState<Tab>("overview");
+  const [stage, setStage]         = useState<Application["stage"]>(app.stage);
+  const [url, setUrl]             = useState(app.url ?? "");
+  const [showDeleteModal, setShowDeleteModal]   = useState(false);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
   const queryClient = useQueryClient();
 
   const patchMutation = useMutation({
@@ -913,12 +1988,21 @@ export function DetailDrawer({ app, onClose }: Props) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["applications"] })
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => api.delete(`/api/applications/${app.id}`).then((r) => r.data),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["applications"] }); onClose(); }
+  });
+
   const handleStageChange = (s: string) => {
     setStage(s as Application["stage"]);
     patchMutation.mutate({ stage: s as Application["stage"] });
   };
 
-  const color = getCompanyColor(app.company);
+  const handleArchive = (reason?: string) => {
+    patchMutation.mutate({ archived: "true", archiveReason: reason } as Partial<Application>);
+    queryClient.invalidateQueries({ queryKey: ["applications"] });
+    onClose();
+  };
 
   return (
     <>
@@ -927,9 +2011,8 @@ export function DetailDrawer({ app, onClose }: Props) {
         {/* Header */}
         <div className="drawer-head" style={{ flexDirection: "column", alignItems: "stretch", gap: 14, paddingBottom: 0, borderBottom: "none" }}>
           <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
-            <div className="avatar avatar-lg" style={{ background: color, border: "none", flexShrink: 0 }}>
-              {app.company.slice(0, 2).toUpperCase()}
-            </div>
+            <LogoAvatar company={app.company} logoUrl={app.logoUrl} size={44} />
+
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="eyebrow" style={{ marginBottom: 2 }}>{app.company}</div>
               <h2 style={{ margin: "0 0 6px", fontSize: 19, fontWeight: 700, letterSpacing: "-0.01em", color: "var(--fg-1)" }}>
@@ -941,14 +2024,39 @@ export function DetailDrawer({ app, onClose }: Props) {
                 )}
                 {app.location && <span className="tag">{app.location}</span>}
                 {app.salary && <span className="tag mono">{app.salary}</span>}
+                {app.archiveReason && (
+                  <span className="tag" style={{ color: "#f87171", borderColor: "rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)" }}>
+                    <Archive size={10} style={{ display: "inline", verticalAlign: "middle", marginRight: 3 }} />
+                    {ARCHIVE_REASON_LABELS[app.archiveReason] ?? app.archiveReason}
+                  </span>
+                )}
+                {app.matchScore != null && (
+                  <span
+                    onClick={() => setTab("agent")}
+                    title="AI Agent öffnen"
+                    style={{
+                      padding: "1px 7px", borderRadius: 999, fontSize: 11, fontWeight: 300, whiteSpace: "nowrap", cursor: "pointer",
+                      background: app.matchScore >= 75 ? "rgba(52,211,153,0.15)" : app.matchScore >= 50 ? "rgba(251,191,36,0.15)" : "rgba(248,113,113,0.15)",
+                      color: app.matchScore >= 75 ? "#34d399" : app.matchScore >= 50 ? "#fbbf24" : "#f87171",
+                      border: `1px solid ${app.matchScore >= 75 ? "#34d39944" : app.matchScore >= 50 ? "#fbbf2444" : "#f8717144"}`
+                    }}
+                  >
+                    {app.matchScore}%
+                  </span>
+                )}
               </div>
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
               <StagePicker value={stage} onChange={handleStageChange} />
-              {app.url && <a href={app.url} target="_blank" rel="noreferrer" className="btn btn-secondary"><ExternalLink size={13} /> Job</a>}
-              <button className="btn btn-ghost btn-icon"><MoreHorizontal size={14} /></button>
+              {url && <a href={url} target="_blank" rel="noreferrer" className="btn btn-secondary"><ExternalLink size={13} /> Job</a>}
+              <MoreMenu onArchive={() => setShowArchiveModal(true)} onDelete={() => setShowDeleteModal(true)} />
               <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
             </div>
+          </div>
+
+          {/* Stage Progress — above tabs */}
+          <div style={{ paddingBottom: 4 }}>
+            <StageProgressBar stage={stage} />
           </div>
 
           {/* Tabs — scrollable */}
@@ -962,7 +2070,7 @@ export function DetailDrawer({ app, onClose }: Props) {
         </div>
 
         <div className="drawer-body" style={{ paddingTop: 16 }}>
-          {tab === "overview"     && <OverviewTab     app={app} stage={stage} onSave={(p) => patchMutation.mutate(p)} />}
+          {tab === "overview"     && <OverviewTab     app={app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} />}
           {tab === "description"  && <DescriptionTab  app={app} onSave={(p) => patchMutation.mutate(p)} />}
           {tab === "documents"    && <DocumentsTab    app={app} />}
           {tab === "process"      && <ProcessTab      app={app} />}
@@ -971,6 +2079,27 @@ export function DetailDrawer({ app, onClose }: Props) {
           {tab === "notes"        && <NotesTab        app={app} onSave={(p) => patchMutation.mutate(p)} />}
         </div>
       </aside>
+
+      {showArchiveModal && (
+        <ArchiveReasonModal
+          role={app.role}
+          company={app.company}
+          onConfirm={(reason) => { setShowArchiveModal(false); handleArchive(reason); }}
+          onClose={() => setShowArchiveModal(false)}
+        />
+      )}
+
+      {showDeleteModal && (
+        <ConfirmModal
+          title="Bewerbung löschen"
+          description={`„${app.role}" bei ${app.company} wird endgültig gelöscht — alle Angaben, Dokumente, Aktivitäten und Kontakte werden entfernt. Diese Aktion kann nicht rückgängig gemacht werden.`}
+          confirmLabel="Endgültig löschen"
+          confirmColor="#f43f5e"
+          icon={<Trash2 size={14} />}
+          onConfirm={() => { setShowDeleteModal(false); deleteMutation.mutate(); }}
+          onClose={() => setShowDeleteModal(false)}
+        />
+      )}
     </>
   );
 }

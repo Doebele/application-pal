@@ -39,7 +39,7 @@ function AutoResizeTextarea({
   return (
     <textarea ref={ref} value={value} onChange={onChange} placeholder={placeholder}
       disabled={disabled} rows={minRows} onInput={resize}
-      style={{ resize: "none", overflow: "hidden", minHeight: minRows * 20 + "px", ...style }}
+      style={{ resize: "none", overflow: "hidden", minHeight: minRows * 20 + "px", width: "100%", display: "block", ...style }}
     />
   );
 }
@@ -190,7 +190,7 @@ export function ImportDrawer({ onClose }: Props) {
         tags:        form.tags.length > 0 ? JSON.stringify(form.tags) : null,
         source:      form.source      || null,
         url:         mode === "url" ? url || null : null,
-        logoUrl:     logoOk ? logoUrl : null,
+        logoUrl:     logoUrl || null,
         stage
       }).then((r) => r.data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["applications"] }); onClose(); }

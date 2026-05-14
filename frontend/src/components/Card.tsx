@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { Clock, Pin, MoreHorizontal, ExternalLink } from "lucide-react";
+import { Clock, Pin, MoreHorizontal, ExternalLink, Archive } from "lucide-react";
 import type { Application } from "@application-pal/shared";
 import type { CardVariant } from "../lib/store";
+import { ARCHIVE_REASON_LABELS } from "./DetailDrawer";
 
 function getInitials(company: string): string {
   return company.slice(0, 2).toUpperCase();
@@ -105,11 +106,37 @@ export function CardRich({ app, onClick }: CardProps) {
           <div className="job-title">{app.role}</div>
           <div className="job-company">{app.company}{app.location ? ` · ${app.location.split("·")[0].trim()}` : ""}</div>
         </div>
-        {/* Stage badge top-right */}
-        <span style={{ padding: "2px 7px", borderRadius: 999, fontSize: 9.5, fontWeight: 700, background: `${stageColor}1a`, color: stageColor, border: `1px solid ${stageColor}44`, whiteSpace: "nowrap", flexShrink: 0 }}>
-          {STAGE_LABELS[app.stage] ?? app.stage}
-        </span>
+        {/* Stage badge + optional match score */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
+          <span style={{ padding: "2px 7px", borderRadius: 999, fontSize: 9.5, fontWeight: 700, background: `${stageColor}1a`, color: stageColor, border: `1px solid ${stageColor}44`, whiteSpace: "nowrap" }}>
+            {STAGE_LABELS[app.stage] ?? app.stage}
+          </span>
+          {app.matchScore != null && (
+            <span style={{
+              padding: "1px 6px", borderRadius: 999, fontSize: 11, fontWeight: 300, whiteSpace: "nowrap",
+              background: app.matchScore >= 75 ? "rgba(52,211,153,0.15)" : app.matchScore >= 50 ? "rgba(251,191,36,0.15)" : "rgba(248,113,113,0.15)",
+              color: app.matchScore >= 75 ? "#34d399" : app.matchScore >= 50 ? "#fbbf24" : "#f87171",
+              border: `1px solid ${app.matchScore >= 75 ? "#34d39944" : app.matchScore >= 50 ? "#fbbf2444" : "#f8717144"}`
+            }}>
+              {app.matchScore}%
+            </span>
+          )}
+        </div>
       </div>
+
+      {/* Archive reason label */}
+      {app.archiveReason && (
+        <div style={{ display: "flex", gap: 4, marginTop: 2 }}>
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 3,
+            padding: "1px 7px", borderRadius: 999, fontSize: 10, fontWeight: 400,
+            color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.07)", whiteSpace: "nowrap"
+          }}>
+            <Archive size={9} />
+            {ARCHIVE_REASON_LABELS[app.archiveReason] ?? app.archiveReason}
+          </span>
+        </div>
+      )}
 
       {/* Row 2: Tags + Salary */}
       {(tags.length > 0 || app.salary) && (

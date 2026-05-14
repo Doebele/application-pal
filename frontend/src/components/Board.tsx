@@ -21,9 +21,13 @@ type Props = {
   applications: Application[];
   cardVariant: CardVariant;
   onCardClick: (id: string) => void;
+  visibleStages?: ReadonlyArray<string>;
 };
 
-export function Board({ applications, cardVariant, onCardClick }: Props) {
+export function Board({ applications, cardVariant, onCardClick, visibleStages }: Props) {
+  const stagesToShow = visibleStages && visibleStages.length > 0
+    ? STAGES.filter((s) => visibleStages.includes(s))
+    : STAGES;
   const queryClient = useQueryClient();
 
   const patchMutation = useMutation({
@@ -59,7 +63,7 @@ export function Board({ applications, cardVariant, onCardClick }: Props) {
     <DragDropContext onDragEnd={onDragEnd}>
       <div className="board-scroll">
         <div className="kanban">
-          {STAGES.map((stageId) => (
+          {stagesToShow.map((stageId) => (
             <Column
               key={stageId}
               stageId={stageId}

@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { RefreshCw, CheckCircle, AlertCircle, Loader, Link2, Unlink, Download, Upload, Database } from "lucide-react";
+import { RefreshCw, CheckCircle, AlertCircle, Loader, Link2, Unlink, Download, Upload, Database, Shield, Key, LogOut, Trash2, FolderOpen, ExternalLink } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { Topbar } from "../components/Topbar";
-import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider } from "../lib/store";
+import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
 import { api } from "../lib/api";
+import { useAuth } from "../lib/auth";
+import { startRegistration } from "@simplewebauthn/browser";
+import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 
 const ACCENT_SWATCHES: { value: Accent; color: string; label: string }[] = [
   { value: "indigo",  color: "#3b82f6", label: "Indigo" },
@@ -183,7 +187,12 @@ function ProviderPill({ value, label, active, onClick, color }: {
 
 // ─── Google OAuth section ─────────────────────────────────────
 function GoogleSection() {
+  const { driveApplicationsFolderId, setDriveApplicationsFolderId } = useUiStore();
   const [status, setStatus] = useState<"loading" | "connected" | "disconnected">("loading");
+  const [folderInput, setFolderInput] = useState(driveApplicationsFolderId);
+  const [folderInfo, setFolderInfo]   = useState<{ id: string; name: string; url: string } | null>(null);
+  const [folderErr, setFolderErr]     = useState<string | null>(null);
+  const [checkingFolder, setCheckingFolder] = useState(false);
 
   const check = useCallback(() => {
     api.get<{ connected: boolean }>("/api/google/status")
@@ -192,6 +201,41 @@ function GoogleSection() {
   }, []);
 
   useEffect(() => { check(); }, [check]);
+
+  // Validate saved folder ID on mount
+  useEffect(() => {
+    if (driveApplicationsFolderId && status === "connected") {
+      api.get<{ id: string; name: string; url: string }>(`/api/drive/folder-info?folderId=${driveApplicationsFolderId}`)
+        .then(r => setFolderInfo(r.data))
+        .catch(() => {});
+    }
+  }, [driveApplicationsFolderId, status]);
+
+  /** Extract folder ID from a Google Drive URL or treat input as raw ID */
+  const parseFolderId = (val: string): string => {
+    const m = val.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+    return m ? m[1] : val.trim();
+  };
+
+  const validateFolder = async () => {
+    const id = parseFolderId(folderInput);
+    if (!id) { setFolderInfo(null); setDriveApplicationsFolderId(""); return; }
+    setCheckingFolder(true); setFolderErr(null);
+    try {
+      const r = await api.get<{ id: string; name: string; url: string }>(`/api/drive/folder-info?folderId=${id}`);
+      setFolderInfo(r.data);
+      setDriveApplicationsFolderId(r.data.id);
+      setFolderInput(r.data.id);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Ordner nicht gefunden";
+      setFolderErr(msg); setFolderInfo(null);
+    } finally { setCheckingFolder(false); }
+  };
+
+  const clearFolder = () => {
+    setFolderInput(""); setFolderInfo(null); setFolderErr(null);
+    setDriveApplicationsFolderId("");
+  };
 
   const connect = async () => {
     const res = await api.get<{ url: string }>("/api/google/auth-url").catch(() => null);
@@ -205,38 +249,317 @@ function GoogleSection() {
   };
 
   return (
-    <div className="settings-row">
-      <div>
-        <div className="settings-row-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <span style={{ fontSize: 14 }}>G</span> Google Drive & Docs
-        </div>
-        <div className="settings-row-sub">
-          {status === "connected" ? "Verbunden — Dokumente werden automatisch in Drive erstellt" : "Dokumente manuell verknüpfen oder Drive verbinden"}
-        </div>
-      </div>
-      <div className="settings-row-right">
-        {status === "loading" && <Loader size={14} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />}
-        {status === "connected" && (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--green)", fontWeight: 600 }}>
-              <CheckCircle size={13} /> Verbunden
-            </span>
-            <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} onClick={disconnect}>
-              <Unlink size={11} /> Trennen
-            </button>
+    <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 14 }}>
+      {/* Header row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <div className="settings-row-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span style={{ fontSize: 14 }}>G</span> Google Drive & Docs
           </div>
-        )}
-        {status === "disconnected" && (
-          <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} onClick={connect}>
-            <Link2 size={12} /> Google verbinden
-          </button>
-        )}
+          <div className="settings-row-sub">
+            {status === "connected" ? "Verbunden — Dokumente werden automatisch in Drive erstellt" : "Dokumente manuell verknüpfen oder Drive verbinden"}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {status === "loading" && <Loader size={14} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />}
+          {status === "connected" && (
+            <>
+              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--green)", fontWeight: 600 }}>
+                <CheckCircle size={13} /> Verbunden
+              </span>
+              <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} onClick={disconnect}>
+                <Unlink size={11} /> Trennen
+              </button>
+            </>
+          )}
+          {status === "disconnected" && (
+            <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} onClick={connect}>
+              <Link2 size={12} /> Google verbinden
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Folder picker — only when connected */}
+      {status === "connected" && (
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+            Ablageordner für Bewerbungsordner
+          </div>
+          <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 10, lineHeight: 1.5 }}>
+            Neuer Bewerbungsordner wird in diesem Google Drive Verzeichnis erstellt. Leer lassen = direkt in „Meine Ablage".
+          </div>
+
+          {/* Current folder display */}
+          {folderInfo ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.25)" }}>
+              <span style={{ fontSize: 15 }}>📁</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)" }}>{folderInfo.name}</div>
+                <div style={{ fontSize: 10, color: "var(--fg-3)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folderInfo.id}</div>
+              </div>
+              <a href={folderInfo.url} target="_blank" rel="noreferrer"
+                style={{ color: "var(--accent)", display: "flex", flexShrink: 0 }} title="In Drive öffnen">
+                <ExternalLink size={12} />
+              </a>
+              <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={clearFolder}>
+                Ändern
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 8 }}>
+              <div className="field" style={{ flex: 1, margin: 0 }}>
+                <input
+                  value={folderInput}
+                  onChange={e => setFolderInput(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && validateFolder()}
+                  placeholder="Drive-Ordner URL einfügen: https://drive.google.com/drive/folders/…"
+                  style={{ fontSize: 12 }}
+                />
+              </div>
+              <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
+                disabled={checkingFolder || !folderInput.trim()} onClick={validateFolder}>
+                {checkingFolder ? <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> : "Bestätigen"}
+              </button>
+            </div>
+          )}
+          {folderErr && <div style={{ fontSize: 11, color: "#f87171", marginTop: 6 }}>{folderErr}</div>}
+          {!folderInfo && !folderInput && (
+            <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 6 }}>
+              Aktuell: Neue Ordner werden direkt in „Meine Ablage" erstellt.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Main SettingsPage ────────────────────────────────────────
+// ─── Drive Naming Section ─────────────────────────────────────
+const PLACEHOLDERS = ["{name}", "{firma}", "{rolle}", "{datum}", "{jahr}", "{monat}", "{doc}"];
+const DUMMY: Record<string, string> = {
+  name: "Claus Medvesek", firma: "Siemens", rolle: "Senior Designer",
+  datum: "260514", jahr: "2026", monat: "05", doc: "CV Deutsch"
+};
+
+function previewRule(rule: string): string {
+  return rule.replace(/\{(\w+)\}/g, (_, k) => DUMMY[k] ?? `{${k}}`);
+}
+
+function DriveNamingSection() {
+  const { driveNameFolder, setDriveNameFolder, driveNameDoc, setDriveNameDoc } = useUiStore();
+  const [folder, setFolder] = useState(driveNameFolder);
+  const [doc, setDoc]       = useState(driveNameDoc);
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <FolderOpen size={13} style={{ color: "var(--fg-3)" }} />
+        <div className="eyebrow">Google Drive Benennung</div>
+      </div>
+      <div className="settings-group">
+        <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
+          <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.6 }}>
+            Regeln für die automatische Benennung von Drive-Ordnern und kopierten Dokumenten.{" "}
+            <span style={{ color: "var(--fg-2)" }}>
+              Platzhalter: {PLACEHOLDERS.map(p => (
+                <code key={p} style={{ fontSize: 10, background: "var(--surface-2)", borderRadius: 3, padding: "1px 4px", margin: "0 2px" }}>{p}</code>
+              ))}
+            </span>
+          </div>
+
+          {/* Folder rule */}
+          <div className="field" style={{ margin: 0 }}>
+            <label>Ordnername-Regel</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input value={folder} onChange={e => setFolder(e.target.value)} onBlur={() => setDriveNameFolder(folder)}
+                placeholder={DEFAULT_FOLDER_RULE} style={{ flex: 1 }} />
+              <button className="btn btn-ghost" style={{ fontSize: 11, whiteSpace: "nowrap" }}
+                onClick={() => { setFolder(DEFAULT_FOLDER_RULE); setDriveNameFolder(DEFAULT_FOLDER_RULE); }}>
+                Zurücksetzen
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 4 }}>
+              Vorschau: <em style={{ color: "var(--fg-2)" }}>{previewRule(folder || DEFAULT_FOLDER_RULE)}</em>
+            </div>
+          </div>
+
+          {/* Doc rule */}
+          <div className="field" style={{ margin: 0 }}>
+            <label>Dokumentname-Regel</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input value={doc} onChange={e => setDoc(e.target.value)} onBlur={() => setDriveNameDoc(doc)}
+                placeholder={DEFAULT_DOC_RULE} style={{ flex: 1 }} />
+              <button className="btn btn-ghost" style={{ fontSize: 11, whiteSpace: "nowrap" }}
+                onClick={() => { setDoc(DEFAULT_DOC_RULE); setDriveNameDoc(DEFAULT_DOC_RULE); }}>
+                Zurücksetzen
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 4 }}>
+              Vorschau: <em style={{ color: "var(--fg-2)" }}>{previewRule(doc || DEFAULT_DOC_RULE)}</em>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Security Section ─────────────────────────────────────────
+type PasskeyInfo = { id: string; deviceName: string | null; createdAt: string };
+
+function SecuritySection() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [creds, setCreds]         = useState<PasskeyInfo[]>([]);
+  const [addingPasskey, setAddingPasskey] = useState(false);
+  const [deviceName, setDeviceName] = useState("");
+  const [passkeyMsg, setPasskeyMsg] = useState("");
+  const [changePw, setChangePw]   = useState(false);
+  const [currPw, setCurrPw]       = useState("");
+  const [newPw, setNewPw]         = useState("");
+  const [pwMsg, setPwMsg]         = useState("");
+
+  const loadCreds = useCallback(async () => {
+    const res = await api.get<PasskeyInfo[]>("/api/auth/webauthn/credentials").catch(() => null);
+    if (res) setCreds(res.data);
+  }, []);
+
+  useEffect(() => { void loadCreds(); }, [loadCreds]);
+
+  const addPasskey = async () => {
+    setPasskeyMsg(""); setAddingPasskey(true);
+    try {
+      const optRes = await api.get<PublicKeyCredentialCreationOptionsJSON>("/api/auth/webauthn/register-options");
+      const reg = await startRegistration({ optionsJSON: optRes.data });
+      await api.post("/api/auth/webauthn/register", { response: reg, deviceName: deviceName || undefined });
+      setPasskeyMsg("Passkey hinzugefügt ✓"); setDeviceName("");
+      await loadCreds();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setPasskeyMsg(msg ?? "Fehler bei der Passkey-Registrierung");
+    } finally { setAddingPasskey(false); }
+  };
+
+  const deleteCred = async (id: string) => {
+    await api.delete(`/api/auth/webauthn/credentials/${id}`);
+    await loadCreds();
+  };
+
+  const changePassword = async () => {
+    setPwMsg("");
+    try {
+      await api.post("/api/auth/change-password", { currentPassword: currPw, newPassword: newPw });
+      setPwMsg("Passwort geändert ✓"); setCurrPw(""); setNewPw(""); setChangePw(false);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setPwMsg(msg ?? "Fehler");
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login", { replace: true });
+  };
+
+  const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <Shield size={13} style={{ color: "var(--fg-3)" }} />
+        <div className="eyebrow">Sicherheit</div>
+      </div>
+      <div className="settings-group">
+
+        {/* Current user */}
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">Account</div>
+            <div className="settings-row-sub">{user?.email}</div>
+          </div>
+          <button className="btn btn-secondary" style={{ gap: 6, fontSize: 12 }} onClick={handleLogout}>
+            <LogOut size={12} /> Abmelden
+          </button>
+        </div>
+
+        {/* Change password */}
+        <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div className="settings-row-label">Passwort</div>
+              <div className="settings-row-sub">Passwort ändern</div>
+            </div>
+            <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => setChangePw(v => !v)}>
+              {changePw ? "Abbrechen" : "Ändern"}
+            </button>
+          </div>
+          {changePw && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <div className="field" style={{ margin: 0 }}>
+                <label>Aktuelles Passwort</label>
+                <input type="password" value={currPw} onChange={e => setCurrPw(e.target.value)} placeholder="••••••••" />
+              </div>
+              <div className="field" style={{ margin: 0 }}>
+                <label>Neues Passwort</label>
+                <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Mindestens 8 Zeichen" />
+              </div>
+              <button className="btn btn-primary" style={{ fontSize: 12, alignSelf: "flex-end" }} onClick={changePassword}>Speichern</button>
+              {pwMsg && <div style={{ fontSize: 12, color: pwMsg.includes("✓") ? "#34d399" : "#f87171" }}>{pwMsg}</div>}
+            </div>
+          )}
+        </div>
+
+        {/* Passkeys */}
+        {supportsPasskey && (
+          <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div className="settings-row-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Key size={12} /> Passkeys
+                </div>
+                <div className="settings-row-sub">Face ID, Touch ID, Windows Hello</div>
+              </div>
+              <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => setPasskeyMsg("")}>
+                + Hinzufügen
+              </button>
+            </div>
+
+            {/* Add passkey inline */}
+            <div style={{ display: "flex", gap: 8 }}>
+              <div className="field" style={{ flex: 1, margin: 0 }}>
+                <label>Gerätename (optional)</label>
+                <input value={deviceName} onChange={e => setDeviceName(e.target.value)} placeholder="z.B. MacBook Pro, iPhone 15" />
+              </div>
+              <button className="btn btn-primary" style={{ fontSize: 12, alignSelf: "flex-end" }} disabled={addingPasskey} onClick={addPasskey}>
+                {addingPasskey ? "…" : "Registrieren"}
+              </button>
+            </div>
+            {passkeyMsg && <div style={{ fontSize: 12, color: passkeyMsg.includes("✓") ? "#34d399" : "#f87171" }}>{passkeyMsg}</div>}
+
+            {/* Registered passkeys list */}
+            {creds.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {creds.map(cr => (
+                  <div key={cr.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)" }}>{cr.deviceName ?? "Unbekanntes Gerät"}</div>
+                      <div style={{ fontSize: 11, color: "var(--fg-3)" }}>Hinzugefügt: {new Date(cr.createdAt).toLocaleDateString("de-CH")}</div>
+                    </div>
+                    <button className="btn btn-ghost btn-icon" onClick={() => deleteCred(cr.id)} title="Entfernen"><Trash2 size={12} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
 export function SettingsPage() {
   const { theme, setTheme, accent, setAccent, density, setDensity, cardVariant, setCardVariant, ai, setAi } = useUiStore();
 
@@ -401,6 +724,12 @@ export function SettingsPage() {
         {/* Data & Backup */}
         <BackupSection />
 
+        {/* Drive Naming */}
+        <DriveNamingSection />
+
+        {/* Security */}
+        <SecuritySection />
+
       </div>
     </>
   );
@@ -408,13 +737,20 @@ export function SettingsPage() {
 
 // ─── Backup Section ────────────────────────────────────────────
 function BackupSection() {
-  const [exporting, setExporting]   = useState(false);
-  const [importing, setImporting]   = useState(false);
-  const [mode, setMode]             = useState<"replace" | "merge">("replace");
-  const [file, setFile]             = useState<File | null>(null);
-  const [result, setResult]         = useState<{ ok: boolean; msg: string } | null>(null);
-  const [confirm, setConfirm]       = useState(false);
+  const [exporting, setExporting]     = useState(false);
+  const [exportingDrive, setExportingDrive] = useState(false);
+  const [importing, setImporting]     = useState(false);
+  const [mode, setMode]               = useState<"replace" | "merge">("replace");
+  const [file, setFile]               = useState<File | null>(null);
+  const [result, setResult]           = useState<{ ok: boolean; msg: string } | null>(null);
+  const [confirm, setConfirm]         = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api.get<{ connected: boolean }>("/api/google/status")
+      .then(r => setGoogleConnected(r.data.connected)).catch(() => {});
+  }, []);
 
   const doExport = async () => {
     setExporting(true);
@@ -431,6 +767,19 @@ function BackupSection() {
       setResult({ ok: false, msg: "Export fehlgeschlagen." });
     } finally {
       setExporting(false);
+    }
+  };
+
+  const doExportToDrive = async () => {
+    setExportingDrive(true); setResult(null);
+    try {
+      const res = await api.post<{ ok: boolean; fileName: string; fileUrl: string }>("/api/export/drive");
+      setResult({ ok: true, msg: `Auf Google Drive gespeichert: ${res.data.fileName}` });
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Google Drive Export fehlgeschlagen";
+      setResult({ ok: false, msg });
+    } finally {
+      setExportingDrive(false);
     }
   };
 
@@ -472,20 +821,21 @@ function BackupSection() {
         <div className="settings-row">
           <div>
             <div className="settings-row-label">Export</div>
-            <div className="settings-row-sub">Alle Daten als JSON-Datei herunterladen</div>
+            <div className="settings-row-sub">Alle Daten als JSON-Backup herunterladen oder auf Google Drive speichern</div>
           </div>
-          <div className="settings-row-right">
-            <button
-              className="btn btn-secondary"
-              style={{ fontSize: 12, gap: 6 }}
-              onClick={doExport}
-              disabled={exporting}
-            >
-              {exporting
-                ? <Loader size={12} style={{ animation: "spin 1s linear infinite" }} />
-                : <Download size={12} />}
-              Exportieren
+          <div className="settings-row-right" style={{ gap: 8 }}>
+            <button className="btn btn-secondary" style={{ fontSize: 12, gap: 6 }} onClick={doExport} disabled={exporting}>
+              {exporting ? <Loader size={12} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={12} />}
+              Herunterladen
             </button>
+            {googleConnected && (
+              <button className="btn btn-secondary" style={{ fontSize: 12, gap: 6 }} onClick={doExportToDrive} disabled={exportingDrive}>
+                {exportingDrive
+                  ? <Loader size={12} style={{ animation: "spin 1s linear infinite" }} />
+                  : <svg width="12" height="12" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>}
+                Drive
+              </button>
+            )}
           </div>
         </div>
 
