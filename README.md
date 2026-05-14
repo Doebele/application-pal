@@ -8,12 +8,16 @@ Persönliches Bewerbungs-Management-Tool mit KI-Unterstützung. Läuft vollstän
 
 - **Kanban-Board** — Bewerbungen per Drag & Drop durch die Phasen ziehen (Inbox → Vorbereitung → Versendet → Interview → Entscheid)
 - **KI-Import** — Job-URL einfügen, KI extrahiert Firma, Rolle, Ort, Gehalt und Tags automatisch
-- **Match-Score** — KI bewertet wie gut dein Profil zur Stelle passt (0–100 mit Breakdown)
-- **Dokumente** — Globale Dokument-Bibliothek (Lebenslauf, Zeugnisse, Portfolio) mit Google Drive Integration
-- **Kontakte** — Ansprechpersonen pro Bewerbung mit Passkey-Login
-- **Profil** — Master-CV, LinkedIn-Bio und persönliche Stichpunkte fliessen in KI-Analysen ein
-- **Sicherer Login** — E-Mail/Passwort, Google Sign-In, Passkeys (Apple Face ID / Touch ID)
-- **Export/Import** — Vollständiges Backup als JSON
+- **Match-Score** — KI bewertet wie gut dein Profil zur Stelle passt (0–100 mit Stärken/Lücken-Breakdown)
+- **Stage-Aufgaben** — Automatische Checklisten pro Bewerbungsphase; manuell erweiterbar
+- **KI-Coaching** — CV-Highlights, Anschreiben, Email-Entwürfe, Interview-Vorbereitung (inkl. Chris-Voss-Methode), Gehaltsverhandlungs-Tipps
+- **Dokumente** — Globale Bibliothek (Lebenslauf, Zeugnisse, Portfolio) + Google Drive Integration mit Live-Ordnerinhalt
+- **Google Drive** — Bewerbungsordner pro Stelle, Dokumente kopieren & direkt öffnen, Refresh & Löschen
+- **Kontakte** — Ansprechpersonen pro Bewerbung
+- **Profil** — Master-CV, LinkedIn-Bio und persönliche Stichpunkte fliessen in alle KI-Analysen ein
+- **Sicherer Login** — E-Mail/Passwort, Google Sign-In, Passkeys (Apple Face ID / Touch ID), „Angemeldet bleiben"-Option
+- **Archivierung** — Mit Grundangabe (nicht verfügbar / nicht relevant / vergeben / sonstiges)
+- **Export/Import** — Vollständiges Backup als JSON (inkl. optionalem Google Drive Backup)
 
 ---
 
@@ -82,7 +86,7 @@ Deine Daten bleiben erhalten (PostgreSQL-Volume wird nicht gelöscht).
 ## Entwickler-Setup (build from source)
 
 ```bash
-git clone https://github.com/clausmedvesek/application-pal.git
+git clone https://github.com/Doebele/application-pal.git
 cd application-pal
 cp .env.example .env   # .env anpassen
 docker compose build

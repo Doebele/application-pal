@@ -1,6 +1,16 @@
 # KI-Integration einrichten
 
-Application Pal unterstützt zwei KI-Provider für die **Job-Import-Extraktion** und den **Match-Score**:
+Application Pal nutzt KI für folgende Funktionen:
+
+- **Job-Import** — automatische Extraktion von Firma, Rolle, Ort, Gehalt und Tags aus einer Job-URL
+- **Match-Score** — Bewertung wie gut dein Profil zur Stelle passt (0–100 mit Breakdown)
+- **CV-Highlights** — welche Erfahrungen/Skills besonders relevant für die Stelle sind
+- **Anschreiben** — personalisierten Entwurf generieren (optional als Google Doc)
+- **Email-Entwürfe** — Bewerbungs-, Follow-up- oder Absage-Email vorformulieren
+- **Interview-Vorbereitung** — rollenspezifische Fragen, STAR-Beispiele, Chris-Voss-Fragen, Rückfragen
+- **Gehaltsverhandlung** — Markteinschätzung, Taktiken und Formulierungsvorschläge
+
+Unterstützte Provider:
 
 - **LM Studio** — lokal, kostenlos, läuft auf deinem Rechner
 - **Anthropic Claude** — cloud-basiert, kostenpflichtig, sehr gute Qualität
@@ -60,4 +70,5 @@ Kosten: ca. $0.01–0.05 pro Analyse (Claude Haiku)
 
 Ohne KI-Konfiguration:
 - Job-Import funktioniert, aber Firma/Rolle/Tags werden nicht automatisch extrahiert
-- Match-Score ist nicht verfügbar
+- Match-Score und alle KI-Coaching-Funktionen sind nicht verfügbar
+- Alle anderen Funktionen (Board, Dokumente, Kontakte, Google Drive) funktionieren normal

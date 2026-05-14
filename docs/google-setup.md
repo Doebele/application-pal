@@ -15,7 +15,7 @@ Beide Funktionen werden in einem einzigen OAuth-Consent-Dialog konfiguriert.
 3. Aktiviere die APIs:
    - **Google Drive API**
    - **Google Docs API**
-   - **Google+ API** (für Anmeldung mit Google)
+   - **Google Identity** (für Anmeldung mit Google — wird über den OAuth Consent Screen automatisch aktiviert)
 
 ## Schritt 2 — OAuth Consent Screen
 
@@ -28,8 +28,10 @@ Beide Funktionen werden in einem einzigen OAuth-Consent-Dialog konfiguriert.
    - `openid`
    - `email`
    - `profile`
-   - `https://www.googleapis.com/auth/drive.file`
+   - `https://www.googleapis.com/auth/drive`
    - `https://www.googleapis.com/auth/documents`
+
+   > ⚠️ **Wichtig**: Es muss `drive` (Vollzugriff) sein, **nicht** `drive.file`. Der eingeschränkte `drive.file`-Scope erlaubt nur Dateien, die die App selbst erstellt hat — Vorlagen aus dem Master-Ordner können damit nicht kopiert werden.
 5. Testnutzer hinzufügen: deine eigene Gmail-Adresse
 6. Speichern
 
@@ -55,7 +57,7 @@ GOOGLE_CLIENT_ID=647153348459-xxxxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-xxxxx
 GOOGLE_REDIRECT_URI=http://localhost:8070/api/google/callback
 GOOGLE_FRONTEND_URL=http://localhost:8070
-GOOGLE_SCOPES=openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/documents
+GOOGLE_SCOPES=openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents
 ```
 
 ## Schritt 5 — Container neu starten
@@ -65,3 +67,33 @@ docker compose up -d backend
 ```
 
 Danach in Application Pal: **Settings → Integrationen → Mit Google verbinden**.
+
+---
+
+## Optional: Vorlagen-Ordner (Master-Folder)
+
+Wenn du Dokument-Vorlagen (z.B. formatierten Lebenslauf, Anschreiben-Vorlage) in Drive hast, die beim Erstellen eines Bewerbungsordners automatisch zur Verfügung stehen sollen:
+
+1. Erstelle einen Ordner in Google Drive, z.B. „Bewerbungs-Vorlagen"
+2. Lege deine formatierten Google Docs darin ab
+3. Kopiere die Ordner-ID aus der URL: `drive.google.com/drive/folders/**ORDNER-ID**`
+4. Trage sie in `.env` ein:
+
+```env
+GOOGLE_MASTER_FOLDER_ID=deine-ordner-id-hier
+```
+
+Die Vorlagen erscheinen dann im Dokumente-Tab unter „Aus Bibliothek zuweisen" und können mit einem Klick in den jeweiligen Bewerbungsordner kopiert werden.
+
+---
+
+## Optional: Standard-Ablageordner
+
+Alle neu erstellten Bewerbungsordner werden standardmässig in „Meine Ablage" angelegt. Um einen anderen Zielordner zu verwenden:
+
+**Settings → Integrationen → Google Drive Ordner** → Ordner-ID eintragen oder über den Picker wählen.
+
+Alternativ in `.env`:
+```env
+GOOGLE_APPLICATIONS_FOLDER_ID=deine-ordner-id-hier
+```
