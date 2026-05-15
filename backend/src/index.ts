@@ -595,7 +595,7 @@ async function extractWithLmStudio(text: string, ai: AiConfig): Promise<LlmExtra
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(240_000)
+    signal: AbortSignal.timeout(480_000)
   });
 
   if (!res.ok) {
@@ -626,7 +626,7 @@ async function extractWithAnthropic(text: string, ai: AiConfig): Promise<LlmExtr
       system: EXTRACTION_PROMPT,
       messages: [{ role: "user", content: EXTRACTION_PROMPT_USER_PREFIX + text.slice(0, 6000) }]
     }),
-    signal: AbortSignal.timeout(240_000)
+    signal: AbortSignal.timeout(480_000)
   });
 
   if (!res.ok) {
@@ -799,7 +799,7 @@ async function extractKnowledgeBaseWithAnthropic(text: string, ai?: AiConfig): P
       system: KB_EXTRACTION_PROMPT,
       messages: [{ role: "user", content: `Extract from this source:\n\n${cleanJobText(text).slice(0, 8000)}` }]
     }),
-    signal: AbortSignal.timeout(240_000)
+    signal: AbortSignal.timeout(480_000)
   });
 
   if (!res.ok) {
@@ -1542,7 +1542,7 @@ app.post("/api/applications/:id/match-score", async (c) => {
           temperature: 0.1,
           max_tokens: 32768
         }),
-        signal: AbortSignal.timeout(240_000)
+        signal: AbortSignal.timeout(480_000)
       });
       if (!res.ok) throw new Error(`LM Studio error: ${res.status}`);
       const json = await res.json() as { choices?: { message?: { content?: string } }[] };
@@ -1558,7 +1558,7 @@ app.post("/api/applications/:id/match-score", async (c) => {
           system: MATCH_SCORE_SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMessage }]
         }),
-        signal: AbortSignal.timeout(240_000)
+        signal: AbortSignal.timeout(480_000)
       });
       if (!res.ok) throw new Error(`Anthropic error: ${res.status}`);
       const json = await res.json() as { content?: { type: string; text: string }[] };
@@ -1768,7 +1768,7 @@ async function callAi(system: string, user: string, ai: AiConfig): Promise<strin
         temperature: 0.15,
         max_tokens: 32768
       }),
-      signal: AbortSignal.timeout(240_000)
+      signal: AbortSignal.timeout(480_000)
     });
     if (!res.ok) throw new Error(`LM Studio error: ${res.status}`);
     const json = await res.json() as { choices?: { message?: { content?: string } }[] };
