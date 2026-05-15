@@ -2175,8 +2175,10 @@ app.get("/api/google/status", async (c) => {
   const tokens = await db.select().from(googleOAuthTokens).limit(1);
   if (tokens.length === 0) return c.json({ connected: false });
   const token = tokens[0];
+  // Connected as long as we have a refresh token (can always renew) OR a non-expired access token
+  const hasRefreshToken = !!token.refreshToken;
   const expired = token.expiresAt ? new Date(token.expiresAt) < new Date() : false;
-  return c.json({ connected: !expired, expiresAt: token.expiresAt });
+  return c.json({ connected: hasRefreshToken || !expired, expiresAt: token.expiresAt });
 });
 
 app.post("/api/google/docs/create", async (c) => {
@@ -2211,7 +2213,42 @@ function applyNameRule(rule: string, vars: Record<string, string>): string {
 
 async function getDriveAccessToken(): Promise<string | null> {
   const [token] = await db.select().from(googleOAuthTokens).limit(1);
-  return token?.accessToken ?? null;
+  if (!token) return null;
+
+  // Auto-refresh if expired or expiring within 5 minutes
+  const needsRefresh = token.expiresAt
+    ? new Date(token.expiresAt).getTime() - Date.now() < 5 * 60 * 1000
+    : false;
+
+  if (needsRefresh && token.refreshToken) {
+    try {
+      const res = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          client_id: GOOGLE_CLIENT_ID,
+          client_secret: GOOGLE_CLIENT_SECRET,
+          refresh_token: token.refreshToken,
+          grant_type: "refresh_token",
+        }),
+      });
+      const data = await res.json() as { access_token?: string; expires_in?: number; error?: string };
+      if (data.access_token) {
+        const expiresAt = data.expires_in
+          ? new Date(Date.now() + data.expires_in * 1000)
+          : new Date(Date.now() + 3600 * 1000);
+        await db.update(googleOAuthTokens).set({
+          accessToken: data.access_token,
+          expiresAt,
+        });
+        return data.access_token;
+      }
+    } catch {
+      // fall through — return existing token and let caller handle 401
+    }
+  }
+
+  return token.accessToken;
 }
 
 // Create/get Drive folder for an application
