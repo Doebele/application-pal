@@ -6,7 +6,7 @@ import {
   BrainElectricity, PageEdit, SendMail, Coins,
   Calendar as IcCalendar, CalendarArrowDown,
   Copy as IcCopy, MailOut, Brain,
-  MapPin, VideoCamera,
+  MapPin, VideoCamera, Expand, Collapse,
 } from "iconoir-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import type {
@@ -1580,8 +1580,9 @@ type InterviewDetails = {
 const VIDEO_PROVIDERS = ["Zoom", "Microsoft Teams", "Google Meet", "Webex", "Andere"];
 const DURATIONS = [30, 45, 60, 90, 120];
 
-function InterviewDetailsPanel({ app, round, onSave }: {
+function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }: {
   app: Application; round: 1 | 2; onSave: (patch: Partial<Application>) => void;
+  expanded?: boolean; onToggleExpand?: () => void;
 }) {
   const field = round === 1 ? "interview1Details" : "interview2Details";
   const raw = round === 1 ? app.interview1Details : app.interview2Details;
@@ -1617,9 +1618,16 @@ function InterviewDetailsPanel({ app, round, onSave }: {
   );
 
   return (
-    <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
-        Interview {round} — Termin
+    <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16, ...(expanded ? { flex: 1, overflow: "auto" } : {}) }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Interview {round} — Termin
+        </div>
+        {onToggleExpand && (
+          <button onClick={onToggleExpand} title={expanded ? "Minimieren" : "Maximieren"} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
+            {expanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
+          </button>
+        )}
       </div>
 
       {/* Date / Time / Duration row */}
@@ -1733,6 +1741,17 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
   });
   const [aiSalaryTips,    setAiSalaryTips]    = useState<SalaryTips | null>(null);
 
+  // Expand-Logik for the three content blocks
+  const [interviewExpanded, setInterviewExpanded] = useState(false);
+  const [aiExpanded,        setAiExpanded]        = useState(false);
+  const [activitiesExpanded,setActivitiesExpanded]= useState(false);
+
+  const expandStyle: React.CSSProperties = {
+    position: "absolute", top: 57, left: 0, right: 0, bottom: 0,
+    zIndex: 10, background: "var(--bg)", padding: "16px 20px",
+    display: "flex", flexDirection: "column", overflow: "hidden",
+  };
+
   const add = async () => {
     if (!newTitle.trim()) return;
     await api.post(`/api/applications/${app.id}/activities`, { type: newType, title: newTitle.trim(), description: newDesc.trim() || undefined });
@@ -1756,118 +1775,141 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
         />
       </div>
 
-      {/* AI-generated content — full width, before interview panel */}
-      {aiCvHighlights && (
-        <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-          <Accordion title="Besonders relevant" count={aiCvHighlights.highlights.length} color="#34d399">
-            {aiCvHighlights.highlights.map((h, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0", borderBottom: i < aiCvHighlights.highlights.length - 1 ? "1px solid var(--border)" : "none" }}>✓ {h}</div>)}
-          </Accordion>
-          <Accordion title="Keywords Match" count={aiCvHighlights.keywords.length} color="#60a5fa">
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-              {aiCvHighlights.keywords.map((k, i) => <span key={i} className="tag" style={{ background: "rgba(96,165,250,0.1)", color: "#60a5fa", borderColor: "rgba(96,165,250,0.3)" }}>{k}</span>)}
-            </div>
-          </Accordion>
-          <Accordion title="Lücken" count={aiCvHighlights.gaps.length} color="#f87171">
-            {aiCvHighlights.gaps.map((g, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-2)", padding: "3px 0" }}>⚠ {g}</div>)}
-          </Accordion>
+      {/* 1. Prozess-spezifische Inhalte (Interview-Termin) */}
+      {(app.stage === "interview_1" || app.stage === "interview_2") && onSave && (
+        <div style={interviewExpanded ? expandStyle : {}}>
+          <InterviewDetailsPanel
+            app={app}
+            round={app.stage === "interview_1" ? 1 : 2}
+            onSave={onSave}
+            expanded={interviewExpanded}
+            onToggleExpand={() => setInterviewExpanded(v => !v)}
+          />
         </div>
       )}
 
-      {aiInterviewPrep && (
-        <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-          <Accordion title="Rollenspezifische Fragen" count={aiInterviewPrep.rollenFragen.length} color="#a78bfa"
-            onCopy={() => copyText(aiInterviewPrep.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"))}>
-            {aiInterviewPrep.rollenFragen.map((q, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < aiInterviewPrep.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
-                <span style={{ color: "var(--fg-3)", flexShrink: 0 }}>{i + 1}.</span>
-                <span style={{ flex: 1 }}>{q}</span>
-                <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
-                  onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                  <IcCopy width={10} height={10} />
-                </button>
-              </div>
-            ))}
-          </Accordion>
-          <Accordion title='Chris Voss "What / How"-Fragen' count={aiInterviewPrep.vossFragenWhatHow.length} color="#34d399"
-            onCopy={() => copyText(aiInterviewPrep.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"))}>
-            <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>
-            {aiInterviewPrep.vossFragenWhatHow.map((q, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < aiInterviewPrep.vossFragenWhatHow.length - 1 ? "1px solid var(--border)" : "none" }}>
-                <span style={{ color: "#34d399", flexShrink: 0 }}>→</span>
-                <span style={{ flex: 1 }}>{q}</span>
-                <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
-                  onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                  <IcCopy width={10} height={10} />
-                </button>
-              </div>
-            ))}
-          </Accordion>
-          <Accordion title="STAR-Beispiele" count={aiInterviewPrep.starBeispiele.length} color="#fbbf24"
-            onCopy={() => copyText(aiInterviewPrep.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"))}>
-            {aiInterviewPrep.starBeispiele.map((s, i) => (
-              <div key={i} style={{ position: "relative", marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
-                <button onClick={() => copyText(`${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`)} title="Kopieren"
-                  style={{ position: "absolute", top: 8, right: 8, background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
-                  onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                  <IcCopy width={11} height={11} />
-                </button>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 6, paddingRight: 20 }}>❓ {s.frage}</div>
-                {[["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]].map(([k, v]) => (
-                  <div key={k} style={{ fontSize: 11, color: "var(--fg-2)", padding: "2px 0" }}>
-                    <span style={{ fontWeight: 700, color: "#fbbf24", marginRight: 6 }}>{k}:</span>{v}
+      {/* 2. KI-generierte Inhalte */}
+      {(aiCvHighlights || aiInterviewPrep || aiSalaryTips) && (
+        <div style={aiExpanded ? expandStyle : {}}>
+          {/* Header with expand toggle */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>KI-Inhalte</div>
+            <button onClick={() => setAiExpanded(v => !v)} title={aiExpanded ? "Minimieren" : "Maximieren"}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
+              {aiExpanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
+            </button>
+          </div>
+          <div style={aiExpanded ? { flex: 1, overflow: "auto" } : {}}>
+            {aiCvHighlights && (
+              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+                <Accordion title="Besonders relevant" count={aiCvHighlights.highlights.length} color="#34d399">
+                  {aiCvHighlights.highlights.map((h, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0", borderBottom: i < aiCvHighlights.highlights.length - 1 ? "1px solid var(--border)" : "none" }}>✓ {h}</div>)}
+                </Accordion>
+                <Accordion title="Keywords Match" count={aiCvHighlights.keywords.length} color="#60a5fa">
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {aiCvHighlights.keywords.map((k, i) => <span key={i} className="tag" style={{ background: "rgba(96,165,250,0.1)", color: "#60a5fa", borderColor: "rgba(96,165,250,0.3)" }}>{k}</span>)}
                   </div>
-                ))}
+                </Accordion>
+                <Accordion title="Lücken" count={aiCvHighlights.gaps.length} color="#f87171">
+                  {aiCvHighlights.gaps.map((g, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-2)", padding: "3px 0" }}>⚠ {g}</div>)}
+                </Accordion>
               </div>
-            ))}
-          </Accordion>
-          <Accordion title="Meine Rückfragen" count={aiInterviewPrep.rueckfragen.length} color="#60a5fa"
-            onCopy={() => copyText(aiInterviewPrep.rueckfragen.map(q => `? ${q}`).join("\n"))}>
-            {aiInterviewPrep.rueckfragen.map((q, i) => (
-              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < aiInterviewPrep.rueckfragen.length - 1 ? "1px solid var(--border)" : "none" }}>
-                <span style={{ color: "#60a5fa", flexShrink: 0 }}>?</span>
-                <span style={{ flex: 1 }}>{q}</span>
-                <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
-                  onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                  <IcCopy width={10} height={10} />
-                </button>
+            )}
+            {aiInterviewPrep && (
+              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+                <Accordion title="Rollenspezifische Fragen" count={aiInterviewPrep.rollenFragen.length} color="#a78bfa"
+                  onCopy={() => copyText(aiInterviewPrep.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"))}>
+                  {aiInterviewPrep.rollenFragen.map((q, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < aiInterviewPrep.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
+                      <span style={{ color: "var(--fg-3)", flexShrink: 0 }}>{i + 1}.</span>
+                      <span style={{ flex: 1 }}>{q}</span>
+                      <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+                        <IcCopy width={10} height={10} />
+                      </button>
+                    </div>
+                  ))}
+                </Accordion>
+                <Accordion title='Chris Voss "What / How"-Fragen' count={aiInterviewPrep.vossFragenWhatHow.length} color="#34d399"
+                  onCopy={() => copyText(aiInterviewPrep.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"))}>
+                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>
+                  {aiInterviewPrep.vossFragenWhatHow.map((q, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < aiInterviewPrep.vossFragenWhatHow.length - 1 ? "1px solid var(--border)" : "none" }}>
+                      <span style={{ color: "#34d399", flexShrink: 0 }}>→</span>
+                      <span style={{ flex: 1 }}>{q}</span>
+                      <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+                        <IcCopy width={10} height={10} />
+                      </button>
+                    </div>
+                  ))}
+                </Accordion>
+                <Accordion title="STAR-Beispiele" count={aiInterviewPrep.starBeispiele.length} color="#fbbf24"
+                  onCopy={() => copyText(aiInterviewPrep.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"))}>
+                  {aiInterviewPrep.starBeispiele.map((s, i) => (
+                    <div key={i} style={{ position: "relative", marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
+                      <button onClick={() => copyText(`${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`)} title="Kopieren"
+                        style={{ position: "absolute", top: 8, right: 8, background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+                        <IcCopy width={11} height={11} />
+                      </button>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 6, paddingRight: 20 }}>❓ {s.frage}</div>
+                      {[["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]].map(([k, v]) => (
+                        <div key={k} style={{ fontSize: 11, color: "var(--fg-2)", padding: "2px 0" }}>
+                          <span style={{ fontWeight: 700, color: "#fbbf24", marginRight: 6 }}>{k}:</span>{v}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </Accordion>
+                <Accordion title="Meine Rückfragen" count={aiInterviewPrep.rueckfragen.length} color="#60a5fa"
+                  onCopy={() => copyText(aiInterviewPrep.rueckfragen.map(q => `? ${q}`).join("\n"))}>
+                  {aiInterviewPrep.rueckfragen.map((q, i) => (
+                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < aiInterviewPrep.rueckfragen.length - 1 ? "1px solid var(--border)" : "none" }}>
+                      <span style={{ color: "#60a5fa", flexShrink: 0 }}>?</span>
+                      <span style={{ flex: 1 }}>{q}</span>
+                      <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+                        <IcCopy width={10} height={10} />
+                      </button>
+                    </div>
+                  ))}
+                </Accordion>
               </div>
-            ))}
-          </Accordion>
-        </div>
-      )}
-
-      {aiSalaryTips && (
-        <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "var(--fg-2)", marginBottom: 10, lineHeight: 1.6 }}>{aiSalaryTips["markteinschätzung"]}</div>
-          <Accordion title="Taktiken" count={aiSalaryTips.taktiken.length} color="#34d399">
-            {aiSalaryTips.taktiken.map((t, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>• {t}</div>)}
-          </Accordion>
-          <Accordion title="Formulierungen" count={aiSalaryTips.formulierungen.length} color="#60a5fa">
-            {aiSalaryTips.formulierungen.map((f, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "4px 0", fontStyle: "italic", borderBottom: i < aiSalaryTips.formulierungen.length - 1 ? "1px solid var(--border)" : "none" }}>„{f}"</div>)}
-          </Accordion>
-          <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.2)" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "#34d399", marginBottom: 4 }}>Chris Voss Anker-Taktik</div>
-            <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6 }}>{aiSalaryTips.vossAnker}</div>
+            )}
+            {aiSalaryTips && (
+              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+                <div style={{ fontSize: 11, color: "var(--fg-2)", marginBottom: 10, lineHeight: 1.6 }}>{aiSalaryTips["markteinschätzung"]}</div>
+                <Accordion title="Taktiken" count={aiSalaryTips.taktiken.length} color="#34d399">
+                  {aiSalaryTips.taktiken.map((t, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>• {t}</div>)}
+                </Accordion>
+                <Accordion title="Formulierungen" count={aiSalaryTips.formulierungen.length} color="#60a5fa">
+                  {aiSalaryTips.formulierungen.map((f, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "4px 0", fontStyle: "italic", borderBottom: i < aiSalaryTips.formulierungen.length - 1 ? "1px solid var(--border)" : "none" }}>„{f}"</div>)}
+                </Accordion>
+                <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.2)" }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: "#34d399", marginBottom: 4 }}>Chris Voss Anker-Taktik</div>
+                  <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6 }}>{aiSalaryTips.vossAnker}</div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Interview Details Panel — full width below columns */}
-      {(app.stage === "interview_1" || app.stage === "interview_2") && onSave && (
-        <InterviewDetailsPanel
-          app={app}
-          round={app.stage === "interview_1" ? 1 : 2}
-          onSave={onSave}
-        />
-      )}
-
-      {/* Activity Timeline */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Aktivitäten</div>
-        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} onClick={() => setAdding((v) => !v)}>
-          <Plus width={11} height={11} /> Aktivität
-        </button>
-      </div>
+      {/* 3. Aktivitäten */}
+      <div style={activitiesExpanded ? expandStyle : {}}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Aktivitäten</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <button className="btn btn-secondary" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} onClick={() => setAdding((v) => !v)}>
+              <Plus width={11} height={11} /> Aktivität
+            </button>
+            <button onClick={() => setActivitiesExpanded(v => !v)} title={activitiesExpanded ? "Minimieren" : "Maximieren"}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 4 }}>
+              {activitiesExpanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
+            </button>
+          </div>
+        </div>
 
       {adding && (
         <div style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", marginBottom: 14, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -1921,6 +1963,7 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
           </div>
         ))}
       </div>
+      </div>  {/* end activitiesExpanded wrapper */}
     </>
   );
 }
