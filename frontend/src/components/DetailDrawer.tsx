@@ -1189,9 +1189,80 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
     setToast({ msg, type });
     toastTimer.current = setTimeout(() => setToast(null), 2800);
   };
-  const copyText = async (text: string, label = "Kopiert") => {
+  const copySection = async (text: string, label = "Kopiert") => {
     try { await copyText(text); showToast(label); }
     catch { showToast("Kopieren fehlgeschlagen", "error"); }
+  };
+
+  // Calendar / iCal (interview stages)
+  const ivRound = stage === "interview_1" ? 1 : 2;
+  const ivRaw   = stage === "interview_1" ? app.interview1Details : app.interview2Details;
+  const ivDetails: InterviewDetails = (() => { try { return ivRaw ? JSON.parse(ivRaw) : {}; } catch { return {}; } })();
+  const { data: calProfile } = useQuery<{ googleCalendarId?: string | null }>({
+    queryKey: ["profile"],
+    queryFn: () => api.get("/api/profile").then(r => r.data),
+    enabled: stage === "interview_1" || stage === "interview_2",
+  });
+  const openGoogleCalendar = () => {
+    if (!ivDetails.date || !ivDetails.time) { showToast("Bitte zuerst Termin erfassen", "error"); return; }
+    const timeStr = ivDetails.time.replace(":", "");
+    const start   = ivDetails.date.replace(/-/g, "") + "T" + timeStr + "00";
+    const endDt   = new Date(`${ivDetails.date}T${ivDetails.time}:00`);
+    endDt.setMinutes(endDt.getMinutes() + (ivDetails.duration ?? 60));
+    const end = endDt.getFullYear().toString() + String(endDt.getMonth()+1).padStart(2,"0") +
+      String(endDt.getDate()).padStart(2,"0") + "T" +
+      String(endDt.getHours()).padStart(2,"0") + String(endDt.getMinutes()).padStart(2,"0") + "00";
+    const loc = ivDetails.format === "onsite" ? (ivDetails.location ?? "") : (ivDetails.videoUrl ?? "");
+    const desc = [
+      `Interview Runde ${ivRound}: ${app.role} @ ${app.company}`,
+      ivDetails.format === "video" && ivDetails.videoProvider ? `Anbieter: ${ivDetails.videoProvider}` : "",
+      ivDetails.format === "video" && ivDetails.videoCode ? `Meeting-Code: ${ivDetails.videoCode}` : "",
+      ivDetails.interviewer ? `Gesprächspartner: ${ivDetails.interviewer}` : "",
+      ivDetails.notes ? `Notizen: ${ivDetails.notes}` : "",
+      (app.portalUrl ?? app.url) ? `Link: ${app.portalUrl ?? app.url}` : "",
+    ].filter(Boolean).join("\n");
+    const url = new URL("https://calendar.google.com/calendar/r/eventedit");
+    url.searchParams.set("text", `Interview ${ivRound}: ${app.role} @ ${app.company}`);
+    url.searchParams.set("dates", `${start}/${end}`);
+    if (loc) url.searchParams.set("location", loc);
+    url.searchParams.set("details", desc);
+    if (calProfile?.googleCalendarId) url.searchParams.set("calid", calProfile.googleCalendarId);
+    window.open(url.toString(), "_blank");
+    showToast("In Google Kalender geöffnet");
+  };
+  const downloadIcal = () => {
+    if (!ivDetails.date || !ivDetails.time) { showToast("Bitte zuerst Termin erfassen", "error"); return; }
+    const timeStr = ivDetails.time.replace(":", "");
+    const dtStart = ivDetails.date.replace(/-/g, "") + "T" + timeStr + "00";
+    const endDt   = new Date(`${ivDetails.date}T${ivDetails.time}:00`);
+    endDt.setMinutes(endDt.getMinutes() + (ivDetails.duration ?? 60));
+    const dtEnd = endDt.getFullYear().toString() + String(endDt.getMonth()+1).padStart(2,"0") +
+      String(endDt.getDate()).padStart(2,"0") + "T" +
+      String(endDt.getHours()).padStart(2,"0") + String(endDt.getMinutes()).padStart(2,"0") + "00";
+    const loc  = ivDetails.format === "onsite" ? (ivDetails.location ?? "") : (ivDetails.videoUrl ?? "");
+    const desc = [
+      `Interview Runde ${ivRound}`,
+      ivDetails.videoProvider ? `Anbieter: ${ivDetails.videoProvider}` : "",
+      ivDetails.videoCode     ? `Meeting-Code: ${ivDetails.videoCode}` : "",
+      ivDetails.interviewer   ? `Gesprächspartner: ${ivDetails.interviewer}` : "",
+      ivDetails.notes         ? `Notizen: ${ivDetails.notes}` : "",
+    ].filter(Boolean).join("\\n");
+    const lines = [
+      "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//Application Pal//Interview//DE",
+      "BEGIN:VEVENT",
+      `DTSTART:${dtStart}`, `DTEND:${dtEnd}`,
+      `SUMMARY:Interview ${ivRound}: ${app.role} @ ${app.company}`,
+      loc ? `LOCATION:${loc}` : "",
+      `DESCRIPTION:${desc}`,
+      `UID:interview-${app.id}-${ivRound}@application-pal`,
+      "END:VEVENT","END:VCALENDAR",
+    ].filter(Boolean).join("\r\n");
+    const blob = new Blob([lines], { type: "text/calendar;charset=utf-8" });
+    const a    = document.createElement("a");
+    a.href     = URL.createObjectURL(blob);
+    a.download = `interview-${app.company.replace(/[^a-z0-9]/gi, "-")}-runde${ivRound}.ics`;
+    a.click(); URL.revokeObjectURL(a.href);
+    showToast("iCal heruntergeladen");
   };
 
   const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
@@ -1257,7 +1328,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
-        KI-Aktionen
+        Aktionen
       </div>
 
       {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>{err}</div>}
@@ -1322,7 +1393,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
                     `\n${sep}\nMEINE RÜCKFRAGEN\n${sep}`,
                     interviewPrep.rueckfragen.map(q => `? ${q}`).join("\n"),
                   ].join("\n");
-                  copyText(text, "Alle Fragen kopiert");
+                  copySection(text, "Alle Fragen kopiert");
                 }}>
                 <Copy size={11} /> Alles kopieren
               </button>
@@ -1355,7 +1426,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
               {/* Rollenspezifische Fragen */}
               <Accordion
                 title="Rollenspezifische Fragen" count={interviewPrep.rollenFragen.length} color="#a78bfa"
-                onCopy={() => copyText(interviewPrep.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"), "Fragen kopiert")}
+                onCopy={() => copySection(interviewPrep.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"), "Fragen kopiert")}
               >
                 {interviewPrep.rollenFragen.map((q, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
@@ -1372,7 +1443,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
               {/* Chris Voss */}
               <Accordion
                 title='🤝 Chris Voss "What / How"-Fragen' count={interviewPrep.vossFragenWhatHow.length} color="#34d399"
-                onCopy={() => copyText(interviewPrep.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"), "Voss-Fragen kopiert")}
+                onCopy={() => copySection(interviewPrep.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"), "Voss-Fragen kopiert")}
               >
                 <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>
                 {interviewPrep.vossFragenWhatHow.map((q, i) => (
@@ -1390,7 +1461,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
               {/* STAR */}
               <Accordion
                 title="STAR-Beispiele" count={interviewPrep.starBeispiele.length} color="#fbbf24"
-                onCopy={() => copyText(
+                onCopy={() => copySection(
                   interviewPrep.starBeispiele.map(s =>
                     `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`
                   ).join("\n\n"), "STAR-Beispiele kopiert"
@@ -1416,7 +1487,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
               {/* Rückfragen */}
               <Accordion
                 title="Meine Rückfragen" count={interviewPrep.rueckfragen.length} color="#60a5fa"
-                onCopy={() => copyText(interviewPrep.rueckfragen.map(q => `? ${q}`).join("\n"), "Rückfragen kopiert")}
+                onCopy={() => copySection(interviewPrep.rueckfragen.map(q => `? ${q}`).join("\n"), "Rückfragen kopiert")}
               >
                 {interviewPrep.rueckfragen.map((q, i) => (
                   <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.rueckfragen.length - 1 ? "1px solid var(--border)" : "none" }}>
@@ -1432,6 +1503,15 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
 
             </div>
           )}
+        {/* Calendar actions — always shown for interview stages */}
+        <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+          <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5, justifyContent: "flex-start" }} onClick={openGoogleCalendar}>
+            <span>📅</span> Google Kalender
+          </button>
+          <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5, justifyContent: "flex-start" }} onClick={downloadIcal}>
+            <span>⬇</span> iCal herunterladen
+          </button>
+        </div>
         </div>
       )}
 
@@ -1618,89 +1698,10 @@ function InterviewDetailsPanel({ app, round, onSave }: {
     }
   }, [raw]);
 
-  const { data: profile } = useQuery<{ googleCalendarId?: string | null }>({
-    queryKey: ["profile"],
-    queryFn: () => api.get("/api/profile").then((r) => r.data)
-  });
-
-  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const showToast = (msg: string, type: "success" | "error" = "success") => {
-    if (toastTimer.current) clearTimeout(toastTimer.current);
-    setToast({ msg, type });
-    toastTimer.current = setTimeout(() => setToast(null), 2800);
-  };
-
   const save = (patch: Partial<InterviewDetails>) => {
     const updated = { ...details, ...patch };
     setDetails(updated);
     onSave({ [field]: JSON.stringify(updated) } as Partial<Application>);
-  };
-
-  const openGoogleCalendar = () => {
-    if (!details.date || !details.time) { showToast("Bitte zuerst Datum und Uhrzeit eingeben", "error"); return; }
-    const timeStr = details.time.replace(":", "");
-    const start = details.date.replace(/-/g, "") + "T" + timeStr + "00";
-    const startDt = new Date(`${details.date}T${details.time}:00`);
-    startDt.setMinutes(startDt.getMinutes() + (details.duration ?? 60));
-    const end = startDt.toISOString().replace(/[-:.]/g, "").slice(0, 15);
-    const loc = details.format === "onsite" ? (details.location ?? "") : (details.videoUrl ?? "");
-    const descParts = [
-      `Interview Runde ${round}: ${app.role} @ ${app.company}`,
-      details.format === "video" && details.videoProvider ? `Anbieter: ${details.videoProvider}` : "",
-      details.format === "video" && details.videoCode ? `Meeting-Code: ${details.videoCode}` : "",
-      details.interviewer ? `Gesprächspartner: ${details.interviewer}` : "",
-      details.notes ? `Notizen: ${details.notes}` : "",
-      (app.portalUrl ?? app.url) ? `Link: ${app.portalUrl ?? app.url}` : "",
-    ].filter(Boolean).join("\n");
-    const url = new URL("https://calendar.google.com/calendar/r/eventedit");
-    url.searchParams.set("text", `Interview ${round}: ${app.role} @ ${app.company}`);
-    url.searchParams.set("dates", `${start}/${end}`);
-    if (loc) url.searchParams.set("location", loc);
-    url.searchParams.set("details", descParts);
-    if (profile?.googleCalendarId) url.searchParams.set("calid", profile.googleCalendarId);
-    window.open(url.toString(), "_blank");
-    showToast("In Google Kalender geöffnet");
-  };
-
-  const downloadIcal = () => {
-    if (!details.date || !details.time) { showToast("Bitte zuerst Datum und Uhrzeit eingeben", "error"); return; }
-    const timeStr = details.time.replace(":", "");
-    const dtStart = details.date.replace(/-/g, "") + "T" + timeStr + "00";
-    const endDt = new Date(`${details.date}T${details.time}:00`);
-    endDt.setMinutes(endDt.getMinutes() + (details.duration ?? 60));
-    const dtEnd = endDt.getFullYear().toString() +
-      String(endDt.getMonth() + 1).padStart(2, "0") +
-      String(endDt.getDate()).padStart(2, "0") + "T" +
-      String(endDt.getHours()).padStart(2, "0") +
-      String(endDt.getMinutes()).padStart(2, "0") + "00";
-    const loc = details.format === "onsite" ? (details.location ?? "") : (details.videoUrl ?? "");
-    const desc = [
-      `Interview Runde ${round}`,
-      details.format === "video" && details.videoProvider ? `Anbieter: ${details.videoProvider}` : "",
-      details.format === "video" && details.videoCode ? `Meeting-Code: ${details.videoCode}` : "",
-      details.interviewer ? `Gesprächspartner: ${details.interviewer}` : "",
-      details.notes ? `Notizen: ${details.notes}` : "",
-      (app.portalUrl ?? app.url) ? `Portal: ${app.portalUrl ?? app.url}` : "",
-    ].filter(Boolean).join("\\n");
-    const lines = [
-      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Application Pal//Interview//DE",
-      "BEGIN:VEVENT",
-      `DTSTART:${dtStart}`,
-      `DTEND:${dtEnd}`,
-      `SUMMARY:Interview ${round}: ${app.role} @ ${app.company}`,
-      loc ? `LOCATION:${loc}` : "",
-      `DESCRIPTION:${desc}`,
-      `UID:interview-${app.id}-${round}@application-pal`,
-      "END:VEVENT", "END:VCALENDAR"
-    ].filter(Boolean).join("\r\n");
-    const blob = new Blob([lines], { type: "text/calendar;charset=utf-8" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `interview-${app.company.replace(/[^a-z0-9]/gi, "-")}-runde${round}.ics`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    showToast("iCal heruntergeladen");
   };
 
   const inp: React.CSSProperties = { background: "none", border: "none", borderBottom: "1px solid var(--border)", padding: "3px 0", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", width: "100%", outline: "none" };
@@ -1808,32 +1809,6 @@ function InterviewDetailsPanel({ app, round, onSave }: {
           onBlur={e => save({ notes: e.target.value || undefined })} />
       </div>
 
-      {/* Actions */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>
-        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={openGoogleCalendar}>
-          <span>📅</span> Google Kalender
-        </button>
-        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={downloadIcal}>
-          <span>⬇</span> iCal herunterladen
-        </button>
-      </div>
-
-      {/* Toast */}
-      {toast && (
-        <div style={{
-          marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6,
-          padding: "7px 12px", borderRadius: 8,
-          background: toast.type === "success" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
-          border: `1px solid ${toast.type === "success" ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
-          fontSize: 11, color: toast.type === "success" ? "#4ade80" : "#f87171", pointerEvents: "none",
-          animation: "fade-in 0.15s ease"
-        }}>
-          {toast.type === "success"
-            ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>}
-          {toast.msg}
-        </div>
-      )}
     </div>
   );
 }
@@ -1860,10 +1835,13 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
 
   return (
     <>
-      {/* Stage Tasks Checklist — always first */}
-      <TaskChecklist app={app} />
+      {/* Two-column: Aufgaben (left) | Aktionen (right) */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start", marginBottom: 4 }}>
+        <TaskChecklist app={app} />
+        <StageAiActions app={app} onSave={onSave} />
+      </div>
 
-      {/* Interview Details Panel */}
+      {/* Interview Details Panel — full width below columns */}
       {(app.stage === "interview_1" || app.stage === "interview_2") && onSave && (
         <InterviewDetailsPanel
           app={app}
@@ -1871,9 +1849,6 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
           onSave={onSave}
         />
       )}
-
-      {/* Stage AI Actions */}
-      <StageAiActions app={app} onSave={onSave} />
 
       {/* Activity Timeline */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
