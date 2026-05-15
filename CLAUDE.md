@@ -22,9 +22,12 @@ npm run dev --workspace frontend
 npm run dev --workspace backend
 
 # Rebuild Docker after source changes — always required, containers do NOT hot-reload
+# MUST run from project root (not a worktree) — build context '.' must point at the monorepo
 cd /Users/clausmedvesek/Developer/projects/application-pal
-docker compose build frontend && docker compose up -d frontend
-docker compose build backend  && docker compose up -d backend
+docker build -t application-pal-frontend -f frontend/Dockerfile . && \
+  docker compose -f docker-compose.yml --env-file .env up -d frontend
+docker build -t application-pal-backend  -f backend/Dockerfile  . && \
+  docker compose -f docker-compose.yml --env-file .env up -d backend
 
 # Apply DB migration manually to running container
 docker exec application-pal-db psql -U postgres -d application_pal -c "ALTER TABLE ..."
@@ -48,7 +51,9 @@ docker exec application-pal-db psql -U postgres -d application_pal -c "ALTER TAB
 
 **axios withCredentials**: `frontend/src/lib/api.ts` sets `withCredentials: true`. This is required for the httpOnly auth cookies to be sent with every API request. Never remove this.
 
-**Docker working directory**: Always `cd /Users/clausmedvesek/Developer/projects/application-pal` before `docker compose` commands — the CWD persists between Bash tool calls and may drift to a worktree.
+**Docker working directory**: Always `cd /Users/clausmedvesek/Developer/projects/application-pal` before any Docker command. The CWD persists between Bash calls and may drift to a worktree. Building from a worktree compiles the wrong source — the running container will serve stale code with no error. Use `docker build -t ... -f .../Dockerfile .` (explicit tag + Dockerfile path) instead of `docker compose build` to avoid silent wrong-context builds.
+
+**After Docker rebuild, verify content**: Run `docker exec application-pal-frontend grep -r "SomeNewString" /usr/share/nginx/html/assets/` to confirm the newly written code is actually in the bundle.
 
 ## Architecture
 
