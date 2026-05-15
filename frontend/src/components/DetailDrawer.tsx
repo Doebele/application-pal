@@ -168,44 +168,44 @@ function AgentStep({ done, active, label, meta }: { done: boolean; active: boole
 
 // ─── Stage Progress Bar ───────────────────────────────────────
 function StageProgressBar({ stage }: { stage: string }) {
-  const activeIdx = STAGES.findIndex((s) => s.id === stage);
-  const STAGE_COLORS: Record<string, string> = {
-    import_validating: "#94a3b8", preparing_cv: "#60a5fa", preparing_letter: "#22d3ee",
-    application_sent: "#a78bfa", pending: "#fbbf24", interview_1: "#34d399",
-    interview_2: "#10b981", rejected: "#f87171", accepted: "#84cc16"
-  };
+  const activeIdx  = STAGES.findIndex((s) => s.id === stage);
+  const PAST_COLOR = "var(--fg-3)";   // muted for all completed steps
+  const FUTURE_BG  = "var(--border)"; // dimmed for upcoming steps
+
   return (
     <div style={{ padding: "12px 0 8px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 0, position: "relative" }}>
         {STAGES.map((s, i) => {
           const isPast   = i < activeIdx;
           const isActive = i === activeIdx;
-          const isFuture = i > activeIdx;
-          const color = STAGE_COLORS[s.id];
+          const dotColor = isActive ? "var(--accent)" : isPast ? PAST_COLOR : FUTURE_BG;
+          const lineColor = (idx: number) => idx < activeIdx ? PAST_COLOR : FUTURE_BG;
           return (
             <div key={s.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
               <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
                 {i > 0 && (
-                  <div style={{ flex: 1, height: 2, background: isPast || isActive ? color : "var(--border)", transition: "background 0.2s" }} />
+                  <div style={{ flex: 1, height: 2, background: lineColor(i), transition: "background 0.2s" }} />
                 )}
                 <div style={{
-                  width: isActive ? 14 : 10, height: isActive ? 14 : 10, borderRadius: "50%",
-                  background: isPast || isActive ? color : "var(--border-2)",
-                  border: isActive ? `2px solid ${color}` : "none",
-                  boxShadow: isActive ? `0 0 0 3px ${color}28` : "none",
+                  width: isActive ? 13 : 9, height: isActive ? 13 : 9, borderRadius: "50%",
+                  background: dotColor,
+                  border: isActive ? "2px solid var(--accent)" : "none",
+                  boxShadow: isActive ? "0 0 0 3px var(--accent-15)" : "none",
                   flexShrink: 0, transition: "all 0.2s",
-                  display: "flex", alignItems: "center", justifyContent: "center"
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  opacity: isPast ? 0.55 : 1,
                 }}>
-                  {isPast && <Check size={6} color="#fff" />}
+                  {isPast && <Check size={5} color="var(--bg)" strokeWidth={3} />}
                 </div>
                 {i < STAGES.length - 1 && (
-                  <div style={{ flex: 1, height: 2, background: isPast ? color : "var(--border)", transition: "background 0.2s" }} />
+                  <div style={{ flex: 1, height: 2, background: lineColor(i + 1), transition: "background 0.2s" }} />
                 )}
               </div>
               <div style={{
                 fontSize: 9, fontWeight: isActive ? 700 : 500,
-                color: isActive ? color : isFuture ? "var(--fg-3)" : "var(--fg-3)",
-                whiteSpace: "nowrap", textAlign: "center"
+                color: isActive ? "var(--accent)" : "var(--fg-3)",
+                whiteSpace: "nowrap", textAlign: "center",
+                opacity: isPast ? 0.55 : 1,
               }}>
                 {s.short}
               </div>
