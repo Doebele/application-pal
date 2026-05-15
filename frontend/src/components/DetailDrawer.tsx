@@ -4,6 +4,11 @@ import {
   ChevronRight, Link2, Plus, Mail, Phone, Calendar, FileText,
   Loader, Trash2, Edit3, MessageSquare, Clock, ChevronDown, Archive, Pencil, Copy
 } from "lucide-react";
+import {
+  BrainElectricity, PageEdit, SendMail, Coins,
+  Calendar as IcCalendar, CalendarArrowDown, Refresh,
+  Copy as IcCopy, Page, MailOut, Brain,
+} from "iconoir-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import type {
   Application, ApplicationDocument, ApplicationActivity, ApplicationContact, UserDocument
@@ -1128,7 +1133,7 @@ function Accordion({ title, count, color, children, onCopy, defaultOpen = true }
           }}
             onMouseEnter={e => (e.currentTarget.style.color = color ?? "var(--accent)")}
             onMouseLeave={e => (e.currentTarget.style.color = "var(--fg-3)")}>
-            <Copy size={11} />
+            <IcCopy width={11} height={11} />
           </button>
         )}
       </div>
@@ -1276,7 +1281,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
     } finally { setLoading(null); }
   };
 
-  const AiBtn = ({ id, label, icon }: { id: string; label: string; icon: string }) => (
+  const AiBtn = ({ id, label, icon }: { id: string; label: string; icon: React.ReactNode }) => (
     <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={!!loading}
       onClick={() => run(id, async () => {
         if (id === "cv-doc") {
@@ -1312,7 +1317,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
           setSalaryTips(r.data);
         }
       })}>
-      {loading === id ? <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> : <span>{icon}</span>}
+      {loading === id ? <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> : icon}
       {label}
     </button>
   );
@@ -1336,8 +1341,8 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
       {/* CV Phase */}
       {showCv && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-          <AiBtn id="cv-highlights" icon="🤖" label="CV-Highlights analysieren" />
-          <AiBtn id="cv-doc" icon="📄" label="Google Doc aus Master-CV" />
+          <AiBtn id="cv-highlights" icon={<BrainElectricity width={12} height={12} />} label="CV-Highlights analysieren" />
+          <AiBtn id="cv-doc" icon={<PageEdit width={12} height={12} />} label="Google Doc aus Master-CV" />
         </div>
       )}
       {cvHighlights && (
@@ -1359,17 +1364,17 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
       {/* Letter Phase */}
       {showLetter && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-          <AiBtn id="cover-letter" icon="✍️" label="Anschreiben generieren" />
-          <AiBtn id="cover-letter-doc" icon="📄" label="Als Google Doc" />
+          <AiBtn id="cover-letter" icon={<PageEdit width={12} height={12} />} label="Anschreiben generieren" />
+          <AiBtn id="cover-letter-doc" icon={<Page width={12} height={12} />} label="Als Google Doc" />
         </div>
       )}
 
       {/* Email Phase */}
       {showEmail && (
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
-          {stage === "application_sent" && <AiBtn id="email-app" icon="✉️" label="Bewerbungs-Email" />}
-          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-follow" icon="📨" label="Follow-up-Email" />}
-          {stage === "accepted" && <AiBtn id="email-decline" icon="🙏" label="Absage-Email (andere Stellen)" />}
+          {stage === "application_sent" && <AiBtn id="email-app" icon={<SendMail width={12} height={12} />} label="Bewerbungs-Email" />}
+          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-follow" icon={<SendMail width={12} height={12} />} label="Follow-up-Email" />}
+          {stage === "accepted" && <AiBtn id="email-decline" icon={<MailOut width={12} height={12} />} label="Absage-Email (andere Stellen)" />}
         </div>
       )}
 
@@ -1377,8 +1382,8 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
       {showIv && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: interviewPrep ? 10 : 0, alignItems: "center" }}>
-            <AiBtn id="interview-prep" icon="🎯" label={interviewPrep ? "Neu generieren" : "Interview-Vorbereitung generieren"} />
-            {showSalary && <AiBtn id="salary-tips" icon="💰" label="Gehaltsverhandlung" />}
+            <AiBtn id="interview-prep" icon={interviewPrep ? <Refresh width={12} height={12} /> : <Brain width={12} height={12} />} label={interviewPrep ? "Neu generieren" : "Interview-Vorbereitung generieren"} />
+            {showSalary && <AiBtn id="salary-tips" icon={<Coins width={12} height={12} />} label="Gehaltsverhandlung" />}
             {interviewPrep && <>
               <button className="btn btn-ghost" style={{ fontSize: 11, gap: 5 }}
                 onClick={() => {
@@ -1395,7 +1400,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
                   ].join("\n");
                   copySection(text, "Alle Fragen kopiert");
                 }}>
-                <Copy size={11} /> Alles kopieren
+                <IcCopy width={11} height={11} /> Alles kopieren
               </button>
               <button className="btn btn-ghost" style={{ fontSize: 11, gap: 5 }}
                 disabled={loading === "iv-export"}
@@ -1416,7 +1421,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
                     setLoading(null);
                   }
                 }}>
-                {loading === "iv-export" ? <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> : <span>📄</span>}
+                {loading === "iv-export" ? <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />}
                 Als Google Doc
               </button>
             </>}
@@ -1434,7 +1439,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
                     <span style={{ flex: 1 }}>{q}</span>
                     <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
                       onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                      <Copy size={10} />
+                      <IcCopy width={10} height={10} />
                     </button>
                   </div>
                 ))}
@@ -1452,7 +1457,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
                     <span style={{ flex: 1 }}>{q}</span>
                     <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
                       onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                      <Copy size={10} />
+                      <IcCopy width={10} height={10} />
                     </button>
                   </div>
                 ))}
@@ -1472,7 +1477,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
                     <button onClick={() => copyText(`${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`)} title="Kopieren"
                       style={{ position: "absolute", top: 8, right: 8, background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
                       onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                      <Copy size={11} />
+                      <IcCopy width={11} height={11} />
                     </button>
                     <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 6, paddingRight: 20 }}>❓ {s.frage}</div>
                     {[["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]].map(([k, v]) => (
@@ -1495,7 +1500,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
                     <span style={{ flex: 1 }}>{q}</span>
                     <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
                       onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                      <Copy size={10} />
+                      <IcCopy width={10} height={10} />
                     </button>
                   </div>
                 ))}
@@ -1506,10 +1511,10 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
         {/* Calendar actions — always shown for interview stages */}
         <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
           <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5, justifyContent: "flex-start" }} onClick={openGoogleCalendar}>
-            <span>📅</span> Google Kalender
+            <IcCalendar width={12} height={12} /> Google Kalender
           </button>
           <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5, justifyContent: "flex-start" }} onClick={downloadIcal}>
-            <span>⬇</span> iCal herunterladen
+            <CalendarArrowDown width={12} height={12} /> iCal herunterladen
           </button>
         </div>
         </div>
