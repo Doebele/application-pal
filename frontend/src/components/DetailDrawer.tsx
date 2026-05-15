@@ -1841,6 +1841,9 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
 
   return (
     <>
+      {/* Stage Tasks Checklist — always first */}
+      <TaskChecklist app={app} />
+
       {/* Interview Details Panel */}
       {(app.stage === "interview_1" || app.stage === "interview_2") && onSave && (
         <InterviewDetailsPanel
@@ -1849,9 +1852,6 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
           onSave={onSave}
         />
       )}
-
-      {/* Stage Tasks Checklist */}
-      <TaskChecklist app={app} />
 
       {/* Stage AI Actions */}
       <StageAiActions app={app} onSave={onSave} />
