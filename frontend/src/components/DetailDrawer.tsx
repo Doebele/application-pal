@@ -2534,7 +2534,7 @@ export function DetailDrawer({ app, onClose }: Props) {
           </div>
 
           {/* Tabs — scrollable */}
-          <div style={{ display: "flex", borderBottom: "1px solid var(--border)", overflowX: "auto", gap: 0 }}>
+          <div className="hide-scrollbar" style={{ display: "flex", borderBottom: "1px solid var(--border)", overflowX: "auto", gap: 0 }}>
             {TABS.map(({ id, label }) => (
               <button key={id} className={"tab" + (tab === id ? " active" : "")} onClick={() => setTab(id)} style={{ whiteSpace: "nowrap" }}>
                 {label}
