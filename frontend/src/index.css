@@ -85,8 +85,10 @@
 [data-density="low"]  { --pad-card:18px; --pad-row:14px; --gap-stack:14px; }
 [data-density="high"] { --pad-card:12px; --pad-row:10px; --gap-stack:8px; }
 
-/* Low density: zoom the whole UI for more breathing room */
+/* Low density: zoom the whole UI for more breathing room.
+   app-shell counters the zoom so it stays exactly 1 screen tall. */
 body[data-density="low"] { zoom: 1.12; }
+body[data-density="low"] .app-shell { height: calc(100vh / 1.12); }
 
 /* Stage semantic colors */
 .stage-import_validating { --stage:#94a3b8; --stage-bg:rgba(148,163,184,0.12); }
