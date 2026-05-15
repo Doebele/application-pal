@@ -87,6 +87,10 @@ export const applications = pgTable("applications", {
   matchDetails: text("match_details"),   // JSON: {breakdown, staerken, luecken, reasoning}
   googleFolderId: text("google_folder_id"),
   googleFolderUrl: text("google_folder_url"),
+  interview1Details: text("interview1_details"),  // JSON: InterviewDetails
+  interview2Details: text("interview2_details"),  // JSON: InterviewDetails
+  interview1Prep: text("interview1_prep"),         // JSON: InterviewPrep (AI-generated questions)
+  interview2Prep: text("interview2_prep"),         // JSON: InterviewPrep (AI-generated questions)
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -105,6 +109,8 @@ export const userProfile = pgTable("user_profile", {
   photoUrl: text("photo_url"),
   masterCv: text("master_cv"),
   personalNotes: text("personal_notes"),   // Interview-relevant personal priorities/talking points
+  googleCalendarId: text("google_calendar_id"),  // e.g. "user@gmail.com" or custom calendar ID
+  sessionTimeout: text("session_timeout").default("15m"),  // JWT access token lifetime
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });

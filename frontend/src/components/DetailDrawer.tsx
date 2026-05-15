@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import {
   X, ExternalLink, MoreHorizontal, Check, Sparkles, RefreshCw,
   ChevronRight, Link2, Plus, Mail, Phone, Calendar, FileText,
-  Loader, Trash2, Edit3, MessageSquare, Clock, ChevronDown, Archive, Pencil
+  Loader, Trash2, Edit3, MessageSquare, Clock, ChevronDown, Archive, Pencil, Copy
 } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import type {
@@ -496,6 +496,15 @@ function DocumentsTab({ app }: { app: Application }) {
   // Map of userDocumentId → drive URL (for docs already copied to this app's folder)
   const [libDriveUrls, setLibDriveUrls] = useState<Record<string, string>>({});
 
+  // Toast feedback
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ msg, type });
+    toastTimer.current = setTimeout(() => setToast(null), 2800);
+  };
+
   // Drive folder state
   const [folderState, setFolderState] = useState<{ folderId: string; folderUrl: string } | null>(
     app.googleFolderId ? { folderId: app.googleFolderId, folderUrl: app.googleFolderUrl ?? "" } : null
@@ -590,7 +599,10 @@ function DocumentsTab({ app }: { app: Application }) {
     setTogglingId(libDoc.id);
     if (linkedIds.has(libDoc.id)) {
       const match = appDocs.find((d) => d.userDocumentId === libDoc.id);
-      if (match) await api.delete(`/api/applications/${app.id}/documents/${match.id}`).catch(() => {});
+      if (match) {
+        await api.delete(`/api/applications/${app.id}/documents/${match.id}`).catch(() => {});
+        showToast(`„${libDoc.name}" entfernt`);
+      }
     } else {
       const isGDoc = libDoc.fileType === "gdoc";
       const isPdf  = libDoc.fileType === "pdf";
@@ -609,19 +621,24 @@ function DocumentsTab({ app }: { app: Application }) {
         } catch (e: unknown) {
           const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
           setCopyLibErr(msg ?? null);
+          showToast(msg ?? "Google Doc konnte nicht kopiert werden", "error");
         }
       }
-      // Copy PDFs to Drive folder (upload from URL)
+      // Copy PDFs to Drive folder (upload from URL directly into app folder)
       let finalFileUrl = !isGDoc ? libDoc.url : undefined;
       if (folderState && isPdf && libDoc.url) {
         try {
           const r = await api.post<{ fileUrl: string }>(
             `/api/applications/${app.id}/drive/upload-pdf-from-url`,
-            { url: libDoc.url, fileName: libDoc.name, parentFolderId: driveApplicationsFolderId || undefined }
+            { url: libDoc.url, fileName: libDoc.name }
           );
           finalFileUrl = r.data.fileUrl;
           setLibDriveUrls(prev => ({ ...prev, [libDoc.id]: r.data.fileUrl }));
-        } catch { /* fall through — use original URL */ }
+        } catch (e: unknown) {
+          const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+          setCopyLibErr(msg ?? "PDF-Upload fehlgeschlagen");
+          showToast(msg ?? "PDF konnte nicht auf Drive kopiert werden", "error");
+        }
       }
       await api.post(`/api/applications/${app.id}/documents`, {
         type: catToDocType(libDoc.category),
@@ -631,6 +648,11 @@ function DocumentsTab({ app }: { app: Application }) {
         fileUrl: finalFileUrl,
         userDocumentId: libDoc.id,
       }).catch(() => {});
+      showToast(
+        folderState && (isGDoc || isPdf)
+          ? `„${libDoc.name}" hinzugefügt & auf Drive kopiert`
+          : `„${libDoc.name}" hinzugefügt`
+      );
       // Refresh Drive file list
       void loadDriveFiles();
     }
@@ -653,7 +675,11 @@ function DocumentsTab({ app }: { app: Application }) {
         await api.patch(`/api/applications/${app.id}/documents/${match.id}`, { googleDocUrl: r.data.driveUrl }).catch(() => {});
         refetch();
       }
-    } catch { /* ignore */ }
+      showToast(`„${libDoc.name}" auf Drive kopiert`);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      showToast(msg ?? "Kopieren fehlgeschlagen", "error");
+    }
     setCopyingLibId(null);
   };
 
@@ -860,7 +886,7 @@ function DocumentsTab({ app }: { app: Application }) {
         >
           <ChevronRight size={13} style={{ transform: libOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
           <div className="eyebrow" style={{ flex: 1, textAlign: "left" }}>Aus Bibliothek zuweisen</div>
-          {copyLibErr && <span style={{ fontSize: 10, color: "#f87171", maxWidth: 160, textAlign: "right", lineHeight: 1.3 }}>{copyLibErr}</span>}
+          {copyLibErr && null /* errors shown as toast */}
           {library.length > 0 && (
             <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{library.length} Dokumente</span>
           )}
@@ -959,9 +985,15 @@ function DocumentsTab({ app }: { app: Application }) {
                               ) : (
                                 /* Figma / link / image — can't copy, offer link-copy instead */
                                 <button
-                                  onClick={(e) => {
+                                  onClick={async (e) => {
                                     e.stopPropagation();
-                                    if (libDoc.url) navigator.clipboard.writeText(libDoc.url);
+                                    if (!libDoc.url) return;
+                                    try {
+                                      await navigator.clipboard.writeText(libDoc.url);
+                                      showToast("Link kopiert");
+                                    } catch {
+                                      showToast("Kopieren fehlgeschlagen", "error");
+                                    }
                                   }}
                                   style={{ fontSize: 9, color: fileAccent, background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 2, padding: 0 }}>
                                   <Link2 size={9} /> Link kopieren
@@ -996,6 +1028,30 @@ function DocumentsTab({ app }: { app: Application }) {
           )
         )}
       </div>
+
+      {/* Toast feedback */}
+      {toast && (
+        <div style={{
+          position: "sticky", bottom: 16, zIndex: 20,
+          alignSelf: "center",
+          display: "inline-flex", alignItems: "center", gap: 8,
+          padding: "9px 16px", borderRadius: 10,
+          background: toast.type === "success" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+          border: `1px solid ${toast.type === "success" ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)"}`,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.35)",
+          backdropFilter: "blur(8px)",
+          fontSize: 12, fontWeight: 500,
+          color: toast.type === "success" ? "#4ade80" : "#f87171",
+          animation: "fade-in 0.15s ease",
+          pointerEvents: "none",
+        }}>
+          {toast.type === "success"
+            ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          }
+          {toast.msg}
+        </div>
+      )}
     </>
   );
 }
@@ -1029,19 +1085,34 @@ const STAGE_LABELS_DE: Record<string, string> = {
 };
 
 // ── Accordion helper ──
-function Accordion({ title, count, color, children }: { title: string; count: number; color?: string; children: React.ReactNode }) {
-  const [open, setOpen] = useState(true);
+function Accordion({ title, count, color, children, onCopy, defaultOpen = true }: {
+  title: string; count: number; color?: string; children: React.ReactNode;
+  onCopy?: () => void; defaultOpen?: boolean;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div style={{ marginBottom: 10 }}>
-      <button onClick={() => setOpen(v => !v)} style={{
-        display: "flex", alignItems: "center", gap: 8, width: "100%",
-        background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)",
-        padding: "6px 0", borderBottom: "1px solid var(--border)"
-      }}>
-        <ChevronRight size={12} style={{ color: "var(--fg-3)", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
-        <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: color ?? "var(--fg-2)", textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "left" }}>{title}</span>
-        <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{count}</span>
-      </button>
+      <div style={{ display: "flex", alignItems: "center", borderBottom: "1px solid var(--border)", padding: "6px 0" }}>
+        <button onClick={() => setOpen(v => !v)} style={{
+          flex: 1, display: "flex", alignItems: "center", gap: 8,
+          background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", padding: 0
+        }}>
+          <ChevronRight size={12} style={{ color: "var(--fg-3)", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} />
+          <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: color ?? "var(--fg-2)", textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "left" }}>{title}</span>
+          <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{count}</span>
+        </button>
+        {onCopy && (
+          <button onClick={onCopy} title="Abschnitt kopieren" style={{
+            marginLeft: 8, background: "none", border: "none", cursor: "pointer",
+            color: "var(--fg-3)", display: "flex", alignItems: "center", padding: "0 2px",
+            borderRadius: 4, transition: "color 0.15s"
+          }}
+            onMouseEnter={e => (e.currentTarget.style.color = color ?? "var(--accent)")}
+            onMouseLeave={e => (e.currentTarget.style.color = "var(--fg-3)")}>
+            <Copy size={11} />
+          </button>
+        )}
+      </div>
       {open && <div style={{ paddingTop: 8 }}>{children}</div>}
     </div>
   );
@@ -1075,15 +1146,34 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
 }
 
 // ── Stage AI Actions ──
-function StageAiActions({ app }: { app: Application }) {
+function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Partial<Application>) => void }) {
   const { ai } = useUiStore();
   const stage = app.stage;
   const [loading, setLoading] = useState<string | null>(null);
   const [cvHighlights, setCvHighlights] = useState<CvHighlights | null>(null);
-  const [interviewPrep, setInterviewPrep] = useState<InterviewPrep | null>(null);
+
+  // Initialize interviewPrep from DB (persisted after generation)
+  const [interviewPrep, setInterviewPrep] = useState<InterviewPrep | null>(() => {
+    const raw = stage === "interview_1" ? app.interview1Prep
+              : stage === "interview_2" ? app.interview2Prep : null;
+    try { return raw ? JSON.parse(raw) as InterviewPrep : null; } catch { return null; }
+  });
   const [salaryTips, setSalaryTips] = useState<SalaryTips | null>(null);
   const [emailModal, setEmailModal] = useState<EmailDraft | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // Toast
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ msg, type });
+    toastTimer.current = setTimeout(() => setToast(null), 2800);
+  };
+  const copyText = async (text: string, label = "Kopiert") => {
+    try { await navigator.clipboard.writeText(text); showToast(label); }
+    catch { showToast("Kopieren fehlgeschlagen", "error"); }
+  };
 
   const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
 
@@ -1124,6 +1214,9 @@ function StageAiActions({ app }: { app: Application }) {
         } else if (id === "interview-prep") {
           const r = await api.post<InterviewPrep>(`/api/applications/${app.id}/ai/interview-prep`, aiBody);
           setInterviewPrep(r.data);
+          // Persist to DB so it survives page reload
+          const prepField = stage === "interview_1" ? "interview1Prep" : "interview2Prep";
+          onSave?.({ [prepField]: JSON.stringify(r.data) } as Partial<Application>);
         } else if (id === "salary-tips") {
           const r = await api.post<SalaryTips>(`/api/applications/${app.id}/ai/salary-tips`, aiBody);
           setSalaryTips(r.data);
@@ -1193,31 +1286,105 @@ function StageAiActions({ app }: { app: Application }) {
       {/* Interview Phase */}
       {showIv && (
         <div style={{ marginBottom: 12 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: interviewPrep ? 10 : 0 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: interviewPrep ? 10 : 0, alignItems: "center" }}>
             <AiBtn id="interview-prep" icon="🎯" label={interviewPrep ? "Neu generieren" : "Interview-Vorbereitung generieren"} />
             {showSalary && <AiBtn id="salary-tips" icon="💰" label="Gehaltsverhandlung" />}
+            {interviewPrep && <>
+              <button className="btn btn-ghost" style={{ fontSize: 11, gap: 5 }}
+                onClick={() => {
+                  const sep = "═".repeat(40);
+                  const text = [
+                    `${sep}\nROLLENSPEZIFISCHE FRAGEN\n${sep}`,
+                    interviewPrep.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"),
+                    `\n${sep}\nCHRIS VOSS FRAGEN\n${sep}`,
+                    interviewPrep.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"),
+                    `\n${sep}\nSTAR-BEISPIELE\n${sep}`,
+                    interviewPrep.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"),
+                    `\n${sep}\nMEINE RÜCKFRAGEN\n${sep}`,
+                    interviewPrep.rueckfragen.map(q => `? ${q}`).join("\n"),
+                  ].join("\n");
+                  copyText(text, "Alle Fragen kopiert");
+                }}>
+                <Copy size={11} /> Alles kopieren
+              </button>
+              <button className="btn btn-ghost" style={{ fontSize: 11, gap: 5 }}
+                disabled={loading === "iv-export"}
+                onClick={async () => {
+                  setLoading("iv-export");
+                  try {
+                    const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/interview-prep/export-doc`, { interviewPrep });
+                    window.open(r.data.docUrl, "_blank");
+                    showToast("Google Doc erstellt & geöffnet");
+                  } catch (e: unknown) {
+                    const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+                    if (msg === "Unauthorized" || (e as { response?: { status?: number } })?.response?.status === 401) {
+                      showToast("Session abgelaufen — bitte Seite neu laden", "error");
+                    } else {
+                      showToast(msg ?? "Export fehlgeschlagen", "error");
+                    }
+                  } finally {
+                    setLoading(null);
+                  }
+                }}>
+                {loading === "iv-export" ? <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> : <span>📄</span>}
+                Als Google Doc
+              </button>
+            </>}
           </div>
           {interviewPrep && (
             <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14 }}>
-              <Accordion title="Rollenspezifische Fragen" count={interviewPrep.rollenFragen.length} color="#a78bfa">
+              {/* Rollenspezifische Fragen */}
+              <Accordion
+                title="Rollenspezifische Fragen" count={interviewPrep.rollenFragen.length} color="#a78bfa"
+                onCopy={() => copyText(interviewPrep.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"), "Fragen kopiert")}
+              >
                 {interviewPrep.rollenFragen.map((q, i) => (
-                  <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
-                    <span style={{ color: "var(--fg-3)", marginRight: 6 }}>{i + 1}.</span>{q}
+                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
+                    <span style={{ color: "var(--fg-3)", flexShrink: 0 }}>{i + 1}.</span>
+                    <span style={{ flex: 1 }}>{q}</span>
+                    <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+                      <Copy size={10} />
+                    </button>
                   </div>
                 ))}
               </Accordion>
-              <Accordion title='🤝 Chris Voss "What / How"-Fragen' count={interviewPrep.vossFragenWhatHow.length} color="#34d399">
+
+              {/* Chris Voss */}
+              <Accordion
+                title='🤝 Chris Voss "What / How"-Fragen' count={interviewPrep.vossFragenWhatHow.length} color="#34d399"
+                onCopy={() => copyText(interviewPrep.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"), "Voss-Fragen kopiert")}
+              >
                 <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>
                 {interviewPrep.vossFragenWhatHow.map((q, i) => (
-                  <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.vossFragenWhatHow.length - 1 ? "1px solid var(--border)" : "none" }}>
-                    <span style={{ color: "#34d399", marginRight: 6 }}>→</span>{q}
+                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.vossFragenWhatHow.length - 1 ? "1px solid var(--border)" : "none" }}>
+                    <span style={{ color: "#34d399", flexShrink: 0 }}>→</span>
+                    <span style={{ flex: 1 }}>{q}</span>
+                    <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+                      <Copy size={10} />
+                    </button>
                   </div>
                 ))}
               </Accordion>
-              <Accordion title="STAR-Beispiele" count={interviewPrep.starBeispiele.length} color="#fbbf24">
+
+              {/* STAR */}
+              <Accordion
+                title="STAR-Beispiele" count={interviewPrep.starBeispiele.length} color="#fbbf24"
+                onCopy={() => copyText(
+                  interviewPrep.starBeispiele.map(s =>
+                    `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`
+                  ).join("\n\n"), "STAR-Beispiele kopiert"
+                )}
+              >
                 {interviewPrep.starBeispiele.map((s, i) => (
-                  <div key={i} style={{ marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 6 }}>❓ {s.frage}</div>
+                  <div key={i} style={{ position: "relative", marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
+                    <button onClick={() => copyText(`${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`)} title="Kopieren"
+                      style={{ position: "absolute", top: 8, right: 8, background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+                      <Copy size={11} />
+                    </button>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 6, paddingRight: 20 }}>❓ {s.frage}</div>
                     {[["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]].map(([k, v]) => (
                       <div key={k} style={{ fontSize: 11, color: "var(--fg-2)", padding: "2px 0" }}>
                         <span style={{ fontWeight: 700, color: "#fbbf24", marginRight: 6 }}>{k}:</span>{v}
@@ -1226,13 +1393,24 @@ function StageAiActions({ app }: { app: Application }) {
                   </div>
                 ))}
               </Accordion>
-              <Accordion title="Meine Rückfragen" count={interviewPrep.rueckfragen.length} color="#60a5fa">
+
+              {/* Rückfragen */}
+              <Accordion
+                title="Meine Rückfragen" count={interviewPrep.rueckfragen.length} color="#60a5fa"
+                onCopy={() => copyText(interviewPrep.rueckfragen.map(q => `? ${q}`).join("\n"), "Rückfragen kopiert")}
+              >
                 {interviewPrep.rueckfragen.map((q, i) => (
-                  <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.rueckfragen.length - 1 ? "1px solid var(--border)" : "none" }}>
-                    <span style={{ color: "#60a5fa", marginRight: 6 }}>?</span>{q}
+                  <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < interviewPrep.rueckfragen.length - 1 ? "1px solid var(--border)" : "none" }}>
+                    <span style={{ color: "#60a5fa", flexShrink: 0 }}>?</span>
+                    <span style={{ flex: 1 }}>{q}</span>
+                    <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+                      onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+                      <Copy size={10} />
+                    </button>
                   </div>
                 ))}
               </Accordion>
+
             </div>
           )}
         </div>
@@ -1256,6 +1434,26 @@ function StageAiActions({ app }: { app: Application }) {
       )}
 
       {emailModal && <EmailModal draft={emailModal} onClose={() => setEmailModal(null)} />}
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          position: "sticky", bottom: 16, zIndex: 20, alignSelf: "center",
+          display: "inline-flex", alignItems: "center", gap: 8,
+          padding: "9px 16px", borderRadius: 10,
+          background: toast.type === "success" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+          border: `1px solid ${toast.type === "success" ? "rgba(34,197,94,0.35)" : "rgba(239,68,68,0.35)"}`,
+          boxShadow: "0 4px 20px rgba(0,0,0,0.35)", backdropFilter: "blur(8px)",
+          fontSize: 12, fontWeight: 500,
+          color: toast.type === "success" ? "#4ade80" : "#f87171",
+          animation: "fade-in 0.15s ease", pointerEvents: "none",
+        }}>
+          {toast.type === "success"
+            ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>}
+          {toast.msg}
+        </div>
+      )}
     </div>
   );
 }
@@ -1373,7 +1571,255 @@ function TaskChecklist({ app }: { app: Application }) {
   );
 }
 
-function ProcessTab({ app }: { app: Application }) {
+// ── Interview Details Panel ──────────────────────────────────
+type InterviewDetails = {
+  date?: string; time?: string; duration?: number;
+  format?: "onsite" | "video" | "phone";
+  location?: string; videoUrl?: string; videoCode?: string; videoProvider?: string;
+  interviewer?: string; notes?: string;
+};
+const VIDEO_PROVIDERS = ["Zoom", "Microsoft Teams", "Google Meet", "Webex", "Andere"];
+const DURATIONS = [30, 45, 60, 90, 120];
+
+function InterviewDetailsPanel({ app, round, onSave }: {
+  app: Application; round: 1 | 2; onSave: (patch: Partial<Application>) => void;
+}) {
+  const field = round === 1 ? "interview1Details" : "interview2Details";
+  const raw = round === 1 ? app.interview1Details : app.interview2Details;
+  const [details, setDetails] = useState<InterviewDetails>(() => {
+    try { return raw ? JSON.parse(raw) : {}; } catch { return {}; }
+  });
+
+  // Sync if app prop changes (e.g. refetch)
+  const prevRaw = useRef(raw);
+  useEffect(() => {
+    if (prevRaw.current !== raw) {
+      prevRaw.current = raw;
+      try { setDetails(raw ? JSON.parse(raw) : {}); } catch { setDetails({}); }
+    }
+  }, [raw]);
+
+  const { data: profile } = useQuery<{ googleCalendarId?: string | null }>({
+    queryKey: ["profile"],
+    queryFn: () => api.get("/api/profile").then((r) => r.data)
+  });
+
+  const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showToast = (msg: string, type: "success" | "error" = "success") => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ msg, type });
+    toastTimer.current = setTimeout(() => setToast(null), 2800);
+  };
+
+  const save = (patch: Partial<InterviewDetails>) => {
+    const updated = { ...details, ...patch };
+    setDetails(updated);
+    onSave({ [field]: JSON.stringify(updated) } as Partial<Application>);
+  };
+
+  const openGoogleCalendar = () => {
+    if (!details.date || !details.time) { showToast("Bitte zuerst Datum und Uhrzeit eingeben", "error"); return; }
+    const timeStr = details.time.replace(":", "");
+    const start = details.date.replace(/-/g, "") + "T" + timeStr + "00";
+    const startDt = new Date(`${details.date}T${details.time}:00`);
+    startDt.setMinutes(startDt.getMinutes() + (details.duration ?? 60));
+    const end = startDt.toISOString().replace(/[-:.]/g, "").slice(0, 15);
+    const loc = details.format === "onsite" ? (details.location ?? "") : (details.videoUrl ?? "");
+    const descParts = [
+      `Interview Runde ${round}: ${app.role} @ ${app.company}`,
+      details.format === "video" && details.videoProvider ? `Anbieter: ${details.videoProvider}` : "",
+      details.format === "video" && details.videoCode ? `Meeting-Code: ${details.videoCode}` : "",
+      details.interviewer ? `Gesprächspartner: ${details.interviewer}` : "",
+      details.notes ? `Notizen: ${details.notes}` : "",
+      (app.portalUrl ?? app.url) ? `Link: ${app.portalUrl ?? app.url}` : "",
+    ].filter(Boolean).join("\n");
+    const url = new URL("https://calendar.google.com/calendar/r/eventedit");
+    url.searchParams.set("text", `Interview ${round}: ${app.role} @ ${app.company}`);
+    url.searchParams.set("dates", `${start}/${end}`);
+    if (loc) url.searchParams.set("location", loc);
+    url.searchParams.set("details", descParts);
+    if (profile?.googleCalendarId) url.searchParams.set("calid", profile.googleCalendarId);
+    window.open(url.toString(), "_blank");
+    showToast("In Google Kalender geöffnet");
+  };
+
+  const downloadIcal = () => {
+    if (!details.date || !details.time) { showToast("Bitte zuerst Datum und Uhrzeit eingeben", "error"); return; }
+    const timeStr = details.time.replace(":", "");
+    const dtStart = details.date.replace(/-/g, "") + "T" + timeStr + "00";
+    const endDt = new Date(`${details.date}T${details.time}:00`);
+    endDt.setMinutes(endDt.getMinutes() + (details.duration ?? 60));
+    const dtEnd = endDt.getFullYear().toString() +
+      String(endDt.getMonth() + 1).padStart(2, "0") +
+      String(endDt.getDate()).padStart(2, "0") + "T" +
+      String(endDt.getHours()).padStart(2, "0") +
+      String(endDt.getMinutes()).padStart(2, "0") + "00";
+    const loc = details.format === "onsite" ? (details.location ?? "") : (details.videoUrl ?? "");
+    const desc = [
+      `Interview Runde ${round}`,
+      details.format === "video" && details.videoProvider ? `Anbieter: ${details.videoProvider}` : "",
+      details.format === "video" && details.videoCode ? `Meeting-Code: ${details.videoCode}` : "",
+      details.interviewer ? `Gesprächspartner: ${details.interviewer}` : "",
+      details.notes ? `Notizen: ${details.notes}` : "",
+      (app.portalUrl ?? app.url) ? `Portal: ${app.portalUrl ?? app.url}` : "",
+    ].filter(Boolean).join("\\n");
+    const lines = [
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Application Pal//Interview//DE",
+      "BEGIN:VEVENT",
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`,
+      `SUMMARY:Interview ${round}: ${app.role} @ ${app.company}`,
+      loc ? `LOCATION:${loc}` : "",
+      `DESCRIPTION:${desc}`,
+      `UID:interview-${app.id}-${round}@application-pal`,
+      "END:VEVENT", "END:VCALENDAR"
+    ].filter(Boolean).join("\r\n");
+    const blob = new Blob([lines], { type: "text/calendar;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `interview-${app.company.replace(/[^a-z0-9]/gi, "-")}-runde${round}.ics`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showToast("iCal heruntergeladen");
+  };
+
+  const inp: React.CSSProperties = { background: "none", border: "none", borderBottom: "1px solid var(--border)", padding: "3px 0", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", width: "100%", outline: "none" };
+  const lbl: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 };
+  const fmtBtn = (val: InterviewDetails["format"], label: string) => (
+    <button type="button" onClick={() => save({ format: val })} style={{
+      padding: "4px 10px", borderRadius: 6, border: `1px solid ${details.format === val ? "var(--accent)" : "var(--border)"}`,
+      background: details.format === val ? "rgba(var(--accent-rgb,99,102,241),0.1)" : "none",
+      color: details.format === val ? "var(--accent)" : "var(--fg-2)",
+      fontSize: 11, cursor: "pointer", fontFamily: "var(--font-sans)", fontWeight: details.format === val ? 600 : 400
+    }}>{label}</button>
+  );
+
+  return (
+    <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 12 }}>
+        Interview {round} — Termin
+      </div>
+
+      {/* Date / Time / Duration row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+        <div>
+          <div style={lbl}>Datum</div>
+          <input type="date" value={details.date ?? ""} style={inp}
+            onChange={e => setDetails(d => ({ ...d, date: e.target.value }))}
+            onBlur={e => save({ date: e.target.value || undefined })} />
+        </div>
+        <div>
+          <div style={lbl}>Uhrzeit</div>
+          <input type="time" value={details.time ?? ""} style={inp}
+            onChange={e => setDetails(d => ({ ...d, time: e.target.value }))}
+            onBlur={e => save({ time: e.target.value || undefined })} />
+        </div>
+        <div>
+          <div style={lbl}>Dauer</div>
+          <select value={details.duration ?? 60} style={{ ...inp, cursor: "pointer" }}
+            onChange={e => save({ duration: Number(e.target.value) })}>
+            {DURATIONS.map(d => <option key={d} value={d}>{d} Min</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Format */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={lbl}>Format</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {fmtBtn("onsite", "📍 Vor Ort")}
+          {fmtBtn("video", "🎥 Video")}
+          {fmtBtn("phone", "📞 Telefon")}
+        </div>
+      </div>
+
+      {/* Location (onsite) */}
+      {details.format === "onsite" && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={lbl}>Adresse</div>
+          <input type="text" value={details.location ?? ""} placeholder="Bahnhofstrasse 1, 8001 Zürich" style={inp}
+            onChange={e => setDetails(d => ({ ...d, location: e.target.value }))}
+            onBlur={e => save({ location: e.target.value || undefined })} />
+        </div>
+      )}
+
+      {/* Video fields */}
+      {details.format === "video" && (
+        <div style={{ marginBottom: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+          <div>
+            <div style={lbl}>Anbieter</div>
+            <select value={details.videoProvider ?? ""} style={{ ...inp, cursor: "pointer" }}
+              onChange={e => save({ videoProvider: e.target.value || undefined })}>
+              <option value="">— Auswählen —</option>
+              {VIDEO_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10 }}>
+            <div>
+              <div style={lbl}>Meeting-URL</div>
+              <input type="url" value={details.videoUrl ?? ""} placeholder="https://zoom.us/j/..." style={inp}
+                onChange={e => setDetails(d => ({ ...d, videoUrl: e.target.value }))}
+                onBlur={e => save({ videoUrl: e.target.value || undefined })} />
+            </div>
+            <div style={{ minWidth: 110 }}>
+              <div style={lbl}>Meeting-Code</div>
+              <input type="text" value={details.videoCode ?? ""} placeholder="123 456" style={inp}
+                onChange={e => setDetails(d => ({ ...d, videoCode: e.target.value }))}
+                onBlur={e => save({ videoCode: e.target.value || undefined })} />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Interviewer */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={lbl}>Gesprächspartner</div>
+        <input type="text" value={details.interviewer ?? ""} placeholder="Max Muster (HR), Anna Schmidt (Fachteam)" style={inp}
+          onChange={e => setDetails(d => ({ ...d, interviewer: e.target.value }))}
+          onBlur={e => save({ interviewer: e.target.value || undefined })} />
+      </div>
+
+      {/* Notes */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={lbl}>Notizen</div>
+        <textarea value={details.notes ?? ""} placeholder="Portfolio mitbringen, Laptop vorbereiten…" rows={2}
+          style={{ ...inp, resize: "vertical", lineHeight: 1.5 }}
+          onChange={e => setDetails(d => ({ ...d, notes: e.target.value }))}
+          onBlur={e => save({ notes: e.target.value || undefined })} />
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", paddingTop: 4 }}>
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={openGoogleCalendar}>
+          <span>📅</span> Google Kalender
+        </button>
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={downloadIcal}>
+          <span>⬇</span> iCal herunterladen
+        </button>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{
+          marginTop: 10, display: "inline-flex", alignItems: "center", gap: 6,
+          padding: "7px 12px", borderRadius: 8,
+          background: toast.type === "success" ? "rgba(34,197,94,0.12)" : "rgba(239,68,68,0.12)",
+          border: `1px solid ${toast.type === "success" ? "rgba(34,197,94,0.3)" : "rgba(239,68,68,0.3)"}`,
+          fontSize: 11, color: toast.type === "success" ? "#4ade80" : "#f87171", pointerEvents: "none",
+          animation: "fade-in 0.15s ease"
+        }}>
+          {toast.type === "success"
+            ? <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            : <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>}
+          {toast.msg}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partial<Application>) => void }) {
   const { data: activities = [], refetch } = useQuery<ApplicationActivity[]>({
     queryKey: ["activities", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/activities`).then((r) => r.data)
@@ -1395,11 +1841,20 @@ function ProcessTab({ app }: { app: Application }) {
 
   return (
     <>
+      {/* Interview Details Panel */}
+      {(app.stage === "interview_1" || app.stage === "interview_2") && onSave && (
+        <InterviewDetailsPanel
+          app={app}
+          round={app.stage === "interview_1" ? 1 : 2}
+          onSave={onSave}
+        />
+      )}
+
       {/* Stage Tasks Checklist */}
       <TaskChecklist app={app} />
 
       {/* Stage AI Actions */}
-      <StageAiActions app={app} />
+      <StageAiActions app={app} onSave={onSave} />
 
       {/* Activity Timeline */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
@@ -2073,7 +2528,7 @@ export function DetailDrawer({ app, onClose }: Props) {
           {tab === "overview"     && <OverviewTab     app={app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} />}
           {tab === "description"  && <DescriptionTab  app={app} onSave={(p) => patchMutation.mutate(p)} />}
           {tab === "documents"    && <DocumentsTab    app={app} />}
-          {tab === "process"      && <ProcessTab      app={app} />}
+          {tab === "process"      && <ProcessTab      app={app} onSave={(p) => patchMutation.mutate(p)} />}
           {tab === "agent"        && <AgentTab        app={app} />}
           {tab === "contacts"     && <ContactsTab     app={app} />}
           {tab === "notes"        && <NotesTab        app={app} onSave={(p) => patchMutation.mutate(p)} />}

@@ -406,8 +406,63 @@ function DriveNamingSection() {
   );
 }
 
+// ─── Google Calendar Section ──────────────────────────────────
+function CalendarSection() {
+  const [calId, setCalId] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    api.get<{ googleCalendarId?: string | null }>("/api/profile")
+      .then(r => setCalId(r.data.googleCalendarId ?? ""))
+      .catch(() => {});
+  }, []);
+
+  const save = async () => {
+    await api.patch("/api/profile", { googleCalendarId: calId.trim() || null }).catch(() => {});
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1500);
+  };
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <span style={{ fontSize: 13 }}>📅</span>
+        <div className="eyebrow">Google Kalender</div>
+      </div>
+      <div className="settings-group">
+        <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
+          <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.6 }}>
+            Standard-Kalender für Interviewtermine. Interview-Einträge werden direkt in diesem Kalender erstellt.
+          </div>
+          <div className="field" style={{ margin: 0 }}>
+            <label>Kalender-ID</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input value={calId} onChange={e => setCalId(e.target.value)} onBlur={save}
+                placeholder="deine@gmail.com (leer = Primär-Kalender)"
+                style={{ flex: 1 }} />
+              {saved && <span style={{ fontSize: 11, color: "#4ade80", whiteSpace: "nowrap" }}>✓ Gespeichert</span>}
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: "var(--fg-3)", lineHeight: 1.6 }}>
+            Die Kalender-ID findest du in Google Kalender → Einstellungen → Kalender auswählen → „Kalender-ID" (meist deine Gmail-Adresse für den Primär-Kalender).
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Security Section ─────────────────────────────────────────
 type PasskeyInfo = { id: string; deviceName: string | null; createdAt: string };
+
+const SESSION_TIMEOUT_OPTIONS = [
+  { value: "15m",  label: "15 Minuten (Standard)" },
+  { value: "1h",   label: "1 Stunde" },
+  { value: "6h",   label: "6 Stunden" },
+  { value: "24h",  label: "24 Stunden" },
+  { value: "7d",   label: "1 Woche" },
+  { value: "30d",  label: "30 Tage" },
+];
 
 function SecuritySection() {
   const { user, logout } = useAuth();
@@ -420,6 +475,21 @@ function SecuritySection() {
   const [currPw, setCurrPw]       = useState("");
   const [newPw, setNewPw]         = useState("");
   const [pwMsg, setPwMsg]         = useState("");
+  const [sessionTimeout, setSessionTimeout] = useState("15m");
+  const [timeoutSaved, setTimeoutSaved] = useState(false);
+
+  useEffect(() => {
+    api.get<{ sessionTimeout?: string | null }>("/api/profile")
+      .then(r => setSessionTimeout(r.data.sessionTimeout ?? "15m"))
+      .catch(() => {});
+  }, []);
+
+  const saveTimeout = async (val: string) => {
+    setSessionTimeout(val);
+    await api.patch("/api/profile", { sessionTimeout: val }).catch(() => {});
+    setTimeoutSaved(true);
+    setTimeout(() => setTimeoutSaved(false), 1500);
+  };
 
   const loadCreds = useCallback(async () => {
     const res = await api.get<PasskeyInfo[]>("/api/auth/webauthn/credentials").catch(() => null);
@@ -472,6 +542,21 @@ function SecuritySection() {
         <div className="eyebrow">Sicherheit</div>
       </div>
       <div className="settings-group">
+
+        {/* Session timeout */}
+        <div className="settings-row">
+          <div style={{ flex: 1 }}>
+            <div className="settings-row-label">Session-Dauer</div>
+            <div className="settings-row-sub">Wie lange bleibt die Anmeldung aktiv — wirksam ab nächster Anmeldung</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <select value={sessionTimeout} onChange={e => saveTimeout(e.target.value)}
+              style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", cursor: "pointer" }}>
+              {SESSION_TIMEOUT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+            {timeoutSaved && <span style={{ fontSize: 11, color: "#4ade80" }}>✓</span>}
+          </div>
+        </div>
 
         {/* Current user */}
         <div className="settings-row">
@@ -726,6 +811,9 @@ export function SettingsPage() {
 
         {/* Drive Naming */}
         <DriveNamingSection />
+
+        {/* Google Calendar */}
+        <CalendarSection />
 
         {/* Security */}
         <SecuritySection />

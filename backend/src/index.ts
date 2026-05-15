@@ -70,13 +70,25 @@ function getJwtSecret(): string {
 }
 
 // ─── Auth helpers ─────────────────────────────────────────────
-function issueTokens(c: Parameters<typeof setCookie>[0], userId: string, rememberMe = false) {
-  const access  = jwt.sign({ userId }, getJwtSecret(), { expiresIn: "15m" });
+const SESSION_TIMEOUT_SECONDS: Record<string, number> = {
+  "15m": 900, "1h": 3600, "6h": 21600,
+  "24h": 86400, "7d": 604800, "30d": 2592000
+};
+
+function issueTokens(c: Parameters<typeof setCookie>[0], userId: string, rememberMe = false, accessTimeout = "15m") {
+  const maxAge = SESSION_TIMEOUT_SECONDS[accessTimeout] ?? 900;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const access  = jwt.sign({ userId }, getJwtSecret(), { expiresIn: accessTimeout } as any);
   const refreshExpiry = rememberMe ? "90d" : "1d";
   const refresh = jwt.sign({ userId }, getJwtSecret(), { expiresIn: refreshExpiry });
   const secure  = env.APP_URL.startsWith("https");
-  setCookie(c, "access_token",  access,  { httpOnly: true, sameSite: "Lax", path: "/", secure, maxAge: 60 * 15 });
+  setCookie(c, "access_token",  access,  { httpOnly: true, sameSite: "Lax", path: "/", secure, maxAge });
   setCookie(c, "refresh_token", refresh, { httpOnly: true, sameSite: "Lax", path: "/", secure, ...(rememberMe ? { maxAge: 60 * 60 * 24 * 90 } : {}) });
+}
+
+async function getSessionTimeout(): Promise<string> {
+  const [p] = await db.select({ sessionTimeout: userProfile.sessionTimeout }).from(userProfile).limit(1);
+  return p?.sessionTimeout ?? "15m";
 }
 
 function clearTokens(c: Parameters<typeof deleteCookie>[0]) {
@@ -124,7 +136,7 @@ app.use("/api/*", async (c, next) => {
     if (refresh) {
       try {
         const rp = jwt.verify(refresh, getJwtSecret()) as { userId: string };
-        issueTokens(c, rp.userId);
+        issueTokens(c, rp.userId, false, await getSessionTimeout());
         c.set("userId" as never, rp.userId);
         return next();
       } catch { /* fall through */ }
@@ -151,7 +163,7 @@ app.post("/api/auth/setup", async (c) => {
   }
   const passwordHash = await bcrypt.hash(password, 12);
   const [user] = await db.insert(users).values({ email: email.toLowerCase().trim(), passwordHash }).returning();
-  issueTokens(c, user.id, rememberMe === true);
+  issueTokens(c, user.id, rememberMe === true, await getSessionTimeout());
   return c.json({ email: user.email });
 });
 
@@ -162,7 +174,7 @@ app.post("/api/auth/login", async (c) => {
   if (!user || !user.passwordHash) return c.json({ error: "Ungültige Anmeldedaten" }, 401);
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return c.json({ error: "Ungültige Anmeldedaten" }, 401);
-  issueTokens(c, user.id, rememberMe === true);
+  issueTokens(c, user.id, rememberMe === true, await getSessionTimeout());
   return c.json({ email: user.email });
 });
 
@@ -187,12 +199,12 @@ app.get("/api/auth/me", async (c) => {
 });
 
 // Refresh access token
-app.post("/api/auth/refresh", (c) => {
+app.post("/api/auth/refresh", async (c) => {
   const refresh = getCookie(c, "refresh_token");
   if (!refresh) return c.json({ error: "Unauthorized" }, 401);
   try {
     const { userId } = jwt.verify(refresh, getJwtSecret()) as { userId: string };
-    issueTokens(c, userId);
+    issueTokens(c, userId, false, await getSessionTimeout());
     return c.json({ ok: true });
   } catch {
     return c.json({ error: "Unauthorized" }, 401);
@@ -336,7 +348,7 @@ app.post("/api/auth/webauthn/login", async (c) => {
     });
     if (!verification.verified) return c.json({ error: "Passkey-Verifizierung fehlgeschlagen" }, 401);
     await db.update(webauthnCredentials).set({ counter: verification.authenticationInfo.newCounter }).where(eq(webauthnCredentials.id, cred.id));
-    issueTokens(c, cred.userId);
+    issueTokens(c, cred.userId, false, await getSessionTimeout());
     webauthnChallenges.delete("login");
     return c.json({ ok: true });
   } catch (err) {
@@ -576,14 +588,14 @@ async function extractWithLmStudio(text: string, ai: AiConfig): Promise<LlmExtra
       { role: "user",   content: EXTRACTION_PROMPT_USER_PREFIX + text.slice(0, 6000) }
     ],
     temperature: 0.05,
-    max_tokens: 16384  // Qwen3 needs space for its <think> block before JSON output
+    max_tokens: 32768  // Qwen3 needs space for its <think> block before JSON output
   };
 
   const res = await fetch(`${baseUrl}/v1/chat/completions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(120_000)
+    signal: AbortSignal.timeout(240_000)
   });
 
   if (!res.ok) {
@@ -610,11 +622,11 @@ async function extractWithAnthropic(text: string, ai: AiConfig): Promise<LlmExtr
     },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 300,
+      max_tokens: 600,
       system: EXTRACTION_PROMPT,
       messages: [{ role: "user", content: EXTRACTION_PROMPT_USER_PREFIX + text.slice(0, 6000) }]
     }),
-    signal: AbortSignal.timeout(120_000)
+    signal: AbortSignal.timeout(240_000)
   });
 
   if (!res.ok) {
@@ -783,11 +795,11 @@ async function extractKnowledgeBaseWithAnthropic(text: string, ai?: AiConfig): P
     },
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
-      max_tokens: 900,
+      max_tokens: 1800,
       system: KB_EXTRACTION_PROMPT,
       messages: [{ role: "user", content: `Extract from this source:\n\n${cleanJobText(text).slice(0, 8000)}` }]
     }),
-    signal: AbortSignal.timeout(120_000)
+    signal: AbortSignal.timeout(240_000)
   });
 
   if (!res.ok) {
@@ -1528,9 +1540,9 @@ app.post("/api/applications/:id/match-score", async (c) => {
             { role: "user", content: userMessage }
           ],
           temperature: 0.1,
-          max_tokens: 16384
+          max_tokens: 32768
         }),
-        signal: AbortSignal.timeout(120_000)
+        signal: AbortSignal.timeout(240_000)
       });
       if (!res.ok) throw new Error(`LM Studio error: ${res.status}`);
       const json = await res.json() as { choices?: { message?: { content?: string } }[] };
@@ -1542,11 +1554,11 @@ app.post("/api/applications/:id/match-score", async (c) => {
         headers: { "x-api-key": aiConfig.anthropicApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
-          max_tokens: 1024,
+          max_tokens: 2048,
           system: MATCH_SCORE_SYSTEM_PROMPT,
           messages: [{ role: "user", content: userMessage }]
         }),
-        signal: AbortSignal.timeout(120_000)
+        signal: AbortSignal.timeout(240_000)
       });
       if (!res.ok) throw new Error(`Anthropic error: ${res.status}`);
       const json = await res.json() as { content?: { type: string; text: string }[] };
@@ -1754,9 +1766,9 @@ async function callAi(system: string, user: string, ai: AiConfig): Promise<strin
         model: ai.lmStudioModel || undefined,
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
         temperature: 0.15,
-        max_tokens: 16384
+        max_tokens: 32768
       }),
-      signal: AbortSignal.timeout(120_000)
+      signal: AbortSignal.timeout(240_000)
     });
     if (!res.ok) throw new Error(`LM Studio error: ${res.status}`);
     const json = await res.json() as { choices?: { message?: { content?: string } }[] };
@@ -1766,8 +1778,8 @@ async function callAi(system: string, user: string, ai: AiConfig): Promise<strin
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": ai.anthropicApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 4096, system, messages: [{ role: "user", content: user }] }),
-      signal: AbortSignal.timeout(60_000)
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 8192, system, messages: [{ role: "user", content: user }] }),
+      signal: AbortSignal.timeout(120_000)
     });
     if (!res.ok) throw new Error(`Anthropic error: ${res.status}`);
     const json = await res.json() as { content?: { type: string; text: string }[] };
@@ -1980,6 +1992,82 @@ Regeln:
   }
 });
 
+// Export Interview Prep to Google Doc
+app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
+  const id = c.req.param("id");
+  const { interviewPrep } = await c.req.json<{ interviewPrep: {
+    rollenFragen: string[];
+    starBeispiele: { frage: string; situation: string; aufgabe: string; aktion: string; ergebnis: string }[];
+    vossFragenWhatHow: string[];
+    rueckfragen: string[];
+  } }>();
+  if (!interviewPrep) return c.json({ error: "Keine Interview-Daten übergeben" }, 400);
+
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [token] = await db.select().from(googleOAuthTokens).limit(1);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const sep = "═".repeat(48);
+  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  let content = `Interview-Vorbereitung: ${app_.role} @ ${app_.company}\n${date}\n\n`;
+  content += `${sep}\nROLLENSPEZIFISCHE FRAGEN\n${sep}\n\n`;
+  content += interviewPrep.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n") + "\n\n";
+  content += `${sep}\nCHRIS VOSS "WHAT / HOW"-FRAGEN\n${sep}\nTaktische offene Fragen nach "Never Split the Difference"\n\n`;
+  content += interviewPrep.vossFragenWhatHow.map(q => `→ ${q}`).join("\n") + "\n\n";
+  content += `${sep}\nSTAR-BEISPIELE\n${sep}\n\n`;
+  content += interviewPrep.starBeispiele.map((s, i) =>
+    `Beispiel ${i + 1}: ${s.frage}\nS (Situation): ${s.situation}\nT (Aufgabe): ${s.aufgabe}\nA (Aktion): ${s.aktion}\nR (Ergebnis): ${s.ergebnis}`
+  ).join("\n\n") + "\n\n";
+  content += `${sep}\nMEINE RÜCKFRAGEN\n${sep}\n\n`;
+  content += interviewPrep.rueckfragen.map(q => `? ${q}`).join("\n");
+
+  // Verify token not expired
+  if (token.expiresAt && new Date(token.expiresAt) < new Date()) {
+    return c.json({ error: "Google-Verbindung abgelaufen — bitte in Settings → Integrationen neu verbinden" }, 400);
+  }
+
+  const docTitle = `Interview-Prep – ${app_.role} @ ${app_.company}`;
+  try {
+    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: docTitle })
+    });
+    if (!docRes.ok) {
+      const errBody = await docRes.json().catch(() => ({})) as { error?: { message?: string } };
+      const msg = errBody?.error?.message ?? `HTTP ${docRes.status}`;
+      return c.json({ error: `Google Docs API: ${msg}` }, 502);
+    }
+    const doc = await docRes.json() as { documentId: string };
+
+    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+    });
+
+    // Move to application Drive folder if one exists
+    if (app_.googleFolderId) {
+      await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
+        method: "PATCH",
+        headers: { "Authorization": `Bearer ${token.accessToken}` }
+      });
+    }
+
+    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+    // Save as applicationDocument
+    await db.insert(applicationDocuments).values({
+      applicationId: id, type: "other", name: docTitle,
+      status: "draft", googleDocId: doc.documentId, googleDocUrl: docUrl
+    });
+    return c.json({ docUrl, title: docTitle });
+  } catch (err) {
+    console.error("interview-prep export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
+  }
+});
+
 // Salary Negotiation Tips
 app.post("/api/applications/:id/ai/salary-tips", async (c) => {
   const id = c.req.param("id");
@@ -2072,7 +2160,7 @@ app.get("/api/google/callback", async (c) => {
       const [appUser] = existingUser
         ? [existingUser]
         : await db.insert(users).values({ email: googleEmail.toLowerCase() }).returning();
-      issueTokens(c, appUser.id);
+      issueTokens(c, appUser.id, false, await getSessionTimeout());
       return c.redirect(`${GOOGLE_FRONTEND_URL}/?google_connected=1`);
     }
 
@@ -2230,6 +2318,64 @@ app.delete("/api/applications/:id/drive/files/:fileId", async (c) => {
   await db.delete(applicationDocuments)
     .where(and(eq(applicationDocuments.applicationId, id), eq(applicationDocuments.googleDocId, fileId)));
   return c.json({ ok: true });
+});
+
+// Upload a PDF from a URL directly into the application's Drive folder
+app.post("/api/applications/:id/drive/upload-pdf-from-url", async (c) => {
+  const id = c.req.param("id");
+  const accessToken = await getDriveAccessToken();
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Bewerbung nicht gefunden" }, 404);
+  if (!app_.googleFolderId) return c.json({ error: "Kein Drive-Ordner für diese Bewerbung" }, 400);
+
+  const { url, fileName } = await c.req.json<{ url: string; fileName: string }>();
+  if (!url) return c.json({ error: "Keine URL angegeben" }, 400);
+
+  // Fetch the PDF — Google Drive URLs need auth-download via Drive API
+  let fileBuffer: ArrayBuffer;
+  try {
+    const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (driveMatch) {
+      const fileId = driveMatch[1];
+      const fetchRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+        headers: { "Authorization": `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(60_000)
+      });
+      if (!fetchRes.ok) return c.json({ error: `Drive Download: HTTP ${fetchRes.status}` }, 502);
+      fileBuffer = await fetchRes.arrayBuffer();
+    } else {
+      const fetchRes = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+      if (!fetchRes.ok) return c.json({ error: `Datei nicht erreichbar: HTTP ${fetchRes.status}` }, 502);
+      fileBuffer = await fetchRes.arrayBuffer();
+    }
+  } catch {
+    return c.json({ error: "Datei-URL nicht erreichbar" }, 502);
+  }
+
+  const safeName = fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`;
+  const boundary = "----AppPdfUploadBoundary";
+  const metadata = JSON.stringify({ name: safeName, mimeType: "application/pdf", parents: [app_.googleFolderId] });
+  const multipartBody = Buffer.concat([
+    Buffer.from(`--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`),
+    Buffer.from(fileBuffer),
+    Buffer.from(`\r\n--${boundary}--`)
+  ]);
+
+  const uploadRes = await fetch("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": `multipart/related; boundary=${boundary}` },
+    body: multipartBody
+  });
+
+  if (!uploadRes.ok) {
+    const err = await uploadRes.json() as { error?: { message?: string } };
+    return c.json({ error: `Drive Upload: ${err.error?.message ?? uploadRes.status}` }, 502);
+  }
+
+  const uploaded = await uploadRes.json() as { id: string; name: string };
+  return c.json({ ok: true, fileId: uploaded.id, fileUrl: `https://drive.google.com/file/d/${uploaded.id}/view`, fileName: uploaded.name });
 });
 
 app.get("/api/drive/folder-info", async (c) => {

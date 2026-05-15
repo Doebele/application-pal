@@ -13,6 +13,7 @@ export function LoginPage() {
   const [error, setError]     = useState("");
   const [loading, setLoading] = useState(false);
   const [passkeyLoading, setPasskeyLoading] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
 
@@ -27,7 +28,7 @@ export function LoginPage() {
     e.preventDefault();
     setError(""); setLoading(true);
     try {
-      await api.post("/api/auth/login", { email, password });
+      await api.post("/api/auth/login", { email, password, rememberMe });
       await refetch();
       navigate("/", { replace: true });
     } catch (err: unknown) {
@@ -70,6 +71,11 @@ export function LoginPage() {
             <label>Passwort</label>
             <input className="input-line" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Passwort" required />
           </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>
+            <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)}
+              style={{ width: 14, height: 14, accentColor: "var(--accent)", cursor: "pointer", flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: "var(--fg-2)" }}>Auf diesem Gerät angemeldet bleiben</span>
+          </label>
           {error && <div style={{ fontSize: 12, color: "#f87171", background: "rgba(248,113,113,0.1)", borderRadius: 7, padding: "8px 12px" }}>{error}</div>}
           <button className="btn btn-primary" type="submit" disabled={loading} style={{ marginTop: 4 }}>
             {loading ? "Anmelden…" : "Anmelden"}
