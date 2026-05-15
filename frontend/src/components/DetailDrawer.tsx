@@ -207,7 +207,9 @@ function StageProgressBar({ stage }: { stage: string }) {
               <div style={{
                 fontSize: 9, fontWeight: isActive ? 700 : 500,
                 color: isActive ? "var(--accent)" : "var(--fg-3)",
-                whiteSpace: "nowrap", textAlign: "center",
+                whiteSpace: "nowrap",
+                textAlign: i === 0 ? "left" : i === STAGES.length - 1 ? "right" : "center",
+                alignSelf: i === 0 ? "flex-start" : i === STAGES.length - 1 ? "flex-end" : "center",
                 opacity: isPast ? 0.55 : 1,
               }}>
                 {s.short}
