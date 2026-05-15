@@ -13,6 +13,20 @@ import { useUiStore } from "../lib/store";
 
 type Tab = "overview" | "description" | "documents" | "process" | "agent" | "contacts" | "notes";
 
+// Clipboard helper: tries modern API first, falls back to execCommand for focus/permission issues
+async function copyText(text: string): Promise<void> {
+  if (navigator.clipboard && document.hasFocus()) {
+    try { await navigator.clipboard.writeText(text); return; } catch { /* fall through */ }
+  }
+  const el = document.createElement("textarea");
+  el.value = text;
+  el.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0";
+  document.body.appendChild(el);
+  el.focus(); el.select();
+  document.execCommand("copy");
+  document.body.removeChild(el);
+}
+
 const TABS: { id: Tab; label: string }[] = [
   { id: "overview",    label: "Übersicht"      },
   { id: "description", label: "Beschreibung"   },
@@ -989,7 +1003,7 @@ function DocumentsTab({ app }: { app: Application }) {
                                     e.stopPropagation();
                                     if (!libDoc.url) return;
                                     try {
-                                      await navigator.clipboard.writeText(libDoc.url);
+                                      await copyText(libDoc.url);
                                       showToast("Link kopiert");
                                     } catch {
                                       showToast("Kopieren fehlgeschlagen", "error");
@@ -1121,7 +1135,7 @@ function Accordion({ title, count, color, children, onCopy, defaultOpen = true }
 // ── Email Modal ──
 function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
-  const copy = () => { navigator.clipboard.writeText(`${draft.subject}\n\n${draft.body}`); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+  const copy = () => { copyText(`${draft.subject}\n\n${draft.body}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 300, background: "rgba(0,0,0,0.6)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={onClose}>
@@ -1171,7 +1185,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
     toastTimer.current = setTimeout(() => setToast(null), 2800);
   };
   const copyText = async (text: string, label = "Kopiert") => {
-    try { await navigator.clipboard.writeText(text); showToast(label); }
+    try { await copyText(text); showToast(label); }
     catch { showToast("Kopieren fehlgeschlagen", "error"); }
   };
 
