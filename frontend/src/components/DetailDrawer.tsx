@@ -179,7 +179,10 @@ function StageProgressBar({ stage }: { stage: string }) {
           const isPast   = i < activeIdx;
           const isActive = i === activeIdx;
           const dotColor = isActive ? "var(--accent)" : isPast ? PAST_COLOR : FUTURE_BG;
-          const lineColor = (idx: number) => idx < activeIdx ? PAST_COLOR : FUTURE_BG;
+          // line at idx = connection from step idx-1 → idx
+          // leading into active step → accent; past connections → muted; future → border
+          const lineColor = (idx: number) =>
+            idx === activeIdx ? "var(--accent)" : idx < activeIdx ? PAST_COLOR : FUTURE_BG;
           return (
             <div key={s.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
               <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
