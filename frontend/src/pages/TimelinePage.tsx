@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { Topbar } from "../components/Topbar";
-import { SlidersHorizontal } from "lucide-react";
+import { Settings } from "iconoir-react";
 
 const STAGE_LABELS: Record<string, string> = {
   import_validating: "Inbox", preparing_cv: "Preparing CV",
@@ -55,7 +55,7 @@ export function TimelinePage() {
         title="Timeline"
         sub="Workspace activity — all changes across applications"
         actions={
-          <button className="btn btn-secondary"><SlidersHorizontal size={13} /> Filter</button>
+          <button className="btn btn-secondary"><Settings width={13} height={13} /> Filter</button>
         }
       />
       <div className="page-content" style={{ maxWidth: 640 }}>

@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import {
-  LayoutDashboard, Calendar, List, Files, Settings,
-  PanelLeft, Sun, Moon, Gauge, Armchair, UserCircle, FolderOpen, Database
-} from "lucide-react";
+  DashboardDots, Calendar, List, MultiplePages, Settings,
+  SidebarCollapse, SunLight, HalfMoon, DashboardSpeed, Sofa, ProfileCircle, Folder, Database
+} from "iconoir-react";
 import { NavLink } from "react-router-dom";
 import type { Application } from "@application-pal/shared";
 import { useUiStore } from "../lib/store";
@@ -125,14 +125,14 @@ export function Rail({ applications }: Props) {
   const countByStage = (id: string) => applications.filter((a) => a.stage === id).length;
 
   const navItems = [
-    { to: "/",           label: "Board",      icon: <LayoutDashboard size={15} />, count: applications.length },
-    { to: "/profile",    label: "Profil",     icon: <UserCircle size={15} /> },
-    { to: "/documents",  label: "Dokumente",  icon: <FolderOpen size={15} /> },
-    { to: "/knowledge",  label: "Knowledge",  icon: <Database size={15} /> },
-    { to: "/calendar",   label: "Calendar",   icon: <Calendar size={15} /> },
-    { to: "/timeline",   label: "Timeline",   icon: <List size={15} /> },
-    { to: "/templates",  label: "Templates",  icon: <Files size={15} /> },
-    { to: "/settings",   label: "Settings",   icon: <Settings size={15} /> },
+    { to: "/",           label: "Board",      icon: <DashboardDots width={15} height={15} />, count: applications.length },
+    { to: "/profile",    label: "Profil",     icon: <ProfileCircle width={15} height={15} /> },
+    { to: "/documents",  label: "Dokumente",  icon: <Folder width={15} height={15} /> },
+    { to: "/knowledge",  label: "Knowledge",  icon: <Database width={15} height={15} /> },
+    { to: "/calendar",   label: "Calendar",   icon: <Calendar width={15} height={15} /> },
+    { to: "/timeline",   label: "Timeline",   icon: <List width={15} height={15} /> },
+    { to: "/templates",  label: "Templates",  icon: <MultiplePages width={15} height={15} /> },
+    { to: "/settings",   label: "Settings",   icon: <Settings width={15} height={15} /> },
   ];
 
   return (
@@ -161,7 +161,7 @@ export function Rail({ applications }: Props) {
           title={railOpen ? "Collapse sidebar" : "Expand sidebar"}
           style={{ transform: railOpen ? "none" : "scaleX(-1)" }}
         >
-          <PanelLeft size={15} />
+          <SidebarCollapse width={15} height={15} />
         </button>
       </div>
 
@@ -232,7 +232,7 @@ export function Rail({ applications }: Props) {
               onClick={() => density !== "high" && toggleDensity()}
               title="High density"
             >
-              <Gauge size={13} />
+              <DashboardSpeed width={13} height={13} />
               <span>High</span>
             </button>
             <button
@@ -240,13 +240,13 @@ export function Rail({ applications }: Props) {
               onClick={() => density !== "low" && toggleDensity()}
               title="Low density"
             >
-              <Armchair size={13} />
+              <Sofa width={13} height={13} />
               <span>Low</span>
             </button>
           </div>
         ) : (
           <RailBtn
-            icon={density === "high" ? <Gauge size={15} /> : <Armchair size={15} />}
+            icon={density === "high" ? <DashboardSpeed width={15} height={15} /> : <Sofa width={15} height={15} />}
             label={density === "high" ? "High density" : "Low density"}
             onClick={toggleDensity}
             open={false}
@@ -261,7 +261,7 @@ export function Rail({ applications }: Props) {
               onClick={() => theme !== "light" && toggleTheme()}
               title="Light mode"
             >
-              <Sun size={13} />
+              <SunLight width={13} height={13} />
               <span>Light</span>
             </button>
             <button
@@ -269,13 +269,13 @@ export function Rail({ applications }: Props) {
               onClick={() => theme !== "dark" && toggleTheme()}
               title="Dark mode"
             >
-              <Moon size={13} />
+              <HalfMoon width={13} height={13} />
               <span>Dark</span>
             </button>
           </div>
         ) : (
           <RailBtn
-            icon={theme === "dark" ? <Moon size={15} /> : <Sun size={15} />}
+            icon={theme === "dark" ? <HalfMoon width={15} height={15} /> : <SunLight width={15} height={15} />}
             label={theme === "dark" ? "Dark mode" : "Light mode"}
             onClick={toggleTheme}
             open={false}

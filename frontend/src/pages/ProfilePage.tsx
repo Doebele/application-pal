@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { ExternalLink, Save, User, Linkedin, FileText, Loader, Maximize2, Minimize2, Lightbulb } from "lucide-react";
+import { OpenNewWindow, FloppyDisk, User, Linkedin, Page, RefreshCircle, Expand, Collapse, LightBulb } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 import type { UserProfile } from "@application-pal/shared";
@@ -75,7 +75,7 @@ export function ProfilePage() {
     <>
       <Topbar title="Profil" />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
-        <Loader size={20} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />
+        <RefreshCircle width={20} height={20} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />
       </div>
     </>
   );
@@ -91,7 +91,7 @@ export function ProfilePage() {
             onClick={() => save()}
             disabled={saving}
           >
-            {saving ? <Loader size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Save size={13} />}
+            {saving ? <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} /> : <FloppyDisk width={13} height={13} />}
             {saved ? "Gespeichert" : "Speichern"}
           </button>
         }
@@ -101,7 +101,7 @@ export function ProfilePage() {
         {/* Personal Info */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-            <User size={14} style={{ color: "var(--accent)" }} />
+            <User width={14} height={14} style={{ color: "var(--accent)" }} />
             <div className="eyebrow">Persönliche Angaben</div>
           </div>
           <div className="settings-group">
@@ -162,7 +162,7 @@ export function ProfilePage() {
           } : {})
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-            <Linkedin size={14} style={{ color: "#0a66c2" }} />
+            <Linkedin width={14} height={14} style={{ color: "#0a66c2" }} />
             <div className="eyebrow" style={{ flex: 1 }}>LinkedIn Profil</div>
             <button
               className="btn btn-ghost btn-icon"
@@ -170,7 +170,7 @@ export function ProfilePage() {
               title={linkedinExpanded ? "Minimieren" : "Maximieren"}
               style={{ padding: 4 }}
             >
-              {linkedinExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              {linkedinExpanded ? <Collapse width={14} height={14} /> : <Expand width={14} height={14} />}
             </button>
           </div>
           <div className="settings-group" style={linkedinExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
@@ -181,7 +181,7 @@ export function ProfilePage() {
                   {profile.linkedinUrl && (
                     <a href={profile.linkedinUrl} target="_blank" rel="noreferrer"
                       style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent)", fontSize: 10, fontWeight: 600, textDecoration: "none" }}>
-                      <ExternalLink size={10} /> Profil öffnen
+                      <OpenNewWindow width={10} height={10} /> Profil öffnen
                     </a>
                   )}
                 </div>
@@ -222,7 +222,7 @@ export function ProfilePage() {
           } : {})
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <FileText size={14} style={{ color: "var(--accent)" }} />
+            <Page width={14} height={14} style={{ color: "var(--accent)" }} />
             <div className="eyebrow" style={{ flex: 1 }}>Master-Lebenslauf</div>
             <button
               className="btn btn-ghost btn-icon"
@@ -230,7 +230,7 @@ export function ProfilePage() {
               title={cvExpanded ? "Minimieren" : "Maximieren"}
               style={{ padding: 4 }}
             >
-              {cvExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              {cvExpanded ? <Collapse width={14} height={14} /> : <Expand width={14} height={14} />}
             </button>
           </div>
           {!cvExpanded && (
@@ -278,7 +278,7 @@ export function ProfilePage() {
           } : {})
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <Lightbulb size={14} style={{ color: "#f59e0b" }} />
+            <LightBulb width={14} height={14} style={{ color: "#f59e0b" }} />
             <div className="eyebrow" style={{ flex: 1 }}>Persönliche Stichpunkte</div>
             <button
               className="btn btn-ghost btn-icon"
@@ -286,7 +286,7 @@ export function ProfilePage() {
               title={notesExpanded ? "Minimieren" : "Maximieren"}
               style={{ padding: 4 }}
             >
-              {notesExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              {notesExpanded ? <Collapse width={14} height={14} /> : <Expand width={14} height={14} />}
             </button>
           </div>
           <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 14, lineHeight: 1.6 }}>

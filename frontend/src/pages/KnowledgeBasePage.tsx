@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  BriefcaseBusiness, Building2, Database, ExternalLink, FileText,
-  Loader, Plus, Search, Upload, X
-} from "lucide-react";
+  Bag, Building, Database, OpenNewWindow, Page,
+  RefreshCircle, Plus, Search, Upload, Xmark
+} from "iconoir-react";
 import type { KbCompany, KbRole, KbSource } from "@application-pal/shared";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
@@ -65,7 +65,7 @@ function AddSourceModal({ onClose, onCreated }: {
             <div className="eyebrow">Knowledge Base</div>
             <h2 style={{ margin: "3px 0 0", fontSize: 20 }}>Quelle hinzufügen</h2>
           </div>
-          <button className="icon-btn" onClick={onClose}><X size={15} /></button>
+          <button className="icon-btn" onClick={onClose}><Xmark width={15} height={15} /></button>
         </div>
         <div className="drawer-body">
           <div className="field">
@@ -96,7 +96,7 @@ function AddSourceModal({ onClose, onCreated }: {
               cursor: "pointer"
             }}
           >
-            <Upload size={17} style={{ color: "var(--accent)" }} />
+            <Upload width={17} height={17} style={{ color: "var(--accent)" }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700 }}>{file ? file.name : "PDF auswählen"}</div>
               <div style={{ color: "var(--fg-3)", fontSize: 11 }}>Stelleninserat oder Firmenprofil</div>
@@ -121,7 +121,7 @@ function AddSourceModal({ onClose, onCreated }: {
             disabled={ingest.isPending || (!url.trim() && !file)}
             onClick={() => { setError(null); ingest.mutate(); }}
           >
-            {ingest.isPending ? <Loader size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Plus size={13} />}
+            {ingest.isPending ? <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} /> : <Plus width={13} height={13} />}
             Importieren
           </button>
         </div>
@@ -146,7 +146,7 @@ function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () => void }
             <h2 style={{ margin: "3px 0 0", fontSize: 20 }}>{role?.title ?? "Lade Rolle..."}</h2>
             {role?.company && <div style={{ color: "var(--fg-3)", fontSize: 12 }}>{role.company.name}</div>}
           </div>
-          <button className="icon-btn" onClick={onClose}><X size={15} /></button>
+          <button className="icon-btn" onClick={onClose}><Xmark width={15} height={15} /></button>
         </div>
         <div className="drawer-body">
           <div className="stat-box">
@@ -170,9 +170,9 @@ function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () => void }
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {(role?.sources ?? []).map((source) => (
                 <div key={source.id} style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--fg-2)" }}>
-                  <FileText size={13} />
+                  <Page width={13} height={13} />
                   <span style={{ flex: 1 }}>{sourceLabel(source)}</span>
-                  {source.kind === "url" && <ExternalLink size={12} />}
+                  {source.kind === "url" && <OpenNewWindow width={12} height={12} />}
                 </div>
               ))}
             </div>
@@ -208,7 +208,7 @@ export function KnowledgeBasePage() {
 
   const addButton = (
     <button className="btn btn-primary" onClick={() => setAddingSource(true)}>
-      <Plus size={13} /> Add Source
+      <Plus width={13} height={13} /> Add Source
     </button>
   );
 
@@ -218,7 +218,7 @@ export function KnowledgeBasePage() {
       <main style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "360px 1fr", gap: 0 }}>
         <section style={{ borderRight: "1px solid var(--border)", padding: 18, overflowY: "auto" }}>
           <div className="input-line-wrap" style={{ marginBottom: 14 }}>
-            <Search size={13} className="input-line-icon" />
+            <Search width={13} height={13} className="input-line-icon" />
             <input
               className="input-line"
               value={q}
@@ -245,7 +245,7 @@ export function KnowledgeBasePage() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Building2 size={15} style={{ color: "var(--accent)" }} />
+                  <Building width={15} height={15} style={{ color: "var(--accent)" }} />
                   <strong>{company.name}</strong>
                 </div>
                 <div style={{ marginTop: 4, color: "var(--fg-3)", fontSize: 11 }}>
@@ -260,7 +260,7 @@ export function KnowledgeBasePage() {
           {!selectedCompany ? (
             <div className="card" style={{ height: "100%", display: "grid", placeItems: "center", color: "var(--fg-3)" }}>
               <div style={{ textAlign: "center" }}>
-                <Database size={28} style={{ marginBottom: 8 }} />
+                <Database width={28} height={28} style={{ marginBottom: 8 }} />
                 <div>Quelle hinzufügen, um die Knowledge Base aufzubauen.</div>
               </div>
             </div>
@@ -268,7 +268,7 @@ export function KnowledgeBasePage() {
             <div style={{ maxWidth: 920 }}>
               <div style={{ display: "flex", gap: 14, alignItems: "flex-start", marginBottom: 20 }}>
                 <div style={{ width: 44, height: 44, borderRadius: 12, background: "var(--accent-08)", color: "var(--accent)", display: "grid", placeItems: "center" }}>
-                  <Building2 size={21} />
+                  <Building width={21} height={21} />
                 </div>
                 <div>
                   <div className="eyebrow">{selectedCompany.industry ?? "Company"}</div>
@@ -304,7 +304,7 @@ export function KnowledgeBasePage() {
                         }}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <BriefcaseBusiness size={14} style={{ color: "var(--accent)" }} />
+                          <Bag width={14} height={14} style={{ color: "var(--accent)" }} />
                           <strong>{role.title}</strong>
                         </div>
                         <div style={{ color: "var(--fg-3)", fontSize: 11, marginTop: 4 }}>
@@ -321,7 +321,7 @@ export function KnowledgeBasePage() {
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {selectedCompany.sources.map((source) => (
                       <div key={source.id} style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--fg-2)" }}>
-                        {source.kind === "pdf" ? <FileText size={14} /> : <ExternalLink size={14} />}
+                        {source.kind === "pdf" ? <Page width={14} height={14} /> : <OpenNewWindow width={14} height={14} />}
                         <span style={{ flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {sourceLabel(source)}
                         </span>

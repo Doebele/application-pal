@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { Topbar } from "../components/Topbar";
-import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, NavArrowLeft, NavArrowRight } from "iconoir-react";
 import { useState } from "react";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -51,12 +51,12 @@ export function CalendarPage() {
         title="Calendar"
         actions={
           <>
-            <button className="btn btn-secondary" onClick={prev}><ChevronLeft size={14} /></button>
+            <button className="btn btn-secondary" onClick={prev}><NavArrowLeft width={14} height={14} /></button>
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)", minWidth: 130, textAlign: "center" }}>
               {MONTHS[month]} {year}
             </span>
-            <button className="btn btn-secondary" onClick={next}><ChevronRight size={14} /></button>
-            <button className="btn btn-primary"><Plus size={13} /> Event</button>
+            <button className="btn btn-secondary" onClick={next}><NavArrowRight width={14} height={14} /></button>
+            <button className="btn btn-primary"><Plus width={13} height={13} /> Event</button>
           </>
         }
       />

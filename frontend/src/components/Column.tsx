@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus } from "iconoir-react";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
 import type { Application } from "@application-pal/shared";
 import { ApplicationCard } from "./Card";
@@ -33,7 +33,7 @@ export function Column({ stageId, applications, cardVariant, onCardClick }: Prop
         <h3>{label}</h3>
         <span className="col-count">{applications.length}</span>
         <button className="col-add" aria-label="Add">
-          <Plus size={13} />
+          <Plus width={13} height={13} />
         </button>
       </div>
 

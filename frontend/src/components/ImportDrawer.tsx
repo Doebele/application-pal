@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { X, Link, Sparkles, Check, ArrowRight, Cpu, Cloud, Plus, ChevronDown, Maximize2, Minimize2 } from "lucide-react";
+import { Xmark, Link, Sparks, Check, ArrowRight, Cpu, Cloud, Plus, NavArrowDown, Expand, Collapse } from "iconoir-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
@@ -51,7 +51,7 @@ function AgentStep({ done, active, label, meta }: {
     <div className={`agent-step${done ? " done" : ""}${active ? " active" : ""}`}>
       <div className="pip">
         {done
-          ? <Check size={11} />
+          ? <Check width={11} height={11} />
           : active
             ? <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--accent)", display: "block" }} />
             : <span style={{ width: 6, height: 6, borderRadius: 999, background: "currentColor", display: "block" }} />}
@@ -94,7 +94,7 @@ function StagePicker({ value, onChange }: { value: string; onChange: (v: string)
       >
         <span style={{ width: 7, height: 7, borderRadius: 999, background: current.color, flexShrink: 0 }} />
         {current.label}
-        <ChevronDown size={11} style={{ opacity: 0.7, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+        <NavArrowDown width={11} height={11} style={{ opacity: 0.7, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </button>
 
       {open && (
@@ -115,7 +115,7 @@ function StagePicker({ value, onChange }: { value: string; onChange: (v: string)
             }}>
               <span style={{ width: 8, height: 8, borderRadius: 999, background: s.color, flexShrink: 0 }} />
               {s.label}
-              {value === s.id && <Check size={11} style={{ marginLeft: "auto", color: s.color }} />}
+              {value === s.id && <Check width={11} height={11} style={{ marginLeft: "auto", color: s.color }} />}
             </button>
           ))}
         </div>
@@ -233,7 +233,7 @@ export function ImportDrawer({ onClose }: Props) {
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", flex: 1 }}>Beschreibung</span>
         <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} onClick={() => setDescExpanded(false)} title="Minimieren">
-          <Minimize2 size={13} />
+          <Collapse width={13} height={13} />
         </button>
       </div>
       <textarea
@@ -261,7 +261,7 @@ export function ImportDrawer({ onClose }: Props) {
           </div>
           {/* Stage picker in header */}
           <StagePicker value={stage} onChange={setStage} />
-          <button className="btn btn-ghost btn-icon" onClick={onClose} style={{ marginLeft: 4 }}><X size={16} /></button>
+          <button className="btn btn-ghost btn-icon" onClick={onClose} style={{ marginLeft: 4 }}><Xmark width={16} height={16} /></button>
         </div>
 
         <div className="drawer-body" style={{ gap: 12 }}>
@@ -281,7 +281,7 @@ export function ImportDrawer({ onClose }: Props) {
                 fontSize: 10, fontWeight: 700, border: "1px solid",
                 borderColor: ai.provider === "lm-studio" ? "rgba(16,185,129,0.25)" : "rgba(245,158,11,0.25)"
               }}>
-                {ai.provider === "lm-studio" ? <Cpu size={10} /> : <Cloud size={10} />}
+                {ai.provider === "lm-studio" ? <Cpu width={10} height={10} /> : <Cloud width={10} height={10} />}
                 {ai.provider === "lm-studio"
                   ? `LM Studio${ai.lmStudioModel ? ` · ${ai.lmStudioModel.split("/").pop()}` : ""}`
                   : "Anthropic"}
@@ -296,7 +296,7 @@ export function ImportDrawer({ onClose }: Props) {
           {/* URL / Text input */}
           {mode === "url" ? (
             <div style={{ position: "relative" }}>
-              <Link size={12} style={{ position: "absolute", left: 2, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
+              <Link width={12} height={12} style={{ position: "absolute", left: 2, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
               <input
                 className="input-line"
                 value={url} onChange={(e) => setUrl(e.target.value)}
@@ -319,7 +319,7 @@ export function ImportDrawer({ onClose }: Props) {
             onClick={runExtraction}
             disabled={phase === "reading" || phase === "extracting" || (!url && !pasteText)}
           >
-            <Sparkles size={12} />
+            <Sparks width={12} height={12} />
             {phase === "idle" ? (usingAi ? "Extract with AI" : "Extract (regex)") : phase === "done" ? "Erneut extrahieren" : "Extrahiere…"}
           </button>
 
@@ -402,7 +402,7 @@ export function ImportDrawer({ onClose }: Props) {
                 <span style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", flex: 1 }}>Beschreibung</span>
                 {ready && (
                   <button className="btn btn-ghost btn-icon" style={{ padding: 3 }} onClick={() => setDescExpanded(true)} title="Maximieren">
-                    <Maximize2 size={12} />
+                    <Expand width={12} height={12} />
                   </button>
                 )}
               </div>
@@ -419,7 +419,7 @@ export function ImportDrawer({ onClose }: Props) {
           <button className="btn btn-secondary" onClick={onClose}>Abbrechen</button>
           <button className="btn btn-primary" disabled={!canCreate || createMutation.isPending} onClick={() => createMutation.mutate()}>
             {createMutation.isPending ? "Anlegen…" : "Anlegen"}
-            <ArrowRight size={13} />
+            <ArrowRight width={13} height={13} />
           </button>
         </div>
       </aside>

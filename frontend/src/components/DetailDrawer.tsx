@@ -1,13 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import {
-  X, ExternalLink, MoreHorizontal, Check, Sparkles, RefreshCw,
-  ChevronRight, Link2, Plus, Mail, Phone, Calendar, FileText,
-  Loader, Trash2, Edit3, MessageSquare, Clock, ChevronDown, Archive, Pencil, Copy
-} from "lucide-react";
-import {
+  Xmark, OpenNewWindow, MoreHoriz, Check, Sparks, Refresh,
+  NavArrowRight, Link, Plus, Mail, Phone, Calendar, Page,
+  RefreshCircle, Trash, EditPencil, ChatBubbleEmpty, Clock, NavArrowDown, Archive, Copy,
   BrainElectricity, PageEdit, SendMail, Coins,
-  Calendar as IcCalendar, CalendarArrowDown, Refresh,
-  Copy as IcCopy, Page, MailOut, Brain,
+  Calendar as IcCalendar, CalendarArrowDown,
+  Copy as IcCopy, MailOut, Brain,
+  MapPin, VideoCamera,
 } from "iconoir-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import type {
@@ -95,7 +94,7 @@ function StagePicker({ value, onChange }: { value: string; onChange: (v: string)
       }}>
         <span style={{ width: 7, height: 7, borderRadius: 999, background: color, flexShrink: 0 }} />
         {label}
-        <ChevronDown size={11} style={{ opacity: 0.7, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+        <NavArrowDown width={11} height={11} style={{ opacity: 0.7, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </button>
 
       {open && (
@@ -118,7 +117,7 @@ function StagePicker({ value, onChange }: { value: string; onChange: (v: string)
               }}>
                 <span style={{ width: 8, height: 8, borderRadius: 999, background: sc, flexShrink: 0 }} />
                 {s.label}
-                {value === s.id && <Check size={11} style={{ marginLeft: "auto", color: sc }} />}
+                {value === s.id && <Check width={11} height={11} style={{ marginLeft: "auto", color: sc }} />}
               </button>
             );
           })}
@@ -159,7 +158,7 @@ function AgentStep({ done, active, label, meta }: { done: boolean; active: boole
   return (
     <div className={`agent-step${done ? " done" : ""}${active ? " active" : ""}`}>
       <div className="pip">
-        {done ? <Check size={11} /> : active
+        {done ? <Check width={11} height={11} /> : active
           ? <span style={{ width: 8, height: 8, borderRadius: 999, background: "var(--accent)", display: "block" }} />
           : <span style={{ width: 6, height: 6, borderRadius: 999, background: "currentColor", display: "block" }} />}
       </div>
@@ -203,7 +202,7 @@ function StageProgressBar({ stage }: { stage: string }) {
                   display: "flex", alignItems: "center", justifyContent: "center",
                   opacity: isPast ? 0.55 : 1,
                 }}>
-                  {isPast && <Check size={5} color="var(--bg)" strokeWidth={3} />}
+                  {isPast && <Check width={5} height={5} color="var(--bg)" strokeWidth={3} />}
                 </div>
                 {i < STAGES.length - 1 && (
                   <div style={{ flex: 1, height: 2, background: lineColor(i + 1), transition: "background 0.2s" }} />
@@ -320,19 +319,19 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
         <div className="field">
           <label>Original URL</label>
           <div style={{ position: "relative" }}>
-            <Link2 size={12} style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
+            <Link width={12} height={12} style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
             <input value={url} onChange={(e) => onUrlChange(e.target.value)} onBlur={() => save({ url })}
               placeholder="https://…" style={{ paddingLeft: 18, paddingRight: url ? 20 : undefined }} />
-            {url && <a href={url} target="_blank" rel="noreferrer" style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", color: "var(--accent)", display: "flex" }}><ExternalLink size={12} /></a>}
+            {url && <a href={url} target="_blank" rel="noreferrer" style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", color: "var(--accent)", display: "flex" }}><OpenNewWindow width={12} height={12} /></a>}
           </div>
         </div>
         <div className="field">
           <label>Bewerbungsportal</label>
           <div style={{ position: "relative" }}>
-            <ExternalLink size={12} style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
+            <OpenNewWindow width={12} height={12} style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
             <input value={app.portalUrl ?? ""} onChange={(e) => save({ portalUrl: e.target.value })} onBlur={(e) => save({ portalUrl: e.target.value })}
               placeholder="https://apply.firma.com/…" style={{ paddingLeft: 18, paddingRight: app.portalUrl ? 20 : undefined }} />
-            {app.portalUrl && <a href={app.portalUrl} target="_blank" rel="noreferrer" style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", color: "var(--accent)", display: "flex" }}><ExternalLink size={12} /></a>}
+            {app.portalUrl && <a href={app.portalUrl} target="_blank" rel="noreferrer" style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", color: "var(--accent)", display: "flex" }}><OpenNewWindow width={12} height={12} /></a>}
           </div>
         </div>
       </div>
@@ -383,7 +382,7 @@ function DescriptionTab({ app, onSave }: { app: Application; onSave: (patch: Par
         <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Originale Stellenbeschreibung</div>
         {app.url && (
           <a href={app.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent)", fontSize: 11, fontWeight: 600, textDecoration: "none" }}>
-            <ExternalLink size={11} /> Original öffnen
+            <OpenNewWindow width={11} height={11} /> Original öffnen
           </a>
         )}
       </div>
@@ -747,11 +746,11 @@ function DocumentsTab({ app }: { app: Application }) {
               <>
                 <button onClick={() => { setDriveFiles(null); }} title="Aktualisieren"
                   style={{ background: "none", border: "none", cursor: driveFilesLoading ? "wait" : "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
-                  <RefreshCw size={11} style={{ animation: driveFilesLoading ? "spin 1s linear infinite" : "none" }} />
+                  <Refresh width={11} height={11} style={{ animation: driveFilesLoading ? "spin 1s linear infinite" : "none" }} />
                 </button>
                 <a href={folderState.folderUrl} target="_blank" rel="noreferrer"
                   style={{ fontSize: 11, color: "var(--fg-3)", textDecoration: "none", display: "flex", alignItems: "center", gap: 3 }}>
-                  <ExternalLink size={10} /> Ordner öffnen
+                  <OpenNewWindow width={10} height={10} /> Ordner öffnen
                 </a>
               </>
             )}
@@ -763,15 +762,15 @@ function DocumentsTab({ app }: { app: Application }) {
             <button onClick={createFolder} disabled={folderCreating}
               style={{ fontSize: 11, color: "var(--fg-3)", background: "none", border: "none", cursor: folderCreating ? "wait" : "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 5, padding: "4px 0" }}>
               {folderCreating
-                ? <><Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> Erstelle Ordner…</>
-                : <><Plus size={11} /> Bewerbungsordner erstellen</>}
+                ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> Erstelle Ordner…</>
+                : <><Plus width={11} height={11} /> Bewerbungsordner erstellen</>}
             </button>
           ) : (
             <>
               {/* Live Drive folder contents */}
               {driveFiles === null && driveFilesLoading && (
                 <div style={{ fontSize: 11, color: "var(--fg-3)", display: "flex", alignItems: "center", gap: 5, marginBottom: 8 }}>
-                  <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> Lade Ordner-Inhalt…
+                  <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> Lade Ordner-Inhalt…
                 </div>
               )}
               {driveFiles !== null && driveFiles.length === 0 && (
@@ -796,13 +795,13 @@ function DocumentsTab({ app }: { app: Application }) {
                         </span>
                         <a href={f.webViewLink} target="_blank" rel="noreferrer"
                           style={{ color: "var(--fg-3)", display: "flex", flexShrink: 0, opacity: 0.6 }} title="Öffnen">
-                          <ExternalLink size={10} />
+                          <OpenNewWindow width={10} height={10} />
                         </a>
                         <button className="btn btn-ghost btn-icon" style={{ padding: 2, flexShrink: 0, opacity: 0.5 }}
                           title="Aus Drive löschen" disabled={isDeleting} onClick={() => deleteDriveFile(f.id)}>
                           {isDeleting
-                            ? <Loader size={10} style={{ animation: "spin 1s linear infinite" }} />
-                            : <Trash2 size={10} />}
+                            ? <RefreshCircle width={10} height={10} style={{ animation: "spin 1s linear infinite" }} />
+                            : <Trash width={10} height={10} />}
                         </button>
                       </div>
                     );
@@ -821,7 +820,7 @@ function DocumentsTab({ app }: { app: Application }) {
           <div className="eyebrow" style={{ flex: 1 }}>Zugewiesen</div>
           <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }}
             onClick={() => setCreating(creating ? null : "cv")}>
-            <Plus size={11} /> Neu erstellen
+            <Plus width={11} height={11} /> Neu erstellen
           </button>
         </div>
 
@@ -852,7 +851,7 @@ function DocumentsTab({ app }: { app: Application }) {
             <button className="btn btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => create(creating)}>
               {googleConnected ? "Erstellen + Google Doc" : "Erstellen"}
             </button>
-            <button className="btn btn-ghost btn-icon" onClick={() => setCreating(null)}><X size={13} /></button>
+            <button className="btn btn-ghost btn-icon" onClick={() => setCreating(null)}><Xmark width={13} height={13} /></button>
           </div>
         )}
 
@@ -869,7 +868,7 @@ function DocumentsTab({ app }: { app: Application }) {
               return (
                 <div key={doc.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
                   <div style={{ color: isGDoc ? "#4285f4" : "var(--fg-3)", flexShrink: 0 }}>
-                    {isGDoc ? <GDocIcon size={14} /> : <FileText size={14} />}
+                    {isGDoc ? <GDocIcon size={14} /> : <Page width={14} height={14} />}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{doc.name}</div>
@@ -890,11 +889,11 @@ function DocumentsTab({ app }: { app: Application }) {
                       color: isGDoc ? "#4285f4" : "var(--fg-2)", fontSize: 11, fontWeight: 600,
                       textDecoration: "none", whiteSpace: "nowrap"
                     }}>
-                      {isGDoc ? <GDocIcon size={11} /> : <ExternalLink size={11} />}
+                      {isGDoc ? <GDocIcon size={11} /> : <OpenNewWindow width={11} height={11} />}
                       {isGDoc ? "Öffnen" : "Link"}
                     </a>
                   )}
-                  <button className="btn btn-ghost btn-icon" onClick={() => deleteDoc(doc.id)}><Trash2 size={12} /></button>
+                  <button className="btn btn-ghost btn-icon" onClick={() => deleteDoc(doc.id)}><Trash width={12} height={12} /></button>
                 </div>
               );
             })}
@@ -908,7 +907,7 @@ function DocumentsTab({ app }: { app: Application }) {
           onClick={() => setLibOpen((v) => !v)}
           style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", background: "none", border: "none", cursor: "pointer", padding: "4px 0 10px", color: "var(--fg-2)", fontFamily: "var(--font-sans)" }}
         >
-          <ChevronRight size={13} style={{ transform: libOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
+          <NavArrowRight width={13} height={13} style={{ transform: libOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
           <div className="eyebrow" style={{ flex: 1, textAlign: "left" }}>Aus Bibliothek zuweisen</div>
           {copyLibErr && null /* errors shown as toast */}
           {library.length > 0 && (
@@ -987,21 +986,21 @@ function DocumentsTab({ app }: { app: Application }) {
                               display: "flex", alignItems: "center", justifyContent: "center", gap: 4, minHeight: 24
                             }}>
                               {isToggling ? (
-                                <Loader size={10} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />
+                                <RefreshCircle width={10} height={10} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />
                               ) : isLinked ? (
                                 hasDriveCopy ? (
                                   <span style={{ fontSize: 9, color: "#34d399", fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
-                                    <Check size={9} /> Drive ✓
+                                    <Check width={9} height={9} /> Drive ✓
                                   </span>
                                 ) : canCopyToDrive ? (
                                   <button onClick={(e) => { e.stopPropagation(); copyLibDocToDrive(libDoc); }} disabled={isCopying}
                                     style={{ fontSize: 9, color: "#4285f4", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 2, padding: 0 }}>
-                                    {isCopying ? <Loader size={9} style={{ animation: "spin 1s linear infinite" }} /> : <GDocIcon size={9} />}
+                                    {isCopying ? <RefreshCircle width={9} height={9} style={{ animation: "spin 1s linear infinite" }} /> : <GDocIcon size={9} />}
                                     {isCopying ? "…" : "→ Drive"}
                                   </button>
                                 ) : (
                                   <span style={{ fontSize: 9, color: fileAccent, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
-                                    <Check size={9} /> Hinzugefügt
+                                    <Check width={9} height={9} /> Hinzugefügt
                                   </span>
                                 )
                               ) : canDriveCopy ? (
@@ -1020,7 +1019,7 @@ function DocumentsTab({ app }: { app: Application }) {
                                     }
                                   }}
                                   style={{ fontSize: 9, color: fileAccent, background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 2, padding: 0 }}>
-                                  <Link2 size={9} /> Link kopieren
+                                  <Link width={9} height={9} /> Link kopieren
                                 </button>
                               )}
                             </div>
@@ -1038,7 +1037,7 @@ function DocumentsTab({ app }: { app: Application }) {
                                   display: "flex", alignItems: "center", justifyContent: "center"
                                 }}
                                 title={hasDriveCopy ? "In Drive öffnen" : "Öffnen"}>
-                                <ExternalLink size={9} />
+                                <OpenNewWindow width={9} height={9} />
                               </a>
                             )}
                           </div>
@@ -1082,13 +1081,13 @@ function DocumentsTab({ app }: { app: Application }) {
 
 // ─── Process Tab (Tasks + AI + Timeline) ──────────────────────
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
-  note:         <MessageSquare size={13} />,
-  email:        <Mail size={13} />,
-  call:         <Phone size={13} />,
-  interview:    <Calendar size={13} />,
-  deadline:     <Clock size={13} />,
-  stage_change: <ChevronRight size={13} />,
-  document:     <FileText size={13} />
+  note:         <ChatBubbleEmpty width={13} height={13} />,
+  email:        <Mail width={13} height={13} />,
+  call:         <Phone width={13} height={13} />,
+  interview:    <Calendar width={13} height={13} />,
+  deadline:     <Clock width={13} height={13} />,
+  stage_change: <NavArrowRight width={13} height={13} />,
+  document:     <Page width={13} height={13} />
 };
 const ACTIVITY_TYPES = [
   { id: "note", label: "Notiz" }, { id: "email", label: "E-Mail" },
@@ -1121,7 +1120,7 @@ function Accordion({ title, count, color, children, onCopy, defaultOpen = true }
           flex: 1, display: "flex", alignItems: "center", gap: 8,
           background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", padding: 0
         }}>
-          <ChevronRight size={12} style={{ color: "var(--fg-3)", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} />
+          <NavArrowRight width={12} height={12} style={{ color: "var(--fg-3)", transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s", flexShrink: 0 }} />
           <span style={{ flex: 1, fontSize: 11, fontWeight: 700, color: color ?? "var(--fg-2)", textTransform: "uppercase", letterSpacing: "0.07em", textAlign: "left" }}>{title}</span>
           <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{count}</span>
         </button>
@@ -1161,7 +1160,7 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
           <div style={{ fontSize: 13, color: "var(--fg-1)", whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "8px 0" }}>{draft.body}</div>
         </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button className="btn btn-secondary" onClick={onClose}><X size={12} /> Schliessen</button>
+          <button className="btn btn-secondary" onClick={onClose}><Xmark width={12} height={12} /> Schliessen</button>
           <button className="btn btn-primary" onClick={copy}>{copied ? "✓ Kopiert!" : "Text kopieren"}</button>
         </div>
       </div>
@@ -1317,7 +1316,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
           setSalaryTips(r.data);
         }
       })}>
-      {loading === id ? <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> : icon}
+      {loading === id ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : icon}
       {label}
     </button>
   );
@@ -1421,7 +1420,7 @@ function StageAiActions({ app, onSave }: { app: Application; onSave?: (patch: Pa
                     setLoading(null);
                   }
                 }}>
-                {loading === "iv-export" ? <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />}
+                {loading === "iv-export" ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />}
                 Als Google Doc
               </button>
             </>}
@@ -1636,13 +1635,13 @@ function TaskChecklist({ app }: { app: Application }) {
                 background: t.done ? "#34d399" : "transparent", flexShrink: 0, cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s"
               }}>
-              {t.done && <Check size={10} style={{ color: "#fff" }} />}
+              {t.done && <Check width={10} height={10} style={{ color: "#fff" }} />}
             </button>
             <span style={{ flex: 1, fontSize: 13, color: t.done ? "var(--fg-3)" : "var(--fg-1)", textDecoration: t.done ? "line-through" : "none", transition: "all 0.15s" }}>
               {t.title}
             </span>
             <button className="btn btn-ghost btn-icon task-del" style={{ padding: 2, opacity: 0 }} onClick={() => del(t)}>
-              <Trash2 size={11} />
+              <Trash width={11} height={11} />
             </button>
           </div>
         ))}
@@ -1669,7 +1668,7 @@ function TaskChecklist({ app }: { app: Application }) {
         onClick={() => setShowAdd(true)}
         style={{ marginTop: 8, fontSize: 11, color: "var(--fg-3)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 4, padding: "2px 0" }}
       >
-        <Plus size={11} /> Aufgabe hinzufügen
+        <Plus width={11} height={11} /> Aufgabe hinzufügen
       </button>
     </div>
   );
@@ -1711,13 +1710,14 @@ function InterviewDetailsPanel({ app, round, onSave }: {
 
   const inp: React.CSSProperties = { background: "none", border: "none", borderBottom: "1px solid var(--border)", padding: "3px 0", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", width: "100%", outline: "none" };
   const lbl: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 };
-  const fmtBtn = (val: InterviewDetails["format"], label: string) => (
+  const fmtBtn = (val: InterviewDetails["format"], icon: React.ReactNode, label: string) => (
     <button type="button" onClick={() => save({ format: val })} style={{
       padding: "4px 10px", borderRadius: 6, border: `1px solid ${details.format === val ? "var(--accent)" : "var(--border)"}`,
       background: details.format === val ? "rgba(var(--accent-rgb,99,102,241),0.1)" : "none",
       color: details.format === val ? "var(--accent)" : "var(--fg-2)",
-      fontSize: 11, cursor: "pointer", fontFamily: "var(--font-sans)", fontWeight: details.format === val ? 600 : 400
-    }}>{label}</button>
+      fontSize: 11, cursor: "pointer", fontFamily: "var(--font-sans)", fontWeight: details.format === val ? 600 : 400,
+      display: "inline-flex", alignItems: "center", gap: 4
+    }}>{icon}{label}</button>
   );
 
   return (
@@ -1753,9 +1753,9 @@ function InterviewDetailsPanel({ app, round, onSave }: {
       <div style={{ marginBottom: 14 }}>
         <div style={lbl}>Format</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {fmtBtn("onsite", "📍 Vor Ort")}
-          {fmtBtn("video", "🎥 Video")}
-          {fmtBtn("phone", "📞 Telefon")}
+          {fmtBtn("onsite", <MapPin width={11} height={11} />, "Vor Ort")}
+          {fmtBtn("video", <VideoCamera width={11} height={11} />, "Video")}
+          {fmtBtn("phone", <Phone width={11} height={11} />, "Telefon")}
         </div>
       </div>
 
@@ -1859,7 +1859,7 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
         <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Aktivitäten</div>
         <button className="btn btn-secondary" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} onClick={() => setAdding((v) => !v)}>
-          <Plus size={11} /> Aktivität
+          <Plus width={11} height={11} /> Aktivität
         </button>
       </div>
 
@@ -1900,7 +1900,7 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
           <div key={act.id} style={{ display: "flex", gap: 12, paddingBottom: 14 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
               <div style={{ width: 28, height: 28, borderRadius: "50%", background: "var(--accent-08)", border: "1px solid var(--accent-15)", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--accent)", flexShrink: 0 }}>
-                {ACTIVITY_ICONS[act.type] ?? <MessageSquare size={13} />}
+                {ACTIVITY_ICONS[act.type] ?? <ChatBubbleEmpty width={13} height={13} />}
               </div>
               {i < activities.length - 1 && <div style={{ width: 1, flex: 1, background: "var(--border-2)", marginTop: 4 }} />}
             </div>
@@ -1911,7 +1911,7 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
                 {new Date(act.activityDate).toLocaleString()}
               </div>
             </div>
-            <button className="btn btn-ghost btn-icon" style={{ flexShrink: 0, padding: 4 }} onClick={() => del(act.id)}><Trash2 size={11} /></button>
+            <button className="btn btn-ghost btn-icon" style={{ flexShrink: 0, padding: 4 }} onClick={() => del(act.id)}><Trash width={11} height={11} /></button>
           </div>
         ))}
       </div>
@@ -2098,10 +2098,10 @@ function AgentTab({ app }: { app: Application }) {
         style={{ alignSelf: "flex-start" }}
       >
         {running
-          ? <><Loader size={13} style={{ animation: "spin 1s linear infinite" }} /> Analysiere…</>
+          ? <><RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} /> Analysiere…</>
           : result
-            ? <><RefreshCw size={13} /> Neu analysieren</>
-            : <><Sparkles size={13} /> Analyse starten</>
+            ? <><Refresh width={13} height={13} /> Neu analysieren</>
+            : <><Sparks width={13} height={13} /> Analyse starten</>
         }
       </button>
     </>
@@ -2208,7 +2208,7 @@ function ContactsTab({ app }: { app: Application }) {
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
         <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, padding: "5px 10px" }}
           onClick={() => { setAdding((v) => !v); setEditId(null); }}>
-          <Plus size={11} /> Kontakt
+          <Plus width={11} height={11} /> Kontakt
         </button>
       </div>
 
@@ -2235,15 +2235,15 @@ function ContactsTab({ app }: { app: Application }) {
                   <div style={{ fontSize: 15, fontWeight: 700, color: "var(--fg-1)" }}>{c.name}</div>
                   {c.role && <div style={{ fontSize: 13, color: "var(--fg-3)", marginTop: 1 }}>{c.role}</div>}
                   <div style={{ display: "flex", gap: 8, marginTop: 5, flexWrap: "wrap" }}>
-                    {c.email && <a href={`mailto:${c.email}`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 13, textDecoration: "none" }}><Mail size={12} />{c.email}</a>}
-                    {c.phone && <a href={`tel:${c.phone}`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 13, textDecoration: "none" }}><Phone size={12} />{c.phone}</a>}
-                    {c.linkedinUrl && <a href={c.linkedinUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 3, color: "#0a66c2", fontSize: 13, textDecoration: "none" }}><ExternalLink size={12} />LinkedIn</a>}
+                    {c.email && <a href={`mailto:${c.email}`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 13, textDecoration: "none" }}><Mail width={12} height={12} />{c.email}</a>}
+                    {c.phone && <a href={`tel:${c.phone}`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 13, textDecoration: "none" }}><Phone width={12} height={12} />{c.phone}</a>}
+                    {c.linkedinUrl && <a href={c.linkedinUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 3, color: "#0a66c2", fontSize: 13, textDecoration: "none" }}><OpenNewWindow width={12} height={12} />LinkedIn</a>}
                   </div>
                   {c.notes && <div style={{ marginTop: 6, fontSize: 13, color: "var(--fg-2)", whiteSpace: "pre-wrap" }}>{c.notes}</div>}
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Bearbeiten" onClick={() => startEdit(c)}><Pencil size={11} /></button>
-                  <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Löschen" onClick={() => del(c.id)}><Trash2 size={12} /></button>
+                  <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Bearbeiten" onClick={() => startEdit(c)}><EditPencil width={11} height={11} /></button>
+                  <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Löschen" onClick={() => del(c.id)}><Trash width={12} height={12} /></button>
                 </div>
               </div>
             )}
@@ -2288,7 +2288,7 @@ function ConfirmModal({ title, description, confirmLabel, confirmColor = "var(--
         </div>
         <div style={{ fontSize: 13, color: "var(--fg-2)", lineHeight: 1.6 }}>{description}</div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><X size={12} /> Abbrechen</button>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><Xmark width={12} height={12} /> Abbrechen</button>
           <button style={{
             display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8,
             border: "none", background: confirmColor, color: "#fff",
@@ -2327,7 +2327,7 @@ function ArchiveReasonModal({
       <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 28, width: 400, display: "flex", flexDirection: "column", gap: 16 }}
         onClick={(e) => e.stopPropagation()}>
         <div style={{ fontWeight: 700, fontSize: 16, color: "var(--fg-1)", display: "flex", alignItems: "center", gap: 8 }}>
-          <Archive size={15} /> Bewerbung archivieren
+          <Archive width={15} height={15} /> Bewerbung archivieren
         </div>
         <div style={{ fontSize: 13, color: "var(--fg-3)" }}>
           <strong style={{ color: "var(--fg-1)" }}>„{role}"</strong> bei {company} — warum wird diese Stelle archiviert?
@@ -2342,7 +2342,7 @@ function ArchiveReasonModal({
             }}>
               <span style={{ fontSize: 16 }}>{r.emoji}</span>
               <span style={{ fontSize: 13, fontWeight: selected === r.id ? 600 : 400, color: selected === r.id ? "var(--accent)" : "var(--fg-1)" }}>{r.label}</span>
-              {selected === r.id && <Check size={13} style={{ marginLeft: "auto", color: "var(--accent)" }} />}
+              {selected === r.id && <Check width={13} height={13} style={{ marginLeft: "auto", color: "var(--accent)" }} />}
             </button>
           ))}
           {selected === "other" && (
@@ -2358,7 +2358,7 @@ function ArchiveReasonModal({
           )}
         </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><X size={12} /> Abbrechen</button>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><Xmark width={12} height={12} /> Abbrechen</button>
           <button
             disabled={!selected}
             style={{
@@ -2368,7 +2368,7 @@ function ArchiveReasonModal({
             }}
             onClick={confirm}
           >
-            <Archive size={12} /> Archivieren
+            <Archive width={12} height={12} /> Archivieren
           </button>
         </div>
       </div>
@@ -2406,7 +2406,7 @@ function MoreMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: ()
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button className="btn btn-ghost btn-icon" onClick={() => setOpen((v) => !v)}>
-        <MoreHorizontal size={14} />
+        <MoreHoriz width={14} height={14} />
       </button>
 
       {open && (
@@ -2416,9 +2416,9 @@ function MoreMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: ()
           borderRadius: 10, padding: 4, minWidth: 200,
           boxShadow: "0 8px 24px rgba(0,0,0,0.18)"
         }}>
-          {menuItem("Archivieren", <Archive size={13} style={{ color: "var(--fg-3)" }} />, onArchive)}
+          {menuItem("Archivieren", <Archive width={13} height={13} style={{ color: "var(--fg-3)" }} />, onArchive)}
           <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
-          {menuItem("Entfernen", <Trash2 size={13} />, onDelete, true)}
+          {menuItem("Entfernen", <Trash width={13} height={13} />, onDelete, true)}
         </div>
       )}
     </div>
@@ -2480,7 +2480,7 @@ export function DetailDrawer({ app, onClose }: Props) {
                 {app.salary && <span className="tag mono">{app.salary}</span>}
                 {app.archiveReason && (
                   <span className="tag" style={{ color: "#f87171", borderColor: "rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.08)" }}>
-                    <Archive size={10} style={{ display: "inline", verticalAlign: "middle", marginRight: 3 }} />
+                    <Archive width={10} height={10} style={{ display: "inline", verticalAlign: "middle", marginRight: 3 }} />
                     {ARCHIVE_REASON_LABELS[app.archiveReason] ?? app.archiveReason}
                   </span>
                 )}
@@ -2502,9 +2502,9 @@ export function DetailDrawer({ app, onClose }: Props) {
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
               <StagePicker value={stage} onChange={handleStageChange} />
-              {url && <a href={url} target="_blank" rel="noreferrer" className="btn btn-secondary"><ExternalLink size={13} /> Job</a>}
+              {url && <a href={url} target="_blank" rel="noreferrer" className="btn btn-secondary"><OpenNewWindow width={13} height={13} /> Job</a>}
               <MoreMenu onArchive={() => setShowArchiveModal(true)} onDelete={() => setShowDeleteModal(true)} />
-              <button className="btn btn-ghost btn-icon" onClick={onClose}><X size={16} /></button>
+              <button className="btn btn-ghost btn-icon" onClick={onClose}><Xmark width={16} height={16} /></button>
             </div>
           </div>
 
@@ -2549,7 +2549,7 @@ export function DetailDrawer({ app, onClose }: Props) {
           description={`„${app.role}" bei ${app.company} wird endgültig gelöscht — alle Angaben, Dokumente, Aktivitäten und Kontakte werden entfernt. Diese Aktion kann nicht rückgängig gemacht werden.`}
           confirmLabel="Endgültig löschen"
           confirmColor="#f43f5e"
-          icon={<Trash2 size={14} />}
+          icon={<Trash width={14} height={14} />}
           onConfirm={() => { setShowDeleteModal(false); deleteMutation.mutate(); }}
           onClose={() => setShowDeleteModal(false)}
         />

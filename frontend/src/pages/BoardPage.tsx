@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, SlidersHorizontal, Plus, Check } from "lucide-react";
+import { Archive, Settings, Plus, Check } from "iconoir-react";
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
@@ -114,7 +114,7 @@ function FilterDropdown({
           }}>
             <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0, background: active ? s.color : "var(--border)", transition: "background 0.1s" }} />
             <span style={{ flex: 1, fontSize: 13, fontWeight: active ? 600 : 400, color: active ? "var(--fg-1)" : "var(--fg-3)", textAlign: "left" }}>{s.label}</span>
-            {active && !allSelected && <Check size={12} style={{ color: s.color, flexShrink: 0 }} />}
+            {active && !allSelected && <Check width={12} height={12} style={{ color: s.color, flexShrink: 0 }} />}
           </button>
         );
       })}
@@ -131,7 +131,7 @@ function FilterDropdown({
           cursor: "pointer", fontFamily: "var(--font-sans)", transition: "background 0.1s"
         }}>
           <span style={{ flex: 1, fontSize: 13, fontWeight: timeFilter === t.id ? 600 : 400, color: timeFilter === t.id ? "var(--accent)" : "var(--fg-2)", textAlign: "left" }}>{t.label}</span>
-          {timeFilter === t.id && <Check size={12} style={{ color: "var(--accent)" }} />}
+          {timeFilter === t.id && <Check width={12} height={12} style={{ color: "var(--accent)" }} />}
         </button>
       ))}
     </div>
@@ -177,7 +177,7 @@ function ArchiveFilterDropdown({
           cursor: "pointer", fontFamily: "var(--font-sans)", transition: "background 0.1s"
         }}>
           <span style={{ flex: 1, fontSize: 13, fontWeight: reasonFilter === r.id ? 600 : 400, color: reasonFilter === r.id ? "var(--accent)" : "var(--fg-2)", textAlign: "left" }}>{r.label}</span>
-          {reasonFilter === r.id && <Check size={12} style={{ color: "var(--accent)" }} />}
+          {reasonFilter === r.id && <Check width={12} height={12} style={{ color: "var(--accent)" }} />}
         </button>
       ))}
 
@@ -193,7 +193,7 @@ function ArchiveFilterDropdown({
           cursor: "pointer", fontFamily: "var(--font-sans)", transition: "background 0.1s"
         }}>
           <span style={{ flex: 1, fontSize: 13, fontWeight: timeFilter === t.id ? 600 : 400, color: timeFilter === t.id ? "var(--accent)" : "var(--fg-2)", textAlign: "left" }}>{t.label}</span>
-          {timeFilter === t.id && <Check size={12} style={{ color: "var(--accent)" }} />}
+          {timeFilter === t.id && <Check width={12} height={12} style={{ color: "var(--accent)" }} />}
         </button>
       ))}
     </div>
@@ -254,7 +254,7 @@ export function BoardPage() {
         className="btn btn-secondary"
         style={{ gap: 6, ...(showArchived ? { border: "1px solid var(--accent)", background: "var(--accent-08)", color: "var(--accent)" } : {}) }}
       >
-        <Archive size={13} /> Archiv
+        <Archive width={13} height={13} /> Archiv
       </button>
 
       {/* Filter button — works for both board and archive */}
@@ -264,7 +264,7 @@ export function BoardPage() {
           onClick={() => showArchived ? setArchiveFilterOpen(v => !v) : setFilterOpen(v => !v)}
           style={{ gap: 6, ...(isFiltered ? { border: "1px solid var(--accent)", background: "var(--accent-08)", color: "var(--accent)" } : {}) }}
         >
-          <SlidersHorizontal size={13} />
+          <Settings width={13} height={13} />
           Filter
           {isFiltered && filterBadgeCount > 0 && (
             <span style={{
@@ -299,7 +299,7 @@ export function BoardPage() {
 
       {!showArchived && (
         <button className="btn btn-primary" onClick={() => setImportModalOpen(true)}>
-          <Plus size={13} /> Import Job
+          <Plus width={13} height={13} /> Import Job
         </button>
       )}
     </>

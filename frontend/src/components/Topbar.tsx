@@ -1,4 +1,4 @@
-import { Search, Plus, SlidersHorizontal } from "lucide-react";
+import { Search, Plus, Settings } from "iconoir-react";
 
 type Props = {
   title: string;
@@ -17,7 +17,7 @@ export function Topbar({ title, sub, onImport, showImport = false, actions }: Pr
       </div>
 
       <div className="topbar-search">
-        <Search size={13} className="search-icon" />
+        <Search width={13} height={13} className="search-icon" />
         <input placeholder="Search applications, companies, roles…" />
       </div>
 
@@ -28,10 +28,10 @@ export function Topbar({ title, sub, onImport, showImport = false, actions }: Pr
           {showImport && (
             <>
               <button className="btn btn-secondary">
-                <SlidersHorizontal size={13} /> Filter
+                <Settings width={13} height={13} /> Filter
               </button>
               <button className="btn btn-primary" onClick={onImport}>
-                <Plus size={13} /> Import Job
+                <Plus width={13} height={13} /> Import Job
               </button>
             </>
           )}

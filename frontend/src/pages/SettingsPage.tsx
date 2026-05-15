@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { RefreshCw, CheckCircle, AlertCircle, Loader, Link2, Unlink, Download, Upload, Database, Shield, Key, LogOut, Trash2, FolderOpen, ExternalLink } from "lucide-react";
+import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Download, Upload, Database, Shield, Key, LogOut, Trash, Folder, OpenNewWindow, Calendar } from "iconoir-react";
 import { useNavigate } from "react-router-dom";
 import { Topbar } from "../components/Topbar";
 import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
@@ -77,11 +77,11 @@ function LmStudioSection() {
             title="Test connection"
           >
             {status === "loading"
-              ? <Loader size={13} style={{ animation: "spin 1s linear infinite" }} />
-              : <RefreshCw size={13} />}
+              ? <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} />
+              : <Refresh width={13} height={13} />}
           </button>
-          {status === "ok"    && <CheckCircle size={14} style={{ color: "var(--green)", flexShrink: 0 }} />}
-          {status === "error" && <AlertCircle size={14} style={{ color: "var(--red)", flexShrink: 0 }} />}
+          {status === "ok"    && <CheckCircle width={14} height={14} style={{ color: "var(--green)", flexShrink: 0 }} />}
+          {status === "error" && <WarningCircle width={14} height={14} style={{ color: "var(--red)", flexShrink: 0 }} />}
         </div>
       </div>
 
@@ -261,20 +261,20 @@ function GoogleSection() {
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {status === "loading" && <Loader size={14} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />}
+          {status === "loading" && <RefreshCircle width={14} height={14} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />}
           {status === "connected" && (
             <>
               <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--green)", fontWeight: 600 }}>
-                <CheckCircle size={13} /> Verbunden
+                <CheckCircle width={13} height={13} /> Verbunden
               </span>
               <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} onClick={disconnect}>
-                <Unlink size={11} /> Trennen
+                <LinkSlash width={11} height={11} /> Trennen
               </button>
             </>
           )}
           {status === "disconnected" && (
             <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} onClick={connect}>
-              <Link2 size={12} /> Google verbinden
+              <Link width={12} height={12} /> Google verbinden
             </button>
           )}
         </div>
@@ -293,14 +293,14 @@ function GoogleSection() {
           {/* Current folder display */}
           {folderInfo ? (
             <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.25)" }}>
-              <span style={{ fontSize: 15 }}>📁</span>
+              <Folder width={15} height={15} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)" }}>{folderInfo.name}</div>
                 <div style={{ fontSize: 10, color: "var(--fg-3)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folderInfo.id}</div>
               </div>
               <a href={folderInfo.url} target="_blank" rel="noreferrer"
                 style={{ color: "var(--accent)", display: "flex", flexShrink: 0 }} title="In Drive öffnen">
-                <ExternalLink size={12} />
+                <OpenNewWindow width={12} height={12} />
               </a>
               <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={clearFolder}>
                 Ändern
@@ -319,7 +319,7 @@ function GoogleSection() {
               </div>
               <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
                 disabled={checkingFolder || !folderInput.trim()} onClick={validateFolder}>
-                {checkingFolder ? <Loader size={11} style={{ animation: "spin 1s linear infinite" }} /> : "Bestätigen"}
+                {checkingFolder ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : "Bestätigen"}
               </button>
             </div>
           )}
@@ -355,7 +355,7 @@ function DriveNamingSection() {
   return (
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <FolderOpen size={13} style={{ color: "var(--fg-3)" }} />
+        <Folder width={13} height={13} style={{ color: "var(--fg-3)" }} />
         <div className="eyebrow">Google Drive Benennung</div>
       </div>
       <div className="settings-group">
@@ -426,7 +426,7 @@ function CalendarSection() {
   return (
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 13 }}>📅</span>
+        <Calendar width={13} height={13} />
         <div className="eyebrow">Google Kalender</div>
       </div>
       <div className="settings-group">
@@ -538,7 +538,7 @@ function SecuritySection() {
   return (
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <Shield size={13} style={{ color: "var(--fg-3)" }} />
+        <Shield width={13} height={13} style={{ color: "var(--fg-3)" }} />
         <div className="eyebrow">Sicherheit</div>
       </div>
       <div className="settings-group">
@@ -565,7 +565,7 @@ function SecuritySection() {
             <div className="settings-row-sub">{user?.email}</div>
           </div>
           <button className="btn btn-secondary" style={{ gap: 6, fontSize: 12 }} onClick={handleLogout}>
-            <LogOut size={12} /> Abmelden
+            <LogOut width={12} height={12} /> Abmelden
           </button>
         </div>
 
@@ -602,7 +602,7 @@ function SecuritySection() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <div className="settings-row-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Key size={12} /> Passkeys
+                  <Key width={12} height={12} /> Passkeys
                 </div>
                 <div className="settings-row-sub">Face ID, Touch ID, Windows Hello</div>
               </div>
@@ -632,7 +632,7 @@ function SecuritySection() {
                       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)" }}>{cr.deviceName ?? "Unbekanntes Gerät"}</div>
                       <div style={{ fontSize: 11, color: "var(--fg-3)" }}>Hinzugefügt: {new Date(cr.createdAt).toLocaleDateString("de-CH")}</div>
                     </div>
-                    <button className="btn btn-ghost btn-icon" onClick={() => deleteCred(cr.id)} title="Entfernen"><Trash2 size={12} /></button>
+                    <button className="btn btn-ghost btn-icon" onClick={() => deleteCred(cr.id)} title="Entfernen"><Trash width={12} height={12} /></button>
                   </div>
                 ))}
               </div>
@@ -900,7 +900,7 @@ function BackupSection() {
   return (
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <Database size={13} style={{ color: "var(--fg-3)" }} />
+        <Database width={13} height={13} style={{ color: "var(--fg-3)" }} />
         <div className="eyebrow">Daten & Backup</div>
       </div>
       <div className="settings-group">
@@ -913,13 +913,13 @@ function BackupSection() {
           </div>
           <div className="settings-row-right" style={{ gap: 8 }}>
             <button className="btn btn-secondary" style={{ fontSize: 12, gap: 6 }} onClick={doExport} disabled={exporting}>
-              {exporting ? <Loader size={12} style={{ animation: "spin 1s linear infinite" }} /> : <Download size={12} />}
+              {exporting ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> : <Download width={12} height={12} />}
               Herunterladen
             </button>
             {googleConnected && (
               <button className="btn btn-secondary" style={{ fontSize: 12, gap: 6 }} onClick={doExportToDrive} disabled={exportingDrive}>
                 {exportingDrive
-                  ? <Loader size={12} style={{ animation: "spin 1s linear infinite" }} />
+                  ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} />
                   : <svg width="12" height="12" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>}
                 Drive
               </button>
@@ -970,8 +970,8 @@ function BackupSection() {
               onClick={() => mode === "replace" ? setConfirm(true) : doImport()}
             >
               {importing
-                ? <Loader size={12} style={{ animation: "spin 1s linear infinite" }} />
-                : <Upload size={12} />}
+                ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} />
+                : <Upload width={12} height={12} />}
               Importieren
             </button>
           </div>

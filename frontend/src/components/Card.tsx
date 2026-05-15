@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Clock, Pin, MoreHorizontal, ExternalLink, Archive } from "lucide-react";
+import { Clock, MapPin, MoreHoriz, OpenNewWindow, Archive } from "iconoir-react";
 import type { Application } from "@application-pal/shared";
 import type { CardVariant } from "../lib/store";
 import { ARCHIVE_REASON_LABELS } from "./DetailDrawer";
@@ -132,7 +132,7 @@ export function CardRich({ app, onClick }: CardProps) {
             padding: "1px 7px", borderRadius: 999, fontSize: 10, fontWeight: 400,
             color: "#f87171", border: "1px solid rgba(248,113,113,0.3)", background: "rgba(248,113,113,0.07)", whiteSpace: "nowrap"
           }}>
-            <Archive size={9} />
+            <Archive width={9} height={9} />
             {ARCHIVE_REASON_LABELS[app.archiveReason] ?? app.archiveReason}
           </span>
         </div>
@@ -149,7 +149,7 @@ export function CardRich({ app, onClick }: CardProps) {
       {/* Row 3: Next step callout */}
       {app.nextDeadline && (
         <div className="job-deadline">
-          <Pin size={11} /> {app.nextDeadline}
+          <MapPin width={11} height={11} /> {app.nextDeadline}
         </div>
       )}
 
@@ -161,11 +161,11 @@ export function CardRich({ app, onClick }: CardProps) {
           <a href={app.url} target="_blank" rel="noreferrer"
             className="btn btn-ghost btn-icon" style={{ padding: 3, color: "var(--fg-3)" }}
             onClick={(e) => e.stopPropagation()} title="Open original posting">
-            <ExternalLink size={11} />
+            <OpenNewWindow width={11} height={11} />
           </a>
         )}
         <span className="mono" style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5 }}>
-          <Clock size={11} />
+          <Clock width={11} height={11} />
           {days === 0 ? "Today" : `${days}d`}
         </span>
       </div>

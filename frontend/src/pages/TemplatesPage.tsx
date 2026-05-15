@@ -1,5 +1,5 @@
 import { Topbar } from "../components/Topbar";
-import { Plus } from "lucide-react";
+import { Plus } from "iconoir-react";
 
 const TEMPLATES = [
   { icon: "📄", title: "Software Engineer CV",        sub: "Generic template for tech roles",          category: "CV" },
@@ -25,7 +25,7 @@ export function TemplatesPage() {
         title="Templates"
         sub="Reusable CV blocks, cover letter starters, and summary snippets"
         actions={
-          <button className="btn btn-primary"><Plus size={13} /> New template</button>
+          <button className="btn btn-primary"><Plus width={13} height={13} /> New template</button>
         }
       />
       <div className="page-content">
@@ -46,7 +46,7 @@ export function TemplatesPage() {
                   className="template-card"
                   style={{ border: "1px dashed var(--border)", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: "var(--fg-3)", fontSize: 12, minHeight: 90 }}
                 >
-                  <Plus size={14} /> New {cat}
+                  <Plus width={14} height={14} /> New {cat}
                 </div>
               </div>
             </div>
