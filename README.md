@@ -10,12 +10,13 @@ Persönliches Bewerbungs-Management-Tool mit KI-Unterstützung. Läuft vollstän
 - **KI-Import** — Job-URL einfügen, KI extrahiert Firma, Rolle, Ort, Gehalt und Tags automatisch
 - **Match-Score** — KI bewertet wie gut dein Profil zur Stelle passt (0–100 mit Stärken/Lücken-Breakdown)
 - **Stage-Aufgaben** — Automatische Checklisten pro Bewerbungsphase; manuell erweiterbar
-- **KI-Coaching** — CV-Highlights, Anschreiben, Email-Entwürfe, Interview-Vorbereitung (inkl. Chris-Voss-Methode), Gehaltsverhandlungs-Tipps
+- **KI-Coaching** — CV-Highlights, Anschreiben, Email-Entwürfe, Interview-Vorbereitung (inkl. Chris-Voss-Methode & STAR-Beispiele), Gehaltsverhandlungs-Tipps; alle Ergebnisse kopierbar & als Google Doc exportierbar
+- **Interview-Termin** — Datum, Uhrzeit, Format (Vor Ort / Video / Telefon), Adresse/Meeting-URL/Code; Export zu Google Kalender oder iCal-Download
 - **Dokumente** — Globale Bibliothek (Lebenslauf, Zeugnisse, Portfolio) + Google Drive Integration mit Live-Ordnerinhalt
 - **Google Drive** — Bewerbungsordner pro Stelle, Dokumente kopieren & direkt öffnen, Refresh & Löschen
 - **Kontakte** — Ansprechpersonen pro Bewerbung
 - **Profil** — Master-CV, LinkedIn-Bio und persönliche Stichpunkte fliessen in alle KI-Analysen ein
-- **Sicherer Login** — E-Mail/Passwort, Google Sign-In, Passkeys (Apple Face ID / Touch ID), „Angemeldet bleiben"-Option
+- **Sicherer Login** — E-Mail/Passwort, Google Sign-In, Passkeys (Apple Face ID / Touch ID), „Angemeldet bleiben"-Option, konfigurierbarer Session-Timeout
 - **Archivierung** — Mit Grundangabe (nicht verfügbar / nicht relevant / vergeben / sonstiges)
 - **Export/Import** — Vollständiges Backup als JSON (inkl. optionalem Google Drive Backup)
 

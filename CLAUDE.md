@@ -40,9 +40,9 @@ docker exec application-pal-db psql -U postgres -d application_pal -c "ALTER TAB
 
 **LM Studio in Docker**: The backend runs inside Docker. `localhost:1234` inside Docker ≠ the host machine. `resolveHostUrl()` in `backend/src/index.ts` rewrites `localhost` → `host.docker.internal` for all LM Studio calls. Never hardcode `localhost` for LM Studio URLs.
 
-**Qwen3 max_tokens**: Always set `max_tokens: 16384` for LM Studio calls. Qwen3 emits a long `<think>…</think>` block before the JSON answer. `extractJson()` strips `<think>` blocks before parsing.
+**Qwen3 max_tokens**: Always set `max_tokens: 32768` for LM Studio calls (doubled). Qwen3 emits a long `<think>…</think>` block before the JSON answer. `extractJson()` strips `<think>` blocks before parsing.
 
-**nginx proxy timeout**: `frontend/nginx.conf` sets `proxy_read_timeout 180s`. AI endpoints can take up to 120s. Never reduce this timeout.
+**nginx proxy timeout**: `frontend/nginx.conf` sets `proxy_read_timeout 360s`. AI endpoints can take up to 240s. Never reduce this timeout.
 
 **Preview server directory**: `.claude/launch.json` must use `sh -c "cd /abs/path && npm run dev --workspace frontend"` so the preview tool serves the main project, not a worktree.
 
@@ -71,7 +71,9 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 **Key helper functions** (defined before routes):
 - `resolveHostUrl(url)` — rewrites `localhost` → `host.docker.internal` for Docker networking
 - `getJwtSecret()` — returns JWT secret; auto-generates ephemeral secret if `JWT_SECRET` env is empty
-- `issueTokens(c, userId)` — sets `access_token` (15min) + `refresh_token` (30d) as httpOnly cookies
+- `issueTokens(c, userId, rememberMe, accessTimeout)` — sets `access_token` (lifetime from `user_profile.session_timeout`, default 15min) + `refresh_token` (session or 90d) as httpOnly cookies
+- `getSessionTimeout()` — reads `user_profile.session_timeout`; called by all auth routes before `issueTokens()`
+- `SESSION_TIMEOUT_SECONDS` — map of timeout string → seconds: `"15m"|"1h"|"6h"|"24h"|"7d"|"30d"`
 - `STAGE_TASK_TEMPLATES` — predefined task lists per stage; `initTasksForStage(appId, stage)` inserts them (idempotent, no duplicates)
 - `callAi(system, user, ai)` — generic AI caller for LM Studio or Anthropic; used by all coaching endpoints
 - `extractJson(raw)` — strips `<think>` blocks + markdown fences, returns parsed JSON
@@ -106,8 +108,8 @@ Verifies `access_token` cookie via JWT; silently refreshes via `refresh_token` c
 
 | Table | Purpose | Exported |
 |---|---|---|
-| `applications` | Jobs: stage, tags, salary, logoUrl, archived, archiveReason, matchScore, matchDetails, googleFolderId, googleFolderUrl, portalUrl | ✅ |
-| `user_profile` | Single-row profile: masterCv, linkedinBio, headline, personalNotes | ✅ |
+| `applications` | Jobs: stage, tags, salary, logoUrl, archived, archiveReason, matchScore, matchDetails, googleFolderId, googleFolderUrl, portalUrl, interview1Details, interview2Details, interview1Prep, interview2Prep | ✅ |
+| `user_profile` | Single-row profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, sessionTimeout | ✅ |
 | `user_documents` | Global document library (CV, Zeugnisse, Figma, etc.) | ✅ |
 | `application_documents` | Per-job docs; `userDocumentId` links to library; `googleDocId`/`googleDocUrl` for Drive | ✅ |
 | `application_activities` | Timeline events per job | ✅ |
@@ -127,7 +129,7 @@ Verifies `access_token` cookie via JWT; silently refreshes via `refresh_token` c
 
 ### AI Endpoints (all require `{ ai: AiConfig }` body)
 
-All use `callAi()` + `extractJson()` pattern, `resolveHostUrl()`, and `max_tokens: 16384` for LM Studio.
+All use `callAi()` + `extractJson()` pattern, `resolveHostUrl()`, and `max_tokens: 32768` for LM Studio.
 
 | Endpoint | Returns |
 |---|---|
@@ -136,7 +138,8 @@ All use `callAi()` + `extractJson()` pattern, `resolveHostUrl()`, and `max_token
 | `POST /api/applications/:id/ai/cv-doc` | Creates Google Doc from Master-CV + highlights; returns `{ docUrl }` |
 | `POST /api/applications/:id/ai/cover-letter` | `{ subject, body, docUrl? }` — `createDoc: true` also creates Google Doc |
 | `POST /api/applications/:id/ai/email-draft` | `{ subject, body }` — body: `{ type: "application"|"followup"|"decline" }` |
-| `POST /api/applications/:id/ai/interview-prep` | `{ rollenFragen, starBeispiele, vossFragenWhatHow, rueckfragen }` |
+| `POST /api/applications/:id/ai/interview-prep` | `{ rollenFragen, starBeispiele, vossFragenWhatHow, rueckfragen }` — result persisted to `interview1Prep`/`interview2Prep` |
+| `POST /api/applications/:id/ai/interview-prep/export-doc` | Creates Google Doc from interview prep; body: `{ interviewPrep }`; returns `{ docUrl }` |
 | `POST /api/applications/:id/ai/salary-tips` | `{ markteinschätzung, taktiken, formulierungen, vossAnker }` |
 
 ### Google Drive Endpoints
@@ -151,6 +154,9 @@ All require Google OAuth token in DB (`drive` scope — NOT `drive.file`).
 | `POST /api/applications/:id/drive/copy-doc` | Copies a user-library Google Doc to app folder; same fallback |
 | `GET /api/drive/folder-info?folderId=` | Validates a folder ID and returns its name |
 | `POST /api/export/drive` | Saves JSON backup to Drive root as `application-pal-backup-YYYY-MM-DD.json` |
+| `GET /api/applications/:id/drive/files` | Lists live Drive folder contents (no subfolders) |
+| `DELETE /api/applications/:id/drive/files/:fileId` | Deletes file from Drive + removes from `applicationDocuments` |
+| `POST /api/applications/:id/drive/upload-pdf-from-url` | Downloads PDF from URL (or Drive with auth) and uploads to app folder |
 
 **Drive naming rules** (`applyNameRule`): placeholders `{firma}`, `{rolle}`, `{name}`, `{datum}` (YYMMDD), `{jahr}`, `{monat}`, `{doc}`. Defaults: folder = `{firma} – {rolle} – {datum}`, doc = `{doc} – {name} – {firma} – {datum}`. Stored in `useUiStore` (`driveNameFolder`, `driveNameDoc`). Parent folder stored as `driveApplicationsFolderId` in store; sent as `parentFolderId` in `init-folder` request.
 
@@ -158,7 +164,11 @@ All require Google OAuth token in DB (`drive` scope — NOT `drive.file`).
 
 **DetailDrawer**: The main job detail view. `stage` and `url` are lifted to `DetailDrawer` component state so the header Stage-Picker updates immediately. Tab type: `"overview" | "description" | "documents" | "process" | "agent" | "contacts" | "notes"`.
 
-**ProcessTab**: Three sections top-to-bottom: `TaskChecklist` (current-stage tasks with progress bar) → `StageAiActions` (contextual AI actions per stage) → activity timeline. `StageAiActions` only renders for stages with relevant actions (`preparing_cv`, `preparing_letter`, `application_sent`, `pending`, `interview_1`, `interview_2`, `accepted`).
+**ProcessTab**: Four sections top-to-bottom: `InterviewDetailsPanel` (only for `interview_1`/`interview_2`) → `TaskChecklist` → `StageAiActions` → activity timeline. `ProcessTab` receives `onSave` and passes it to both `InterviewDetailsPanel` and `StageAiActions`. `StageAiActions` only renders for stages with relevant actions.
+
+**InterviewDetailsPanel**: Renders in ProcessTab for interview stages. Fields: date, time, duration, format (onsite/video/phone), address or video URL/code/provider, interviewer, notes. Autosave on blur. "Google Kalender" button uses URL method (`calendar.google.com/calendar/r/eventedit?...`) with optional `calid` from `user_profile.googleCalendarId`. "iCal herunterladen" generates a `.ics` file client-side.
+
+**StageAiActions**: For interview stages, interview prep is initialized from `app.interview1Prep`/`app.interview2Prep` (JSON.parse). After generation, persisted to DB via `onSave()`. "Alles kopieren" and "Als Google Doc" buttons appear inline next to "Neu generieren".
 
 **DocumentsTab**: Three sections: Google Drive folder panel (top, only if connected) → Zugewiesen list → library grid (2-column). Library docs show 3 states: not linked / linked-no-Drive / linked-with-Drive-copy. Adding a Google Doc from library auto-copies to Drive folder if one exists.
 
@@ -169,6 +179,8 @@ All require Google OAuth token in DB (`drive` scope — NOT `drive.file`).
 ### Authentication
 
 Single-user design. JWT in httpOnly cookies (no localStorage). `GET /api/auth/status` returns `{ setup: bool }` — if `false`, SetupPage is shown. Google Sign-In doubles as Drive authorization (one OAuth consent for both). WebAuthn passkeys supported via `@simplewebauthn/server` with `requireUserVerification: false` for broad authenticator compatibility.
+
+**Session timeout** is configurable per user (Settings → Sicherheit): 15m / 1h / 6h / 24h / 7d / 30d. Stored in `user_profile.session_timeout`. All auth routes call `getSessionTimeout()` before `issueTokens()`. Access token `maxAge` is set accordingly. **Remember-me** checkbox on login: unchecked = session refresh cookie (no `maxAge`), checked = 90-day persistent refresh cookie.
 
 ### Google OAuth
 
