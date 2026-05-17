@@ -1928,21 +1928,23 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
 // Email Draft
 app.post("/api/applications/:id/ai/email-draft", async (c) => {
   const id = c.req.param("id");
-  const { ai, type } = await c.req.json<{ ai: AiConfig; type: "application" | "followup" | "decline" }>();
+  const { ai, type } = await c.req.json<{ ai: AiConfig; type: "application" | "followup" | "decline" | "feedback" | "linkedin" }>();
   const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).limit(1);
   const typeDescriptions = {
     application: "eine Bewerbungs-Email (kurze Begleit-Email zur Bewerbung)",
     followup: "eine freundliche Follow-up-Email (3-4 Wochen nach Bewerbung, höflich nach Stand fragen)",
-    decline: "eine höfliche Absage-Email (du hast eine andere Stelle angenommen)"
+    decline: "eine höfliche Absage-Email (du hast eine andere Stelle angenommen)",
+    feedback: "eine höfliche Email um konstruktives Feedback zur Absage zu bitten (kurz und professionell, max. 100 Wörter im Body)",
+    linkedin: "eine kurze LinkedIn-Vernetzungsnachricht an HR/Hiring Manager (max. 300 Zeichen, freundlich und professionell)"
   };
-  const system = `Schreibe ${typeDescriptions[type]}. Professionell, klar, nicht zu lang (max. 150 Wörter im Body).
+  const system = `Schreibe ${typeDescriptions[type]}. Professionell, klar, nicht zu lang (max. 150 Wörter im Body, ausser bei linkedin: max. 300 Zeichen).
 Erkenne die Sprache der Stellenbeschreibung und schreibe in dieser Sprache.
 Antworte NUR mit JSON: { "subject": "<Betreff>", "body": "<Email-Text>" }`;
   const contacts = await db.select().from(applicationContacts).where(eq(applicationContacts.applicationId, id)).limit(1);
   const contact = contacts[0];
-  const user = `Absender: ${profile?.name ?? ""} (${profile?.email ?? ""})\nEmpfänger: ${contact ? `${contact.name}${contact.role ? ` (${contact.role})` : ""}` : "HR-Team"} bei ${app_.company}\nStelle: ${app_.role}`;
+  const user = `Absender: ${profile?.name ?? ""} (${profile?.email ?? ""})\nEmpfänger: ${contact ? `${contact.name}${contact.role ? ` (${contact.role})` : ""}` : "HR-Team"} bei ${app_.company}\nStelle: ${app_.role}\nStellenbeschreibung: ${app_.description?.slice(0, 500) ?? ""}`;
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { subject: string; body: string };
@@ -2090,6 +2092,343 @@ Antworte NUR mit JSON:
   } catch (err) {
     console.error("salary-tips error:", err);
     return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Gehalts-Check Schweiz (Inbox stage)
+app.post("/api/applications/:id/ai/salary-check", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const system = `Du bist ein Schweizer Lohnexperte. Analysiere die Stellenausschreibung und ermittle ein realistisches Lohnband für die Schweiz. Berücksichtige: Titel/Level, Branche, Region (falls angegeben), Unternehmensgrösse. Antworte NUR mit JSON:
+{ "lohnband": { "min": number, "max": number, "median": number }, "waehrung": "CHF", "basis": "Jahresbrutto", "begruendung": "<string 2-3 Sätze>", "faktoren": ["<string>"] }`;
+  const user = `Stelle: ${app_.role}\nUnternehmen: ${app_.company}\nBranche (falls erkennbar): aus Stellenbeschreibung ableiten\nStellenbeschreibung:\n${app_.description?.slice(0, 2000) ?? ""}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { lohnband: { min: number; max: number; median: number }; waehrung: string; basis: string; begruendung: string; faktoren: string[] };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("salary-check error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Export Salary Check to Google Doc
+app.post("/api/applications/:id/ai/salary-check/export-doc", async (c) => {
+  const id = c.req.param("id");
+  const { salaryCheck } = await c.req.json<{ salaryCheck: { lohnband: { min: number; max: number; median: number }; waehrung: string; basis: string; begruendung: string; faktoren: string[] } }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [token] = await db.select().from(googleOAuthTokens).limit(1);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  if (token.expiresAt && new Date(token.expiresAt) < new Date()) return c.json({ error: "Google-Verbindung abgelaufen" }, 400);
+  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const sep = "─".repeat(40);
+  let content = `Gehalts-Check Schweiz: ${app_.role} @ ${app_.company}\n${date}\n\n`;
+  content += `${sep}\nLOHNBAND\n${sep}\n\n`;
+  content += `Minimum:  CHF ${salaryCheck.lohnband.min.toLocaleString("de-CH")}\n`;
+  content += `Median:   CHF ${salaryCheck.lohnband.median.toLocaleString("de-CH")}\n`;
+  content += `Maximum:  CHF ${salaryCheck.lohnband.max.toLocaleString("de-CH")}\n`;
+  content += `Basis: ${salaryCheck.basis}\n\n`;
+  content += `${sep}\nBEGRÜNDUNG\n${sep}\n\n${salaryCheck.begruendung}\n\n`;
+  if (salaryCheck.faktoren.length > 0) {
+    content += `${sep}\nEINFLUSSFAKTOREN\n${sep}\n\n`;
+    content += salaryCheck.faktoren.map(f => `• ${f}`).join("\n");
+  }
+  const docTitle = `Gehalts-Check – ${app_.role} @ ${app_.company}`;
+  try {
+    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: docTitle })
+    });
+    if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
+    const doc = await docRes.json() as { documentId: string };
+    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+    });
+    if (app_.googleFolderId) {
+      await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
+        method: "PATCH", headers: { "Authorization": `Bearer ${token.accessToken}` }
+      });
+    }
+    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("salary-check export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
+  }
+});
+
+// ATS-Keywords extrahieren (Inbox stage)
+app.post("/api/applications/:id/ai/ats-keywords", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const system = `Du bist ein Recruiting-Experte. Extrahiere die wichtigsten Keywords für ATS-Systeme aus der Stellenbeschreibung. Antworte NUR mit JSON:
+{ "mustHave": ["<string>"], "niceToHave": ["<string>"], "softSkills": ["<string>"], "tools": ["<string>"] }`;
+  const user = `Stellenbeschreibung:\n${app_.description?.slice(0, 2500) ?? ""}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { mustHave: string[]; niceToHave: string[]; softSkills: string[]; tools: string[] };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("ats-keywords error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Unternehmens- & Branchenrecherche (Pending stage)
+app.post("/api/applications/:id/ai/company-research", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const system = `Du bist ein Business-Analyst. Erstelle eine strukturierte Unternehmens- und Branchenrecherche basierend auf den verfügbaren Informationen. Antworte NUR mit JSON:
+{ "unternehmensueberblick": "<string>", "branche": "<string>", "marktposition": "<string>", "unternehmenskultur": "<string>", "wettbewerber": ["<string>"], "aktuelleThemen": ["<string>"], "gespraechsthemen": ["<string>"] }`;
+  const user = `Unternehmen: ${app_.company}\nRolle: ${app_.role}\nStellenbeschreibung:\n${app_.description?.slice(0, 2000) ?? ""}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { unternehmensueberblick: string; branche: string; marktposition: string; unternehmenskultur: string; wettbewerber: string[]; aktuelleThemen: string[]; gespraechsthemen: string[] };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("company-research error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Export Company Research to Google Doc
+app.post("/api/applications/:id/ai/company-research/export-doc", async (c) => {
+  const id = c.req.param("id");
+  const { research } = await c.req.json<{ research: { unternehmensueberblick: string; branche: string; marktposition: string; unternehmenskultur: string; wettbewerber: string[]; aktuelleThemen: string[]; gespraechsthemen: string[] } }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [token] = await db.select().from(googleOAuthTokens).limit(1);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  if (token.expiresAt && new Date(token.expiresAt) < new Date()) return c.json({ error: "Google-Verbindung abgelaufen" }, 400);
+  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const sep = "─".repeat(40);
+  let content = `Unternehmensrecherche: ${app_.company} – ${app_.role}\n${date}\n\n`;
+  content += `${sep}\nUNTERNEHMENSÜBERBLICK\n${sep}\n\n${research.unternehmensueberblick}\n\n`;
+  content += `Branche: ${research.branche}\n\n`;
+  content += `${sep}\nMARKTPOSITION\n${sep}\n\n${research.marktposition}\n\n`;
+  content += `${sep}\nUNTERNEHMENSKULTUR\n${sep}\n\n${research.unternehmenskultur}\n\n`;
+  if (research.wettbewerber.length > 0) {
+    content += `${sep}\nWETTBEWERBER\n${sep}\n\n${research.wettbewerber.map(w => `• ${w}`).join("\n")}\n\n`;
+  }
+  if (research.aktuelleThemen.length > 0) {
+    content += `${sep}\nAKTUELLE THEMEN\n${sep}\n\n${research.aktuelleThemen.map(t => `• ${t}`).join("\n")}\n\n`;
+  }
+  if (research.gespraechsthemen.length > 0) {
+    content += `${sep}\nGESPRÄCHSTHEMEN FÜRS INTERVIEW\n${sep}\n\n${research.gespraechsthemen.map(t => `💡 ${t}`).join("\n")}`;
+  }
+  const docTitle = `Unternehmensrecherche – ${app_.company}`;
+  try {
+    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: docTitle })
+    });
+    if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
+    const doc = await docRes.json() as { documentId: string };
+    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+    });
+    if (app_.googleFolderId) {
+      await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
+        method: "PATCH", headers: { "Authorization": `Bearer ${token.accessToken}` }
+      });
+    }
+    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("company-research export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
+  }
+});
+
+// Ackermann-Verhandlungs-Script (Pending stage)
+app.post("/api/applications/:id/ai/ackermann-script", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [profile] = await db.select().from(userProfile).limit(1);
+  const system = `Du bist ein Experte für Gehaltsverhandlung nach dem Ackermann-Modell (FBI-Verhandlungsmethode, Chris Voss). Erstelle ein konkretes, mehrstufiges Verhandlungs-Script. Das Ackermann-Modell: Startgebot = 65% des Zielgehalts, dann Angebote bei 85%, 95%, 100% mit abnehmenden Steigerungen und einer ungeraden Endzahl. Antworte NUR mit JSON:
+{ "zielgehalt": number, "ankergebot": number, "schritte": [{ "runde": number, "angebot": number, "formulierung": "<string>", "taktik": "<string>" }], "nichtmonetaer": ["<string>"], "vossAnker": "<string>" }`;
+  const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nLohnband (falls bekannt): ${app_.salary ?? "nicht angegeben"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1500) ?? ""}\nProfil des Kandidaten: ${profile?.masterCv?.slice(0, 1000) ?? "Kein Profil hinterlegt"}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { zielgehalt: number; ankergebot: number; schritte: Array<{ runde: number; angebot: number; formulierung: string; taktik: string }>; nichtmonetaer: string[]; vossAnker: string };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("ackermann-script error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Export Ackermann Script to Google Doc
+app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
+  const id = c.req.param("id");
+  const { script } = await c.req.json<{ script: { zielgehalt: number; ankergebot: number; schritte: Array<{ runde: number; angebot: number; formulierung: string; taktik: string }>; nichtmonetaer: string[]; vossAnker: string } }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [token] = await db.select().from(googleOAuthTokens).limit(1);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  if (token.expiresAt && new Date(token.expiresAt) < new Date()) return c.json({ error: "Google-Verbindung abgelaufen" }, 400);
+  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const sep = "═".repeat(48);
+  let content = `Ackermann-Verhandlungs-Script: ${app_.role} @ ${app_.company}\n${date}\n\n`;
+  content += `${sep}\nZIELGEHALT & ANKERLOHN\n${sep}\n\n`;
+  content += `Zielgehalt:   CHF ${script.zielgehalt.toLocaleString("de-CH")}\n`;
+  content += `Ankergebot:   CHF ${script.ankergebot.toLocaleString("de-CH")} (65% des Zielgehalts)\n\n`;
+  content += `${sep}\nVERHANDLUNGSSCHRITTE\n${sep}\n\n`;
+  content += script.schritte.map(s =>
+    `Runde ${s.runde} — CHF ${s.angebot.toLocaleString("de-CH")}\nFormulierung: "${s.formulierung}"\nTaktik: ${s.taktik}`
+  ).join("\n\n") + "\n\n";
+  content += `${sep}\nCHRIS VOSS ANKER-FORMULIERUNG\n${sep}\n\n${script.vossAnker}\n\n`;
+  if (script.nichtmonetaer.length > 0) {
+    content += `${sep}\nNICHT-MONETÄRE ALTERNATIVEN\n${sep}\n\n`;
+    content += script.nichtmonetaer.map(n => `• ${n}`).join("\n");
+  }
+  const docTitle = `Ackermann-Script – ${app_.role} @ ${app_.company}`;
+  try {
+    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: docTitle })
+    });
+    if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
+    const doc = await docRes.json() as { documentId: string };
+    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+    });
+    if (app_.googleFolderId) {
+      await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
+        method: "PATCH", headers: { "Authorization": `Bearer ${token.accessToken}` }
+      });
+    }
+    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("ackermann-script export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
+  }
+});
+
+// Anschreiben reviewen (Letter stage)
+app.post("/api/applications/:id/ai/letter-review", async (c) => {
+  const id = c.req.param("id");
+  const { ai, coverLetterContent } = await c.req.json<{ ai: AiConfig; coverLetterContent?: string }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const system = `Du bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch. Antworte NUR mit JSON:
+{ "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "zu lang | angemessen | zu kurz", "personalisierung": "schwach | mittel | stark" }`;
+  const letterText = coverLetterContent?.trim() || "Kein Anschreiben vorhanden. Bitte zuerst ein Anschreiben generieren oder einfügen.";
+  const user = `Stelle: ${app_.role} bei ${app_.company}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}\n\nAnschreiben:\n${letterText}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { gesamteindruck: string; staerken: string[]; verbesserungen: string[]; cliches: string[]; tonalitaet: string; laenge: string; personalisierung: string };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("letter-review error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Eröffnungssätze (Letter stage)
+app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [profile] = await db.select().from(userProfile).limit(1);
+  const system = `Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend). Antworte NUR mit JSON:
+{ "saetze": [{ "satz": "<string>", "ansatz": "<string>", "erklaerung": "<string>" }] }`;
+  const user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { saetze: Array<{ satz: string; ansatz: string; erklaerung: string }> };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("opening-sentences error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Onboarding-Checkliste (Accepted stage)
+app.post("/api/applications/:id/ai/onboarding", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const system = `Du bist ein Karriere-Coach. Erstelle eine strukturierte Onboarding-Checkliste für die ersten 90 Tage in der neuen Stelle. Antworte NUR mit JSON:
+{ "erste30Tage": ["<string>"], "erste60Tage": ["<string>"], "erste90Tage": ["<string>"], "allgemein": ["<string>"] }`;
+  const user = `Stelle: ${app_.role}\nUnternehmen: ${app_.company}\nBranche: aus Stellenbeschreibung ableiten\nStellenbeschreibung:\n${app_.description?.slice(0, 1500) ?? ""}`;
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { erste30Tage: string[]; erste60Tage: string[]; erste90Tage: string[]; allgemein: string[] };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("onboarding error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Export Onboarding Checklist to Google Doc
+app.post("/api/applications/:id/ai/onboarding/export-doc", async (c) => {
+  const id = c.req.param("id");
+  const { checklist } = await c.req.json<{ checklist: { erste30Tage: string[]; erste60Tage: string[]; erste90Tage: string[]; allgemein: string[] } }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [token] = await db.select().from(googleOAuthTokens).limit(1);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  if (token.expiresAt && new Date(token.expiresAt) < new Date()) return c.json({ error: "Google-Verbindung abgelaufen" }, 400);
+  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const sep = "─".repeat(40);
+  let content = `Onboarding-Checkliste: ${app_.role} @ ${app_.company}\n${date}\n\n`;
+  content += `${sep}\nERSTE 30 TAGE\n${sep}\n\n`;
+  content += checklist.erste30Tage.map(t => `☐ ${t}`).join("\n") + "\n\n";
+  content += `${sep}\nERSTE 60 TAGE\n${sep}\n\n`;
+  content += checklist.erste60Tage.map(t => `☐ ${t}`).join("\n") + "\n\n";
+  content += `${sep}\nERSTE 90 TAGE\n${sep}\n\n`;
+  content += checklist.erste90Tage.map(t => `☐ ${t}`).join("\n") + "\n\n";
+  if (checklist.allgemein.length > 0) {
+    content += `${sep}\nALLGEMEIN\n${sep}\n\n`;
+    content += checklist.allgemein.map(t => `• ${t}`).join("\n");
+  }
+  const docTitle = `Onboarding-Checkliste – ${app_.role} @ ${app_.company}`;
+  try {
+    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: docTitle })
+    });
+    if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
+    const doc = await docRes.json() as { documentId: string };
+    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+    });
+    if (app_.googleFolderId) {
+      await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
+        method: "PATCH", headers: { "Authorization": `Bearer ${token.accessToken}` }
+      });
+    }
+    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("onboarding export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
   }
 });
 

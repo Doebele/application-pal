@@ -7,6 +7,7 @@ import {
   Calendar as IcCalendar, CalendarArrowDown,
   Copy as IcCopy, MailOut, Brain,
   MapPin, VideoCamera, Expand, Collapse,
+  Search, Spark, Building, CheckCircle, Linkedin, ChatBubbleCheck,
 } from "iconoir-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import type {
@@ -15,7 +16,7 @@ import type {
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
 
-type Tab = "overview" | "description" | "documents" | "process" | "agent" | "contacts" | "notes";
+type Tab = "overview" | "description" | "documents" | "process" | "insights" | "contacts" | "notes";
 
 // Clipboard helper: tries modern API first, falls back to execCommand for focus/permission issues
 async function copyText(text: string): Promise<void> {
@@ -36,7 +37,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "description", label: "Beschreibung"   },
   { id: "documents",   label: "Dokumente"      },
   { id: "process",     label: "Prozess"        },
-  { id: "agent",       label: "AI Agent"       },
+  { id: "insights",     label: "Insights"       },
   { id: "contacts",    label: "Kontakte"       },
   { id: "notes",       label: "Notizen"        },
 ];
@@ -1101,6 +1102,54 @@ type InterviewPrep = { rollenFragen: string[]; starBeispiele: { frage: string; s
 type EmailDraft = { subject: string; body: string };
 type SalaryTips = { "markteinschätzung": string; taktiken: string[]; formulierungen: string[]; vossAnker: string };
 
+type SalaryCheck = {
+  lohnband: { min: number; max: number; median: number };
+  waehrung: string;
+  basis: string;
+  begruendung: string;
+  faktoren: string[];
+};
+type AtsKeywords = {
+  mustHave: string[];
+  niceToHave: string[];
+  softSkills: string[];
+  tools: string[];
+};
+type CompanyResearch = {
+  unternehmensueberblick: string;
+  branche: string;
+  marktposition: string;
+  unternehmenskultur: string;
+  wettbewerber: string[];
+  aktuelleThemen: string[];
+  gespraechsthemen: string[];
+};
+type AckermannScript = {
+  zielgehalt: number;
+  ankergebot: number;
+  schritte: Array<{ runde: number; angebot: number; formulierung: string; taktik: string }>;
+  nichtmonetaer: string[];
+  vossAnker: string;
+};
+type LetterReview = {
+  gesamteindruck: string;
+  staerken: string[];
+  verbesserungen: string[];
+  cliches: string[];
+  tonalitaet: string;
+  laenge: string;
+  personalisierung: string;
+};
+type OpeningSentences = {
+  saetze: Array<{ satz: string; ansatz: string; erklaerung: string }>;
+};
+type OnboardingChecklist = {
+  erste30Tage: string[];
+  erste60Tage: string[];
+  erste90Tage: string[];
+  allgemein: string[];
+};
+
 const STAGE_LABELS_DE: Record<string, string> = {
   import_validating: "Inbox", preparing_cv: "CV vorbereiten", preparing_letter: "Anschreiben",
   application_sent: "Beworben", pending: "Wartend", interview_1: "Interview 1",
@@ -1169,12 +1218,21 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
 }
 
 // ── Stage AI Actions ──
-function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChange, onSalaryTipsChange }: {
+function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChange, onSalaryTipsChange,
+  onSalaryCheckChange, onAtsKeywordsChange, onCompanyResearchChange, onAckermannScriptChange,
+  onLetterReviewChange, onOpeningSentencesChange, onOnboardingChange }: {
   app: Application;
   onSave?: (patch: Partial<Application>) => void;
   onCvHighlightsChange?: (v: CvHighlights | null) => void;
   onInterviewPrepChange?: (v: InterviewPrep | null) => void;
   onSalaryTipsChange?: (v: SalaryTips | null) => void;
+  onSalaryCheckChange?: (v: SalaryCheck | null) => void;
+  onAtsKeywordsChange?: (v: AtsKeywords | null) => void;
+  onCompanyResearchChange?: (v: CompanyResearch | null) => void;
+  onAckermannScriptChange?: (v: AckermannScript | null) => void;
+  onLetterReviewChange?: (v: LetterReview | null) => void;
+  onOpeningSentencesChange?: (v: OpeningSentences | null) => void;
+  onOnboardingChange?: (v: OnboardingChecklist | null) => void;
 }) {
   const { ai } = useUiStore();
   const stage = app.stage;
@@ -1191,10 +1249,30 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   const [emailModal, setEmailModal] = useState<EmailDraft | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
+  // New AI state
+  const [salaryCheck,      setSalaryCheck]      = useState<SalaryCheck | null>(null);
+  const [atsKeywords,      setAtsKeywords]       = useState<AtsKeywords | null>(null);
+  const [companyResearch,  setCompanyResearch]   = useState<CompanyResearch | null>(null);
+  const [ackermannScript,  setAckermannScript]   = useState<AckermannScript | null>(null);
+  const [letterReview,     setLetterReview]      = useState<LetterReview | null>(null);
+  const [openingSentences, setOpeningSentences]  = useState<OpeningSentences | null>(null);
+  const [onboarding,       setOnboarding]        = useState<OnboardingChecklist | null>(null);
+
   // Wrapped setters — also notify parent so content can render full-width
-  const updateCvHighlights   = (v: CvHighlights | null)   => { setCvHighlights(v);  onCvHighlightsChange?.(v);   };
-  const updateInterviewPrep  = (v: InterviewPrep | null)  => { setInterviewPrep(v); onInterviewPrepChange?.(v);  };
-  const updateSalaryTips     = (v: SalaryTips | null)     => { setSalaryTips(v);    onSalaryTipsChange?.(v);     };
+  const updateCvHighlights    = (v: CvHighlights | null)    => { setCvHighlights(v);     onCvHighlightsChange?.(v);    };
+  const updateInterviewPrep   = (v: InterviewPrep | null)   => { setInterviewPrep(v);    onInterviewPrepChange?.(v);   };
+  const updateSalaryTips      = (v: SalaryTips | null)      => { setSalaryTips(v);       onSalaryTipsChange?.(v);      };
+  const updateSalaryCheck     = (v: SalaryCheck | null)     => { setSalaryCheck(v);      onSalaryCheckChange?.(v);     };
+  const updateAtsKeywords     = (v: AtsKeywords | null)     => { setAtsKeywords(v);      onAtsKeywordsChange?.(v);     };
+  const updateCompanyResearch = (v: CompanyResearch | null) => { setCompanyResearch(v);  onCompanyResearchChange?.(v); };
+  const updateAckermannScript = (v: AckermannScript | null) => { setAckermannScript(v);  onAckermannScriptChange?.(v); };
+  const updateLetterReview    = (v: LetterReview | null)    => { setLetterReview(v);     onLetterReviewChange?.(v);    };
+  const updateOpeningSentences= (v: OpeningSentences | null)=> { setOpeningSentences(v); onOpeningSentencesChange?.(v);};
+  const updateOnboarding      = (v: OnboardingChecklist | null) => { setOnboarding(v);   onOnboardingChange?.(v);      };
+
+  // Suppress unused variable warning for onboarding local state
+  void salaryCheck; void atsKeywords; void companyResearch; void ackermannScript;
+  void letterReview; void openingSentences; void onboarding;
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -1325,6 +1403,33 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
         } else if (id === "salary-tips") {
           const r = await api.post<SalaryTips>(`/api/applications/${app.id}/ai/salary-tips`, aiBody);
           updateSalaryTips(r.data);
+        } else if (id === "salary-check") {
+          const r = await api.post<SalaryCheck>(`/api/applications/${app.id}/ai/salary-check`, aiBody);
+          updateSalaryCheck(r.data);
+        } else if (id === "ats-keywords") {
+          const r = await api.post<AtsKeywords>(`/api/applications/${app.id}/ai/ats-keywords`, aiBody);
+          updateAtsKeywords(r.data);
+        } else if (id === "company-research") {
+          const r = await api.post<CompanyResearch>(`/api/applications/${app.id}/ai/company-research`, aiBody);
+          updateCompanyResearch(r.data);
+        } else if (id === "ackermann-script") {
+          const r = await api.post<AckermannScript>(`/api/applications/${app.id}/ai/ackermann-script`, aiBody);
+          updateAckermannScript(r.data);
+        } else if (id === "letter-review") {
+          const r = await api.post<LetterReview>(`/api/applications/${app.id}/ai/letter-review`, { ...aiBody });
+          updateLetterReview(r.data);
+        } else if (id === "opening-sentences") {
+          const r = await api.post<OpeningSentences>(`/api/applications/${app.id}/ai/opening-sentences`, aiBody);
+          updateOpeningSentences(r.data);
+        } else if (id === "email-feedback") {
+          const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "feedback" });
+          setEmailModal(r.data);
+        } else if (id === "email-linkedin") {
+          const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "linkedin" });
+          setEmailModal(r.data);
+        } else if (id === "onboarding") {
+          const r = await api.post<OnboardingChecklist>(`/api/applications/${app.id}/ai/onboarding`, aiBody);
+          updateOnboarding(r.data);
         }
       })}>
       {loading === id ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : icon}
@@ -1332,13 +1437,15 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
     </button>
   );
 
-  const showCv     = ["preparing_cv"].includes(stage);
-  const showLetter = ["preparing_letter"].includes(stage);
-  const showEmail  = ["application_sent", "pending", "accepted"].includes(stage);
-  const showIv     = ["interview_1", "interview_2"].includes(stage);
-  const showSalary = ["interview_2", "accepted"].includes(stage);
+  const showCv       = ["preparing_cv"].includes(stage);
+  const showLetter   = ["preparing_letter"].includes(stage);
+  const showEmail    = ["application_sent", "pending", "accepted"].includes(stage);
+  const showIv       = ["interview_1", "interview_2"].includes(stage);
+  const showSalary   = ["interview_2", "accepted"].includes(stage);
+  const showInbox    = stage === "import_validating";
+  const showRejected = stage === "rejected";
 
-  if (!showCv && !showLetter && !showEmail && !showIv && !showSalary) return null;
+  if (!showCv && !showLetter && !showEmail && !showIv && !showSalary && !showInbox && !showRejected) return null;
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -1348,27 +1455,54 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
 
       {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>{err}</div>}
 
+      {/* Inbox Phase */}
+      {showInbox && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+          <AiBtn id="salary-check" icon={<Coins width={12} height={12} />} label="Gehalts-Check Schweiz" />
+          <AiBtn id="ats-keywords" icon={<Search width={12} height={12} />} label="ATS-Keywords extrahieren" />
+        </div>
+      )}
+
       {/* CV Phase */}
       {showCv && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
           <AiBtn id="cv-highlights" icon={<BrainElectricity width={12} height={12} />} label="CV-Highlights analysieren" />
           <AiBtn id="cv-doc" icon={<PageEdit width={12} height={12} />} label="Google Doc aus Master-CV" />
         </div>
       )}
       {/* Letter Phase */}
       {showLetter && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
           <AiBtn id="cover-letter" icon={<PageEdit width={12} height={12} />} label="Anschreiben generieren" />
           <AiBtn id="cover-letter-doc" icon={<Page width={12} height={12} />} label="Als Google Doc" />
+          <AiBtn id="letter-review" icon={<ChatBubbleCheck width={12} height={12} />} label="Anschreiben reviewen" />
+          <AiBtn id="opening-sentences" icon={<Spark width={12} height={12} />} label="3 Eröffnungssätze" />
         </div>
       )}
 
       {/* Email Phase */}
       {showEmail && (
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
           {stage === "application_sent" && <AiBtn id="email-app" icon={<SendMail width={12} height={12} />} label="Bewerbungs-Email" />}
           {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-follow" icon={<SendMail width={12} height={12} />} label="Follow-up-Email" />}
+          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-linkedin" icon={<Linkedin width={12} height={12} />} label="LinkedIn-Vernetzung" />}
           {stage === "accepted" && <AiBtn id="email-decline" icon={<MailOut width={12} height={12} />} label="Absage-Email (andere Stellen)" />}
+          {stage === "accepted" && <AiBtn id="onboarding" icon={<CheckCircle width={12} height={12} />} label="Onboarding-Checkliste" />}
+        </div>
+      )}
+
+      {/* Pending Phase */}
+      {stage === "pending" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+          <AiBtn id="company-research" icon={<Building width={12} height={12} />} label="Unternehmensrecherche" />
+          <AiBtn id="ackermann-script" icon={<Coins width={12} height={12} />} label="Ackermann-Verhandlungs-Script" />
+        </div>
+      )}
+
+      {/* Rejected Phase */}
+      {showRejected && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+          <AiBtn id="email-feedback" icon={<Mail width={12} height={12} />} label="Feedback-Email anfordern" />
         </div>
       )}
 
@@ -1733,13 +1867,20 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
   const [newDesc, setNewDesc] = useState("");
 
   // AI-generated content — rendered full-width below the column grid
-  const [aiCvHighlights,  setAiCvHighlights]  = useState<CvHighlights | null>(null);
-  const [aiInterviewPrep, setAiInterviewPrep] = useState<InterviewPrep | null>(() => {
+  const [aiCvHighlights,    setAiCvHighlights]    = useState<CvHighlights | null>(null);
+  const [aiInterviewPrep,   setAiInterviewPrep]   = useState<InterviewPrep | null>(() => {
     const raw = app.stage === "interview_1" ? app.interview1Prep
               : app.stage === "interview_2" ? app.interview2Prep : null;
     try { return raw ? JSON.parse(raw) as InterviewPrep : null; } catch { return null; }
   });
-  const [aiSalaryTips,    setAiSalaryTips]    = useState<SalaryTips | null>(null);
+  const [aiSalaryTips,      setAiSalaryTips]      = useState<SalaryTips | null>(null);
+  const [aiSalaryCheck,     setAiSalaryCheck]     = useState<SalaryCheck | null>(null);
+  const [aiAtsKeywords,     setAiAtsKeywords]     = useState<AtsKeywords | null>(null);
+  const [aiCompanyResearch, setAiCompanyResearch] = useState<CompanyResearch | null>(null);
+  const [aiAckermannScript, setAiAckermannScript] = useState<AckermannScript | null>(null);
+  const [aiLetterReview,    setAiLetterReview]    = useState<LetterReview | null>(null);
+  const [aiOpeningSentences,setAiOpeningSentences]= useState<OpeningSentences | null>(null);
+  const [aiOnboarding,      setAiOnboarding]      = useState<OnboardingChecklist | null>(null);
 
   // Expand-Logik for the three content blocks
   const [interviewExpanded, setInterviewExpanded] = useState(false);
@@ -1772,6 +1913,13 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
           onCvHighlightsChange={setAiCvHighlights}
           onInterviewPrepChange={setAiInterviewPrep}
           onSalaryTipsChange={setAiSalaryTips}
+          onSalaryCheckChange={setAiSalaryCheck}
+          onAtsKeywordsChange={setAiAtsKeywords}
+          onCompanyResearchChange={setAiCompanyResearch}
+          onAckermannScriptChange={setAiAckermannScript}
+          onLetterReviewChange={setAiLetterReview}
+          onOpeningSentencesChange={setAiOpeningSentences}
+          onOnboardingChange={setAiOnboarding}
         />
       </div>
 
@@ -1789,7 +1937,7 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
       )}
 
       {/* 2. KI-generierte Inhalte */}
-      {(aiCvHighlights || aiInterviewPrep || aiSalaryTips) && (
+      {(aiCvHighlights || aiInterviewPrep || aiSalaryTips || aiSalaryCheck || aiAtsKeywords || aiCompanyResearch || aiAckermannScript || aiLetterReview || aiOpeningSentences || aiOnboarding) && (
         <div style={aiExpanded ? expandStyle : {}}>
           {/* Header with expand toggle */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
@@ -1890,6 +2038,269 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
                   <div style={{ fontSize: 10, fontWeight: 700, color: "#34d399", marginBottom: 4 }}>Chris Voss Anker-Taktik</div>
                   <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6 }}>{aiSalaryTips.vossAnker}</div>
                 </div>
+              </div>
+            )}
+
+            {/* Salary Check panel */}
+            {aiSalaryCheck && (
+              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Gehalts-Check Schweiz</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
+                      onClick={() => copyText(`Lohnband: ${aiSalaryCheck.waehrung} ${aiSalaryCheck.lohnband.min.toLocaleString()}–${aiSalaryCheck.lohnband.max.toLocaleString()} (Median: ${aiSalaryCheck.lohnband.median.toLocaleString()})\n\n${aiSalaryCheck.begruendung}`)}>
+                      <IcCopy width={11} height={11} /> Kopieren
+                    </button>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
+                      onClick={async () => {
+                        const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/salary-check/export-doc`, { salaryCheck: aiSalaryCheck });
+                        window.open(r.data.docUrl, "_blank");
+                      }}>
+                      <Page width={11} height={11} /> Google Doc
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
+                  <div style={{ textAlign: "center", flex: 1, padding: 12, borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
+                    <div style={{ fontSize: 10, color: "var(--fg-3)", marginBottom: 4 }}>MINIMUM</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: "var(--fg-1)" }}>CHF {aiSalaryCheck.lohnband.min.toLocaleString()}</div>
+                  </div>
+                  <div style={{ textAlign: "center", flex: 1, padding: 12, borderRadius: 8, background: "var(--accent-08)", border: "1px solid var(--accent)" }}>
+                    <div style={{ fontSize: 10, color: "var(--accent)", marginBottom: 4, fontWeight: 700 }}>MEDIAN</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "var(--accent)" }}>CHF {aiSalaryCheck.lohnband.median.toLocaleString()}</div>
+                  </div>
+                  <div style={{ textAlign: "center", flex: 1, padding: 12, borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
+                    <div style={{ fontSize: 10, color: "var(--fg-3)", marginBottom: 4 }}>MAXIMUM</div>
+                    <div style={{ fontSize: 18, fontWeight: 800, color: "var(--fg-1)" }}>CHF {aiSalaryCheck.lohnband.max.toLocaleString()}</div>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 10 }}>{aiSalaryCheck.begruendung}</div>
+                {aiSalaryCheck.faktoren.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                    {aiSalaryCheck.faktoren.map((f, i) => <span key={i} className="tag">{f}</span>)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ATS Keywords panel */}
+            {aiAtsKeywords && (
+              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>ATS-Keywords</div>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
+                    onClick={() => copyText([
+                      "MUST-HAVE:\n" + aiAtsKeywords.mustHave.join(", "),
+                      "NICE-TO-HAVE:\n" + aiAtsKeywords.niceToHave.join(", "),
+                      "SOFT SKILLS:\n" + aiAtsKeywords.softSkills.join(", "),
+                      "TOOLS:\n" + aiAtsKeywords.tools.join(", "),
+                    ].join("\n\n"))}>
+                    <IcCopy width={11} height={11} /> Kopieren
+                  </button>
+                </div>
+                {[
+                  { label: "Must-Have", items: aiAtsKeywords.mustHave, color: "#f87171" },
+                  { label: "Nice-to-Have", items: aiAtsKeywords.niceToHave, color: "#fbbf24" },
+                  { label: "Soft Skills", items: aiAtsKeywords.softSkills, color: "#34d399" },
+                  { label: "Tools", items: aiAtsKeywords.tools, color: "#60a5fa" },
+                ].filter(g => g.items.length > 0).map(group => (
+                  <div key={group.label} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: group.color, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{group.label}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {group.items.map((k, i) => <span key={i} className="tag" style={{ background: `${group.color}15`, color: group.color, borderColor: `${group.color}40` }}>{k}</span>)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Company Research panel */}
+            {aiCompanyResearch && (
+              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Unternehmensrecherche</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
+                      onClick={() => copyText(Object.entries(aiCompanyResearch).map(([k, v]) => `${k.toUpperCase()}:\n${Array.isArray(v) ? (v as string[]).join(", ") : v}`).join("\n\n"))}>
+                      <IcCopy width={11} height={11} /> Kopieren
+                    </button>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
+                      onClick={async () => {
+                        const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/company-research/export-doc`, { research: aiCompanyResearch });
+                        window.open(r.data.docUrl, "_blank");
+                      }}>
+                      <Page width={11} height={11} /> Google Doc
+                    </button>
+                  </div>
+                </div>
+                <Accordion title="Unternehmensüberblick" count={0} color="#60a5fa">
+                  <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6 }}>{aiCompanyResearch.unternehmensueberblick}</div>
+                </Accordion>
+                <Accordion title="Marktposition & Kultur" count={0} color="#a78bfa">
+                  <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6, marginBottom: 8 }}>{aiCompanyResearch.marktposition}</div>
+                  <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.6 }}>{aiCompanyResearch.unternehmenskultur}</div>
+                </Accordion>
+                {aiCompanyResearch.wettbewerber.length > 0 && (
+                  <Accordion title="Wettbewerber" count={aiCompanyResearch.wettbewerber.length} color="#fbbf24">
+                    {aiCompanyResearch.wettbewerber.map((w, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>• {w}</div>)}
+                  </Accordion>
+                )}
+                {aiCompanyResearch.aktuelleThemen.length > 0 && (
+                  <Accordion title="Aktuelle Themen" count={aiCompanyResearch.aktuelleThemen.length} color="#34d399">
+                    {aiCompanyResearch.aktuelleThemen.map((t, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>• {t}</div>)}
+                  </Accordion>
+                )}
+                {aiCompanyResearch.gespraechsthemen.length > 0 && (
+                  <Accordion title="Gesprächsthemen fürs Interview" count={aiCompanyResearch.gespraechsthemen.length} color="#f87171">
+                    {aiCompanyResearch.gespraechsthemen.map((t, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "5px 0" }}>💡 {t}</div>)}
+                  </Accordion>
+                )}
+              </div>
+            )}
+
+            {/* Ackermann Script panel */}
+            {aiAckermannScript && (
+              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Ackermann-Verhandlungs-Script</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
+                      onClick={() => copyText(`ZIELGEHALT: CHF ${aiAckermannScript.zielgehalt.toLocaleString()}\nANKERGEBOT: CHF ${aiAckermannScript.ankergebot.toLocaleString()}\n\n` +
+                        aiAckermannScript.schritte.map(s => `Runde ${s.runde} (CHF ${s.angebot.toLocaleString()}):\n"${s.formulierung}"\nTaktik: ${s.taktik}`).join("\n\n") +
+                        `\n\nCHRIS VOSS ANKER:\n${aiAckermannScript.vossAnker}`)}>
+                      <IcCopy width={11} height={11} /> Kopieren
+                    </button>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
+                      onClick={async () => {
+                        const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/ackermann-script/export-doc`, { script: aiAckermannScript });
+                        window.open(r.data.docUrl, "_blank");
+                      }}>
+                      <Page width={11} height={11} /> Google Doc
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
+                  <div style={{ flex: 1, padding: 10, borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)", textAlign: "center" }}>
+                    <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>ZIELGEHALT</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "var(--accent)" }}>CHF {aiAckermannScript.zielgehalt.toLocaleString()}</div>
+                  </div>
+                  <div style={{ flex: 1, padding: 10, borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.3)", textAlign: "center" }}>
+                    <div style={{ fontSize: 9, color: "#fbbf24", marginBottom: 3 }}>ANKERLOHN (65%)</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "#fbbf24" }}>CHF {aiAckermannScript.ankergebot.toLocaleString()}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+                  {aiAckermannScript.schritte.map((s, i) => (
+                    <div key={i} style={{ padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase" }}>Runde {s.runde}</span>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--fg-1)" }}>CHF {s.angebot.toLocaleString()}</span>
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--fg-1)", fontStyle: "italic", marginBottom: 4 }}>„{s.formulierung}"</div>
+                      <div style={{ fontSize: 11, color: "var(--fg-3)" }}>🧠 {s.taktik}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.2)" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", marginBottom: 4 }}>CHRIS VOSS ANKER-FORMULIERUNG</div>
+                  <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6 }}>{aiAckermannScript.vossAnker}</div>
+                </div>
+                {aiAckermannScript.nichtmonetaer.length > 0 && (
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 6 }}>Nicht-monetäre Alternativen</div>
+                    {aiAckermannScript.nichtmonetaer.map((n, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-2)", padding: "2px 0" }}>• {n}</div>)}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Letter Review panel */}
+            {aiLetterReview && (
+              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Anschreiben-Review</div>
+                  <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
+                    onClick={() => copyText(`${aiLetterReview.gesamteindruck}\n\nStärken:\n${aiLetterReview.staerken.map(s => `• ${s}`).join("\n")}\n\nVerbesserungen:\n${aiLetterReview.verbesserungen.map(v => `• ${v}`).join("\n")}`)}>
+                    <IcCopy width={11} height={11} /> Kopieren
+                  </button>
+                </div>
+                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+                  <span className="tag" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>Tonalität: {aiLetterReview.tonalitaet}</span>
+                  <span className="tag" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>Länge: {aiLetterReview.laenge}</span>
+                  <span className="tag" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>Personalisierung: {aiLetterReview.personalisierung}</span>
+                </div>
+                <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 12 }}>{aiLetterReview.gesamteindruck}</div>
+                <Accordion title="Stärken" count={aiLetterReview.staerken.length} color="#34d399">
+                  {aiLetterReview.staerken.map((s, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>✓ {s}</div>)}
+                </Accordion>
+                <Accordion title="Verbesserungen" count={aiLetterReview.verbesserungen.length} color="#fbbf24">
+                  {aiLetterReview.verbesserungen.map((v, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>→ {v}</div>)}
+                </Accordion>
+                {aiLetterReview.cliches.length > 0 && (
+                  <Accordion title="Clichés / Floskeln" count={aiLetterReview.cliches.length} color="#f87171">
+                    {aiLetterReview.cliches.map((c, i) => <div key={i} style={{ fontSize: 12, color: "#f87171", padding: "3px 0" }}>⚠ {c}</div>)}
+                  </Accordion>
+                )}
+              </div>
+            )}
+
+            {/* Opening Sentences panel */}
+            {aiOpeningSentences && (
+              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)", marginBottom: 12 }}>3 Eröffnungssätze</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                  {aiOpeningSentences.saetze.map((s, i) => (
+                    <div key={i} style={{ padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", marginBottom: 4 }}>{s.ansatz}</div>
+                          <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.5, marginBottom: 4 }}>„{s.satz}"</div>
+                          <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{s.erklaerung}</div>
+                        </div>
+                        <button onClick={() => copyText(s.satz)} title="Kopieren"
+                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 2, flexShrink: 0 }}>
+                          <IcCopy width={10} height={10} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Onboarding Checklist panel */}
+            {aiOnboarding && (
+              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Onboarding-Checkliste</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
+                      onClick={() => copyText(`Erste 30 Tage:\n${aiOnboarding.erste30Tage.map(t => `• ${t}`).join("\n")}\n\nErste 60 Tage:\n${aiOnboarding.erste60Tage.map(t => `• ${t}`).join("\n")}\n\nErste 90 Tage:\n${aiOnboarding.erste90Tage.map(t => `• ${t}`).join("\n")}`)}>
+                      <IcCopy width={11} height={11} /> Kopieren
+                    </button>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
+                      onClick={async () => {
+                        const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/onboarding/export-doc`, { checklist: aiOnboarding });
+                        window.open(r.data.docUrl, "_blank");
+                      }}>
+                      <Page width={11} height={11} /> Google Doc
+                    </button>
+                  </div>
+                </div>
+                {[
+                  { label: "Erste 30 Tage", items: aiOnboarding.erste30Tage, color: "#60a5fa" },
+                  { label: "Erste 60 Tage", items: aiOnboarding.erste60Tage, color: "#a78bfa" },
+                  { label: "Erste 90 Tage", items: aiOnboarding.erste90Tage, color: "#34d399" },
+                ].map(phase => (
+                  <Accordion key={phase.label} title={phase.label} count={phase.items.length} color={phase.color}>
+                    {phase.items.map((item, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>☐ {item}</div>)}
+                  </Accordion>
+                ))}
+                {aiOnboarding.allgemein.length > 0 && (
+                  <Accordion title="Allgemein" count={aiOnboarding.allgemein.length} color="#fbbf24">
+                    {aiOnboarding.allgemein.map((item, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>• {item}</div>)}
+                  </Accordion>
+                )}
               </div>
             )}
           </div>
@@ -2535,8 +2946,8 @@ export function DetailDrawer({ app, onClose }: Props) {
                 )}
                 {app.matchScore != null && (
                   <span
-                    onClick={() => setTab("agent")}
-                    title="AI Agent öffnen"
+                    onClick={() => setTab("insights")}
+                    title="Insights öffnen"
                     style={{
                       padding: "1px 7px", borderRadius: 999, fontSize: 11, fontWeight: 300, whiteSpace: "nowrap", cursor: "pointer",
                       background: app.matchScore >= 75 ? "rgba(52,211,153,0.15)" : app.matchScore >= 50 ? "rgba(251,191,36,0.15)" : "rgba(248,113,113,0.15)",
@@ -2577,7 +2988,7 @@ export function DetailDrawer({ app, onClose }: Props) {
           {tab === "description"  && <DescriptionTab  app={app} onSave={(p) => patchMutation.mutate(p)} />}
           {tab === "documents"    && <DocumentsTab    app={app} />}
           {tab === "process"      && <ProcessTab      app={app} onSave={(p) => patchMutation.mutate(p)} />}
-          {tab === "agent"        && <AgentTab        app={app} />}
+          {tab === "insights"     && <AgentTab        app={app} />}
           {tab === "contacts"     && <ContactsTab     app={app} />}
           {tab === "notes"        && <NotesTab        app={app} onSave={(p) => patchMutation.mutate(p)} />}
         </div>
