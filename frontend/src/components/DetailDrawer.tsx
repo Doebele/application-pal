@@ -401,10 +401,77 @@ function DescriptionTab({ app, onSave }: { app: Application; onSave: (patch: Par
 }
 
 // ─── Details Tab (Übersicht + Beschreibung) ───────────────────
-function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
+const AI_RESULT_LABELS: Record<string, string> = {
+  "glassdoor-check": "Glassdoor Rating",
+  "salary-check": "Gehalts-Check Schweiz",
+  "ats-keywords": "ATS-Keywords",
+  "cv-highlights": "CV-Highlights",
+  "interview-prep": "Interview-Vorbereitung",
+  "salary-tips": "Gehaltsverhandlung",
+  "company-research": "Unternehmensrecherche",
+  "ackermann-script": "Ackermann-Script",
+  "letter-review": "Anschreiben-Review",
+  "opening-sentences": "Eröffnungssätze",
+  "onboarding": "Onboarding-Checkliste",
+};
+
+function aiResultSummary(id: string, data: unknown): string {
+  if (!data) return "";
+  const d = data as Record<string, unknown>;
+  switch (id) {
+    case "glassdoor-check": {
+      const rating = d.rating as number | null;
+      const summary = (d.summary as string | undefined) ?? "";
+      return rating != null ? `★ ${rating} · ${summary.slice(0, 70)}` : summary.slice(0, 80);
+    }
+    case "salary-check": {
+      const lb = d.lohnband as { min?: number; max?: number; median?: number } | undefined;
+      const w = (d.waehrung as string | undefined) ?? "CHF";
+      if (!lb) return (d.begruendung as string | undefined ?? "").slice(0, 80);
+      return `${w} ${lb.min?.toLocaleString("de-CH")}–${lb.max?.toLocaleString("de-CH")} · Median ${lb.median?.toLocaleString("de-CH")}`;
+    }
+    case "ats-keywords": {
+      const kws = [...((d.mustHave as string[]) ?? [])].slice(0, 6).join(" · ");
+      return kws + ((d.mustHave as string[] | undefined ?? []).length > 6 ? " …" : "");
+    }
+    case "cv-highlights": {
+      const h = (d.highlights as string[] | undefined ?? []).length;
+      const k = (d.keywords as string[] | undefined ?? []).length;
+      return `${h} Stärken · ${k} Keywords`;
+    }
+    case "interview-prep": {
+      const q = (d.rollenFragen as string[] | undefined ?? []).length;
+      const s = (d.starBeispiele as unknown[] | undefined ?? []).length;
+      const v = (d.vossFragenWhatHow as string[] | undefined ?? []).length;
+      return `${q} Fragen · ${s} STAR · ${v} Voss`;
+    }
+    case "salary-tips":
+      return ((d["markteinschätzung"] as string | undefined) ?? "").slice(0, 80);
+    case "company-research":
+      return ((d.unternehmensueberblick as string | undefined) ?? "").slice(0, 80);
+    case "ackermann-script": {
+      const steps = (d.schritte as unknown[] | undefined ?? []).length;
+      return `${steps} Verhandlungsschritte`;
+    }
+    case "letter-review":
+      return ((d.gesamteindruck as string | undefined) ?? "").slice(0, 80);
+    case "opening-sentences":
+      return `${(d.saetze as unknown[] | undefined ?? []).length} Eröffnungssätze generiert`;
+    case "onboarding": {
+      const total = (d.erste30Tage as unknown[] | undefined ?? []).length
+        + (d.erste60Tage as unknown[] | undefined ?? []).length
+        + (d.erste90Tage as unknown[] | undefined ?? []).length;
+      return `${total} Punkte · 30/60/90 Tage`;
+    }
+    default: return "";
+  }
+}
+
+function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults }: {
   app: Application; stage: string;
   url: string; onUrlChange: (url: string) => void;
   onSave: (patch: Partial<Application>) => void;
+  aiResults?: Record<string, { data: unknown; createdAt: Date }>;
 }) {
   const [description, setDescription] = useState(app.description ?? "");
   const [descSaved,   setDescSaved]   = useState(false);
@@ -423,10 +490,46 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
     display: "flex", flexDirection: "column", overflow: "hidden",
   };
 
+  const resultEntries = Object.entries(aiResults ?? {}).filter(([, v]) => v?.data);
+
   return (
     <>
       {/* Übersicht-Inhalt */}
       <OverviewTab app={app} stage={stage} url={url} onUrlChange={onUrlChange} onSave={onSave} />
+
+      {/* KI-Erkenntnisse — erscheint wenn Ergebnisse vorhanden */}
+      {resultEntries.length > 0 && (
+        <div style={{ marginTop: 16, marginBottom: 4 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
+            KI-Erkenntnisse
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            {resultEntries.map(([id, entry]) => {
+              const label = AI_RESULT_LABELS[id] ?? id;
+              const summary = aiResultSummary(id, entry.data);
+              const ts = entry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+              return (
+                <div key={id} title={`Erstellt: ${ts}`} style={{
+                  display: "flex", alignItems: "baseline", gap: 8,
+                  padding: "5px 8px", borderRadius: 6,
+                  background: "var(--surface)", border: "1px solid var(--border)",
+                }}>
+                  <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
+                    <Check width={10} height={10} style={{ color: "#4ade80" }} />
+                    <span style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-2)", whiteSpace: "nowrap" }}>{label}</span>
+                  </span>
+                  {summary && (
+                    <span style={{ fontSize: 11, color: "var(--fg-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+                      {summary}
+                    </span>
+                  )}
+                  <span style={{ fontSize: 9, color: "var(--fg-4)", flexShrink: 0, whiteSpace: "nowrap" }}>{ts}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Stellenbeschreibung — expandierbar */}
       <div style={descExpanded ? expandStyle : { marginTop: 8 }}>
@@ -1326,7 +1429,7 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
 // ── Stage AI Actions ──
 function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChange, onSalaryTipsChange,
   onSalaryCheckChange, onAtsKeywordsChange, onCompanyResearchChange, onAckermannScriptChange,
-  onLetterReviewChange, onOpeningSentencesChange, onOnboardingChange, onGlassdoorChange }: {
+  onLetterReviewChange, onOpeningSentencesChange, onOnboardingChange, onGlassdoorChange, onAiResult }: {
   app: Application;
   onSave?: (patch: Partial<Application>) => void;
   onCvHighlightsChange?: (v: CvHighlights | null) => void;
@@ -1340,10 +1443,20 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   onOpeningSentencesChange?: (v: OpeningSentences | null) => void;
   onOnboardingChange?: (v: OnboardingChecklist | null) => void;
   onGlassdoorChange?: (v: GlassdoorData | null) => void;
+  onAiResult?: (id: string, data: unknown) => void;
 }) {
   const { ai } = useUiStore();
   const stage = app.stage;
   const [loading, setLoading] = useState<string | null>(null);
+  const [resultTimes, setResultTimes] = useState<Record<string, Date>>(() => {
+    const init: Record<string, Date> = {};
+    if (app.glassdoorData) {
+      try { const d = JSON.parse(app.glassdoorData as string); if (d.updatedAt) init["glassdoor-check"] = new Date(d.updatedAt); } catch {}
+    }
+    const raw = app.stage === "interview_1" ? app.interview1Prep : app.stage === "interview_2" ? app.interview2Prep : null;
+    if (raw) { try { JSON.parse(raw); init["interview-prep"] = new Date(); } catch {} }
+    return init;
+  });
   const [cvHighlights, setCvHighlights] = useState<CvHighlights | null>(null);
 
   // Initialize interviewPrep from DB (persisted after generation)
@@ -1369,17 +1482,17 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   });
 
   // Wrapped setters — also notify parent so content can render full-width
-  const updateCvHighlights    = (v: CvHighlights | null)    => { setCvHighlights(v);     onCvHighlightsChange?.(v);    };
-  const updateInterviewPrep   = (v: InterviewPrep | null)   => { setInterviewPrep(v);    onInterviewPrepChange?.(v);   };
-  const updateSalaryTips      = (v: SalaryTips | null)      => { setSalaryTips(v);       onSalaryTipsChange?.(v);      };
-  const updateSalaryCheck     = (v: SalaryCheck | null)     => { setSalaryCheck(v);      onSalaryCheckChange?.(v);     };
-  const updateAtsKeywords     = (v: AtsKeywords | null)     => { setAtsKeywords(v);      onAtsKeywordsChange?.(v);     };
-  const updateCompanyResearch = (v: CompanyResearch | null) => { setCompanyResearch(v);  onCompanyResearchChange?.(v); };
-  const updateAckermannScript = (v: AckermannScript | null) => { setAckermannScript(v);  onAckermannScriptChange?.(v); };
-  const updateLetterReview    = (v: LetterReview | null)    => { setLetterReview(v);     onLetterReviewChange?.(v);    };
-  const updateOpeningSentences= (v: OpeningSentences | null)=> { setOpeningSentences(v); onOpeningSentencesChange?.(v);};
-  const updateOnboarding      = (v: OnboardingChecklist | null) => { setOnboarding(v);   onOnboardingChange?.(v);      };
-  const updateGlassdoor       = (v: GlassdoorData | null)       => { setGlassdoor(v);    onGlassdoorChange?.(v);       };
+  const updateCvHighlights    = (v: CvHighlights | null)    => { setCvHighlights(v);     onCvHighlightsChange?.(v);     if (v) onAiResult?.("cv-highlights", v);     };
+  const updateInterviewPrep   = (v: InterviewPrep | null)   => { setInterviewPrep(v);    onInterviewPrepChange?.(v);    if (v) onAiResult?.("interview-prep", v);    };
+  const updateSalaryTips      = (v: SalaryTips | null)      => { setSalaryTips(v);       onSalaryTipsChange?.(v);       if (v) onAiResult?.("salary-tips", v);       };
+  const updateSalaryCheck     = (v: SalaryCheck | null)     => { setSalaryCheck(v);      onSalaryCheckChange?.(v);      if (v) onAiResult?.("salary-check", v);      };
+  const updateAtsKeywords     = (v: AtsKeywords | null)     => { setAtsKeywords(v);      onAtsKeywordsChange?.(v);      if (v) onAiResult?.("ats-keywords", v);      };
+  const updateCompanyResearch = (v: CompanyResearch | null) => { setCompanyResearch(v);  onCompanyResearchChange?.(v);  if (v) onAiResult?.("company-research", v);  };
+  const updateAckermannScript = (v: AckermannScript | null) => { setAckermannScript(v);  onAckermannScriptChange?.(v);  if (v) onAiResult?.("ackermann-script", v);  };
+  const updateLetterReview    = (v: LetterReview | null)    => { setLetterReview(v);     onLetterReviewChange?.(v);     if (v) onAiResult?.("letter-review", v);     };
+  const updateOpeningSentences= (v: OpeningSentences | null)=> { setOpeningSentences(v); onOpeningSentencesChange?.(v); if (v) onAiResult?.("opening-sentences", v); };
+  const updateOnboarding      = (v: OnboardingChecklist | null) => { setOnboarding(v);   onOnboardingChange?.(v);       if (v) onAiResult?.("onboarding", v);        };
+  const updateGlassdoor       = (v: GlassdoorData | null)       => { setGlassdoor(v);    onGlassdoorChange?.(v);        if (v) onAiResult?.("glassdoor-check", v);   };
 
   // Suppress unused variable warning for local state
   void salaryCheck; void atsKeywords; void companyResearch; void ackermannScript;
@@ -1474,14 +1587,21 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   const run = async (key: string, fn: () => Promise<void>) => {
     if (ai.provider === "none") { setErr("KI-Modell in Settings konfigurieren"); return; }
     setErr(null); setLoading(key);
-    try { await fn(); } catch (e: unknown) {
+    try {
+      await fn();
+      setResultTimes(prev => ({ ...prev, [key]: new Date() }));
+    } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Fehler";
       setErr(msg);
     } finally { setLoading(null); }
   };
 
-  const AiBtn = ({ id, label, icon }: { id: string; label: string; icon: React.ReactNode }) => (
-    <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={!!loading}
+  const AiBtn = ({ id, label, icon }: { id: string; label: string; icon: React.ReactNode }) => {
+    const ts = resultTimes[id];
+    const tsLabel = ts ? ts.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : undefined;
+    return (
+    <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5, width: "100%", justifyContent: "flex-start" }} disabled={!!loading}
+      title={ts && tsLabel ? `Erstellt: ${tsLabel}` : undefined}
       onClick={() => run(id, async () => {
         if (id === "cv-doc") {
           const r = await api.post<{ docUrl?: string }>(`/api/applications/${app.id}/ai/cv-doc`, aiBody);
@@ -1546,10 +1666,17 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
           updateOnboarding(r.data);
         }
       })}>
-      {loading === id ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : icon}
-      {label}
+      {icon}
+      <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
+      {loading === id
+        ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
+        : ts
+          ? <Check width={11} height={11} style={{ color: "#4ade80", flexShrink: 0 }} />
+          : <div style={{ width: 11, flexShrink: 0 }} />
+      }
     </button>
-  );
+    );
+  };
 
   const showCv       = ["preparing_cv"].includes(stage);
   const showLetter   = ["preparing_letter"].includes(stage);
@@ -2093,7 +2220,7 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
   );
 }
 
-function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partial<Application>) => void }) {
+function ProcessTab({ app, onSave, onAiResult }: { app: Application; onSave?: (patch: Partial<Application>) => void; onAiResult?: (id: string, data: unknown) => void }) {
   const { data: activities = [], refetch } = useQuery<ApplicationActivity[]>({
     queryKey: ["activities", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/activities`).then((r) => r.data)
@@ -2161,6 +2288,7 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
           onOpeningSentencesChange={setAiOpeningSentences}
           onOnboardingChange={setAiOnboarding}
           onGlassdoorChange={setAiGlassdoor}
+          onAiResult={onAiResult}
         />
       </div>
 
@@ -3140,6 +3268,23 @@ export function DetailDrawer({ app, onClose }: Props) {
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const queryClient = useQueryClient();
 
+  // Shared AI results registry — survives tab switches; initialized from DB-persisted fields
+  const [aiResultsRegistry, setAiResultsRegistry] = useState<Record<string, { data: unknown; createdAt: Date }>>(() => {
+    const init: Record<string, { data: unknown; createdAt: Date }> = {};
+    if (app.glassdoorData) {
+      try {
+        const d = JSON.parse(app.glassdoorData as string);
+        init["glassdoor-check"] = { data: d, createdAt: d.updatedAt ? new Date(d.updatedAt) : new Date() };
+      } catch {}
+    }
+    const prep = app.stage === "interview_1" ? app.interview1Prep : app.stage === "interview_2" ? app.interview2Prep : null;
+    if (prep) { try { init["interview-prep"] = { data: JSON.parse(prep), createdAt: new Date() }; } catch {} }
+    return init;
+  });
+  const registerAiResult = useCallback((id: string, data: unknown) => {
+    setAiResultsRegistry(prev => ({ ...prev, [id]: { data, createdAt: new Date() } }));
+  }, []);
+
   const patchMutation = useMutation({
     mutationFn: (patch: Partial<Application>) =>
       api.patch(`/api/applications/${app.id}`, patch).then((r) => r.data),
@@ -3228,8 +3373,8 @@ export function DetailDrawer({ app, onClose }: Props) {
         </div>
 
         <div className="drawer-body" style={{ paddingTop: 16 }}>
-          {tab === "process"      && <ProcessTab      app={app} onSave={(p) => patchMutation.mutate(p)} />}
-          {tab === "details"      && <DetailsTab      app={app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} />}
+          {tab === "process"      && <ProcessTab      app={app} onSave={(p) => patchMutation.mutate(p)} onAiResult={registerAiResult} />}
+          {tab === "details"      && <DetailsTab      app={app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} aiResults={aiResultsRegistry} />}
           {tab === "documents"    && <DocumentsTab    app={app} />}
           {tab === "insights"     && <AgentTab        app={app} />}
           {tab === "contacts"     && <ContactsTab     app={app} />}
