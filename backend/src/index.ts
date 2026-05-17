@@ -2096,6 +2096,65 @@ Antworte NUR mit JSON:
 });
 
 // Gehalts-Check Schweiz (Inbox stage)
+// ── Glassdoor / Unternehmens-Rating ──
+app.post("/api/applications/:id/ai/glassdoor-check", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+
+  const companySlug = (app_.company ?? "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const glassdoorUrl = `https://www.glassdoor.com/Search/results.htm?keyword=${encodeURIComponent(app_.company ?? "")}`;
+  const kununuUrl   = `https://www.kununu.com/search?q=${encodeURIComponent(app_.company ?? "")}`;
+  const linkedinUrl = `https://www.linkedin.com/company/${companySlug}`;
+
+  const system = `Du bist ein Unternehmens-Analyst. Schätze basierend auf deinen Trainingsdaten das Glassdoor-Rating und weitere Kennzahlen für das genannte Unternehmen.
+Antworte NUR mit diesem JSON (alle Felder pflichtend):
+{
+  "rating": number_or_null,
+  "reviewCount": number_or_null,
+  "ceoApproval": number_or_null,
+  "recommendToFriend": number_or_null,
+  "confidence": "hoch" | "mittel" | "niedrig",
+  "summary": "<2-3 Sätze zu Unternehmenskultur und Mitarbeiterzufriedenheit>",
+  "pros": ["<string>"],
+  "cons": ["<string>"],
+  "hinweis": "<kurze Erklärung über Zuverlässigkeit der Daten>"
+}
+Felder sind null wenn keine verlässlichen Daten vorhanden. confidence="niedrig" für unbekannte/sehr kleine Unternehmen.`;
+
+  const user = `Unternehmen: ${app_.company}\nBranche (aus Stellenbeschreibung): ${app_.description?.slice(0, 300) ?? "unbekannt"}`;
+
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as {
+      rating: number | null; reviewCount: number | null;
+      ceoApproval: number | null; recommendToFriend: number | null;
+      confidence: string; summary: string; pros: string[]; cons: string[]; hinweis: string;
+    };
+    const result = { ...parsed, glassdoorUrl, kununuUrl, linkedinUrl, updatedAt: new Date().toISOString(), manuallyEdited: false };
+    // Persist to DB
+    await db.update(applications).set({ glassdoorData: JSON.stringify(result) }).where(eq(applications.id, id));
+    return c.json(result);
+  } catch (err) {
+    console.error("glassdoor-check error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Manuell gespeichertes Rating aktualisieren
+app.patch("/api/applications/:id/ai/glassdoor-check", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json<{ rating?: number | null; reviewCount?: number | null }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const existing = app_.glassdoorData ? JSON.parse(app_.glassdoorData) : {};
+  const updated = { ...existing, ...body, manuallyEdited: true, updatedAt: new Date().toISOString() };
+  await db.update(applications).set({ glassdoorData: JSON.stringify(updated) }).where(eq(applications.id, id));
+  return c.json(updated);
+});
+
 app.post("/api/applications/:id/ai/salary-check", async (c) => {
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();

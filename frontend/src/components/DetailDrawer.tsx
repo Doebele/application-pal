@@ -1192,6 +1192,22 @@ type InterviewPrep = { rollenFragen: string[]; starBeispiele: { frage: string; s
 type EmailDraft = { subject: string; body: string };
 type SalaryTips = { "markteinschätzung": string; taktiken: string[]; formulierungen: string[]; vossAnker: string };
 
+type GlassdoorData = {
+  rating: number | null;
+  reviewCount: number | null;
+  ceoApproval: number | null;
+  recommendToFriend: number | null;
+  confidence: "hoch" | "mittel" | "niedrig";
+  summary: string;
+  pros: string[];
+  cons: string[];
+  hinweis: string;
+  glassdoorUrl: string;
+  kununuUrl: string;
+  linkedinUrl: string;
+  updatedAt: string;
+  manuallyEdited?: boolean;
+};
 type SalaryCheck = {
   lohnband: { min: number; max: number; median: number };
   waehrung: string;
@@ -1310,7 +1326,7 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
 // ── Stage AI Actions ──
 function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChange, onSalaryTipsChange,
   onSalaryCheckChange, onAtsKeywordsChange, onCompanyResearchChange, onAckermannScriptChange,
-  onLetterReviewChange, onOpeningSentencesChange, onOnboardingChange }: {
+  onLetterReviewChange, onOpeningSentencesChange, onOnboardingChange, onGlassdoorChange }: {
   app: Application;
   onSave?: (patch: Partial<Application>) => void;
   onCvHighlightsChange?: (v: CvHighlights | null) => void;
@@ -1323,6 +1339,7 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   onLetterReviewChange?: (v: LetterReview | null) => void;
   onOpeningSentencesChange?: (v: OpeningSentences | null) => void;
   onOnboardingChange?: (v: OnboardingChecklist | null) => void;
+  onGlassdoorChange?: (v: GlassdoorData | null) => void;
 }) {
   const { ai } = useUiStore();
   const stage = app.stage;
@@ -1347,6 +1364,9 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   const [letterReview,     setLetterReview]      = useState<LetterReview | null>(null);
   const [openingSentences, setOpeningSentences]  = useState<OpeningSentences | null>(null);
   const [onboarding,       setOnboarding]        = useState<OnboardingChecklist | null>(null);
+  const [glassdoor,        setGlassdoor]         = useState<GlassdoorData | null>(() => {
+    try { return app.glassdoorData ? JSON.parse(app.glassdoorData as string) : null; } catch { return null; }
+  });
 
   // Wrapped setters — also notify parent so content can render full-width
   const updateCvHighlights    = (v: CvHighlights | null)    => { setCvHighlights(v);     onCvHighlightsChange?.(v);    };
@@ -1359,10 +1379,11 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   const updateLetterReview    = (v: LetterReview | null)    => { setLetterReview(v);     onLetterReviewChange?.(v);    };
   const updateOpeningSentences= (v: OpeningSentences | null)=> { setOpeningSentences(v); onOpeningSentencesChange?.(v);};
   const updateOnboarding      = (v: OnboardingChecklist | null) => { setOnboarding(v);   onOnboardingChange?.(v);      };
+  const updateGlassdoor       = (v: GlassdoorData | null)       => { setGlassdoor(v);    onGlassdoorChange?.(v);       };
 
-  // Suppress unused variable warning for onboarding local state
+  // Suppress unused variable warning for local state
   void salaryCheck; void atsKeywords; void companyResearch; void ackermannScript;
-  void letterReview; void openingSentences; void onboarding;
+  void letterReview; void openingSentences; void onboarding; void glassdoor;
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -1493,6 +1514,9 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
         } else if (id === "salary-tips") {
           const r = await api.post<SalaryTips>(`/api/applications/${app.id}/ai/salary-tips`, aiBody);
           updateSalaryTips(r.data);
+        } else if (id === "glassdoor-check") {
+          const r = await api.post<GlassdoorData>(`/api/applications/${app.id}/ai/glassdoor-check`, aiBody);
+          updateGlassdoor(r.data);
         } else if (id === "salary-check") {
           const r = await api.post<SalaryCheck>(`/api/applications/${app.id}/ai/salary-check`, aiBody);
           updateSalaryCheck(r.data);
@@ -1544,6 +1568,7 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
       {/* Inbox Phase */}
       {showInbox && (
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+          <AiBtn id="glassdoor-check" icon={<Building width={12} height={12} />} label={glassdoor ? "Glassdoor aktualisieren" : "Glassdoor Rating"} />
           <AiBtn id="salary-check" icon={<Coins width={12} height={12} />} label="Gehalts-Check Schweiz" />
           <AiBtn id="ats-keywords" icon={<Search width={12} height={12} />} label="ATS-Keywords extrahieren" />
         </div>
@@ -1678,6 +1703,131 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
 }
 
 // ── Task Checklist ──
+// ── Glassdoor Rating Panel ────────────────────────────────────
+function GlassdoorPanel({ data, appId, onChange }: {
+  data: GlassdoorData;
+  appId: string;
+  onChange: (v: GlassdoorData) => void;
+}) {
+  const [editRating,      setEditRating]      = useState(data.rating?.toString() ?? "");
+  const [editReviewCount, setEditReviewCount] = useState(data.reviewCount?.toString() ?? "");
+  const [saving,          setSaving]          = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    const rating      = editRating      ? parseFloat(editRating)      : null;
+    const reviewCount = editReviewCount ? parseInt(editReviewCount, 10) : null;
+    try {
+      const r = await api.patch<GlassdoorData>(`/api/applications/${appId}/ai/glassdoor-check`, { rating, reviewCount });
+      onChange(r.data);
+    } finally { setSaving(false); }
+  };
+
+  const confidenceColor = data.confidence === "hoch" ? "#34d399" : data.confidence === "mittel" ? "#fbbf24" : "#f87171";
+  const stars = data.rating ? "★".repeat(Math.round(data.rating)) + "☆".repeat(5 - Math.round(data.rating)) : null;
+
+  return (
+    <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Glassdoor Rating</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          <a href={data.glassdoorUrl} target="_blank" rel="noopener noreferrer"
+            className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}>
+            <OpenNewWindow width={10} height={10} /> Glassdoor
+          </a>
+          <a href={data.kununuUrl} target="_blank" rel="noopener noreferrer"
+            className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}>
+            <OpenNewWindow width={10} height={10} /> Kununu
+          </a>
+          <a href={data.linkedinUrl} target="_blank" rel="noopener noreferrer"
+            className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}>
+            <OpenNewWindow width={10} height={10} /> LinkedIn
+          </a>
+        </div>
+      </div>
+
+      {/* Rating display */}
+      <div style={{ display: "flex", gap: 16, marginBottom: 14, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 120, padding: "12px 14px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)", textAlign: "center" }}>
+          <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 4 }}>GLASSDOOR</div>
+          {data.rating
+            ? <><div style={{ fontSize: 28, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{data.rating.toFixed(1)}</div>
+               <div style={{ fontSize: 11, color: "#fbbf24", marginTop: 2 }}>{stars}</div>
+               {data.reviewCount && <div style={{ fontSize: 10, color: "var(--fg-3)", marginTop: 2 }}>~{data.reviewCount} Reviews</div>}</>
+            : <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Keine Daten</div>}
+        </div>
+        {(data.ceoApproval !== null || data.recommendToFriend !== null) && (
+          <div style={{ flex: 1, minWidth: 120, padding: "12px 14px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
+            {data.ceoApproval !== null && (
+              <div style={{ marginBottom: 6 }}>
+                <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 2 }}>CEO-ZUSTIMMUNG</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg-1)" }}>{data.ceoApproval}%</div>
+              </div>
+            )}
+            {data.recommendToFriend !== null && (
+              <div>
+                <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 2 }}>WÜRDEN EMPFEHLEN</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg-1)" }}>{data.recommendToFriend}%</div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Summary */}
+      {data.summary && <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 12 }}>{data.summary}</div>}
+
+      {/* Pros / Cons */}
+      {(data.pros?.length > 0 || data.cons?.length > 0) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          {data.pros?.length > 0 && (
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 5 }}>Positiv</div>
+              {data.pros.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--fg-1)", padding: "2px 0" }}>+ {p}</div>)}
+            </div>
+          )}
+          {data.cons?.length > 0 && (
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#f87171", textTransform: "uppercase", marginBottom: 5 }}>Kritisch</div>
+              {data.cons.map((c, i) => <div key={i} style={{ fontSize: 11, color: "var(--fg-1)", padding: "2px 0" }}>− {c}</div>)}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Manuell aktualisieren */}
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, marginTop: 4 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 8 }}>Manuell aktualisieren</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Rating (1–5)</div>
+            <input type="number" step="0.1" min="1" max="5" value={editRating}
+              onChange={e => setEditRating(e.target.value)}
+              style={{ width: 70, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Anzahl Reviews</div>
+            <input type="number" min="0" value={editReviewCount}
+              onChange={e => setEditReviewCount(e.target.value)}
+              style={{ width: 90, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
+          </div>
+          <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={save} disabled={saving}>
+            {saving ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : "Speichern"}
+          </button>
+        </div>
+      </div>
+
+      {/* Confidence + Hinweis */}
+      <div style={{ marginTop: 10, fontSize: 10, color: "var(--fg-3)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+        <span style={{ color: confidenceColor, fontWeight: 600 }}>Konfidenz: {data.confidence}</span>
+        {data.manuallyEdited && <span style={{ color: "var(--accent)" }}>· manuell bearbeitet</span>}
+        {data.hinweis && <span>· {data.hinweis}</span>}
+      </div>
+    </div>
+  );
+}
+
 function TaskChecklist({ app }: { app: Application }) {
   const { data: tasks = [], refetch } = useQuery<Task[]>({
     queryKey: ["tasks", app.id],
@@ -1968,6 +2118,9 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
   const [aiLetterReview,    setAiLetterReview]    = useState<LetterReview | null>(null);
   const [aiOpeningSentences,setAiOpeningSentences]= useState<OpeningSentences | null>(null);
   const [aiOnboarding,      setAiOnboarding]      = useState<OnboardingChecklist | null>(null);
+  const [aiGlassdoor,       setAiGlassdoor]       = useState<GlassdoorData | null>(() => {
+    try { return app.glassdoorData ? JSON.parse(app.glassdoorData as string) : null; } catch { return null; }
+  });
 
   // Expand-Logik for the three content blocks
   const [interviewExpanded, setInterviewExpanded] = useState(false);
@@ -2007,6 +2160,7 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
           onLetterReviewChange={setAiLetterReview}
           onOpeningSentencesChange={setAiOpeningSentences}
           onOnboardingChange={setAiOnboarding}
+          onGlassdoorChange={setAiGlassdoor}
         />
       </div>
 
@@ -2127,6 +2281,9 @@ function ProcessTab({ app, onSave }: { app: Application; onSave?: (patch: Partia
                 </div>
               </div>
             )}
+
+            {/* Glassdoor Rating panel */}
+            {aiGlassdoor && <GlassdoorPanel data={aiGlassdoor} appId={app.id} onChange={setAiGlassdoor} />}
 
             {/* Salary Check panel */}
             {aiSalaryCheck && (
