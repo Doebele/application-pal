@@ -1624,19 +1624,17 @@ function TaskChecklist({ app }: { app: Application }) {
   useEffect(() => { if (showAdd) inputRef.current?.focus(); }, [showAdd]);
 
   return (
-    <div style={{ marginBottom: 20, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: "14px 16px" }}>
+    <div style={{ marginBottom: 20 }}>
       {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.07em" }}>
-            Aufgaben — {STAGE_LABELS_DE[app.stage] ?? app.stage}
-          </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+          Aufgaben
         </div>
         {total > 0 && (
           <span style={{
-            padding: "2px 9px", borderRadius: 999, fontSize: 11, fontWeight: 700,
+            padding: "1px 7px", borderRadius: 999, fontSize: 10, fontWeight: 700,
             background: pct === 100 ? "rgba(52,211,153,0.15)" : "var(--surface)",
-            color: pct === 100 ? "#34d399" : "var(--fg-2)",
+            color: pct === 100 ? "#34d399" : "var(--fg-3)",
             border: `1px solid ${pct === 100 ? "rgba(52,211,153,0.3)" : "var(--border)"}`
           }}>
             {done} / {total}
@@ -1646,28 +1644,31 @@ function TaskChecklist({ app }: { app: Application }) {
 
       {/* Progress bar */}
       {total > 0 && (
-        <div style={{ height: 3, borderRadius: 999, background: "var(--border)", marginBottom: 12, overflow: "hidden" }}>
+        <div style={{ height: 2, borderRadius: 999, background: "var(--border)", marginBottom: 8, overflow: "hidden" }}>
           <div style={{ height: "100%", width: `${pct}%`, background: color, borderRadius: 999, transition: "width 0.4s ease" }} />
         </div>
       )}
 
       {/* Task list */}
-      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {stageTasks.length === 0 && !showAdd && (
-          <div style={{ fontSize: 12, color: "var(--fg-3)", padding: "8px 0" }}>Keine Aufgaben für diese Phase</div>
+          <div style={{ fontSize: 12, color: "var(--fg-3)", padding: "6px 0" }}>Keine Aufgaben für diese Phase</div>
         )}
         {stageTasks.map((t) => (
-          <div key={t.id} className="task-row" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderRadius: 6 }}>
+          <div key={t.id} className="task-row" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0" }}>
+            {/* Underline-style checkbox */}
             <button
               onClick={() => toggle(t)}
               style={{
-                width: 17, height: 17, borderRadius: 4, border: `1.5px solid ${t.done ? "#34d399" : "var(--border-strong)"}`,
-                background: t.done ? "#34d399" : "transparent", flexShrink: 0, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center", transition: "all 0.15s"
+                width: 16, height: 16, flexShrink: 0, cursor: "pointer",
+                background: "none", border: "none", padding: 0,
+                display: "flex", alignItems: "flex-end", justifyContent: "center",
+                borderBottom: `1.5px solid ${t.done ? "#34d399" : "var(--border-strong)"}`,
+                transition: "border-color 0.15s"
               }}>
-              {t.done && <Check width={10} height={10} style={{ color: "#fff" }} />}
+              {t.done && <Check width={10} height={10} style={{ color: "#34d399", marginBottom: 1 }} />}
             </button>
-            <span style={{ flex: 1, fontSize: 13, color: t.done ? "var(--fg-3)" : "var(--fg-1)", textDecoration: t.done ? "line-through" : "none", transition: "all 0.15s" }}>
+            <span style={{ flex: 1, fontSize: 12.5, color: t.done ? "var(--fg-3)" : "var(--fg-1)", textDecoration: t.done ? "line-through" : "none", transition: "all 0.15s" }}>
               {t.title}
             </span>
             <button className="btn btn-ghost btn-icon task-del" style={{ padding: 2, opacity: 0 }} onClick={() => del(t)}>
@@ -1679,7 +1680,7 @@ function TaskChecklist({ app }: { app: Application }) {
         {/* Inline add */}
         {showAdd && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-            <div style={{ width: 17, height: 17, borderRadius: 4, border: "1.5px solid var(--border-strong)", flexShrink: 0 }} />
+            <div style={{ width: 16, height: 16, flexShrink: 0, borderBottom: "1.5px solid var(--border-strong)" }} />
             <input
               ref={inputRef}
               value={addText}
