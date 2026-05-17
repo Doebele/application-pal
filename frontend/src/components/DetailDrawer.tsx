@@ -890,36 +890,34 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
   return null;
 }
 
-function AiResultCard({ id, entry, appId, onUpdate }: {
+function AiResultTile({ id, entry, onExpand }: {
   id: string;
   entry: { data: unknown; createdAt: Date };
-  appId: string;
-  onUpdate?: (id: string, data: unknown) => void;
+  onExpand: () => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
   const label   = AI_RESULT_LABELS[id] ?? id;
   const summary = aiResultSummary(id, entry.data);
   const ts      = entry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 
   return (
-    <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", overflow: "hidden" }}>
-      <button onClick={() => setExpanded(v => !v)}
-        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
-        <Check width={10} height={10} style={{ color: "#4ade80", flexShrink: 0 }} />
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)", whiteSpace: "nowrap", flexShrink: 0 }}>{label}</span>
-        {!expanded && summary && (
-          <span style={{ fontSize: 11, color: "var(--fg-3)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
-        )}
-        {expanded && <div style={{ flex: 1 }} />}
-        <span style={{ fontSize: 9, color: "var(--fg-4)", flexShrink: 0, whiteSpace: "nowrap" }}>{ts}</span>
-        <NavArrowDown width={12} height={12} style={{ color: "var(--fg-3)", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
-      </button>
-      {expanded && (
-        <div style={{ borderTop: "1px solid var(--border)", padding: "14px 14px" }}>
-          <AiResultDetail id={id} data={entry.data} appId={appId} onUpdate={onUpdate} />
-        </div>
+    <button onClick={onExpand} style={{
+      display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4,
+      padding: "10px 12px", borderRadius: 8, minHeight: 72,
+      border: "1px solid var(--border)", background: "var(--surface)",
+      cursor: "pointer", textAlign: "left", fontFamily: "var(--font-sans)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, width: "100%" }}>
+        <Check width={9} height={9} style={{ color: "#4ade80", flexShrink: 0 }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-2)", flex: 1 }}>{label}</span>
+        <NavArrowRight width={10} height={10} style={{ color: "var(--fg-4)", flexShrink: 0 }} />
+      </div>
+      {summary && (
+        <span style={{ fontSize: 10, color: "var(--fg-3)", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
+          {summary}
+        </span>
       )}
-    </div>
+      <span style={{ fontSize: 9, color: "var(--fg-4)", marginTop: "auto" }}>{ts}</span>
+    </button>
   );
 }
 
@@ -932,7 +930,8 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResul
 }) {
   const [description, setDescription] = useState(app.description ?? "");
   const [descSaved,   setDescSaved]   = useState(false);
-  const [descExpanded, setDescExpanded] = useState(false);
+  const [descExpanded,  setDescExpanded]  = useState(false);
+  const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
   const [descMode,    setDescMode]    = useState<"preview" | "edit">("preview");
 
   const saveDesc = () => {
@@ -948,22 +947,48 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResul
   };
 
   const resultEntries = Object.entries(aiResults ?? {}).filter(([, v]) => v?.data);
+  const expandedEntry = expandedResultId ? aiResults?.[expandedResultId] : null;
 
   return (
     <>
       {/* Übersicht-Inhalt */}
       <OverviewTab app={app} stage={stage} url={url} onUrlChange={onUrlChange} onSave={onSave} />
 
-      {/* KI-Erkenntnisse — erscheint wenn Ergebnisse vorhanden */}
+      {/* KI-Erkenntnisse — Grid aus Kacheln */}
       {resultEntries.length > 0 && (
-        <div style={{ marginTop: 16, marginBottom: 4 }}>
+        <div style={{ marginTop: 16, marginBottom: 8 }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
             KI-Erkenntnisse
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 6 }}>
             {resultEntries.map(([id, entry]) => (
-              <AiResultCard key={id} id={id} entry={entry} appId={app.id} onUpdate={onAiResultUpdate} />
+              <AiResultTile key={id} id={id} entry={entry} onExpand={() => setExpandedResultId(id)} />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Vollbild-Expand für einzelnes KI-Ergebnis */}
+      {expandedEntry && expandedResultId && (
+        <div style={{ ...expandStyle, overflow: "auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexShrink: 0 }}>
+            <Check width={10} height={10} style={{ color: "#4ade80" }} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>
+              {AI_RESULT_LABELS[expandedResultId] ?? expandedResultId}
+            </span>
+            <div style={{ flex: 1 }} />
+            <button onClick={() => setExpandedResultId(null)} title="Schliessen"
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
+              <Collapse width={13} height={13} />
+            </button>
+          </div>
+          <div style={{ flex: 1, overflow: "auto" }}>
+            <AiResultDetail
+              id={expandedResultId}
+              data={expandedEntry.data}
+              appId={app.id}
+              onUpdate={onAiResultUpdate}
+            />
           </div>
         </div>
       )}
