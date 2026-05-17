@@ -10,6 +10,8 @@ import {
   Search, Spark, Building, CheckCircle, Linkedin, ChatBubbleCheck,
 } from "iconoir-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import type {
   Application, ApplicationDocument, ApplicationActivity, ApplicationContact, UserDocument
 } from "@application-pal/shared";
@@ -407,6 +409,7 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
   const [description, setDescription] = useState(app.description ?? "");
   const [descSaved,   setDescSaved]   = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  const [descMode,    setDescMode]    = useState<"preview" | "edit">("preview");
 
   const saveDesc = () => {
     onSave({ description });
@@ -432,6 +435,19 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
             Stellenbeschreibung
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {/* Vorschau / Bearbeiten toggle */}
+            <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", borderRadius: 6, padding: 2 }}>
+              {(["preview", "edit"] as const).map(m => (
+                <button key={m} onClick={() => setDescMode(m)} style={{
+                  fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: "pointer",
+                  background: descMode === m ? "var(--surface)" : "transparent",
+                  color: descMode === m ? "var(--fg-1)" : "var(--fg-3)",
+                  fontFamily: "var(--font-sans)", fontWeight: 600,
+                }}>
+                  {m === "preview" ? "Vorschau" : "Bearbeiten"}
+                </button>
+              ))}
+            </div>
             {app.url && (
               <a href={app.url} target="_blank" rel="noreferrer"
                 style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent)", fontSize: 11, fontWeight: 600, textDecoration: "none" }}>
@@ -446,13 +462,27 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
           </div>
         </div>
         <div style={descExpanded ? { flex: 1, overflow: "auto" } : {}}>
-          <AutoTextarea
-            value={description}
-            onChange={e => setDescription(e.target.value)}
-            onBlur={saveDesc}
-            placeholder="Originale Stellenbeschreibung einfügen…"
-            minRows={descExpanded ? 20 : 8}
-          />
+          {descMode === "preview" ? (
+            <div className="md-body" style={{ padding: "4px 0" }}>
+              {description
+                ? <ReactMarkdown remarkPlugins={[remarkGfm]}
+                    components={{ a: ({ href, children }) => (
+                      <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                    )}}>
+                    {description}
+                  </ReactMarkdown>
+                : <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Noch keine Stellenbeschreibung vorhanden — wechsle zu „Bearbeiten" um Text einzufügen.</div>
+              }
+            </div>
+          ) : (
+            <AutoTextarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              onBlur={saveDesc}
+              placeholder="Stellenbeschreibung einfügen (Markdown unterstützt)…"
+              minRows={descExpanded ? 20 : 8}
+            />
+          )}
         </div>
       </div>
     </>

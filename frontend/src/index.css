@@ -1282,6 +1282,23 @@ textarea {
 .task-row:hover .task-del { opacity: 1 !important; }
 .task-row:hover { background: var(--surface-2); }
 
+/* Markdown rendered content */
+.md-body { font-size: 13px; line-height: 1.7; color: var(--fg-1); }
+.md-body p { margin: 0 0 0.75em; }
+.md-body h1, .md-body h2, .md-body h3 { font-weight: 700; color: var(--fg-1); margin: 1.2em 0 0.5em; }
+.md-body h1 { font-size: 16px; }
+.md-body h2 { font-size: 14px; }
+.md-body h3 { font-size: 13px; }
+.md-body a { color: var(--accent); text-decoration: underline; }
+.md-body a:hover { opacity: 0.8; }
+.md-body ul, .md-body ol { padding-left: 1.4em; margin-bottom: 0.75em; }
+.md-body li { margin: 0.2em 0; }
+.md-body strong { font-weight: 700; }
+.md-body em { font-style: italic; }
+.md-body hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+.md-body blockquote { border-left: 3px solid var(--accent); padding-left: 12px; color: var(--fg-2); margin: 0.75em 0; }
+.md-body code { font-family: var(--font-mono); font-size: 11px; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
 /* Hide scrollbar but keep scrollability */
 .hide-scrollbar::-webkit-scrollbar { display: none; }
 .hide-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
