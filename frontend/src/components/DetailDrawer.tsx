@@ -890,33 +890,171 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
   return null;
 }
 
+// IDs die die doppelte Kachelbreite benötigen (textintensiver Inhalt)
+const DOUBLE_WIDTH_IDS = new Set([
+  "salary-check", "ats-keywords", "company-research",
+  "salary-tips", "letter-review", "opening-sentences",
+]);
+
+function renderTileContent(id: string, data: unknown): React.ReactNode {
+  const d = data as Record<string, unknown>;
+
+  if (id === "glassdoor-check" || id === "kununu-check") {
+    const rating = d.rating as number | null;
+    const stars  = rating != null ? "★".repeat(Math.round(rating)) + "☆".repeat(5 - Math.round(rating)) : null;
+    const reviews = d.reviewCount as number | null;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, width: "100%" }}>
+        <span style={{ fontSize: 26, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>
+          {rating != null ? rating.toFixed(1) : "—"}
+        </span>
+        {stars && <span style={{ fontSize: 10, color: "#fbbf24", lineHeight: 1 }}>{stars}</span>}
+        {reviews && <span style={{ fontSize: 9, color: "var(--fg-4)" }}>~{reviews} Reviews</span>}
+      </div>
+    );
+  }
+  if (id === "linkedin-profile") {
+    const emp = d.employeeCount as string | undefined;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+        {emp && <span style={{ fontSize: 14, fontWeight: 800, color: "var(--accent)" }}>{emp}</span>}
+        <span style={{ fontSize: 9, color: "var(--fg-4)" }}>Mitarbeitende</span>
+      </div>
+    );
+  }
+  if (id === "salary-check") {
+    const lb = d.lohnband as { min?: number; max?: number; median?: number } | undefined;
+    const w  = (d.waehrung as string | undefined) ?? "CHF";
+    if (!lb) return null;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <span style={{ fontSize: 14, fontWeight: 800, color: "var(--fg-1)", letterSpacing: "-0.02em" }}>
+          {w} {lb.min?.toLocaleString("de-CH")} – {lb.max?.toLocaleString("de-CH")}
+        </span>
+        <span style={{ fontSize: 10, color: "var(--fg-3)" }}>Median {lb.median?.toLocaleString("de-CH")}</span>
+      </div>
+    );
+  }
+  if (id === "ats-keywords") {
+    const kws = (d.mustHave as string[] | undefined) ?? [];
+    return (
+      <div style={{ lineHeight: 1.8 }}>
+        {kws.slice(0, 5).map((k, i) => (
+          <span key={i} style={{
+            display: "inline-block", padding: "1px 7px", borderRadius: 3,
+            marginRight: 4, fontSize: 10, fontWeight: 600,
+            background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--accent)",
+          }}>{k}</span>
+        ))}
+        {kws.length > 5 && <span style={{ fontSize: 9, color: "var(--fg-4)" }}>+{kws.length - 5}</span>}
+      </div>
+    );
+  }
+  if (id === "cv-highlights") {
+    const h = (d.highlights as string[] | undefined ?? []).length;
+    const k = (d.keywords as string[] | undefined ?? []).length;
+    return (
+      <div style={{ display: "flex", gap: 14 }}>
+        {[{ val: h, label: "Stärken", color: "#34d399" }, { val: k, label: "Keywords", color: "var(--accent)" }].map(({ val, label, color }) => (
+          <div key={label} style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color, lineHeight: 1 }}>{val}</div>
+            <div style={{ fontSize: 8, color: "var(--fg-4)", marginTop: 2 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (id === "interview-prep") {
+    const q = (d.rollenFragen as string[] | undefined ?? []).length;
+    const s = (d.starBeispiele as unknown[] | undefined ?? []).length;
+    const v = (d.vossFragenWhatHow as string[] | undefined ?? []).length;
+    return (
+      <div style={{ display: "flex", gap: 10 }}>
+        {[{ val: q, label: "Fragen", color: "var(--accent)" }, { val: s, label: "STAR", color: "#34d399" }, { val: v, label: "Voss", color: "#fbbf24" }].map(({ val, label, color }) => (
+          <div key={label} style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 18, fontWeight: 800, color, lineHeight: 1 }}>{val}</div>
+            <div style={{ fontSize: 8, color: "var(--fg-4)", marginTop: 2 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (id === "ackermann-script") {
+    const ziel  = d.zielgehalt as number | undefined;
+    const anker = d.ankergebot as number | undefined;
+    return (
+      <div style={{ display: "flex", gap: 14 }}>
+        {[{ val: ziel, label: "Ziel", color: "var(--accent)" }, { val: anker, label: "Anker", color: "#34d399" }].map(({ val, label, color }) => (
+          <div key={label}>
+            <div style={{ fontSize: 13, fontWeight: 800, color, lineHeight: 1 }}>{val?.toLocaleString("de-CH") ?? "—"}</div>
+            <div style={{ fontSize: 8, color: "var(--fg-4)", marginTop: 2 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (id === "onboarding") {
+    const t = (d.erste30Tage as string[] | undefined ?? []).length +
+              (d.erste60Tage as string[] | undefined ?? []).length +
+              (d.erste90Tage as string[] | undefined ?? []).length;
+    return (
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 26, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{t}</div>
+        <div style={{ fontSize: 9, color: "var(--fg-4)", marginTop: 2 }}>Punkte</div>
+      </div>
+    );
+  }
+  // Doppelbreite Text-Kacheln — kurz abgeschnitten
+  const textMap: Record<string, string> = {
+    "salary-tips":      (d["markteinschätzung"] as string | undefined) ?? "",
+    "company-research": (d.unternehmensueberblick as string | undefined) ?? "",
+    "letter-review":    (d.gesamteindruck as string | undefined) ?? "",
+  };
+  if (id in textMap) {
+    const text = textMap[id].slice(0, 100);
+    return <span style={{ fontSize: 10, color: "var(--fg-2)", lineHeight: 1.45 }}>{text}{textMap[id].length > 100 ? "…" : ""}</span>;
+  }
+  if (id === "opening-sentences") {
+    const saetze = d.saetze as Array<{ satz: string }> | undefined;
+    const raw = saetze?.[0]?.satz ?? "";
+    const text = raw.slice(0, 95);
+    return <span style={{ fontSize: 10, color: "var(--fg-2)", fontStyle: "italic", lineHeight: 1.45 }}>„{text}{raw.length > 95 ? "…" : ""}"</span>;
+  }
+  return null;
+}
+
 function AiResultTile({ id, entry, onExpand }: {
   id: string;
   entry: { data: unknown; createdAt: Date };
   onExpand: () => void;
 }) {
-  const label   = AI_RESULT_LABELS[id] ?? id;
-  const summary = aiResultSummary(id, entry.data);
-  const ts      = entry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const label    = AI_RESULT_LABELS[id] ?? id;
+  const ts       = entry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const isDouble = DOUBLE_WIDTH_IDS.has(id);
+  const content  = renderTileContent(id, entry.data);
 
   return (
     <button onClick={onExpand} style={{
-      display: "flex", flexDirection: "column", alignItems: "flex-start", gap: 4,
-      padding: "10px 12px", borderRadius: 8, minHeight: 72,
+      gridColumn: isDouble ? "span 2" : undefined,
+      display: "flex", flexDirection: "column",
+      padding: "9px 11px", borderRadius: 8,
+      height: 80,                                    // optimale feste Höhe
       border: "1px solid var(--border)", background: "var(--surface)",
       cursor: "pointer", textAlign: "left", fontFamily: "var(--font-sans)",
+      overflow: "hidden",
     }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 5, width: "100%" }}>
+      {/* Label-Zeile */}
+      <div style={{ display: "flex", alignItems: "center", gap: 5, width: "100%", flexShrink: 0, marginBottom: 5 }}>
         <Check width={9} height={9} style={{ color: "#4ade80", flexShrink: 0 }} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-2)", flex: 1 }}>{label}</span>
-        <NavArrowRight width={10} height={10} style={{ color: "var(--fg-4)", flexShrink: 0 }} />
+        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-2)", flex: 1, textAlign: "left" }}>{label}</span>
+        <NavArrowRight width={9} height={9} style={{ color: "var(--fg-4)", flexShrink: 0 }} />
       </div>
-      {summary && (
-        <span style={{ fontSize: 10, color: "var(--fg-3)", width: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>
-          {summary}
-        </span>
-      )}
-      <span style={{ fontSize: 9, color: "var(--fg-4)", marginTop: "auto" }}>{ts}</span>
+      {/* Hauptinhalt */}
+      <div style={{ flex: 1, width: "100%", overflow: "hidden", display: "flex", alignItems: isDouble ? "flex-start" : "center" }}>
+        {content}
+      </div>
+      {/* Timestamp */}
+      <div style={{ fontSize: 9, color: "var(--fg-4)", flexShrink: 0, marginTop: 4 }}>{ts}</div>
     </button>
   );
 }
@@ -960,7 +1098,7 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResul
           <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
             KI-Erkenntnisse
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(155px, 1fr))", gap: 6 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gridAutoFlow: "dense", gap: 6 }}>
             {resultEntries.map(([id, entry]) => (
               <AiResultTile key={id} id={id} entry={entry} onExpand={() => setExpandedResultId(id)} />
             ))}
