@@ -467,11 +467,331 @@ function aiResultSummary(id: string, data: unknown): string {
   }
 }
 
-function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults }: {
+// ─── AiResultCard Helpers ────────────────────────────────────
+const TagBadge = ({ text, color }: { text: string; color?: string }) => (
+  <span style={{
+    display: "inline-block", padding: "2px 8px", borderRadius: 4, margin: "2px 3px 2px 0",
+    background: color ? `${color}18` : "var(--surface-2)",
+    border: `1px solid ${color ? `${color}44` : "var(--border)"}`,
+    fontSize: 10, color: color ?? "var(--fg-2)", lineHeight: 1.5,
+  }}>{text}</span>
+);
+
+const AiSection = ({ title, children }: { title: string; children: React.ReactNode }) => (
+  <div style={{ marginBottom: 12 }}>
+    <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 5 }}>{title}</div>
+    {children}
+  </div>
+);
+
+const BulletList = ({ items, accent }: { items: string[]; accent?: string }) => (
+  <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    {items.map((item, i) => (
+      <div key={i} style={{ fontSize: 11, color: "var(--fg-1)", display: "flex", gap: 6, alignItems: "flex-start" }}>
+        <span style={{ color: accent ?? "var(--fg-3)", flexShrink: 0 }}>•</span>
+        <span style={{ lineHeight: 1.5 }}>{item}</span>
+      </div>
+    ))}
+  </div>
+);
+
+function GlassdoorCardDetail({ data, appId, onUpdate }: {
+  data: GlassdoorData; appId: string; onUpdate: (v: GlassdoorData) => void;
+}) {
+  const [editRating,      setEditRating]      = useState(data.rating?.toString() ?? "");
+  const [editReviewCount, setEditReviewCount] = useState(data.reviewCount?.toString() ?? "");
+  const [saving,          setSaving]          = useState(false);
+  const stars = data.rating ? "★".repeat(Math.round(data.rating)) + "☆".repeat(5 - Math.round(data.rating)) : null;
+  const confidenceColor = data.confidence === "hoch" ? "#34d399" : data.confidence === "mittel" ? "#fbbf24" : "#f87171";
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await api.patch<GlassdoorData>(`/api/applications/${appId}/ai/glassdoor-check`, {
+        rating: editRating ? parseFloat(editRating) : null,
+        reviewCount: editReviewCount ? parseInt(editReviewCount, 10) : null,
+      });
+      onUpdate(r.data);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <>
+      <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 100, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+          <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>GLASSDOOR</div>
+          {data.rating != null
+            ? <><div style={{ fontSize: 24, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{data.rating.toFixed(1)}</div>
+               <div style={{ fontSize: 10, color: "#fbbf24", marginTop: 2 }}>{stars}</div>
+               {data.reviewCount && <div style={{ fontSize: 9, color: "var(--fg-3)", marginTop: 2 }}>~{data.reviewCount} Reviews</div>}</>
+            : <div style={{ fontSize: 11, color: "var(--fg-3)" }}>—</div>}
+        </div>
+        {(data.ceoApproval != null || data.recommendToFriend != null) && (
+          <div style={{ flex: 1, minWidth: 100, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+            {data.ceoApproval != null && <div style={{ marginBottom: 6 }}>
+              <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 2 }}>CEO-ZUSTIMMUNG</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg-1)" }}>{data.ceoApproval}%</div>
+            </div>}
+            {data.recommendToFriend != null && <div>
+              <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 2 }}>EMPFEHLEN</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg-1)" }}>{data.recommendToFriend}%</div>
+            </div>}
+          </div>
+        )}
+      </div>
+      {data.summary && <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 10 }}>{data.summary}</div>}
+      {(data.pros?.length > 0 || data.cons?.length > 0) && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          {data.pros?.length > 0 && <AiSection title="Positiv"><BulletList items={data.pros} accent="#34d399" /></AiSection>}
+          {data.cons?.length > 0 && <AiSection title="Kritisch"><BulletList items={data.cons} accent="#f87171" /></AiSection>}
+        </div>
+      )}
+      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+        {data.glassdoorUrl && <a href={data.glassdoorUrl} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}><OpenNewWindow width={10} height={10} /> Glassdoor</a>}
+        {data.kununuUrl    && <a href={data.kununuUrl}    target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}><OpenNewWindow width={10} height={10} /> Kununu</a>}
+        {data.linkedinUrl  && <a href={data.linkedinUrl}  target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}><OpenNewWindow width={10} height={10} /> LinkedIn</a>}
+      </div>
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 8 }}>Manuell korrigieren</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+          <div>
+            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Rating (1–5)</div>
+            <input type="number" step="0.1" min="1" max="5" value={editRating} onChange={e => setEditRating(e.target.value)}
+              style={{ width: 70, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Anzahl Reviews</div>
+            <input type="number" min="0" value={editReviewCount} onChange={e => setEditReviewCount(e.target.value)}
+              style={{ width: 90, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
+          </div>
+          <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={save} disabled={saving}>
+            {saving ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : "Speichern"}
+          </button>
+        </div>
+        <div style={{ marginTop: 8, fontSize: 10, color: "var(--fg-3)" }}>
+          <span style={{ color: confidenceColor, fontWeight: 600 }}>Konfidenz: {data.confidence}</span>
+          {data.manuallyEdited && <span style={{ color: "var(--accent)" }}> · manuell bearbeitet</span>}
+          {data.hinweis && <span> · {data.hinweis}</span>}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function AiResultDetail({ id, data, appId, onUpdate }: {
+  id: string; data: unknown; appId: string; onUpdate?: (id: string, data: unknown) => void;
+}) {
+  if (id === "glassdoor-check") {
+    return <GlassdoorCardDetail data={data as GlassdoorData} appId={appId} onUpdate={v => onUpdate?.(id, v)} />;
+  }
+  if (id === "salary-check") {
+    const sc = data as SalaryCheck;
+    const lb = sc.lohnband ?? {};
+    return (
+      <>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          {([
+            { label: "MINIMUM",  val: lb.min,    color: "#94a3b8" },
+            { label: "MEDIAN",   val: lb.median, color: "var(--accent)" },
+            { label: "MAXIMUM",  val: lb.max,    color: "#34d399" },
+          ] as const).map(({ label, val, color }) => (
+            <div key={label} style={{ flex: 1, minWidth: 80, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+              <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>{label}</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color }}>{val != null ? `${sc.waehrung ?? "CHF"} ${val.toLocaleString("de-CH")}` : "—"}</div>
+              <div style={{ fontSize: 9, color: "var(--fg-3)" }}>{sc.basis ?? "p.a."}</div>
+            </div>
+          ))}
+        </div>
+        {sc.begruendung && <AiSection title="Begründung"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{sc.begruendung}</div></AiSection>}
+        {sc.faktoren?.length > 0 && <AiSection title="Einflussfaktoren"><div>{sc.faktoren.map((f, i) => <TagBadge key={i} text={f} />)}</div></AiSection>}
+      </>
+    );
+  }
+  if (id === "ats-keywords") {
+    const kw = data as AtsKeywords;
+    return (
+      <>
+        {kw.mustHave?.length > 0    && <AiSection title="Must Have">{kw.mustHave.map((k, i)    => <TagBadge key={i} text={k} color="var(--accent)" />)}</AiSection>}
+        {kw.niceToHave?.length > 0  && <AiSection title="Nice to Have">{kw.niceToHave.map((k, i)  => <TagBadge key={i} text={k} />)}</AiSection>}
+        {kw.softSkills?.length > 0  && <AiSection title="Soft Skills">{kw.softSkills.map((k, i)  => <TagBadge key={i} text={k} color="#a78bfa" />)}</AiSection>}
+        {kw.tools?.length > 0       && <AiSection title="Tools & Technologien">{kw.tools.map((k, i)       => <TagBadge key={i} text={k} color="#34d399" />)}</AiSection>}
+      </>
+    );
+  }
+  if (id === "cv-highlights") {
+    const cv = data as CvHighlights;
+    return (
+      <>
+        {cv.highlights?.length > 0 && <AiSection title="Relevante Stärken"><BulletList items={cv.highlights} accent="#34d399" /></AiSection>}
+        {cv.keywords?.length > 0   && <AiSection title="Keywords">{cv.keywords.map((k, i) => <TagBadge key={i} text={k} />)}</AiSection>}
+        {cv.gaps?.length > 0       && <AiSection title="Lücken"><BulletList items={cv.gaps} accent="#f87171" /></AiSection>}
+      </>
+    );
+  }
+  if (id === "interview-prep") {
+    const iv = data as InterviewPrep;
+    return (
+      <>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+          {([
+            { label: "FRAGEN",    val: iv.rollenFragen?.length ?? 0,      color: "var(--accent)" },
+            { label: "STAR",      val: iv.starBeispiele?.length ?? 0,     color: "#34d399" },
+            { label: "VOSS",      val: iv.vossFragenWhatHow?.length ?? 0, color: "#fbbf24" },
+            { label: "RÜCKFRAGEN",val: iv.rueckfragen?.length ?? 0,       color: "#a78bfa" },
+          ]).map(({ label, val, color }) => (
+            <div key={label} style={{ flex: 1, minWidth: 70, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+              <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>{label}</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color }}>{val}</div>
+            </div>
+          ))}
+        </div>
+        {iv.rollenFragen?.slice(0, 3).map((q, i) => (
+          <div key={i} style={{ fontSize: 11, color: "var(--fg-2)", padding: "5px 0", borderBottom: i < 2 ? "1px solid var(--border)" : "none", lineHeight: 1.5 }}>{i + 1}. {q}</div>
+        ))}
+        {(iv.rollenFragen?.length ?? 0) > 3 && <div style={{ fontSize: 10, color: "var(--fg-3)", marginTop: 6 }}>+{(iv.rollenFragen?.length ?? 0) - 3} weitere Fragen im Aktionen-Tab</div>}
+      </>
+    );
+  }
+  if (id === "salary-tips") {
+    const st = data as SalaryTips;
+    return (
+      <>
+        {(st["markteinschätzung"] as string | undefined) && <AiSection title="Markteinschätzung"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{st["markteinschätzung"] as string}</div></AiSection>}
+        {st.taktiken?.length > 0     && <AiSection title="Taktiken"><BulletList items={st.taktiken} accent="var(--accent)" /></AiSection>}
+        {st.vossAnker               && <AiSection title="Voss-Anker"><div style={{ fontSize: 11, color: "var(--fg-2)", fontStyle: "italic", lineHeight: 1.6, padding: "6px 10px", borderLeft: "3px solid var(--accent)", background: "var(--surface-2)", borderRadius: "0 6px 6px 0" }}>„{st.vossAnker}"</div></AiSection>}
+      </>
+    );
+  }
+  if (id === "company-research") {
+    const cr = data as CompanyResearch;
+    return (
+      <>
+        {cr.unternehmensueberblick && <AiSection title="Überblick"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmensueberblick}</div></AiSection>}
+        {cr.unternehmenskultur     && <AiSection title="Kultur"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmenskultur}</div></AiSection>}
+        {cr.marktposition          && <AiSection title="Marktposition"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.marktposition}</div></AiSection>}
+        {cr.wettbewerber?.length > 0  && <AiSection title="Wettbewerber">{cr.wettbewerber.map((w, i) => <TagBadge key={i} text={w} />)}</AiSection>}
+        {cr.aktuelleThemen?.length > 0 && <AiSection title="Aktuelle Themen"><BulletList items={cr.aktuelleThemen} /></AiSection>}
+      </>
+    );
+  }
+  if (id === "ackermann-script") {
+    const as_ = data as AckermannScript;
+    return (
+      <>
+        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+          <div style={{ flex: 1, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>ZIELGEHALT</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--accent)" }}>{as_.zielgehalt?.toLocaleString("de-CH")}</div>
+          </div>
+          <div style={{ flex: 1, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>ANKERGEBOT</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#34d399" }}>{as_.ankergebot?.toLocaleString("de-CH")}</div>
+          </div>
+        </div>
+        {as_.schritte?.map((s, i) => (
+          <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-3)", minWidth: 22, flexShrink: 0, paddingTop: 2 }}>R{s.runde}</div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>{s.angebot?.toLocaleString("de-CH")}</div>
+              <div style={{ fontSize: 11, color: "var(--fg-2)", marginTop: 2, lineHeight: 1.5 }}>{s.formulierung}</div>
+            </div>
+          </div>
+        ))}
+        {as_.nichtmonetaer?.length > 0 && <div style={{ marginTop: 12 }}><AiSection title="Nicht-monetäre Punkte"><div>{as_.nichtmonetaer.map((n, i) => <TagBadge key={i} text={n} />)}</div></AiSection></div>}
+      </>
+    );
+  }
+  if (id === "letter-review") {
+    const lr = data as LetterReview;
+    return (
+      <>
+        {lr.gesamteindruck && <AiSection title="Gesamteindruck"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{lr.gesamteindruck}</div></AiSection>}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+          {lr.staerken?.length > 0      && <AiSection title="Stärken"><BulletList items={lr.staerken} accent="#34d399" /></AiSection>}
+          {lr.verbesserungen?.length > 0 && <AiSection title="Verbesserungen"><BulletList items={lr.verbesserungen} accent="#fbbf24" /></AiSection>}
+        </div>
+        {lr.cliches?.length > 0 && <AiSection title="Clichés"><div>{lr.cliches.map((c, i) => <TagBadge key={i} text={c} color="#f87171" />)}</div></AiSection>}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 10, color: "var(--fg-3)" }}>
+          {lr.tonalitaet     && <span>Ton: <strong style={{ color: "var(--fg-2)" }}>{lr.tonalitaet}</strong></span>}
+          {lr.laenge         && <span>· Länge: <strong style={{ color: "var(--fg-2)" }}>{lr.laenge}</strong></span>}
+          {lr.personalisierung && <span>· Personalisierung: <strong style={{ color: "var(--fg-2)" }}>{lr.personalisierung}</strong></span>}
+        </div>
+      </>
+    );
+  }
+  if (id === "opening-sentences") {
+    const os = data as OpeningSentences;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {os.saetze?.map((s, i) => (
+          <div key={i} style={{ padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 12, fontStyle: "italic", color: "var(--fg-1)", lineHeight: 1.6, marginBottom: 4 }}>„{s.satz}"</div>
+            <div style={{ fontSize: 9, color: "var(--accent)", fontWeight: 700, textTransform: "uppercase" }}>{s.ansatz}</div>
+            {s.erklaerung && <div style={{ fontSize: 10, color: "var(--fg-3)", marginTop: 2, lineHeight: 1.4 }}>{s.erklaerung}</div>}
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (id === "onboarding") {
+    const oc = data as OnboardingChecklist;
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        {([
+          { label: "Erste 30 Tage", items: oc.erste30Tage, color: "var(--accent)" },
+          { label: "Erste 60 Tage", items: oc.erste60Tage, color: "#fbbf24" },
+          { label: "Erste 90 Tage", items: oc.erste90Tage, color: "#34d399" },
+        ]).map(({ label, items, color }) => items?.length > 0 && (
+          <div key={label}>
+            <div style={{ fontSize: 9, fontWeight: 700, color, textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
+            <BulletList items={items} accent={color} />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
+
+function AiResultCard({ id, entry, appId, onUpdate }: {
+  id: string;
+  entry: { data: unknown; createdAt: Date };
+  appId: string;
+  onUpdate?: (id: string, data: unknown) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const label   = AI_RESULT_LABELS[id] ?? id;
+  const summary = aiResultSummary(id, entry.data);
+  const ts      = entry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", overflow: "hidden" }}>
+      <button onClick={() => setExpanded(v => !v)}
+        style={{ width: "100%", display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)" }}>
+        <Check width={10} height={10} style={{ color: "#4ade80", flexShrink: 0 }} />
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)", whiteSpace: "nowrap", flexShrink: 0 }}>{label}</span>
+        {!expanded && summary && (
+          <span style={{ fontSize: 11, color: "var(--fg-3)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{summary}</span>
+        )}
+        {expanded && <div style={{ flex: 1 }} />}
+        <span style={{ fontSize: 9, color: "var(--fg-4)", flexShrink: 0, whiteSpace: "nowrap" }}>{ts}</span>
+        <NavArrowDown width={12} height={12} style={{ color: "var(--fg-3)", flexShrink: 0, transform: expanded ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+      </button>
+      {expanded && (
+        <div style={{ borderTop: "1px solid var(--border)", padding: "14px 14px" }}>
+          <AiResultDetail id={id} data={entry.data} appId={appId} onUpdate={onUpdate} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResultUpdate }: {
   app: Application; stage: string;
   url: string; onUrlChange: (url: string) => void;
   onSave: (patch: Partial<Application>) => void;
   aiResults?: Record<string, { data: unknown; createdAt: Date }>;
+  onAiResultUpdate?: (id: string, data: unknown) => void;
 }) {
   const [description, setDescription] = useState(app.description ?? "");
   const [descSaved,   setDescSaved]   = useState(false);
@@ -504,29 +824,9 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults }: {
             KI-Erkenntnisse
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {resultEntries.map(([id, entry]) => {
-              const label = AI_RESULT_LABELS[id] ?? id;
-              const summary = aiResultSummary(id, entry.data);
-              const ts = entry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
-              return (
-                <div key={id} title={`Erstellt: ${ts}`} style={{
-                  display: "flex", alignItems: "baseline", gap: 8,
-                  padding: "5px 8px", borderRadius: 6,
-                  background: "var(--surface)", border: "1px solid var(--border)",
-                }}>
-                  <span style={{ display: "flex", alignItems: "center", gap: 4, flexShrink: 0 }}>
-                    <Check width={10} height={10} style={{ color: "#4ade80" }} />
-                    <span style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-2)", whiteSpace: "nowrap" }}>{label}</span>
-                  </span>
-                  {summary && (
-                    <span style={{ fontSize: 11, color: "var(--fg-3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
-                      {summary}
-                    </span>
-                  )}
-                  <span style={{ fontSize: 9, color: "var(--fg-4)", flexShrink: 0, whiteSpace: "nowrap" }}>{ts}</span>
-                </div>
-              );
-            })}
+            {resultEntries.map(([id, entry]) => (
+              <AiResultCard key={id} id={id} entry={entry} appId={app.id} onUpdate={onAiResultUpdate} />
+            ))}
           </div>
         </div>
       )}
@@ -3284,6 +3584,9 @@ export function DetailDrawer({ app, onClose }: Props) {
   const registerAiResult = useCallback((id: string, data: unknown) => {
     setAiResultsRegistry(prev => ({ ...prev, [id]: { data, createdAt: new Date() } }));
   }, []);
+  const updateAiResult = useCallback((id: string, data: unknown) => {
+    setAiResultsRegistry(prev => prev[id] ? { ...prev, [id]: { ...prev[id], data } } : prev);
+  }, []);
 
   const patchMutation = useMutation({
     mutationFn: (patch: Partial<Application>) =>
@@ -3374,7 +3677,7 @@ export function DetailDrawer({ app, onClose }: Props) {
 
         <div className="drawer-body" style={{ paddingTop: 16 }}>
           {tab === "process"      && <ProcessTab      app={app} onSave={(p) => patchMutation.mutate(p)} onAiResult={registerAiResult} />}
-          {tab === "details"      && <DetailsTab      app={app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} aiResults={aiResultsRegistry} />}
+          {tab === "details"      && <DetailsTab      app={app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} aiResults={aiResultsRegistry} onAiResultUpdate={updateAiResult} />}
           {tab === "documents"    && <DocumentsTab    app={app} />}
           {tab === "insights"     && <AgentTab        app={app} />}
           {tab === "contacts"     && <ContactsTab     app={app} />}
