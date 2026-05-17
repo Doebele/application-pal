@@ -32,9 +32,9 @@
   --red:    #f87171;
   --yellow: #fbbf24;
 
-  /* Shadows */
-  --shadow-modal: 0 32px 80px rgba(0,0,0,0.60);
-  --shadow-card:  0 2px 8px rgba(0,0,0,0.25);
+  /* Shadows — white halo on dark surfaces (design system spec) */
+  --shadow-modal: 0 32px 80px rgba(255,255,255,0.30);
+  --shadow-card:  0 4px 24px rgba(255,255,255,0.18);
 
   /* Radius */
   --r-xs:  4px;
@@ -50,10 +50,21 @@
   --sp-5: 12px; --sp-6: 14px; --sp-7: 16px; --sp-8: 20px;
   --sp-9: 24px; --sp-10:28px;
 
-  /* Typography */
-  --font-sans:  'Syne', system-ui, -apple-system, sans-serif;
-  --font-serif: 'DM Serif Display', Georgia, serif;
-  --font-mono:  'JetBrains Mono', ui-monospace, monospace;
+  /* Typography — Fira Sans (UI) + Libre Caslon Text (display) + Fira Mono (numbers) */
+  --font-sans:  'Fira Sans', system-ui, -apple-system, sans-serif;
+  --font-serif: 'Libre Caslon Text', Georgia, serif;
+  --font-mono:  'Fira Mono', ui-monospace, monospace;
+
+  /* Additional design-system tokens */
+  --bg-elevated:      #20212c;          /* hover rows, tooltips */
+  --border-bp:        rgba(255,255,255,0.13);
+  --border-bp-subtle: rgba(255,255,255,0.07);
+  --border-bp-strong: rgba(255,255,255,0.22);
+  --accent-20:        rgba(59,130,246,0.20);
+  --accent-30:        rgba(59,130,246,0.30);
+  --green-10:         rgba(74,222,128,0.10);
+  --red-10:           rgba(248,113,113,0.10);
+  --yellow-10:        rgba(251,191,36,0.10);
 }
 
 /* Light theme */
@@ -767,13 +778,14 @@ body {
   gap: 5px;
 }
 
-/* Eyebrow label */
+/* Eyebrow label — Fira Sans Condensed, compact, subtle tracking */
 .eyebrow {
-  font-size: 10px;
-  font-weight: 700;
+  font-family: 'Fira Sans Condensed', var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
   color: var(--fg-3);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
 .mono {
   font-family: var(--font-mono);
