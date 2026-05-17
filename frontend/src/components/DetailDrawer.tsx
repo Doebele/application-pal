@@ -510,21 +510,15 @@ const BulletList = ({ items, accent }: { items: string[]; accent?: string }) => 
 function GlassdoorCardDetail({ data, appId, onUpdate }: {
   data: GlassdoorData; appId: string; onUpdate: (v: GlassdoorData) => void;
 }) {
-  const [editRating,      setEditRating]      = useState(data.rating?.toString() ?? "");
-  const [editReviewCount, setEditReviewCount] = useState(data.reviewCount?.toString() ?? "");
-  const [editUrl,         setEditUrl]         = useState(data.glassdoorUrl ?? "");
-  const [saving,          setSaving]          = useState(false);
+  const [editUrl, setEditUrl] = useState(data.glassdoorUrl ?? "");
+  const [saving,  setSaving]  = useState(false);
   const stars = data.rating ? "★".repeat(Math.round(data.rating)) + "☆".repeat(5 - Math.round(data.rating)) : null;
   const confidenceColor = data.confidence === "hoch" ? "#34d399" : data.confidence === "mittel" ? "#fbbf24" : "#f87171";
 
   const save = async () => {
     setSaving(true);
     try {
-      const r = await api.patch<GlassdoorData>(`/api/applications/${appId}/ai/glassdoor-check`, {
-        rating: editRating ? parseFloat(editRating) : null,
-        reviewCount: editReviewCount ? parseInt(editReviewCount, 10) : null,
-        glassdoorUrl: editUrl || undefined,
-      });
+      const r = await api.patch<GlassdoorData>(`/api/applications/${appId}/ai/glassdoor-check`, { glassdoorUrl: editUrl || undefined });
       onUpdate(r.data);
     } finally { setSaving(false); }
   };
@@ -579,28 +573,9 @@ function GlassdoorCardDetail({ data, appId, onUpdate }: {
           </button>
         </div>
       </div>
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 8 }}>Manuell korrigieren</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Rating (1–5)</div>
-            <input type="number" step="0.1" min="1" max="5" value={editRating} onChange={e => setEditRating(e.target.value)}
-              style={{ width: 70, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Anzahl Reviews</div>
-            <input type="number" min="0" value={editReviewCount} onChange={e => setEditReviewCount(e.target.value)}
-              style={{ width: 90, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
-          </div>
-          <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={save} disabled={saving}>
-            {saving ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : "Speichern"}
-          </button>
-        </div>
-        <div style={{ marginTop: 8, fontSize: 10, color: "var(--fg-3)" }}>
-          <span style={{ color: confidenceColor, fontWeight: 600 }}>Konfidenz: {data.confidence}</span>
-          {data.manuallyEdited && <span style={{ color: "var(--accent)" }}> · manuell bearbeitet</span>}
-          {data.hinweis && <span> · {data.hinweis}</span>}
-        </div>
+      <div style={{ fontSize: 10, color: "var(--fg-3)" }}>
+        <span style={{ color: confidenceColor, fontWeight: 600 }}>Konfidenz: {data.confidence}</span>
+        {data.hinweis && <span> · {data.hinweis}</span>}
       </div>
     </>
   );
@@ -2504,17 +2479,13 @@ function GlassdoorPanel({ data, appId, onChange }: {
   appId: string;
   onChange: (v: GlassdoorData) => void;
 }) {
-  const [editRating,      setEditRating]      = useState(data.rating?.toString() ?? "");
-  const [editReviewCount, setEditReviewCount] = useState(data.reviewCount?.toString() ?? "");
-  const [editUrl,         setEditUrl]         = useState(data.glassdoorUrl ?? "");
-  const [saving,          setSaving]          = useState(false);
+  const [editUrl, setEditUrl] = useState(data.glassdoorUrl ?? "");
+  const [saving,  setSaving]  = useState(false);
 
   const save = async () => {
     setSaving(true);
-    const rating      = editRating      ? parseFloat(editRating)      : null;
-    const reviewCount = editReviewCount ? parseInt(editReviewCount, 10) : null;
     try {
-      const r = await api.patch<GlassdoorData>(`/api/applications/${appId}/ai/glassdoor-check`, { rating, reviewCount, glassdoorUrl: editUrl || undefined });
+      const r = await api.patch<GlassdoorData>(`/api/applications/${appId}/ai/glassdoor-check`, { glassdoorUrl: editUrl || undefined });
       onChange(r.data);
     } finally { setSaving(false); }
   };
@@ -2593,33 +2564,10 @@ function GlassdoorPanel({ data, appId, onChange }: {
         </div>
       )}
 
-      {/* Manuell aktualisieren */}
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10, marginTop: 4 }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 8 }}>Manuell aktualisieren</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
-          <div>
-            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Rating (1–5)</div>
-            <input type="number" step="0.1" min="1" max="5" value={editRating}
-              onChange={e => setEditRating(e.target.value)}
-              style={{ width: 70, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Anzahl Reviews</div>
-            <input type="number" min="0" value={editReviewCount}
-              onChange={e => setEditReviewCount(e.target.value)}
-              style={{ width: 90, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
-          </div>
-          <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={save} disabled={saving}>
-            {saving ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : "Speichern"}
-          </button>
-        </div>
-      </div>
-
       {/* Confidence + Hinweis */}
-      <div style={{ marginTop: 10, fontSize: 10, color: "var(--fg-3)", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      <div style={{ marginTop: 8, fontSize: 10, color: "var(--fg-3)" }}>
         <span style={{ color: confidenceColor, fontWeight: 600 }}>Konfidenz: {data.confidence}</span>
-        {data.manuallyEdited && <span style={{ color: "var(--accent)" }}>· manuell bearbeitet</span>}
-        {data.hinweis && <span>· {data.hinweis}</span>}
+        {data.hinweis && <span> · {data.hinweis}</span>}
       </div>
     </div>
   );
