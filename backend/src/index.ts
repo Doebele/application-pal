@@ -2155,6 +2155,92 @@ app.patch("/api/applications/:id/ai/glassdoor-check", async (c) => {
   return c.json(updated);
 });
 
+app.post("/api/applications/:id/ai/kununu-check", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+
+  const companySlug = (app_.company ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const urlEstimate = `https://www.kununu.com/de/${companySlug}`;
+
+  const system = `Du bist ein Unternehmens-Analyst. Schätze basierend auf deinen Trainingsdaten das Kununu-Rating des genannten Unternehmens (Schweiz/DACH-Raum).
+Antworte NUR mit diesem JSON:
+{
+  "rating": number_or_null,
+  "reviewCount": number_or_null,
+  "confidence": "hoch" | "mittel" | "niedrig",
+  "summary": "<2 Sätze zur Mitarbeiterzufriedenheit laut Kununu>",
+  "hinweis": "<kurze Erklärung zur Verlässlichkeit>"
+}
+rating ist null wenn keine Daten bekannt. confidence="niedrig" für unbekannte/sehr kleine Unternehmen.`;
+  const user = `Unternehmen: ${app_.company}\nBeschreibung: ${app_.description?.slice(0, 300) ?? ""}`;
+
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { rating: number | null; reviewCount: number | null; confidence: string; summary: string; hinweis: string };
+    const result = { ...parsed, url: urlEstimate, updatedAt: new Date().toISOString(), manuallyEdited: false };
+    await db.update(applications).set({ kununuData: JSON.stringify(result) }).where(eq(applications.id, id));
+    return c.json(result);
+  } catch (err) {
+    console.error("kununu-check error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+app.patch("/api/applications/:id/ai/kununu-check", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json<{ rating?: number | null; reviewCount?: number | null; url?: string }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const existing = app_.kununuData ? JSON.parse(app_.kununuData) : {};
+  const updated = { ...existing, ...body, manuallyEdited: true, updatedAt: new Date().toISOString() };
+  await db.update(applications).set({ kununuData: JSON.stringify(updated) }).where(eq(applications.id, id));
+  return c.json(updated);
+});
+
+app.post("/api/applications/:id/ai/linkedin-profile", async (c) => {
+  const id = c.req.param("id");
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+
+  const companySlug = (app_.company ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  const urlEstimate = `https://www.linkedin.com/company/${companySlug}`;
+
+  const system = `Du bist ein Unternehmens-Analyst. Ermittle das LinkedIn-Firmenprofil des genannten Unternehmens.
+Antworte NUR mit diesem JSON:
+{
+  "url": "<LinkedIn-Unternehmensseiten-URL, z.B. https://www.linkedin.com/company/firmenname>",
+  "employeeCount": "<geschätzte Mitarbeiterzahl, z.B. '500–1000' oder null>",
+  "description": "<1-2 Sätze zum Unternehmen>",
+  "hinweis": "<Hinweis ob URL bekannt oder nur geschätzt>"
+}`;
+  const user = `Unternehmen: ${app_.company}\nBeschreibung: ${app_.description?.slice(0, 300) ?? ""}`;
+
+  try {
+    const raw = await callAi(system, user, ai);
+    const parsed = extractJson(raw) as { url: string; employeeCount?: string; description?: string; hinweis: string };
+    const result = { ...parsed, url: parsed.url || urlEstimate, updatedAt: new Date().toISOString(), manuallyEdited: false };
+    await db.update(applications).set({ linkedinData: JSON.stringify(result) }).where(eq(applications.id, id));
+    return c.json(result);
+  } catch (err) {
+    console.error("linkedin-profile error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+app.patch("/api/applications/:id/ai/linkedin-profile", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json<{ url?: string }>();
+  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const existing = app_.linkedinData ? JSON.parse(app_.linkedinData) : {};
+  const updated = { ...existing, ...body, manuallyEdited: true, updatedAt: new Date().toISOString() };
+  await db.update(applications).set({ linkedinData: JSON.stringify(updated) }).where(eq(applications.id, id));
+  return c.json(updated);
+});
+
 app.post("/api/applications/:id/ai/salary-check", async (c) => {
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();

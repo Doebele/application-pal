@@ -7,7 +7,7 @@ import {
   Calendar as IcCalendar, CalendarArrowDown,
   Copy as IcCopy, MailOut, Brain,
   MapPin, VideoCamera, Expand, Collapse,
-  Search, Spark, Building, CheckCircle, Linkedin, ChatBubbleCheck,
+  Search, Spark, Building, CheckCircle, Linkedin, ChatBubbleCheck, Star,
 } from "iconoir-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
@@ -403,6 +403,8 @@ function DescriptionTab({ app, onSave }: { app: Application; onSave: (patch: Par
 // ─── Details Tab (Übersicht + Beschreibung) ───────────────────
 const AI_RESULT_LABELS: Record<string, string> = {
   "glassdoor-check": "Glassdoor Rating",
+  "kununu-check": "Kununu Rating",
+  "linkedin-profile": "LinkedIn Firmenprofil",
   "salary-check": "Gehalts-Check Schweiz",
   "ats-keywords": "ATS-Keywords",
   "cv-highlights": "CV-Highlights",
@@ -423,6 +425,16 @@ function aiResultSummary(id: string, data: unknown): string {
       const rating = d.rating as number | null;
       const summary = (d.summary as string | undefined) ?? "";
       return rating != null ? `★ ${rating} · ${summary.slice(0, 70)}` : summary.slice(0, 80);
+    }
+    case "kununu-check": {
+      const rating = d.rating as number | null;
+      const summary = (d.summary as string | undefined) ?? "";
+      return rating != null ? `★ ${rating} · ${summary.slice(0, 70)}` : summary.slice(0, 80);
+    }
+    case "linkedin-profile": {
+      const emp = (d.employeeCount as string | undefined);
+      const desc = (d.description as string | undefined) ?? "";
+      return emp ? `${emp} Mitarbeitende · ${desc.slice(0, 50)}` : desc.slice(0, 80);
     }
     case "salary-check": {
       const lb = d.lohnband as { min?: number; max?: number; median?: number } | undefined;
@@ -578,11 +590,136 @@ function GlassdoorCardDetail({ data, appId, onUpdate }: {
   );
 }
 
+function KununuCardDetail({ data, appId, onUpdate }: {
+  data: KununuData; appId: string; onUpdate: (v: KununuData) => void;
+}) {
+  const [editRating,      setEditRating]      = useState(data.rating?.toString() ?? "");
+  const [editReviewCount, setEditReviewCount] = useState(data.reviewCount?.toString() ?? "");
+  const [editUrl,         setEditUrl]         = useState(data.url ?? "");
+  const [saving,          setSaving]          = useState(false);
+  const stars = data.rating ? "★".repeat(Math.round(data.rating)) + "☆".repeat(5 - Math.round(data.rating)) : null;
+  const confidenceColor = data.confidence === "hoch" ? "#34d399" : data.confidence === "mittel" ? "#fbbf24" : "#f87171";
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await api.patch<KununuData>(`/api/applications/${appId}/ai/kununu-check`, {
+        rating: editRating ? parseFloat(editRating) : null,
+        reviewCount: editReviewCount ? parseInt(editReviewCount, 10) : null,
+        url: editUrl || undefined,
+      });
+      onUpdate(r.data);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <>
+      <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 100, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+          <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>KUNUNU</div>
+          {data.rating != null
+            ? <><div style={{ fontSize: 24, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{data.rating.toFixed(1)}</div>
+               <div style={{ fontSize: 10, color: "#fbbf24", marginTop: 2 }}>{stars}</div>
+               {data.reviewCount && <div style={{ fontSize: 9, color: "var(--fg-3)", marginTop: 2 }}>~{data.reviewCount} Bewertungen</div>}</>
+            : <div style={{ fontSize: 11, color: "var(--fg-3)" }}>—</div>}
+        </div>
+      </div>
+      {data.summary && <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 10 }}>{data.summary}</div>}
+      {data.url && (
+        <a href={data.url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none", marginBottom: 12, display: "inline-flex" }}>
+          <OpenNewWindow width={10} height={10} /> Kununu öffnen
+        </a>
+      )}
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 8 }}>Manuell korrigieren</div>
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 8 }}>
+          <div>
+            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Rating (1–5)</div>
+            <input type="number" step="0.1" min="1" max="5" value={editRating} onChange={e => setEditRating(e.target.value)}
+              style={{ width: 70, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
+          </div>
+          <div>
+            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Anzahl Bewertungen</div>
+            <input type="number" min="0" value={editReviewCount} onChange={e => setEditReviewCount(e.target.value)}
+              style={{ width: 90, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
+          </div>
+        </div>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Kununu-URL</div>
+          <input type="url" value={editUrl} onChange={e => setEditUrl(e.target.value)} placeholder="https://www.kununu.com/de/..."
+            style={{ width: "100%", boxSizing: "border-box", background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 11, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
+        </div>
+        <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={save} disabled={saving}>
+          {saving ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : "Speichern"}
+        </button>
+        <div style={{ marginTop: 8, fontSize: 10, color: "var(--fg-3)" }}>
+          <span style={{ color: confidenceColor, fontWeight: 600 }}>Konfidenz: {data.confidence}</span>
+          {data.manuallyEdited && <span style={{ color: "var(--accent)" }}> · manuell bearbeitet</span>}
+          {data.hinweis && <span> · {data.hinweis}</span>}
+        </div>
+      </div>
+    </>
+  );
+}
+
+function LinkedinCardDetail({ data, appId, onUpdate }: {
+  data: LinkedinData; appId: string; onUpdate: (v: LinkedinData) => void;
+}) {
+  const [editUrl, setEditUrl] = useState(data.url ?? "");
+  const [saving,  setSaving]  = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await api.patch<LinkedinData>(`/api/applications/${appId}/ai/linkedin-profile`, { url: editUrl });
+      onUpdate(r.data);
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <>
+      {data.employeeCount && (
+        <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+          <div style={{ flex: 1, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>MITARBEITENDE</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "var(--accent)" }}>{data.employeeCount}</div>
+          </div>
+        </div>
+      )}
+      {data.description && <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 10 }}>{data.description}</div>}
+      {data.url && (
+        <a href={data.url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none", marginBottom: 12, display: "inline-flex" }}>
+          <OpenNewWindow width={10} height={10} /> LinkedIn öffnen
+        </a>
+      )}
+      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 8 }}>URL aktualisieren</div>
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>LinkedIn Unternehmens-URL</div>
+          <input type="url" value={editUrl} onChange={e => setEditUrl(e.target.value)} placeholder="https://www.linkedin.com/company/..."
+            style={{ width: "100%", boxSizing: "border-box", background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 11, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
+        </div>
+        <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={save} disabled={saving}>
+          {saving ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : "Speichern"}
+        </button>
+        {data.hinweis && <div style={{ marginTop: 8, fontSize: 10, color: "var(--fg-3)" }}>{data.hinweis}</div>}
+        {data.manuallyEdited && <div style={{ marginTop: 4, fontSize: 10, color: "var(--accent)" }}>· manuell bearbeitet</div>}
+      </div>
+    </>
+  );
+}
+
 function AiResultDetail({ id, data, appId, onUpdate }: {
   id: string; data: unknown; appId: string; onUpdate?: (id: string, data: unknown) => void;
 }) {
   if (id === "glassdoor-check") {
     return <GlassdoorCardDetail data={data as GlassdoorData} appId={appId} onUpdate={v => onUpdate?.(id, v)} />;
+  }
+  if (id === "kununu-check") {
+    return <KununuCardDetail data={data as KununuData} appId={appId} onUpdate={v => onUpdate?.(id, v)} />;
+  }
+  if (id === "linkedin-profile") {
+    return <LinkedinCardDetail data={data as LinkedinData} appId={appId} onUpdate={v => onUpdate?.(id, v)} />;
   }
   if (id === "salary-check") {
     const sc = data as SalaryCheck;
@@ -1611,6 +1748,24 @@ type GlassdoorData = {
   updatedAt: string;
   manuallyEdited?: boolean;
 };
+type KununuData = {
+  rating: number | null;
+  reviewCount: number | null;
+  confidence: "hoch" | "mittel" | "niedrig";
+  summary: string;
+  hinweis: string;
+  url: string;
+  updatedAt: string;
+  manuallyEdited?: boolean;
+};
+type LinkedinData = {
+  url: string;
+  employeeCount?: string | null;
+  description?: string;
+  hinweis: string;
+  updatedAt: string;
+  manuallyEdited?: boolean;
+};
 type SalaryCheck = {
   lohnband: { min: number; max: number; median: number };
   waehrung: string;
@@ -1729,7 +1884,8 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
 // ── Stage AI Actions ──
 function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChange, onSalaryTipsChange,
   onSalaryCheckChange, onAtsKeywordsChange, onCompanyResearchChange, onAckermannScriptChange,
-  onLetterReviewChange, onOpeningSentencesChange, onOnboardingChange, onGlassdoorChange, onAiResult }: {
+  onLetterReviewChange, onOpeningSentencesChange, onOnboardingChange, onGlassdoorChange,
+  onKununuChange, onLinkedinChange, onAiResult }: {
   app: Application;
   onSave?: (patch: Partial<Application>) => void;
   onCvHighlightsChange?: (v: CvHighlights | null) => void;
@@ -1743,6 +1899,8 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   onOpeningSentencesChange?: (v: OpeningSentences | null) => void;
   onOnboardingChange?: (v: OnboardingChecklist | null) => void;
   onGlassdoorChange?: (v: GlassdoorData | null) => void;
+  onKununuChange?: (v: KununuData | null) => void;
+  onLinkedinChange?: (v: LinkedinData | null) => void;
   onAiResult?: (id: string, data: unknown) => void;
 }) {
   const { ai } = useUiStore();
@@ -1753,13 +1911,18 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
     if (app.glassdoorData) {
       try { const d = JSON.parse(app.glassdoorData as string); if (d.updatedAt) init["glassdoor-check"] = new Date(d.updatedAt); } catch {}
     }
+    if ((app as Application & { kununuData?: string }).kununuData) {
+      try { const d = JSON.parse((app as Application & { kununuData?: string }).kununuData!); if (d.updatedAt) init["kununu-check"] = new Date(d.updatedAt); } catch {}
+    }
+    if ((app as Application & { linkedinData?: string }).linkedinData) {
+      try { const d = JSON.parse((app as Application & { linkedinData?: string }).linkedinData!); if (d.updatedAt) init["linkedin-profile"] = new Date(d.updatedAt); } catch {}
+    }
     const raw = app.stage === "interview_1" ? app.interview1Prep : app.stage === "interview_2" ? app.interview2Prep : null;
     if (raw) { try { JSON.parse(raw); init["interview-prep"] = new Date(); } catch {} }
     return init;
   });
   const [cvHighlights, setCvHighlights] = useState<CvHighlights | null>(null);
 
-  // Initialize interviewPrep from DB (persisted after generation)
   const [interviewPrep, setInterviewPrep] = useState<InterviewPrep | null>(() => {
     const raw = stage === "interview_1" ? app.interview1Prep
               : stage === "interview_2" ? app.interview2Prep : null;
@@ -1769,7 +1932,6 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   const [emailModal, setEmailModal] = useState<EmailDraft | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
-  // New AI state
   const [salaryCheck,      setSalaryCheck]      = useState<SalaryCheck | null>(null);
   const [atsKeywords,      setAtsKeywords]       = useState<AtsKeywords | null>(null);
   const [companyResearch,  setCompanyResearch]   = useState<CompanyResearch | null>(null);
@@ -1780,8 +1942,13 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   const [glassdoor,        setGlassdoor]         = useState<GlassdoorData | null>(() => {
     try { return app.glassdoorData ? JSON.parse(app.glassdoorData as string) : null; } catch { return null; }
   });
+  const [kununu, setKununu] = useState<KununuData | null>(() => {
+    try { return (app as Application & { kununuData?: string }).kununuData ? JSON.parse((app as Application & { kununuData?: string }).kununuData!) : null; } catch { return null; }
+  });
+  const [linkedin, setLinkedin] = useState<LinkedinData | null>(() => {
+    try { return (app as Application & { linkedinData?: string }).linkedinData ? JSON.parse((app as Application & { linkedinData?: string }).linkedinData!) : null; } catch { return null; }
+  });
 
-  // Wrapped setters — also notify parent so content can render full-width
   const updateCvHighlights    = (v: CvHighlights | null)    => { setCvHighlights(v);     onCvHighlightsChange?.(v);     if (v) onAiResult?.("cv-highlights", v);     };
   const updateInterviewPrep   = (v: InterviewPrep | null)   => { setInterviewPrep(v);    onInterviewPrepChange?.(v);    if (v) onAiResult?.("interview-prep", v);    };
   const updateSalaryTips      = (v: SalaryTips | null)      => { setSalaryTips(v);       onSalaryTipsChange?.(v);       if (v) onAiResult?.("salary-tips", v);       };
@@ -1793,10 +1960,11 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   const updateOpeningSentences= (v: OpeningSentences | null)=> { setOpeningSentences(v); onOpeningSentencesChange?.(v); if (v) onAiResult?.("opening-sentences", v); };
   const updateOnboarding      = (v: OnboardingChecklist | null) => { setOnboarding(v);   onOnboardingChange?.(v);       if (v) onAiResult?.("onboarding", v);        };
   const updateGlassdoor       = (v: GlassdoorData | null)       => { setGlassdoor(v);    onGlassdoorChange?.(v);        if (v) onAiResult?.("glassdoor-check", v);   };
+  const updateKununu          = (v: KununuData | null)           => { setKununu(v);       onKununuChange?.(v);           if (v) onAiResult?.("kununu-check", v);      };
+  const updateLinkedin        = (v: LinkedinData | null)         => { setLinkedin(v);     onLinkedinChange?.(v);         if (v) onAiResult?.("linkedin-profile", v);  };
 
-  // Suppress unused variable warning for local state
   void salaryCheck; void atsKeywords; void companyResearch; void ackermannScript;
-  void letterReview; void openingSentences; void onboarding; void glassdoor;
+  void letterReview; void openingSentences; void onboarding; void glassdoor; void kununu; void linkedin;
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -1900,7 +2068,11 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
     const ts = resultTimes[id];
     const tsLabel = ts ? ts.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : undefined;
     return (
-    <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5, width: "100%", justifyContent: "flex-start" }} disabled={!!loading}
+    <button className="btn btn-secondary" style={{
+      fontSize: 10, padding: "10px 8px", minHeight: 58,
+      flexDirection: "column", alignItems: "center", justifyContent: "center",
+      gap: 0, position: "relative", whiteSpace: "normal",
+    }} disabled={!!loading}
       title={ts && tsLabel ? `Erstellt: ${tsLabel}` : undefined}
       onClick={() => run(id, async () => {
         if (id === "cv-doc") {
@@ -1964,16 +2136,32 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
         } else if (id === "onboarding") {
           const r = await api.post<OnboardingChecklist>(`/api/applications/${app.id}/ai/onboarding`, aiBody);
           updateOnboarding(r.data);
+        } else if (id === "kununu-check") {
+          const r = await api.post<KununuData>(`/api/applications/${app.id}/ai/kununu-check`, aiBody);
+          updateKununu(r.data);
+        } else if (id === "linkedin-profile") {
+          const r = await api.post<LinkedinData>(`/api/applications/${app.id}/ai/linkedin-profile`, aiBody);
+          updateLinkedin(r.data);
         }
       })}>
-      {icon}
-      <span style={{ flex: 1, textAlign: "left" }}>{label}</span>
-      {loading === id
-        ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
-        : ts
-          ? <Check width={11} height={11} style={{ color: "#4ade80", flexShrink: 0 }} />
-          : <div style={{ width: 11, flexShrink: 0 }} />
-      }
+      {/* Tile layout: icon + label centered, status badge top-right */}
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, width: "100%" }}>
+        {loading === id
+          ? <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} />
+          : icon
+        }
+        <span style={{ textAlign: "center", lineHeight: 1.3, wordBreak: "break-word" }}>{label}</span>
+      </div>
+      {!loading && ts && (
+        <div style={{
+          position: "absolute", top: 5, right: 5,
+          width: 14, height: 14, borderRadius: "50%",
+          background: "rgba(74,222,128,0.15)", border: "1px solid rgba(74,222,128,0.4)",
+          display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+        }}>
+          <Check width={8} height={8} style={{ color: "#4ade80" }} />
+        </div>
+      )}
     </button>
     );
   };
@@ -1994,61 +2182,64 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
 
       {/* Inbox Phase */}
       {showInbox && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="glassdoor-check" icon={<Building width={12} height={12} />} label={glassdoor ? "Glassdoor aktualisieren" : "Glassdoor Rating"} />
-          <AiBtn id="salary-check" icon={<Coins width={12} height={12} />} label="Gehalts-Check Schweiz" />
-          <AiBtn id="ats-keywords" icon={<Search width={12} height={12} />} label="ATS-Keywords extrahieren" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+          <AiBtn id="glassdoor-check" icon={<Building width={12} height={12} />} label="Glassdoor Rating" />
+          <AiBtn id="kununu-check"    icon={<Star width={12} height={12} />}     label="Kununu Rating" />
+          <AiBtn id="linkedin-profile" icon={<Linkedin width={12} height={12} />} label="LinkedIn Profil" />
+          <AiBtn id="salary-check"   icon={<Coins width={12} height={12} />}     label="Gehalts-Check" />
+          <AiBtn id="ats-keywords"   icon={<Search width={12} height={12} />}    label="ATS-Keywords" />
         </div>
       )}
 
       {/* CV Phase */}
       {showCv && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="cv-highlights" icon={<BrainElectricity width={12} height={12} />} label="CV-Highlights analysieren" />
-          <AiBtn id="cv-doc" icon={<PageEdit width={12} height={12} />} label="Google Doc aus Master-CV" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+          <AiBtn id="cv-highlights" icon={<BrainElectricity width={12} height={12} />} label="CV-Highlights" />
+          <AiBtn id="cv-doc"        icon={<PageEdit width={12} height={12} />}          label="Google Doc aus Master-CV" />
         </div>
       )}
+
       {/* Letter Phase */}
       {showLetter && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="cover-letter" icon={<PageEdit width={12} height={12} />} label="Anschreiben generieren" />
-          <AiBtn id="cover-letter-doc" icon={<Page width={12} height={12} />} label="Als Google Doc" />
-          <AiBtn id="letter-review" icon={<ChatBubbleCheck width={12} height={12} />} label="Anschreiben reviewen" />
-          <AiBtn id="opening-sentences" icon={<Spark width={12} height={12} />} label="3 Eröffnungssätze" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+          <AiBtn id="cover-letter"     icon={<PageEdit width={12} height={12} />}      label="Anschreiben generieren" />
+          <AiBtn id="cover-letter-doc" icon={<Page width={12} height={12} />}          label="Als Google Doc" />
+          <AiBtn id="letter-review"    icon={<ChatBubbleCheck width={12} height={12} />} label="Anschreiben reviewen" />
+          <AiBtn id="opening-sentences" icon={<Spark width={12} height={12} />}        label="3 Eröffnungssätze" />
         </div>
       )}
 
       {/* Email Phase */}
       {showEmail && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          {stage === "application_sent" && <AiBtn id="email-app" icon={<SendMail width={12} height={12} />} label="Bewerbungs-Email" />}
-          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-follow" icon={<SendMail width={12} height={12} />} label="Follow-up-Email" />}
-          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-linkedin" icon={<Linkedin width={12} height={12} />} label="LinkedIn-Vernetzung" />}
-          {stage === "accepted" && <AiBtn id="email-decline" icon={<MailOut width={12} height={12} />} label="Absage-Email (andere Stellen)" />}
-          {stage === "accepted" && <AiBtn id="onboarding" icon={<CheckCircle width={12} height={12} />} label="Onboarding-Checkliste" />}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+          {stage === "application_sent" && <AiBtn id="email-app"     icon={<SendMail width={12} height={12} />}  label="Bewerbungs-Email" />}
+          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-follow"   icon={<SendMail width={12} height={12} />}  label="Follow-up-Email" />}
+          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-linkedin" icon={<Linkedin width={12} height={12} />}  label="LinkedIn-Vernetzung" />}
+          {stage === "accepted" && <AiBtn id="email-decline" icon={<MailOut width={12} height={12} />}     label="Absage-Email" />}
+          {stage === "accepted" && <AiBtn id="onboarding"    icon={<CheckCircle width={12} height={12} />} label="Onboarding-Checkliste" />}
         </div>
       )}
 
       {/* Pending Phase */}
       {stage === "pending" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="company-research" icon={<Building width={12} height={12} />} label="Unternehmensrecherche" />
-          <AiBtn id="ackermann-script" icon={<Coins width={12} height={12} />} label="Ackermann-Verhandlungs-Script" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+          <AiBtn id="company-research"  icon={<Building width={12} height={12} />} label="Unternehmens-recherche" />
+          <AiBtn id="ackermann-script"  icon={<Coins width={12} height={12} />}    label="Ackermann-Script" />
         </div>
       )}
 
       {/* Rejected Phase */}
       {showRejected && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="email-feedback" icon={<Mail width={12} height={12} />} label="Feedback-Email anfordern" />
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+          <AiBtn id="email-feedback" icon={<Mail width={12} height={12} />} label="Feedback-Email" />
         </div>
       )}
 
       {/* Interview Phase */}
       {showIv && (
         <div style={{ marginBottom: 12 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: interviewPrep ? 10 : 0, alignItems: "center" }}>
-            <AiBtn id="interview-prep" icon={interviewPrep ? <Refresh width={12} height={12} /> : <Brain width={12} height={12} />} label={interviewPrep ? "Neu generieren" : "Interview-Vorbereitung generieren"} />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: interviewPrep ? 8 : 0 }}>
+            <AiBtn id="interview-prep" icon={interviewPrep ? <Refresh width={12} height={12} /> : <Brain width={12} height={12} />} label={interviewPrep ? "Neu generieren" : "Interview-Vorbereitung"} />
             {showSalary && <AiBtn id="salary-tips" icon={<Coins width={12} height={12} />} label="Gehaltsverhandlung" />}
             {interviewPrep && <>
               <button className="btn btn-ghost" style={{ fontSize: 11, gap: 5 }}
@@ -2548,6 +2739,12 @@ function ProcessTab({ app, onSave, onAiResult }: { app: Application; onSave?: (p
   const [aiGlassdoor,       setAiGlassdoor]       = useState<GlassdoorData | null>(() => {
     try { return app.glassdoorData ? JSON.parse(app.glassdoorData as string) : null; } catch { return null; }
   });
+  const [aiKununu,          setAiKununu]          = useState<KununuData | null>(() => {
+    try { return (app as Application & { kununuData?: string }).kununuData ? JSON.parse((app as Application & { kununuData?: string }).kununuData!) : null; } catch { return null; }
+  });
+  const [aiLinkedin,        setAiLinkedin]        = useState<LinkedinData | null>(() => {
+    try { return (app as Application & { linkedinData?: string }).linkedinData ? JSON.parse((app as Application & { linkedinData?: string }).linkedinData!) : null; } catch { return null; }
+  });
 
   // Expand-Logik for the three content blocks
   const [interviewExpanded, setInterviewExpanded] = useState(false);
@@ -2588,6 +2785,8 @@ function ProcessTab({ app, onSave, onAiResult }: { app: Application; onSave?: (p
           onOpeningSentencesChange={setAiOpeningSentences}
           onOnboardingChange={setAiOnboarding}
           onGlassdoorChange={setAiGlassdoor}
+          onKununuChange={setAiKununu}
+          onLinkedinChange={setAiLinkedin}
           onAiResult={onAiResult}
         />
       </div>
@@ -3576,6 +3775,12 @@ export function DetailDrawer({ app, onClose }: Props) {
         const d = JSON.parse(app.glassdoorData as string);
         init["glassdoor-check"] = { data: d, createdAt: d.updatedAt ? new Date(d.updatedAt) : new Date() };
       } catch {}
+    }
+    if ((app as Application & { kununuData?: string }).kununuData) {
+      try { const d = JSON.parse((app as Application & { kununuData?: string }).kununuData!); init["kununu-check"] = { data: d, createdAt: d.updatedAt ? new Date(d.updatedAt) : new Date() }; } catch {}
+    }
+    if ((app as Application & { linkedinData?: string }).linkedinData) {
+      try { const d = JSON.parse((app as Application & { linkedinData?: string }).linkedinData!); init["linkedin-profile"] = { data: d, createdAt: d.updatedAt ? new Date(d.updatedAt) : new Date() }; } catch {}
     }
     const prep = app.stage === "interview_1" ? app.interview1Prep : app.stage === "interview_2" ? app.interview2Prep : null;
     if (prep) { try { init["interview-prep"] = { data: JSON.parse(prep), createdAt: new Date() }; } catch {} }

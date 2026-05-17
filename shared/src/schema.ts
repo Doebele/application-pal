@@ -92,6 +92,8 @@ export const applications = pgTable("applications", {
   interview1Prep: text("interview1_prep"),         // JSON: InterviewPrep (AI-generated questions)
   interview2Prep: text("interview2_prep"),         // JSON: InterviewPrep (AI-generated questions)
   glassdoorData: text("glassdoor_data"),           // JSON: GlassdoorData (rating, links, AI estimate)
+  kununuData: text("kununu_data"),                 // JSON: KununuData (rating, url)
+  linkedinData: text("linkedin_data"),             // JSON: LinkedinData (url, description)
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
