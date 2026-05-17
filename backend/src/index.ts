@@ -2146,7 +2146,7 @@ Felder sind null wenn keine verlässlichen Daten vorhanden. confidence="niedrig"
 // Manuell gespeichertes Rating aktualisieren
 app.patch("/api/applications/:id/ai/glassdoor-check", async (c) => {
   const id = c.req.param("id");
-  const body = await c.req.json<{ rating?: number | null; reviewCount?: number | null }>();
+  const body = await c.req.json<{ rating?: number | null; reviewCount?: number | null; glassdoorUrl?: string }>();
   const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const existing = app_.glassdoorData ? JSON.parse(app_.glassdoorData) : {};

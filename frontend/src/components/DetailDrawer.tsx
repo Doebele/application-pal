@@ -512,6 +512,7 @@ function GlassdoorCardDetail({ data, appId, onUpdate }: {
 }) {
   const [editRating,      setEditRating]      = useState(data.rating?.toString() ?? "");
   const [editReviewCount, setEditReviewCount] = useState(data.reviewCount?.toString() ?? "");
+  const [editUrl,         setEditUrl]         = useState(data.glassdoorUrl ?? "");
   const [saving,          setSaving]          = useState(false);
   const stars = data.rating ? "★".repeat(Math.round(data.rating)) + "☆".repeat(5 - Math.round(data.rating)) : null;
   const confidenceColor = data.confidence === "hoch" ? "#34d399" : data.confidence === "mittel" ? "#fbbf24" : "#f87171";
@@ -522,6 +523,7 @@ function GlassdoorCardDetail({ data, appId, onUpdate }: {
       const r = await api.patch<GlassdoorData>(`/api/applications/${appId}/ai/glassdoor-check`, {
         rating: editRating ? parseFloat(editRating) : null,
         reviewCount: editReviewCount ? parseInt(editReviewCount, 10) : null,
+        glassdoorUrl: editUrl || undefined,
       });
       onUpdate(r.data);
     } finally { setSaving(false); }
@@ -558,10 +560,24 @@ function GlassdoorCardDetail({ data, appId, onUpdate }: {
           {data.cons?.length > 0 && <AiSection title="Kritisch"><BulletList items={data.cons} accent="#f87171" /></AiSection>}
         </div>
       )}
-      <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
-        {data.glassdoorUrl && <a href={data.glassdoorUrl} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}><OpenNewWindow width={10} height={10} /> Glassdoor</a>}
-        {data.kununuUrl    && <a href={data.kununuUrl}    target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}><OpenNewWindow width={10} height={10} /> Kununu</a>}
-        {data.linkedinUrl  && <a href={data.linkedinUrl}  target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}><OpenNewWindow width={10} height={10} /> LinkedIn</a>}
+      {/* Editierbarer Glassdoor-Link */}
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 4 }}>GLASSDOOR-LINK</div>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <input type="url" value={editUrl} onChange={e => setEditUrl(e.target.value)}
+            placeholder="https://www.glassdoor.com/..."
+            style={{ flex: 1, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 11, color: "var(--fg-1)", outline: "none", padding: "3px 0", fontFamily: "var(--font-sans)" }} />
+          {editUrl && (
+            <a href={editUrl} target="_blank" rel="noopener noreferrer" title="Öffnen"
+              style={{ display: "flex", alignItems: "center", color: "var(--fg-3)", padding: 3, borderRadius: 4, flexShrink: 0, textDecoration: "none" }}>
+              <OpenNewWindow width={13} height={13} />
+            </a>
+          )}
+          <button onClick={save} disabled={saving} title="URL speichern & aktualisieren"
+            style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: saving ? "var(--fg-4)" : "var(--fg-2)", padding: 3, borderRadius: 4, flexShrink: 0 }}>
+            {saving ? <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} /> : <Refresh width={13} height={13} />}
+          </button>
+        </div>
       </div>
       <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
         <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 8 }}>Manuell korrigieren</div>
@@ -2492,6 +2508,7 @@ function GlassdoorPanel({ data, appId, onChange }: {
 }) {
   const [editRating,      setEditRating]      = useState(data.rating?.toString() ?? "");
   const [editReviewCount, setEditReviewCount] = useState(data.reviewCount?.toString() ?? "");
+  const [editUrl,         setEditUrl]         = useState(data.glassdoorUrl ?? "");
   const [saving,          setSaving]          = useState(false);
 
   const save = async () => {
@@ -2499,7 +2516,7 @@ function GlassdoorPanel({ data, appId, onChange }: {
     const rating      = editRating      ? parseFloat(editRating)      : null;
     const reviewCount = editReviewCount ? parseInt(editReviewCount, 10) : null;
     try {
-      const r = await api.patch<GlassdoorData>(`/api/applications/${appId}/ai/glassdoor-check`, { rating, reviewCount });
+      const r = await api.patch<GlassdoorData>(`/api/applications/${appId}/ai/glassdoor-check`, { rating, reviewCount, glassdoorUrl: editUrl || undefined });
       onChange(r.data);
     } finally { setSaving(false); }
   };
@@ -2512,19 +2529,20 @@ function GlassdoorPanel({ data, appId, onChange }: {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Glassdoor Rating</div>
-        <div style={{ display: "flex", gap: 6 }}>
-          <a href={data.glassdoorUrl} target="_blank" rel="noopener noreferrer"
-            className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}>
-            <OpenNewWindow width={10} height={10} /> Glassdoor
-          </a>
-          <a href={data.kununuUrl} target="_blank" rel="noopener noreferrer"
-            className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}>
-            <OpenNewWindow width={10} height={10} /> Kununu
-          </a>
-          <a href={data.linkedinUrl} target="_blank" rel="noopener noreferrer"
-            className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none" }}>
-            <OpenNewWindow width={10} height={10} /> LinkedIn
-          </a>
+        <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+          <input type="url" value={editUrl} onChange={e => setEditUrl(e.target.value)}
+            placeholder="https://www.glassdoor.com/..."
+            style={{ width: 220, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 10, color: "var(--fg-2)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
+          {editUrl && (
+            <a href={editUrl} target="_blank" rel="noopener noreferrer" title="Öffnen"
+              style={{ display: "flex", alignItems: "center", color: "var(--fg-3)", padding: 3, borderRadius: 4, textDecoration: "none", flexShrink: 0 }}>
+              <OpenNewWindow width={12} height={12} />
+            </a>
+          )}
+          <button onClick={save} disabled={saving} title="Speichern"
+            style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: saving ? "var(--fg-4)" : "var(--fg-3)", padding: 3, borderRadius: 4, flexShrink: 0 }}>
+            {saving ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> : <Refresh width={12} height={12} />}
+          </button>
         </div>
       </div>
 
