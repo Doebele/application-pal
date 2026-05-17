@@ -174,55 +174,101 @@ function AgentStep({ done, active, label, meta }: { done: boolean; active: boole
 
 // ─── Stage Progress Bar ───────────────────────────────────────
 function StageProgressBar({ stage }: { stage: string }) {
-  const activeIdx  = STAGES.findIndex((s) => s.id === stage);
-  const PAST_COLOR = "var(--fg-3)";   // muted for all completed steps
-  const FUTURE_BG  = "var(--border)"; // dimmed for upcoming steps
+  // Linear stages: Inbox → 2nd Itw (fork terminals excluded)
+  const LINEAR = STAGES.filter(s => s.id !== "rejected" && s.id !== "accepted");
+  const linIdx    = LINEAR.findIndex(s => s.id === stage); // -1 when on fork
+  const onAccepted = stage === "accepted";
+  const onRejected = stage === "rejected";
+  const inFork     = onAccepted || onRejected;
+
+  const P = "var(--fg-3)";         // past
+  const F = "var(--border)";        // future
+  const A = "var(--accent)";        // active
+
+  // Line color entering linear node i
+  const lineC = (i: number) => {
+    if (inFork) return P;           // all linear stages done
+    if (i < linIdx) return P;
+    if (i === linIdx) return A;     // line leading into current = accent
+    return F;
+  };
+
+  // Connector from last linear stage to fork stem
+  const stemC = onAccepted || onRejected ? P : linIdx === LINEAR.length - 1 ? A : F;
+
+  const forkDot = (active: boolean, size = 9) => ({
+    width: active ? 13 : size, height: active ? 13 : size, borderRadius: "50%",
+    background: active ? A : F, flexShrink: 0 as const, transition: "all 0.2s",
+    border: active ? `2px solid ${A}` : "none",
+    boxShadow: active ? `0 0 0 3px var(--accent-15)` : "none",
+    display: "flex", alignItems: "center", justifyContent: "center",
+  });
 
   return (
     <div style={{ padding: "12px 0 8px" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 0, position: "relative" }}>
-        {STAGES.map((s, i) => {
-          const isPast   = i < activeIdx;
-          const isActive = i === activeIdx;
-          const dotColor = isActive ? "var(--accent)" : isPast ? PAST_COLOR : FUTURE_BG;
-          // line at idx = connection from step idx-1 → idx
-          // leading into active step → accent; past connections → muted; future → border
-          const lineColor = (idx: number) =>
-            idx === activeIdx ? "var(--accent)" : idx < activeIdx ? PAST_COLOR : FUTURE_BG;
+      <div style={{ display: "flex", alignItems: "center", gap: 0 }}>
+
+        {/* ── Linear stages ── */}
+        {LINEAR.map((s, i) => {
+          const active = stage === s.id;
+          const past   = i < linIdx || inFork;
+          const dc     = active ? A : past ? P : F;
           return (
-            <div key={s.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <div key={s.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: i === 0 ? "flex-start" : "center", gap: 4 }}>
               <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
-                {i > 0 && (
-                  <div style={{ flex: 1, height: 2, background: lineColor(i), transition: "background 0.2s" }} />
-                )}
+                {i > 0 && <div style={{ flex: 1, height: 2, background: lineC(i), transition: "background 0.2s" }} />}
                 <div style={{
-                  width: isActive ? 13 : 9, height: isActive ? 13 : 9, borderRadius: "50%",
-                  background: dotColor,
-                  border: isActive ? "2px solid var(--accent)" : "none",
-                  boxShadow: isActive ? "0 0 0 3px var(--accent-15)" : "none",
-                  flexShrink: 0, transition: "all 0.2s",
+                  width: active ? 13 : 9, height: active ? 13 : 9, borderRadius: "50%",
+                  background: dc, flexShrink: 0, transition: "all 0.2s",
+                  border: active ? `2px solid ${A}` : "none",
+                  boxShadow: active ? `0 0 0 3px var(--accent-15)` : "none",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  opacity: isPast ? 0.55 : 1,
+                  opacity: past ? 0.55 : 1,
                 }}>
-                  {isPast && <Check width={5} height={5} color="var(--bg)" strokeWidth={3} />}
+                  {past && <Check width={5} height={5} color="var(--bg)" strokeWidth={3} />}
                 </div>
-                {i < STAGES.length - 1 && (
-                  <div style={{ flex: 1, height: 2, background: lineColor(i + 1), transition: "background 0.2s" }} />
-                )}
+                {/* After-dot line or fork connector for last stage */}
+                {i < LINEAR.length - 1
+                  ? <div style={{ flex: 1, height: 2, background: lineC(i + 1), transition: "background 0.2s" }} />
+                  : <div style={{ width: 14, height: 2, background: stemC, transition: "background 0.2s", flexShrink: 0 }} />
+                }
               </div>
               <div style={{
-                fontSize: 9, fontWeight: isActive ? 700 : 500,
-                color: isActive ? "var(--accent)" : "var(--fg-3)",
-                whiteSpace: "nowrap",
-                textAlign: i === 0 ? "left" : i === STAGES.length - 1 ? "right" : "center",
-                alignSelf: i === 0 ? "flex-start" : i === STAGES.length - 1 ? "flex-end" : "center",
-                opacity: isPast ? 0.55 : 1,
-              }}>
-                {s.short}
-              </div>
+                fontSize: 9, fontWeight: active ? 700 : 500,
+                color: active ? A : "var(--fg-3)", whiteSpace: "nowrap",
+                opacity: past ? 0.55 : 1,
+              }}>{s.short}</div>
             </div>
           );
         })}
+
+        {/* ── Fork junction: vertical stem + two outcome branches ── */}
+        <div style={{ display: "flex", flexDirection: "column", position: "relative", flexShrink: 0 }}>
+          {/* Vertical stem spanning both branches */}
+          <div style={{
+            position: "absolute", left: 0, top: "20%", bottom: "20%",
+            width: 2, background: stemC, transition: "background 0.2s",
+          }} />
+
+          {/* Top branch: Contract offer (= accepted) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 5, paddingLeft: 2, paddingBottom: 5 }}>
+            <div style={{ width: 10, height: 2, background: onAccepted ? P : F }} />
+            <div style={forkDot(onAccepted)} />
+            <span style={{ fontSize: 9, fontWeight: onAccepted ? 700 : 500, color: onAccepted ? A : "var(--fg-3)", whiteSpace: "nowrap" }}>
+              Contract offer
+            </span>
+          </div>
+
+          {/* Bottom branch: Rejected */}
+          <div style={{ display: "flex", alignItems: "center", gap: 5, paddingLeft: 2, paddingTop: 5 }}>
+            <div style={{ width: 10, height: 2, background: onRejected ? P : F }} />
+            <div style={forkDot(onRejected)} />
+            <span style={{ fontSize: 9, fontWeight: onRejected ? 700 : 500, color: onRejected ? A : "var(--fg-3)", whiteSpace: "nowrap" }}>
+              Rejected
+            </span>
+          </div>
+        </div>
+
       </div>
     </div>
   );
