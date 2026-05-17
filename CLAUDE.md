@@ -113,7 +113,7 @@ Verifies `access_token` cookie via JWT; silently refreshes via `refresh_token` c
 
 | Table | Purpose | Exported |
 |---|---|---|
-| `applications` | Jobs: stage, tags, salary, logoUrl, archived, archiveReason, matchScore, matchDetails, googleFolderId, googleFolderUrl, portalUrl, interview1Details, interview2Details, interview1Prep, interview2Prep | ✅ |
+| `applications` | Jobs: stage, tags, salary, logoUrl, archived, archiveReason, matchScore, matchDetails, googleFolderId, googleFolderUrl, portalUrl, interview1Details, interview2Details, interview1Prep, interview2Prep, glassdoorData | ✅ |
 | `user_profile` | Single-row profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, sessionTimeout | ✅ |
 | `user_documents` | Global document library (CV, Zeugnisse, Figma, etc.) | ✅ |
 | `application_documents` | Per-job docs; `userDocumentId` links to library; `googleDocId`/`googleDocUrl` for Drive | ✅ |
@@ -142,10 +142,19 @@ All use `callAi()` + `extractJson()` pattern, `resolveHostUrl()`, and `max_token
 | `POST /api/applications/:id/ai/cv-highlights` | `{ highlights, keywords, gaps }` |
 | `POST /api/applications/:id/ai/cv-doc` | Creates Google Doc from Master-CV + highlights; returns `{ docUrl }` |
 | `POST /api/applications/:id/ai/cover-letter` | `{ subject, body, docUrl? }` — `createDoc: true` also creates Google Doc |
-| `POST /api/applications/:id/ai/email-draft` | `{ subject, body }` — body: `{ type: "application"|"followup"|"decline" }` |
+| `POST /api/applications/:id/ai/email-draft` | `{ subject, body }` — body: `{ type: "application"|"followup"|"decline"|"feedback"|"linkedin" }` |
 | `POST /api/applications/:id/ai/interview-prep` | `{ rollenFragen, starBeispiele, vossFragenWhatHow, rueckfragen }` — result persisted to `interview1Prep`/`interview2Prep` |
 | `POST /api/applications/:id/ai/interview-prep/export-doc` | Creates Google Doc from interview prep; body: `{ interviewPrep }`; returns `{ docUrl }` |
 | `POST /api/applications/:id/ai/salary-tips` | `{ markteinschätzung, taktiken, formulierungen, vossAnker }` |
+| `POST /api/applications/:id/ai/salary-check` | `{ band, median, begründung, quellen }` — Swiss salary estimate for the role |
+| `POST /api/applications/:id/ai/ats-keywords` | `{ mustHave, niceToHave, softSkills }` |
+| `POST /api/applications/:id/ai/company-research` | `{ überblick, kultur, news, markt, wettbewerber }` |
+| `POST /api/applications/:id/ai/ackermann-script` | `{ anker, schritte, formulierungen }` — Ackermann salary negotiation script |
+| `POST /api/applications/:id/ai/letter-review` | `{ bewertung, verbesserungen, alternativen }` |
+| `POST /api/applications/:id/ai/opening-sentences` | `{ sätze: string[] }` — 3 alternative cover letter openers |
+| `POST /api/applications/:id/ai/onboarding` | `{ tage30, tage60, tage90, allgemein }` |
+| `POST /api/applications/:id/ai/glassdoor-check` | `{ rating, reviewCount, ceoApproval, recommendToFriend, confidence, summary, pros, cons, hinweis, glassdoorUrl, kununuUrl, linkedinUrl, updatedAt }` — AI estimate from training data; persisted to `glassdoor_data` |
+| `PATCH /api/applications/:id/ai/glassdoor-check` | Manual override for `rating` + `reviewCount`; body: `{ rating?, reviewCount? }` |
 
 ### Google Drive Endpoints
 
@@ -167,13 +176,17 @@ All require Google OAuth token in DB (`drive` scope — NOT `drive.file`).
 
 ### Key Frontend Patterns
 
-**DetailDrawer**: The main job detail view. `stage` and `url` are lifted to `DetailDrawer` component state so the header Stage-Picker updates immediately. Tab type: `"overview" | "description" | "documents" | "process" | "agent" | "contacts" | "notes"`.
+**DetailDrawer**: The main job detail view. `stage` and `url` are lifted to `DetailDrawer` component state so the header Stage-Picker updates immediately. Tab type: `"process" | "details" | "documents" | "insights" | "contacts" | "notes"`. Default tab is `"process"`.
 
-**ProcessTab**: Four sections top-to-bottom: `InterviewDetailsPanel` (only for `interview_1`/`interview_2`) → `TaskChecklist` → `StageAiActions` → activity timeline. `ProcessTab` receives `onSave` and passes it to both `InterviewDetailsPanel` and `StageAiActions`. `StageAiActions` only renders for stages with relevant actions.
+**ProcessTab**: Sections top-to-bottom: `InterviewDetailsPanel` (only for `interview_1`/`interview_2`) → `TaskChecklist` → `StageAiActions` → `GlassdoorPanel` (only when `aiGlassdoor` state is set, inbox stage) → KI-generated content blocks → activity timeline. `ProcessTab` receives `onSave` and passes it to both `InterviewDetailsPanel` and `StageAiActions`. `StageAiActions` only renders for stages with relevant actions.
+
+**DetailsTab**: Merges the former OverviewTab and DescriptionTab. Top half = overview fields (company, role, salary, location, etc.). Bottom = Stellenbeschreibung rendered via `react-markdown` + `remark-gfm` with a Vorschau/Bearbeiten toggle (`descMode` state). Links open in `target="_blank"`. Autosave on `onBlur` in Bearbeiten mode. Styled via `.md-body` CSS class in `index.css`.
 
 **InterviewDetailsPanel**: Renders in ProcessTab for interview stages. Fields: date, time, duration, format (onsite/video/phone), address or video URL/code/provider, interviewer, notes. Autosave on blur. "Google Kalender" button uses URL method (`calendar.google.com/calendar/r/eventedit?...`) with optional `calid` from `user_profile.googleCalendarId`. "iCal herunterladen" generates a `.ics` file client-side.
 
-**StageAiActions**: For interview stages, interview prep is initialized from `app.interview1Prep`/`app.interview2Prep` (JSON.parse). After generation, persisted to DB via `onSave()`. "Alles kopieren" and "Als Google Doc" buttons appear inline next to "Neu generieren".
+**StageAiActions**: For interview stages, interview prep is initialized from `app.interview1Prep`/`app.interview2Prep` (JSON.parse). After generation, persisted to DB via `onSave()`. "Alles kopieren" and "Als Google Doc" buttons appear inline next to "Neu generieren". Receives `onGlassdoorChange` callback for the inbox glassdoor action.
+
+**GlassdoorPanel**: Renders when `glassdoorData` is set (parsed from `app.glassdoorData` JSON). Shows rating stars, CEO approval %, recommend %, pros/cons grid, confidence badge, editable rating + review count inputs (underline style), and direct links to Glassdoor/Kununu/LinkedIn. PATCH call on manual save. All three link URLs are constructed server-side from the company name and stored in the JSON. `glassdoor_data` stores the full `GlassdoorData` JSON object as a TEXT column.
 
 **DocumentsTab**: Three sections: Google Drive folder panel (top, only if connected) → Zugewiesen list → library grid (2-column). Library docs show 3 states: not linked / linked-no-Drive / linked-with-Drive-copy. Adding a Google Doc from library auto-copies to Drive folder if one exists.
 
