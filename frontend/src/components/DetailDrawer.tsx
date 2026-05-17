@@ -1045,7 +1045,6 @@ function AiResultTile({ id, entry, onExpand }: {
   onExpand: () => void;
 }) {
   const label    = AI_RESULT_LABELS[id] ?? id;
-  const ts       = entry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
   const isDouble = DOUBLE_WIDTH_IDS.has(id);
   const content  = renderTileContent(id, entry.data);
 
@@ -1053,24 +1052,20 @@ function AiResultTile({ id, entry, onExpand }: {
     <button onClick={onExpand} style={{
       gridColumn: isDouble ? "span 2" : undefined,
       display: "flex", flexDirection: "column",
-      padding: "9px 11px", borderRadius: 8,
-      height: 80,                                    // optimale feste Höhe
+      padding: "10px 12px", borderRadius: 8,
       border: "1px solid var(--border)", background: "var(--surface)",
       cursor: "pointer", textAlign: "left", fontFamily: "var(--font-sans)",
-      overflow: "hidden",
     }}>
       {/* Label-Zeile */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, width: "100%", flexShrink: 0, marginBottom: 5 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 5, width: "100%", flexShrink: 0, marginBottom: 8 }}>
         <Check width={9} height={9} style={{ color: "#4ade80", flexShrink: 0 }} />
         <span style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-2)", flex: 1, textAlign: "left" }}>{label}</span>
         <NavArrowRight width={9} height={9} style={{ color: "var(--fg-4)", flexShrink: 0 }} />
       </div>
-      {/* Hauptinhalt */}
-      <div style={{ flex: 1, width: "100%", overflow: "hidden", display: "flex", alignItems: isDouble ? "flex-start" : "center" }}>
+      {/* Hauptinhalt — 2–3 wichtigste Infos */}
+      <div style={{ width: "100%", display: "flex", alignItems: isDouble ? "flex-start" : "center" }}>
         {content}
       </div>
-      {/* Timestamp */}
-      <div style={{ fontSize: 9, color: "var(--fg-4)", flexShrink: 0, marginTop: 4 }}>{ts}</div>
     </button>
   );
 }
@@ -1129,6 +1124,9 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResul
             <Check width={10} height={10} style={{ color: "#4ade80" }} />
             <span style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>
               {AI_RESULT_LABELS[expandedResultId] ?? expandedResultId}
+            </span>
+            <span style={{ fontSize: 10, color: "var(--fg-4)" }}>
+              {expandedEntry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
             </span>
             <div style={{ flex: 1 }} />
             <button onClick={() => setExpandedResultId(null)} title="Schliessen"
