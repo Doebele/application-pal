@@ -16,7 +16,7 @@ import type {
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
 
-type Tab = "overview" | "description" | "documents" | "process" | "insights" | "contacts" | "notes";
+type Tab = "process" | "details" | "documents" | "insights" | "contacts" | "notes";
 
 // Clipboard helper: tries modern API first, falls back to execCommand for focus/permission issues
 async function copyText(text: string): Promise<void> {
@@ -33,10 +33,9 @@ async function copyText(text: string): Promise<void> {
 }
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "overview",    label: "Übersicht"      },
-  { id: "description", label: "Beschreibung"   },
+  { id: "process",     label: "Aktionen"       },
+  { id: "details",     label: "Details"        },
   { id: "documents",   label: "Dokumente"      },
-  { id: "process",     label: "Prozess"        },
   { id: "insights",     label: "Insights"       },
   { id: "contacts",    label: "Kontakte"       },
   { id: "notes",       label: "Notizen"        },
@@ -394,6 +393,67 @@ function DescriptionTab({ app, onSave }: { app: Application; onSave: (patch: Par
       <div className="autosave-indicator">
         <span className="dot" style={{ background: saved ? "var(--accent)" : "var(--green)" }} />
         {saved ? "Gespeichert." : "Wird beim Verlassen des Felds gespeichert."}
+      </div>
+    </>
+  );
+}
+
+// ─── Details Tab (Übersicht + Beschreibung) ───────────────────
+function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
+  app: Application; stage: string;
+  url: string; onUrlChange: (url: string) => void;
+  onSave: (patch: Partial<Application>) => void;
+}) {
+  const [description, setDescription] = useState(app.description ?? "");
+  const [descSaved,   setDescSaved]   = useState(false);
+  const [descExpanded, setDescExpanded] = useState(false);
+
+  const saveDesc = () => {
+    onSave({ description });
+    setDescSaved(true);
+    setTimeout(() => setDescSaved(false), 1500);
+  };
+
+  const expandStyle: React.CSSProperties = {
+    position: "absolute", top: 57, left: 0, right: 0, bottom: 0,
+    zIndex: 10, background: "var(--bg)", padding: "16px 20px",
+    display: "flex", flexDirection: "column", overflow: "hidden",
+  };
+
+  return (
+    <>
+      {/* Übersicht-Inhalt */}
+      <OverviewTab app={app} stage={stage} url={url} onUrlChange={onUrlChange} onSave={onSave} />
+
+      {/* Stellenbeschreibung — expandierbar */}
+      <div style={descExpanded ? expandStyle : { marginTop: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+            Stellenbeschreibung
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {app.url && (
+              <a href={app.url} target="_blank" rel="noreferrer"
+                style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent)", fontSize: 11, fontWeight: 600, textDecoration: "none" }}>
+                <OpenNewWindow width={11} height={11} /> Original
+              </a>
+            )}
+            {descSaved && <span style={{ fontSize: 11, color: "#4ade80" }}>✓</span>}
+            <button onClick={() => setDescExpanded(v => !v)} title={descExpanded ? "Minimieren" : "Maximieren"}
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
+              {descExpanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
+            </button>
+          </div>
+        </div>
+        <div style={descExpanded ? { flex: 1, overflow: "auto" } : {}}>
+          <AutoTextarea
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            onBlur={saveDesc}
+            placeholder="Originale Stellenbeschreibung einfügen…"
+            minRows={descExpanded ? 20 : 8}
+          />
+        </div>
       </div>
     </>
   );
@@ -2890,7 +2950,7 @@ function MoreMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: ()
 type Props = { app: Application; onClose: () => void };
 
 export function DetailDrawer({ app, onClose }: Props) {
-  const [tab, setTab]             = useState<Tab>("overview");
+  const [tab, setTab]             = useState<Tab>("process");
   const [stage, setStage]         = useState<Application["stage"]>(app.stage);
   const [url, setUrl]             = useState(app.url ?? "");
   const [showDeleteModal, setShowDeleteModal]   = useState(false);
@@ -2985,10 +3045,9 @@ export function DetailDrawer({ app, onClose }: Props) {
         </div>
 
         <div className="drawer-body" style={{ paddingTop: 16 }}>
-          {tab === "overview"     && <OverviewTab     app={app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} />}
-          {tab === "description"  && <DescriptionTab  app={app} onSave={(p) => patchMutation.mutate(p)} />}
-          {tab === "documents"    && <DocumentsTab    app={app} />}
           {tab === "process"      && <ProcessTab      app={app} onSave={(p) => patchMutation.mutate(p)} />}
+          {tab === "details"      && <DetailsTab      app={app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} />}
+          {tab === "documents"    && <DocumentsTab    app={app} />}
           {tab === "insights"     && <AgentTab        app={app} />}
           {tab === "contacts"     && <ContactsTab     app={app} />}
           {tab === "notes"        && <NotesTab        app={app} onSave={(p) => patchMutation.mutate(p)} />}
