@@ -94,6 +94,7 @@ export const applications = pgTable("applications", {
   glassdoorData: text("glassdoor_data"),           // JSON: GlassdoorData (rating, links, AI estimate)
   kununuData: text("kununu_data"),                 // JSON: KununuData (rating, url)
   linkedinData: text("linkedin_data"),             // JSON: LinkedinData (url, description)
+  aiResultsCache: text("ai_results_cache"),        // JSON: {[actionId]: {data, _savedAt}}
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -112,6 +113,7 @@ export const userProfile = pgTable("user_profile", {
   photoUrl: text("photo_url"),
   masterCv: text("master_cv"),
   personalNotes: text("personal_notes"),   // Interview-relevant personal priorities/talking points
+  desiredSalary: text("desired_salary"),   // Wunschgehalt für Balkengrafik (z.B. "110000")
   googleCalendarId: text("google_calendar_id"),  // e.g. "user@gmail.com" or custom calendar ID
   sessionTimeout: text("session_timeout").default("15m"),  // JWT access token lifetime
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -34,7 +34,7 @@ function AutoResizeTextarea({ value, onChange, placeholder, minRows = 4 }: {
 export function ProfilePage() {
   const [profile, setProfile] = useState<Partial<UserProfile>>({
     name: "", email: "", phone: "", location: "", headline: "",
-    linkedinUrl: "", linkedinBio: "", photoUrl: "", masterCv: "", personalNotes: ""
+    linkedinUrl: "", linkedinBio: "", photoUrl: "", masterCv: "", personalNotes: "", desiredSalary: ""
   });
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -321,6 +321,24 @@ export function ProfilePage() {
                   />
                 )}
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Wunschgehalt — für die Salary-Check-Balkengrafik */}
+        <div className="settings-group">
+          <div className="settings-row">
+            <div className="field" style={{ flex: 1 }}>
+              <label>Wunschgehalt (CHF, Jahresbrutto)</label>
+              <input
+                type="number"
+                value={profile.desiredSalary ?? ""}
+                onChange={(e) => setProfile((p) => ({ ...p, desiredSalary: e.target.value }))}
+                onBlur={() => save({ desiredSalary: profile.desiredSalary })}
+                placeholder="z.B. 110000"
+                style={{ maxWidth: 200 }}
+              />
+              <span className="field-hint">Wird in der Salary-Check-Grafik als Referenzlinie angezeigt</span>
             </div>
           </div>
         </div>

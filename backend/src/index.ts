@@ -1797,6 +1797,14 @@ function extractJson(raw: string): unknown {
   return JSON.parse(m[0]);
 }
 
+// ── AI Result Cache Helper ───────────────────────────────────────
+async function persistAiResult(appId: string, key: string, data: Record<string, unknown>) {
+  const [row] = await db.select({ c: applications.aiResultsCache }).from(applications).where(eq(applications.id, appId)).limit(1);
+  const cache: Record<string, unknown> = row?.c ? JSON.parse(row.c) : {};
+  cache[key] = { ...data, _savedAt: new Date().toISOString() };
+  await db.update(applications).set({ aiResultsCache: JSON.stringify(cache) }).where(eq(applications.id, appId));
+}
+
 // CV Highlights
 app.post("/api/applications/:id/ai/cv-highlights", async (c) => {
   const id = c.req.param("id");
@@ -1816,6 +1824,7 @@ Antworte NUR mit diesem JSON:
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { highlights: string[]; keywords: string[]; gaps: string[] };
+    await persistAiResult(id, "cv-highlights", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {
     console.error("cv-highlights error:", err);
@@ -2088,6 +2097,7 @@ Antworte NUR mit JSON:
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { markteinschätzung: string; taktiken: string[]; formulierungen: string[]; vossAnker: string };
+    await persistAiResult(id, "salary-tips", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {
     console.error("salary-tips error:", err);
@@ -2252,6 +2262,7 @@ app.post("/api/applications/:id/ai/salary-check", async (c) => {
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { lohnband: { min: number; max: number; median: number }; waehrung: string; basis: string; begruendung: string; faktoren: string[] };
+    await persistAiResult(id, "salary-check", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {
     console.error("salary-check error:", err);
@@ -2320,6 +2331,7 @@ app.post("/api/applications/:id/ai/ats-keywords", async (c) => {
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { mustHave: string[]; niceToHave: string[]; softSkills: string[]; tools: string[] };
+    await persistAiResult(id, "ats-keywords", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {
     console.error("ats-keywords error:", err);
@@ -2339,6 +2351,7 @@ app.post("/api/applications/:id/ai/company-research", async (c) => {
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { unternehmensueberblick: string; branche: string; marktposition: string; unternehmenskultur: string; wettbewerber: string[]; aktuelleThemen: string[]; gespraechsthemen: string[] };
+    await persistAiResult(id, "company-research", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {
     console.error("company-research error:", err);
@@ -2411,6 +2424,7 @@ app.post("/api/applications/:id/ai/ackermann-script", async (c) => {
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { zielgehalt: number; ankergebot: number; schritte: Array<{ runde: number; angebot: number; formulierung: string; taktik: string }>; nichtmonetaer: string[]; vossAnker: string };
+    await persistAiResult(id, "ackermann-script", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {
     console.error("ackermann-script error:", err);
@@ -2482,6 +2496,7 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { gesamteindruck: string; staerken: string[]; verbesserungen: string[]; cliches: string[]; tonalitaet: string; laenge: string; personalisierung: string };
+    await persistAiResult(id, "letter-review", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {
     console.error("letter-review error:", err);
@@ -2502,6 +2517,7 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { saetze: Array<{ satz: string; ansatz: string; erklaerung: string }> };
+    await persistAiResult(id, "opening-sentences", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {
     console.error("opening-sentences error:", err);
@@ -2521,6 +2537,7 @@ app.post("/api/applications/:id/ai/onboarding", async (c) => {
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { erste30Tage: string[]; erste60Tage: string[]; erste90Tage: string[]; allgemein: string[] };
+    await persistAiResult(id, "onboarding", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {
     console.error("onboarding error:", err);

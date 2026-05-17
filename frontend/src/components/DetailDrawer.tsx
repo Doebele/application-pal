@@ -746,6 +746,103 @@ function LinkedinCardDetail({ data, appId, onUpdate }: {
   );
 }
 
+// ─── Salary Band Chart ────────────────────────────────────────
+function SalaryBandChart({ min, max, median, desired, currency = "CHF" }: {
+  min: number; max: number; median: number; desired?: number | null; currency?: string;
+}) {
+  const range = max - min;
+  if (range <= 0) return null;
+  const pct = (v: number) => `${Math.max(0, Math.min(100, ((v - min) / range) * 100)).toFixed(2)}%`;
+  const fmt = (v: number) => `${currency} ${v.toLocaleString("de-CH")}`;
+  const desiredPct = desired != null ? pct(desired) : null;
+  const desiredInBand = desired != null && desired >= min && desired <= max;
+
+  return (
+    <div style={{ marginBottom: 16, userSelect: "none" }}>
+      {/* Labels above markers */}
+      <div style={{ position: "relative", height: 20, marginBottom: 2 }}>
+        <div style={{ position: "absolute", left: pct(median), transform: "translateX(-50%)", fontSize: 9, color: "var(--accent)", fontWeight: 700, whiteSpace: "nowrap" }}>
+          Median
+        </div>
+        {desiredPct && (
+          <div style={{
+            position: "absolute",
+            left: desiredInBand ? desiredPct : desired! < min ? "0%" : "100%",
+            transform: "translateX(-50%)",
+            fontSize: 9, color: "#f59e0b", fontWeight: 700, whiteSpace: "nowrap",
+          }}>
+            Wunsch
+          </div>
+        )}
+      </div>
+
+      {/* Band bar */}
+      <div style={{ position: "relative", height: 26, borderRadius: 6, background: "var(--surface-2)", border: "1px solid var(--border)", overflow: "hidden" }}>
+        {/* Band fill */}
+        <div style={{ position: "absolute", inset: 0, background: "var(--accent)", opacity: 0.18 }} />
+        {/* Median marker */}
+        <div style={{ position: "absolute", left: pct(median), top: 0, bottom: 0, width: 2, background: "var(--accent)", transform: "translateX(-50%)" }} />
+        {/* Desired salary marker */}
+        {desiredInBand && desiredPct && (
+          <div style={{ position: "absolute", left: desiredPct, top: 0, bottom: 0, width: 2, background: "#f59e0b", transform: "translateX(-50%)" }} />
+        )}
+      </div>
+
+      {/* Min / Median / Max labels */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 9, color: "var(--fg-3)" }}>
+        <span>{fmt(min)}</span>
+        <span style={{ color: "var(--accent)", fontWeight: 600 }}>{fmt(median)}</span>
+        <span>{fmt(max)}</span>
+      </div>
+
+      {/* Desired salary annotation */}
+      {desired != null && (
+        <div style={{ marginTop: 6, fontSize: 10, color: "#f59e0b", fontWeight: 500 }}>
+          Wunschgehalt: {fmt(desired)}
+          {desiredInBand && ` · ${desired <= median ? "unter" : "über"} Median`}
+          {!desiredInBand && (desired < min ? " · unter Bandminimum" : " · über Bandmaximum")}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Salary-check expanded detail — fetches profile for desired salary
+function SalaryCheckDetail({ data, appId }: { data: SalaryCheck; appId: string }) {
+  const { data: profile } = useQuery<{ desiredSalary?: string | null }>({
+    queryKey: ["profile"],
+    queryFn: () => api.get("/api/profile").then(r => r.data),
+  });
+  const sc = data;
+  const lb = sc.lohnband;
+  const desired = profile?.desiredSalary
+    ? parseInt(profile.desiredSalary.replace(/[^0-9]/g, ""), 10) || null : null;
+
+  return (
+    <>
+      {/* Salary Band Chart */}
+      {lb && <SalaryBandChart min={lb.min} max={lb.max} median={lb.median} desired={desired} currency={sc.waehrung ?? "CHF"} />}
+
+      {/* Min / Median / Max tiles */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+        {([
+          { label: "MINIMUM", val: lb?.min,    color: "#94a3b8" },
+          { label: "MEDIAN",  val: lb?.median, color: "var(--accent)" },
+          { label: "MAXIMUM", val: lb?.max,    color: "#34d399" },
+        ] as const).map(({ label, val, color }) => (
+          <div key={label} style={{ flex: 1, minWidth: 80, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>{label}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color }}>{val != null ? `${sc.waehrung ?? "CHF"} ${val.toLocaleString("de-CH")}` : "—"}</div>
+            <div style={{ fontSize: 9, color: "var(--fg-3)" }}>{sc.basis ?? "p.a."}</div>
+          </div>
+        ))}
+      </div>
+      {sc.begruendung && <AiSection title="Begründung"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{sc.begruendung}</div></AiSection>}
+      {sc.faktoren?.length > 0 && <AiSection title="Einflussfaktoren"><div>{sc.faktoren.map((f, i) => <TagBadge key={i} text={f} />)}</div></AiSection>}
+    </>
+  );
+}
+
 function AiResultDetail({ id, data, appId, onUpdate }: {
   id: string; data: unknown; appId: string; onUpdate?: (id: string, data: unknown) => void;
 }) {
@@ -759,27 +856,7 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
     return <LinkedinCardDetail data={data as LinkedinData} appId={appId} onUpdate={v => onUpdate?.(id, v)} />;
   }
   if (id === "salary-check") {
-    const sc = data as SalaryCheck;
-    const lb = sc.lohnband ?? {};
-    return (
-      <>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          {([
-            { label: "MINIMUM",  val: lb.min,    color: "#94a3b8" },
-            { label: "MEDIAN",   val: lb.median, color: "var(--accent)" },
-            { label: "MAXIMUM",  val: lb.max,    color: "#34d399" },
-          ] as const).map(({ label, val, color }) => (
-            <div key={label} style={{ flex: 1, minWidth: 80, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
-              <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>{label}</div>
-              <div style={{ fontSize: 16, fontWeight: 700, color }}>{val != null ? `${sc.waehrung ?? "CHF"} ${val.toLocaleString("de-CH")}` : "—"}</div>
-              <div style={{ fontSize: 9, color: "var(--fg-3)" }}>{sc.basis ?? "p.a."}</div>
-            </div>
-          ))}
-        </div>
-        {sc.begruendung && <AiSection title="Begründung"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{sc.begruendung}</div></AiSection>}
-        {sc.faktoren?.length > 0 && <AiSection title="Einflussfaktoren"><div>{sc.faktoren.map((f, i) => <TagBadge key={i} text={f} />)}</div></AiSection>}
-      </>
-    );
+    return <SalaryCheckDetail data={data as SalaryCheck} appId={appId} />;
   }
   if (id === "ats-keywords") {
     const kw = data as AtsKeywords;
@@ -2117,9 +2194,26 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
     }
     const raw = app.stage === "interview_1" ? app.interview1Prep : app.stage === "interview_2" ? app.interview2Prep : null;
     if (raw) { try { JSON.parse(raw); init["interview-prep"] = new Date(); } catch {} }
+    // Load timestamps from cache
+    const cache = (app as Application & { aiResultsCache?: string }).aiResultsCache;
+    if (cache) {
+      try {
+        const parsed = JSON.parse(cache) as Record<string, { _savedAt?: string }>;
+        for (const [key, entry] of Object.entries(parsed)) {
+          if (!init[key] && entry._savedAt) init[key] = new Date(entry._savedAt);
+        }
+      } catch {}
+    }
     return init;
   });
-  const [cvHighlights, setCvHighlights] = useState<CvHighlights | null>(null);
+  const [cvHighlights, setCvHighlights] = useState<CvHighlights | null>(() => {
+    try {
+      const cache = (app as Application & { aiResultsCache?: string }).aiResultsCache;
+      if (!cache) return null;
+      const parsed = JSON.parse(cache) as Record<string, unknown>;
+      return parsed["cv-highlights"] ? parsed["cv-highlights"] as CvHighlights : null;
+    } catch { return null; }
+  });
 
   const [interviewPrep, setInterviewPrep] = useState<InterviewPrep | null>(() => {
     const raw = stage === "interview_1" ? app.interview1Prep
@@ -3957,6 +4051,18 @@ export function DetailDrawer({ app, onClose }: Props) {
     }
     const prep = app.stage === "interview_1" ? app.interview1Prep : app.stage === "interview_2" ? app.interview2Prep : null;
     if (prep) { try { init["interview-prep"] = { data: JSON.parse(prep), createdAt: new Date() }; } catch {} }
+    // Load all other AI results from cache
+    const cache = (app as Application & { aiResultsCache?: string }).aiResultsCache;
+    if (cache) {
+      try {
+        const parsed = JSON.parse(cache) as Record<string, Record<string, unknown> & { _savedAt?: string }>;
+        for (const [key, entry] of Object.entries(parsed)) {
+          if (!init[key]) { // don't overwrite individually-stored entries
+            init[key] = { data: entry, createdAt: entry._savedAt ? new Date(entry._savedAt) : new Date() };
+          }
+        }
+      } catch {}
+    }
     return init;
   });
   const registerAiResult = useCallback((id: string, data: unknown) => {
