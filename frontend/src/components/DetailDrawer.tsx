@@ -1509,10 +1509,6 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
 
   return (
     <div style={{ marginBottom: 20 }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 10 }}>
-        Aktionen
-      </div>
-
       {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8 }}>{err}</div>}
 
       {/* Inbox Phase */}
@@ -1723,7 +1719,7 @@ function TaskChecklist({ app }: { app: Application }) {
                 width: 16, height: 16, flexShrink: 0, cursor: "pointer",
                 background: "none", border: "none", padding: 0,
                 display: "flex", alignItems: "flex-end", justifyContent: "center",
-                borderBottom: `1.5px solid ${t.done ? "#34d399" : "var(--border-strong)"}`,
+                borderBottom: `1.5px solid ${t.done ? "#34d399" : "var(--border)"}`,
                 transition: "border-color 0.15s"
               }}>
               {t.done && <Check width={10} height={10} style={{ color: "#34d399", marginBottom: 1 }} />}
@@ -1740,7 +1736,7 @@ function TaskChecklist({ app }: { app: Application }) {
         {/* Inline add */}
         {showAdd && (
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 0" }}>
-            <div style={{ width: 16, height: 16, flexShrink: 0, borderBottom: "1.5px solid var(--border-strong)" }} />
+            <div style={{ width: 16, height: 16, flexShrink: 0, borderBottom: "1.5px solid var(--border)" }} />
             <input
               ref={inputRef}
               value={addText}
