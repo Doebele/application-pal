@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
-import { Settings, Plus, Check } from "iconoir-react";
+import { Settings, Plus, Check, ViewGrid, List, NavArrowUp, NavArrowDown } from "iconoir-react";
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
@@ -201,10 +201,162 @@ function ArchiveFilterDropdown({
   );
 }
 
+// ─── Archive columns (by rejection reason) ────────────────────
+const ARCHIVE_COLS = [
+  { id: "unavailable", color: "#f87171" },
+  { id: "irrelevant",  color: "#fbbf24" },
+  { id: "taken",       color: "#94a3b8" },
+  { id: "other",       color: "#8896a8" },
+  { id: "_none",       color: "#535e6b", label: "Kein Grund" },
+] as const;
+
+function ArchiveCard({ app, onClick }: { app: Application; onClick: () => void }) {
+  const score = app.matchScore;
+  return (
+    <div
+      onClick={onClick}
+      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", marginBottom: 6, transition: "border-color 0.12s" }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = "rgba(59,130,246,0.35)")}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
+    >
+      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.role}</div>
+      <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 6 }}>{app.company}</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <span style={{ fontSize: 9, color: "var(--fg-4)", fontFamily: "var(--font-mono)" }}>
+          {new Date(app.createdAt).toLocaleDateString("de-CH")}
+        </span>
+        {score != null && (
+          <span style={{
+            padding: "1px 6px", borderRadius: 999, fontSize: 10, fontWeight: 700, fontFamily: "var(--font-mono)",
+            background: score >= 75 ? "rgba(52,211,153,0.15)" : score >= 50 ? "rgba(251,191,36,0.15)" : "rgba(248,113,113,0.15)",
+            color: score >= 75 ? "#34d399" : score >= 50 ? "#fbbf24" : "#f87171",
+          }}>{score}%</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ArchiveKanban({ applications, onCardClick }: { applications: Application[]; onCardClick: (id: string) => void }) {
+  return (
+    <div style={{ display: "flex", gap: 12, padding: "16px 20px", overflowX: "auto", alignItems: "flex-start", flex: 1 }}>
+      {ARCHIVE_COLS.map(col => {
+        const apps = applications.filter(a =>
+          col.id === "_none" ? !a.archiveReason : a.archiveReason === col.id
+        );
+        const label = col.id === "_none" ? col.label : (ARCHIVE_REASON_LABELS[col.id] ?? col.id);
+        return (
+          <div key={col.id} style={{ width: 248, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "0 2px" }}>
+              <div style={{ width: 8, height: 8, borderRadius: 2, background: col.color, flexShrink: 0 }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)", flex: 1 }}>{label}</span>
+              <span style={{ fontSize: 10, color: "var(--fg-4)", fontFamily: "var(--font-mono)" }}>{apps.length}</span>
+            </div>
+            {apps.map(app => <ArchiveCard key={app.id} app={app} onClick={() => onCardClick(app.id)} />)}
+            {apps.length === 0 && (
+              <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "20px 12px", textAlign: "center", fontSize: 11, color: "var(--fg-4)" }}>
+                Keine Einträge
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+type ArchiveSortKey = "role" | "createdAt" | "company" | "reason" | "score";
+
+function ArchiveTable({ applications, onRowClick }: { applications: Application[]; onRowClick: (id: string) => void }) {
+  const [sortKey, setSortKey] = useState<ArchiveSortKey>("createdAt");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+
+  const toggleSort = (key: ArchiveSortKey) => {
+    if (sortKey === key) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortKey(key); setSortDir("asc"); }
+  };
+
+  const sorted = [...applications].sort((a, b) => {
+    let va: string | number, vb: string | number;
+    switch (sortKey) {
+      case "role":      va = a.role ?? ""; vb = b.role ?? ""; break;
+      case "company":   va = a.company ?? ""; vb = b.company ?? ""; break;
+      case "reason":    va = a.archiveReason ?? ""; vb = b.archiveReason ?? ""; break;
+      case "score":     va = a.matchScore ?? -1; vb = b.matchScore ?? -1; break;
+      case "createdAt": va = new Date(a.createdAt).getTime(); vb = new Date(b.createdAt).getTime(); break;
+      default: va = ""; vb = "";
+    }
+    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
+    return sortDir === "asc" ? cmp : -cmp;
+  });
+
+  const SortIcon = ({ k }: { k: ArchiveSortKey }) => sortKey !== k ? null : (
+    sortDir === "asc"
+      ? <NavArrowUp  width={9} height={9} style={{ flexShrink: 0, color: "var(--accent)" }} />
+      : <NavArrowDown width={9} height={9} style={{ flexShrink: 0, color: "var(--accent)" }} />
+  );
+
+  const cols: { key: ArchiveSortKey; label: string; flex: number }[] = [
+    { key: "role",      label: "Name",             flex: 3 },
+    { key: "createdAt", label: "Erstellt",          flex: 2 },
+    { key: "company",   label: "Unternehmen",       flex: 2 },
+    { key: "reason",    label: "Ablehnungsgrund",   flex: 2 },
+    { key: "score",     label: "Match",             flex: 1 },
+  ];
+
+  return (
+    <div style={{ padding: "0 20px 20px", flex: 1, overflow: "auto" }}>
+      {/* Header */}
+      <div style={{ display: "flex", gap: 12, padding: "8px 12px", borderBottom: "1px solid var(--border)", marginBottom: 2, position: "sticky", top: 0, background: "var(--bg)", zIndex: 1 }}>
+        {cols.map(col => (
+          <div
+            key={col.key}
+            onClick={() => toggleSort(col.key)}
+            style={{ flex: col.flex, display: "flex", alignItems: "center", gap: 4, cursor: "pointer", userSelect: "none",
+              fontSize: 9, fontWeight: 700, color: sortKey === col.key ? "var(--accent)" : "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}
+          >
+            {col.label} <SortIcon k={col.key} />
+          </div>
+        ))}
+      </div>
+      {/* Rows */}
+      {sorted.map(app => (
+        <div
+          key={app.id}
+          onClick={() => onRowClick(app.id)}
+          style={{ display: "flex", gap: 12, padding: "9px 12px", borderRadius: 6, cursor: "pointer", borderBottom: "1px solid var(--border-2)" }}
+          onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
+          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+        >
+          <div style={{ flex: 3, fontSize: 12, fontWeight: 600, color: "var(--fg-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.role}</div>
+          <div style={{ flex: 2, fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font-mono)" }}>{new Date(app.createdAt).toLocaleDateString("de-CH")}</div>
+          <div style={{ flex: 2, fontSize: 11, color: "var(--fg-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.company}</div>
+          <div style={{ flex: 2, fontSize: 11, color: "var(--fg-3)" }}>
+            {app.archiveReason ? (ARCHIVE_REASON_LABELS[app.archiveReason] ?? app.archiveReason) : "—"}
+          </div>
+          <div style={{ flex: 1 }}>
+            {app.matchScore != null && (
+              <span style={{
+                padding: "1px 7px", borderRadius: 999, fontSize: 10, fontWeight: 700, fontFamily: "var(--font-mono)",
+                background: app.matchScore >= 75 ? "rgba(52,211,153,0.15)" : app.matchScore >= 50 ? "rgba(251,191,36,0.15)" : "rgba(248,113,113,0.15)",
+                color: app.matchScore >= 75 ? "#34d399" : app.matchScore >= 50 ? "#fbbf24" : "#f87171",
+              }}>{app.matchScore}%</span>
+            )}
+          </div>
+        </div>
+      ))}
+      {sorted.length === 0 && (
+        <div style={{ textAlign: "center", padding: "56px 0", fontSize: 13, color: "var(--fg-3)" }}>Keine archivierten Bewerbungen</div>
+      )}
+    </div>
+  );
+}
+
 export function BoardPage() {
   const { cardVariant, isImportModalOpen, setImportModalOpen, selectedApplicationId, setSelectedApplicationId } = useUiStore();
   const [searchParams] = useSearchParams();
   const showArchived = searchParams.get("archive") === "true";
+  const [archiveView, setArchiveView] = useState<"kanban" | "table">("table");
 
   // Main board filters
   const [visibleStages, setVisibleStages] = useState<string[]>([]);
@@ -251,6 +403,30 @@ export function BoardPage() {
 
   const headerActions = (
     <>
+      {/* Archive view toggle */}
+      {showArchived && (
+        <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", borderRadius: 6, padding: 2 }}>
+          <button
+            onClick={() => setArchiveView("kanban")}
+            title="Kanban-Ansicht"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 4, border: "none", cursor: "pointer",
+              background: archiveView === "kanban" ? "var(--surface)" : "transparent",
+              color: archiveView === "kanban" ? "var(--fg-1)" : "var(--fg-3)" }}
+          >
+            <ViewGrid width={13} height={13} />
+          </button>
+          <button
+            onClick={() => setArchiveView("table")}
+            title="Tabellen-Ansicht"
+            style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 4, border: "none", cursor: "pointer",
+              background: archiveView === "table" ? "var(--surface)" : "transparent",
+              color: archiveView === "table" ? "var(--fg-1)" : "var(--fg-3)" }}
+          >
+            <List width={13} height={13} />
+          </button>
+        </div>
+      )}
+
       {/* Filter button — works for both board and archive */}
       <div ref={showArchived ? archiveFilterRef : filterRef} style={{ position: "relative" }}>
         <button
@@ -306,12 +482,18 @@ export function BoardPage() {
         sub={`${applications.length} ${showArchived ? "archivierte" : ""} Bewerbungen`}
         actions={headerActions}
       />
-      <Board
-        applications={applications}
-        cardVariant={cardVariant}
-        onCardClick={(id) => setSelectedApplicationId(id)}
-        visibleStages={showArchived ? undefined : (visibleStages.length > 0 ? visibleStages : undefined)}
-      />
+      {showArchived ? (
+        archiveView === "kanban"
+          ? <ArchiveKanban applications={applications} onCardClick={setSelectedApplicationId} />
+          : <ArchiveTable  applications={applications} onRowClick={setSelectedApplicationId} />
+      ) : (
+        <Board
+          applications={applications}
+          cardVariant={cardVariant}
+          onCardClick={(id) => setSelectedApplicationId(id)}
+          visibleStages={visibleStages.length > 0 ? visibleStages : undefined}
+        />
+      )}
       {isImportModalOpen && !showArchived && (
         <ImportDrawer onClose={() => setImportModalOpen(false)} />
       )}
