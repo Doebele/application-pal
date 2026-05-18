@@ -1018,12 +1018,12 @@ function renderTileContent(id: string, data: unknown): React.ReactNode {
     const stars  = rating != null ? "★".repeat(Math.round(rating)) + "☆".repeat(5 - Math.round(rating)) : null;
     const reviews = d.reviewCount as number | null;
     return (
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 1, width: "100%" }}>
-        <span style={{ fontSize: 26, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: "100%" }}>
+        <span style={{ fontSize: 44, fontWeight: 800, color: "var(--fg-2)", lineHeight: 1, letterSpacing: "-0.03em", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
           {rating != null ? rating.toFixed(1) : "—"}
         </span>
-        {stars && <span style={{ fontSize: 10, color: "#fbbf24", lineHeight: 1 }}>{stars}</span>}
-        {reviews && <span style={{ fontSize: 9, color: "var(--fg-4)" }}>~{reviews} Reviews</span>}
+        {stars && <span style={{ fontSize: 14, color: "#4ade80", lineHeight: 1, letterSpacing: 2 }}>{stars}</span>}
+        {reviews && <span style={{ fontSize: 9, color: "var(--fg-4)", marginTop: 2 }}>~{reviews} Reviews</span>}
       </div>
     );
   }
@@ -1137,32 +1137,60 @@ function renderTileContent(id: string, data: unknown): React.ReactNode {
   return null;
 }
 
+const TILE_EMPTY_LABELS: Record<string, string> = {
+  "glassdoor-check":   "Bewertung ermitteln",
+  "kununu-check":      "Bewertung ermitteln",
+  "linkedin-profile":  "Profil ermitteln",
+  "salary-check":      "Lohnband berechnen",
+  "ats-keywords":      "Keywords extrahieren",
+  "cv-highlights":     "CV analysieren",
+  "interview-prep":    "Vorbereitung generieren",
+  "company-research":  "Recherche starten",
+  "ackermann-script":  "Script generieren",
+  "letter-review":     "Review starten",
+  "opening-sentences": "Sätze generieren",
+  "onboarding":        "Checkliste erstellen",
+  "salary-tips":       "Tipps generieren",
+};
+
 function AiResultTile({ id, entry, onExpand }: {
   id: string;
-  entry: { data: unknown; createdAt: Date };
+  entry: { data: unknown; createdAt: Date } | null;
   onExpand: () => void;
 }) {
   const label    = AI_RESULT_LABELS[id] ?? id;
   const isDouble = DOUBLE_WIDTH_IDS.has(id);
-  const content  = renderTileContent(id, entry.data);
+  const content  = entry ? renderTileContent(id, entry.data) : null;
+  const hasData  = !!content;
 
   return (
     <button onClick={onExpand} style={{
       gridColumn: isDouble ? "span 2" : undefined,
-      display: "flex", flexDirection: "column",
-      padding: "10px 12px", borderRadius: 8,
+      position: "relative",
+      display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "12px 12px 14px", borderRadius: 12, minHeight: 120,
       border: "1px solid var(--border)", background: "var(--surface)",
-      cursor: "pointer", textAlign: "left", fontFamily: "var(--font-sans)",
+      cursor: "pointer", fontFamily: "var(--font-sans)",
     }}>
-      {/* Label-Zeile */}
-      <div style={{ display: "flex", alignItems: "center", gap: 5, width: "100%", flexShrink: 0, marginBottom: 8 }}>
-        <Check width={9} height={9} style={{ color: "#4ade80", flexShrink: 0 }} />
-        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-2)", flex: 1, textAlign: "left" }}>{label}</span>
-        <NavArrowRight width={9} height={9} style={{ color: "var(--fg-4)", flexShrink: 0 }} />
+      {/* Label zentriert oben */}
+      <span style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 10, lineHeight: 1, textAlign: "center" }}>
+        {label}
+      </span>
+      {/* Expand-Icon oben-rechts — immer sichtbar, Accent-Farbe */}
+      <div style={{ position: "absolute", top: 8, right: 8, color: "var(--accent)", display: "flex" }}>
+        <Expand width={13} height={13} />
       </div>
-      {/* Hauptinhalt — 2–3 wichtigste Infos */}
-      <div style={{ width: "100%", display: "flex", alignItems: isDouble ? "flex-start" : "center" }}>
-        {content}
+      {/* Hauptinhalt — mit oder ohne Daten */}
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 64 }}>
+        {hasData ? (
+          <div style={{ display: "flex", alignItems: isDouble ? "flex-start" : "center", justifyContent: "center", width: "100%" }}>
+            {content}
+          </div>
+        ) : (
+          <span style={{ fontSize: 12, color: "var(--fg-3)", fontWeight: 500, textAlign: "center", lineHeight: 1.4, padding: "0 4px" }}>
+            {TILE_EMPTY_LABELS[id] ?? "Analyse starten"}
+          </span>
+        )}
       </div>
     </button>
   );
@@ -1193,39 +1221,60 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResul
     display: "flex", flexDirection: "column", overflow: "hidden",
   };
 
-  const resultEntries = Object.entries(aiResults ?? {}).filter(([, v]) => v?.data);
-  const expandedEntry = expandedResultId ? aiResults?.[expandedResultId] : null;
+  const STAGE_TILES: Record<string, string[]> = {
+    import_validating: ["glassdoor-check","kununu-check","linkedin-profile","salary-check","ats-keywords"],
+    preparing_cv:      ["cv-highlights"],
+    preparing_letter:  ["letter-review","opening-sentences"],
+    application_sent:  ["company-research","salary-tips"],
+    pending:           ["company-research","ackermann-script","salary-tips"],
+    interview_1:       ["interview-prep","salary-tips"],
+    interview_2:       ["interview-prep","salary-tips"],
+    rejected:          [],
+    accepted:          ["onboarding"],
+  };
+
+  const stageTileIds = STAGE_TILES[app.stage] ?? [];
+  // Merge: stage-tiles (immer sichtbar) + weitere bereits generierte Ergebnisse anderer Phasen
+  const tileIds = [...new Set([
+    ...stageTileIds,
+    ...Object.keys(aiResults ?? {}).filter(k => aiResults?.[k]?.data),
+  ])];
+  const tileEntries: [string, { data: unknown; createdAt: Date } | null][] =
+    tileIds.map(id => [id, aiResults?.[id] ?? null]);
+
+  const expandedEntry = expandedResultId ? (aiResults?.[expandedResultId] ?? null) : null;
 
   return (
     <>
       {/* Übersicht-Inhalt */}
       <OverviewTab app={app} stage={stage} url={url} onUrlChange={onUrlChange} onSave={onSave} />
 
-      {/* KI-Erkenntnisse — Grid aus Kacheln */}
-      {resultEntries.length > 0 && (
+      {/* KI-Erkenntnisse — Grid aus Kacheln (immer sichtbar für stage-relevante Aktionen) */}
+      {tileEntries.length > 0 && (
         <div style={{ marginTop: 16, marginBottom: 8 }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
             KI-Erkenntnisse
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gridAutoFlow: "dense", gap: 6 }}>
-            {resultEntries.map(([id, entry]) => (
+            {tileEntries.map(([id, entry]) => (
               <AiResultTile key={id} id={id} entry={entry} onExpand={() => setExpandedResultId(id)} />
             ))}
           </div>
         </div>
       )}
 
-      {/* Vollbild-Expand für einzelnes KI-Ergebnis */}
-      {expandedEntry && expandedResultId && (
+      {/* Vollbild-Expand — auch für leere Kacheln */}
+      {expandedResultId && (
         <div style={{ ...expandStyle, overflow: "auto" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexShrink: 0 }}>
-            <Check width={10} height={10} style={{ color: "#4ade80" }} />
             <span style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>
               {AI_RESULT_LABELS[expandedResultId] ?? expandedResultId}
             </span>
-            <span style={{ fontSize: 10, color: "var(--fg-4)" }}>
-              {expandedEntry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-            </span>
+            {expandedEntry && (
+              <span style={{ fontSize: 10, color: "var(--fg-4)" }}>
+                {expandedEntry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
             <div style={{ flex: 1 }} />
             <button onClick={() => setExpandedResultId(null)} title="Schliessen"
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
@@ -1233,12 +1282,24 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResul
             </button>
           </div>
           <div style={{ flex: 1, overflow: "auto" }}>
-            <AiResultDetail
-              id={expandedResultId}
-              data={expandedEntry.data}
-              appId={app.id}
-              onUpdate={onAiResultUpdate}
-            />
+            {expandedEntry ? (
+              <AiResultDetail
+                id={expandedResultId}
+                data={expandedEntry.data}
+                appId={app.id}
+                onUpdate={onAiResultUpdate}
+              />
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60%", gap: 12, color: "var(--fg-3)" }}>
+                <Expand width={28} height={28} style={{ opacity: 0.3 }} />
+                <div style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-2)" }}>
+                  {TILE_EMPTY_LABELS[expandedResultId] ?? "Analyse starten"}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--fg-3)", textAlign: "center", maxWidth: 260, lineHeight: 1.5 }}>
+                  Wechsle zum <strong>Aktionen-Tab</strong> und klicke auf die entsprechende Schaltfläche, um diese Auswertung zu starten.
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
