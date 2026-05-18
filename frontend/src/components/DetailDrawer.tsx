@@ -627,73 +627,19 @@ function GlassdoorCardDetail({ data, appId, onUpdate }: {
   );
 }
 
-function KununuCardDetail({ data, appId, onUpdate }: {
-  data: KununuData; appId: string; onUpdate: (v: KununuData) => void;
-}) {
-  const [editRating,      setEditRating]      = useState(data.rating?.toString() ?? "");
-  const [editReviewCount, setEditReviewCount] = useState(data.reviewCount?.toString() ?? "");
-  const [editUrl,         setEditUrl]         = useState(data.url ?? "");
-  const [saving,          setSaving]          = useState(false);
-  const stars = data.rating ? "★".repeat(Math.round(data.rating)) + "☆".repeat(5 - Math.round(data.rating)) : null;
+function KununuCardDetail({ data }: { data: KununuData }) {
   const confidenceColor = data.confidence === "hoch" ? "#34d399" : data.confidence === "mittel" ? "#fbbf24" : "#f87171";
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const r = await api.patch<KununuData>(`/api/applications/${appId}/ai/kununu-check`, {
-        rating: editRating ? parseFloat(editRating) : null,
-        reviewCount: editReviewCount ? parseInt(editReviewCount, 10) : null,
-        url: editUrl || undefined,
-      });
-      onUpdate(r.data);
-    } finally { setSaving(false); }
-  };
-
   return (
     <>
-      <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 100, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
-          <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>KUNUNU</div>
-          {data.rating != null
-            ? <><div style={{ fontSize: 24, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{data.rating.toFixed(1)}</div>
-               <div style={{ fontSize: 10, color: "#fbbf24", marginTop: 2 }}>{stars}</div>
-               {data.reviewCount && <div style={{ fontSize: 9, color: "var(--fg-3)", marginTop: 2 }}>~{data.reviewCount} Bewertungen</div>}</>
-            : <div style={{ fontSize: 11, color: "var(--fg-3)" }}>—</div>}
-        </div>
-      </div>
-      {data.summary && <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 10 }}>{data.summary}</div>}
+      {data.summary && <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 12 }}>{data.summary}</div>}
       {data.url && (
         <a href={data.url} target="_blank" rel="noopener noreferrer" className="btn btn-ghost" style={{ fontSize: 10, gap: 4, textDecoration: "none", marginBottom: 12, display: "inline-flex" }}>
           <OpenNewWindow width={10} height={10} /> Kununu öffnen
         </a>
       )}
-      <div style={{ borderTop: "1px solid var(--border)", paddingTop: 10 }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 8 }}>Manuell korrigieren</div>
-        <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 8 }}>
-          <div>
-            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Rating (1–5)</div>
-            <input type="number" step="0.1" min="1" max="5" value={editRating} onChange={e => setEditRating(e.target.value)}
-              style={{ width: 70, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
-          </div>
-          <div>
-            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Anzahl Bewertungen</div>
-            <input type="number" min="0" value={editReviewCount} onChange={e => setEditReviewCount(e.target.value)}
-              style={{ width: 90, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 12, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
-          </div>
-        </div>
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>Kununu-URL</div>
-          <input type="url" value={editUrl} onChange={e => setEditUrl(e.target.value)} placeholder="https://www.kununu.com/de/..."
-            style={{ width: "100%", boxSizing: "border-box", background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 11, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
-        </div>
-        <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={save} disabled={saving}>
-          {saving ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : "Speichern"}
-        </button>
-        <div style={{ marginTop: 8, fontSize: 10, color: "var(--fg-3)" }}>
-          <span style={{ color: confidenceColor, fontWeight: 600 }}>Konfidenz: {data.confidence}</span>
-          {data.manuallyEdited && <span style={{ color: "var(--accent)" }}> · manuell bearbeitet</span>}
-          {data.hinweis && <span> · {data.hinweis}</span>}
-        </div>
+      <div style={{ fontSize: 10, color: "var(--fg-3)" }}>
+        <span style={{ color: confidenceColor, fontWeight: 600 }}>Konfidenz: {data.confidence}</span>
+        {data.hinweis && <span> · {data.hinweis}</span>}
       </div>
     </>
   );
@@ -850,7 +796,7 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
     return <GlassdoorCardDetail data={data as GlassdoorData} appId={appId} onUpdate={v => onUpdate?.(id, v)} />;
   }
   if (id === "kununu-check") {
-    return <KununuCardDetail data={data as KununuData} appId={appId} onUpdate={v => onUpdate?.(id, v)} />;
+    return <KununuCardDetail data={data as KununuData} />;
   }
   if (id === "linkedin-profile") {
     return <LinkedinCardDetail data={data as LinkedinData} appId={appId} onUpdate={v => onUpdate?.(id, v)} />;
@@ -1196,6 +1142,149 @@ function AiResultTile({ id, entry, onExpand }: {
   );
 }
 
+// ─── Large tile (2× scale) for expand right column ───────────
+function renderTileContentLarge(id: string, data: unknown): React.ReactNode {
+  const d = data as Record<string, unknown>;
+  if (id === "glassdoor-check" || id === "kununu-check") {
+    const rating  = d.rating as number | null;
+    const stars   = rating != null ? "★".repeat(Math.round(rating)) + "☆".repeat(5 - Math.round(rating)) : null;
+    const reviews = d.reviewCount as number | null;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, width: "100%" }}>
+        <span style={{ fontSize: 72, fontWeight: 800, color: "var(--fg-2)", lineHeight: 1, letterSpacing: "-0.04em", fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
+          {rating != null ? rating.toFixed(1) : "—"}
+        </span>
+        {stars && <span style={{ fontSize: 22, color: "#4ade80", lineHeight: 1, letterSpacing: 3 }}>{stars}</span>}
+        {reviews && <span style={{ fontSize: 12, color: "var(--fg-4)", marginTop: 2 }}>~{reviews} {id === "kununu-check" ? "Bewertungen" : "Reviews"}</span>}
+      </div>
+    );
+  }
+  if (id === "linkedin-profile") {
+    const emp = d.employeeCount as string | undefined;
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+        {emp && <span style={{ fontSize: 26, fontWeight: 800, color: "var(--accent)" }}>{emp}</span>}
+        <span style={{ fontSize: 13, color: "var(--fg-4)" }}>Mitarbeitende</span>
+      </div>
+    );
+  }
+  if (id === "salary-check") {
+    const lb = d.lohnband as { min?: number; max?: number; median?: number } | undefined;
+    const w  = (d.waehrung as string | undefined) ?? "CHF";
+    if (!lb) return null;
+    return (
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "var(--fg-1)", letterSpacing: "-0.02em" }}>
+          {w} {lb.min?.toLocaleString("de-CH")} – {lb.max?.toLocaleString("de-CH")}
+        </div>
+        <div style={{ fontSize: 14, color: "var(--fg-3)", marginTop: 4 }}>Median {lb.median?.toLocaleString("de-CH")}</div>
+      </div>
+    );
+  }
+  if (id === "cv-highlights") {
+    const h = (d.highlights as string[] | undefined ?? []).length;
+    const k = (d.keywords as string[] | undefined ?? []).length;
+    return (
+      <div style={{ display: "flex", gap: 24 }}>
+        {[{ val: h, label: "Stärken", color: "#34d399" }, { val: k, label: "Keywords", color: "var(--accent)" }].map(({ val, label, color }) => (
+          <div key={label} style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 40, fontWeight: 800, color, lineHeight: 1 }}>{val}</div>
+            <div style={{ fontSize: 11, color: "var(--fg-4)", marginTop: 4 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (id === "interview-prep") {
+    const q = (d.rollenFragen as string[] | undefined ?? []).length;
+    const s = (d.starBeispiele as unknown[] | undefined ?? []).length;
+    const v = (d.vossFragenWhatHow as string[] | undefined ?? []).length;
+    return (
+      <div style={{ display: "flex", gap: 16 }}>
+        {[{ val: q, label: "Fragen", color: "var(--accent)" }, { val: s, label: "STAR", color: "#34d399" }, { val: v, label: "Voss", color: "#fbbf24" }].map(({ val, label, color }) => (
+          <div key={label} style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 32, fontWeight: 800, color, lineHeight: 1 }}>{val}</div>
+            <div style={{ fontSize: 10, color: "var(--fg-4)", marginTop: 4 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (id === "onboarding") {
+    const t = (d.erste30Tage as string[] | undefined ?? []).length +
+              (d.erste60Tage as string[] | undefined ?? []).length +
+              (d.erste90Tage as string[] | undefined ?? []).length;
+    return (
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 56, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{t}</div>
+        <div style={{ fontSize: 13, color: "var(--fg-4)", marginTop: 6 }}>Punkte</div>
+      </div>
+    );
+  }
+  if (id === "ackermann-script") {
+    const ziel  = d.zielgehalt as number | undefined;
+    const anker = d.ankergebot as number | undefined;
+    return (
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{ziel?.toLocaleString("de-CH") ?? "—"}</div>
+        <div style={{ fontSize: 11, color: "var(--fg-4)", margin: "4px 0 10px" }}>Zielgehalt</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: "#34d399" }}>{anker?.toLocaleString("de-CH") ?? "—"}</div>
+        <div style={{ fontSize: 11, color: "var(--fg-4)", marginTop: 2 }}>Anker</div>
+      </div>
+    );
+  }
+  // text tiles — show first ~80 chars
+  const textMap: Record<string, string> = {
+    "salary-tips":      (d["markteinschätzung"] as string | undefined) ?? "",
+    "company-research": (d.unternehmensueberblick as string | undefined) ?? "",
+    "letter-review":    (d.gesamteindruck as string | undefined) ?? "",
+  };
+  if (id in textMap) {
+    const text = textMap[id].slice(0, 80);
+    return <span style={{ fontSize: 13, color: "var(--fg-2)", lineHeight: 1.5, textAlign: "center" }}>{text}{textMap[id].length > 80 ? "…" : ""}</span>;
+  }
+  if (id === "ats-keywords") {
+    const kws = (d.mustHave as string[] | undefined) ?? [];
+    return (
+      <div style={{ lineHeight: 2.2, textAlign: "center" }}>
+        {kws.slice(0, 4).map((k, i) => (
+          <span key={i} style={{ display: "inline-block", padding: "3px 10px", borderRadius: 4, margin: "2px 3px", fontSize: 12, fontWeight: 600, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--accent)" }}>{k}</span>
+        ))}
+        {kws.length > 4 && <span style={{ fontSize: 11, color: "var(--fg-4)" }}> +{kws.length - 4}</span>}
+      </div>
+    );
+  }
+  if (id === "opening-sentences") {
+    const saetze = d.saetze as Array<{ satz: string }> | undefined;
+    const first = (saetze?.[0]?.satz ?? "").slice(0, 80);
+    return <span style={{ fontSize: 12, color: "var(--fg-2)", fontStyle: "italic", lineHeight: 1.5, textAlign: "center" }}>„{first}…"</span>;
+  }
+  return null;
+}
+
+function AiResultTileLarge({ id, entry }: { id: string; entry: { data: unknown } | null }) {
+  const label   = AI_RESULT_LABELS[id] ?? id;
+  const content = entry ? renderTileContentLarge(id, entry.data) : null;
+  return (
+    <div style={{
+      display: "flex", flexDirection: "column", alignItems: "center",
+      padding: "20px 16px 22px", borderRadius: 16, height: "100%",
+      border: "1px solid var(--border)", background: "var(--surface)",
+    }}>
+      <span style={{ fontSize: 14, color: "var(--fg-3)", marginBottom: 16, lineHeight: 1, textAlign: "center" }}>
+        {label}
+      </span>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
+        {content ?? (
+          <span style={{ fontSize: 14, color: "var(--fg-3)", fontWeight: 500, textAlign: "center", lineHeight: 1.4 }}>
+            {TILE_EMPTY_LABELS[id] ?? "—"}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Endpoint map for direct execution from expand view
 const ACTION_ENDPOINTS: Record<string, string> = {
   "glassdoor-check":   "/ai/glassdoor-check",
@@ -1249,7 +1338,7 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
   const ts = entry?.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 
   return (
-    <div style={{ ...expandStyle, overflow: "auto" }}>
+    <div style={{ ...expandStyle, overflow: "hidden" }}>
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexShrink: 0 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>
@@ -1257,7 +1346,6 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
         </span>
         {ts && <span style={{ fontSize: 10, color: "var(--fg-4)" }}>{ts}</span>}
         <div style={{ flex: 1 }} />
-        {/* Run / Update button */}
         {ACTION_ENDPOINTS[id] && (
           <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={running} onClick={run}>
             {running
@@ -1273,18 +1361,27 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
         </button>
       </div>
       {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, flexShrink: 0 }}>{err}</div>}
-      {/* Content */}
-      <div style={{ flex: 1, overflow: "auto" }}>
-        {hasData ? (
-          <AiResultDetail id={id} data={entry.data} appId={appId} onUpdate={onRegister} />
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60%", gap: 12 }}>
-            <Expand width={28} height={28} style={{ opacity: 0.3, color: "var(--fg-3)" }} />
-            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-2)" }}>
-              {TILE_EMPTY_LABELS[id] ?? "Analyse starten"}
-            </span>
-          </div>
-        )}
+
+      {/* Two-column: left = detail content, right = large tile */}
+      <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0 }}>
+        {/* Left column — detail content */}
+        <div style={{ flex: 1, overflow: "auto" }}>
+          {hasData ? (
+            <AiResultDetail id={id} data={entry.data} appId={appId} onUpdate={onRegister} />
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60%", gap: 12 }}>
+              <Expand width={28} height={28} style={{ opacity: 0.3, color: "var(--fg-3)" }} />
+              <span style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-2)" }}>
+                {TILE_EMPTY_LABELS[id] ?? "Analyse starten"}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Right column — large tile (2× scale) */}
+        <div style={{ width: 200, flexShrink: 0 }}>
+          <AiResultTileLarge id={id} entry={entry} />
+        </div>
       </div>
     </div>
   );
