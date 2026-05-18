@@ -1196,6 +1196,100 @@ function AiResultTile({ id, entry, onExpand }: {
   );
 }
 
+// Endpoint map for direct execution from expand view
+const ACTION_ENDPOINTS: Record<string, string> = {
+  "glassdoor-check":   "/ai/glassdoor-check",
+  "kununu-check":      "/ai/kununu-check",
+  "linkedin-profile":  "/ai/linkedin-profile",
+  "salary-check":      "/ai/salary-check",
+  "ats-keywords":      "/ai/ats-keywords",
+  "cv-highlights":     "/ai/cv-highlights",
+  "interview-prep":    "/ai/interview-prep",
+  "company-research":  "/ai/company-research",
+  "ackermann-script":  "/ai/ackermann-script",
+  "letter-review":     "/ai/letter-review",
+  "opening-sentences": "/ai/opening-sentences",
+  "onboarding":        "/ai/onboarding",
+  "salary-tips":       "/ai/salary-tips",
+};
+
+function TileExpandView({ id, entry, appId, onClose, onRegister }: {
+  id: string;
+  entry: { data: unknown; createdAt: Date } | null;
+  appId: string;
+  onClose: () => void;
+  onRegister?: (id: string, data: unknown) => void;
+}) {
+  const { ai } = useUiStore();
+  const [running, setRunning] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const expandStyle: React.CSSProperties = {
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+    zIndex: 10, background: "var(--bg)", padding: "16px 20px",
+    display: "flex", flexDirection: "column", overflow: "hidden",
+  };
+
+  const run = async () => {
+    const endpoint = ACTION_ENDPOINTS[id];
+    if (!endpoint) return;
+    if (ai.provider === "none") { setErr("KI-Modell in Settings konfigurieren"); return; }
+    setErr(null); setRunning(true);
+    try {
+      const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+      const r = await api.post<Record<string, unknown>>(`/api/applications/${appId}${endpoint}`, aiBody);
+      onRegister?.(id, r.data);
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Fehler";
+      setErr(msg);
+    } finally { setRunning(false); }
+  };
+
+  const hasData = !!entry;
+  const ts = entry?.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div style={{ ...expandStyle, overflow: "auto" }}>
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexShrink: 0 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>
+          {AI_RESULT_LABELS[id] ?? id}
+        </span>
+        {ts && <span style={{ fontSize: 10, color: "var(--fg-4)" }}>{ts}</span>}
+        <div style={{ flex: 1 }} />
+        {/* Run / Update button */}
+        {ACTION_ENDPOINTS[id] && (
+          <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={running} onClick={run}>
+            {running
+              ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} />
+              : <Refresh width={11} height={11} />
+            }
+            {hasData ? "Aktualisieren" : "Jetzt ausführen"}
+          </button>
+        )}
+        <button onClick={onClose} title="Schliessen"
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
+          <Collapse width={13} height={13} />
+        </button>
+      </div>
+      {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, flexShrink: 0 }}>{err}</div>}
+      {/* Content */}
+      <div style={{ flex: 1, overflow: "auto" }}>
+        {hasData ? (
+          <AiResultDetail id={id} data={entry.data} appId={appId} onUpdate={onRegister} />
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60%", gap: 12 }}>
+            <Expand width={28} height={28} style={{ opacity: 0.3, color: "var(--fg-3)" }} />
+            <span style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-2)" }}>
+              {TILE_EMPTY_LABELS[id] ?? "Analyse starten"}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResultUpdate }: {
   app: Application; stage: string;
   url: string; onUrlChange: (url: string) => void;
@@ -1216,7 +1310,7 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResul
   };
 
   const expandStyle: React.CSSProperties = {
-    position: "absolute", top: 57, left: 0, right: 0, bottom: 0,
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 10, background: "var(--bg)", padding: "16px 20px",
     display: "flex", flexDirection: "column", overflow: "hidden",
   };
@@ -1265,43 +1359,13 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResul
 
       {/* Vollbild-Expand — auch für leere Kacheln */}
       {expandedResultId && (
-        <div style={{ ...expandStyle, overflow: "auto" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexShrink: 0 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>
-              {AI_RESULT_LABELS[expandedResultId] ?? expandedResultId}
-            </span>
-            {expandedEntry && (
-              <span style={{ fontSize: 10, color: "var(--fg-4)" }}>
-                {expandedEntry.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" })}
-              </span>
-            )}
-            <div style={{ flex: 1 }} />
-            <button onClick={() => setExpandedResultId(null)} title="Schliessen"
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
-              <Collapse width={13} height={13} />
-            </button>
-          </div>
-          <div style={{ flex: 1, overflow: "auto" }}>
-            {expandedEntry ? (
-              <AiResultDetail
-                id={expandedResultId}
-                data={expandedEntry.data}
-                appId={app.id}
-                onUpdate={onAiResultUpdate}
-              />
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60%", gap: 12, color: "var(--fg-3)" }}>
-                <Expand width={28} height={28} style={{ opacity: 0.3 }} />
-                <div style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-2)" }}>
-                  {TILE_EMPTY_LABELS[expandedResultId] ?? "Analyse starten"}
-                </div>
-                <div style={{ fontSize: 11, color: "var(--fg-3)", textAlign: "center", maxWidth: 260, lineHeight: 1.5 }}>
-                  Wechsle zum <strong>Aktionen-Tab</strong> und klicke auf die entsprechende Schaltfläche, um diese Auswertung zu starten.
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <TileExpandView
+          id={expandedResultId}
+          entry={expandedEntry}
+          appId={app.id}
+          onClose={() => setExpandedResultId(null)}
+          onRegister={onAiResultUpdate}
+        />
       )}
 
       {/* Stellenbeschreibung — expandierbar */}
@@ -3080,7 +3144,7 @@ function ProcessTab({ app, onSave, onAiResult }: { app: Application; onSave?: (p
   const [activitiesExpanded,setActivitiesExpanded]= useState(false);
 
   const expandStyle: React.CSSProperties = {
-    position: "absolute", top: 57, left: 0, right: 0, bottom: 0,
+    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
     zIndex: 10, background: "var(--bg)", padding: "16px 20px",
     display: "flex", flexDirection: "column", overflow: "hidden",
   };
@@ -4130,7 +4194,7 @@ export function DetailDrawer({ app, onClose }: Props) {
     setAiResultsRegistry(prev => ({ ...prev, [id]: { data, createdAt: new Date() } }));
   }, []);
   const updateAiResult = useCallback((id: string, data: unknown) => {
-    setAiResultsRegistry(prev => prev[id] ? { ...prev, [id]: { ...prev[id], data } } : prev);
+    setAiResultsRegistry(prev => ({ ...prev, [id]: { data, createdAt: new Date() } }));
   }, []);
 
   const patchMutation = useMutation({

@@ -843,6 +843,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  position: relative; /* containing block for expand overlays */
 }
 .drawer-body::-webkit-scrollbar { width: 6px; }
 .drawer-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
