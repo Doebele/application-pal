@@ -323,25 +323,8 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
   };
   const removeTag = (t: string) => { const next = tags.filter((x) => x !== t); setTags(next); save({ tags: JSON.stringify(next) }); };
 
-  const daysInStage    = daysAgo(app.updatedAt);
-  const daysSinceApplied = app.appliedAt ? daysAgo(app.appliedAt) : null;
-
   return (
     <>
-      {/* Compact stats */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 4 }}>
-        {[
-          { label: "In Stage", value: <span className="mono" style={{ fontSize: 15, fontWeight: 700 }}>{daysInStage}<span style={{ fontSize: 11, color: "var(--fg-3)", marginLeft: 1 }}>d</span></span> },
-          { label: "Applied",  value: <span className="mono" style={{ fontSize: 15, fontWeight: 700 }}>{daysSinceApplied != null ? <>{daysSinceApplied}<span style={{ fontSize: 11, color: "var(--fg-3)", marginLeft: 1 }}>d</span></> : "—"}</span> },
-          { label: "Salary",   value: <span style={{ fontSize: 13, fontWeight: 600 }}>{app.salary || "—"}</span> },
-          { label: "Deadline", value: <span style={{ fontSize: 13, fontWeight: 600 }}>{app.nextDeadline || "—"}</span> },
-        ].map(({ label, value }) => (
-          <div key={label} style={{ flex: 1, padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)" }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
-            <div style={{ color: "var(--fg-1)", lineHeight: 1.2 }}>{value}</div>
-          </div>
-        ))}
-      </div>
 
       {/* Fields */}
       {/* Row 1: Firma + Ort */}
