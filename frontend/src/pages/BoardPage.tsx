@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { Settings, Plus, Check, ViewGrid, List, NavArrowUp, NavArrowDown } from "iconoir-react";
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
@@ -355,6 +355,7 @@ function ArchiveTable({ applications, onRowClick }: { applications: Application[
 export function BoardPage() {
   const { cardVariant, isImportModalOpen, setImportModalOpen, selectedApplicationId, setSelectedApplicationId } = useUiStore();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const showArchived = searchParams.get("archive") === "true";
   const [archiveView, setArchiveView] = useState<"kanban" | "table">("table");
 
@@ -501,6 +502,7 @@ export function BoardPage() {
         <DetailDrawer
           app={selectedApp}
           onClose={() => setSelectedApplicationId(null)}
+          onArchived={() => { setSelectedApplicationId(null); navigate("/?archive=true"); }}
         />
       )}
     </>

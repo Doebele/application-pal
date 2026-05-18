@@ -4229,9 +4229,9 @@ function MoreMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: ()
 }
 
 // ─── Main DetailDrawer ────────────────────────────────────────
-type Props = { app: Application; onClose: () => void };
+type Props = { app: Application; onClose: () => void; onArchived?: () => void };
 
-export function DetailDrawer({ app, onClose }: Props) {
+export function DetailDrawer({ app, onClose, onArchived }: Props) {
   const [tab, setTab]             = useState<Tab>("process");
   const [stage, setStage]         = useState<Application["stage"]>(app.stage);
   const [url, setUrl]             = useState(app.url ?? "");
@@ -4296,6 +4296,7 @@ export function DetailDrawer({ app, onClose }: Props) {
   const handleArchive = (reason?: string) => {
     patchMutation.mutate({ archived: "true", archiveReason: reason } as Partial<Application>);
     queryClient.invalidateQueries({ queryKey: ["applications"] });
+    onArchived?.();
     onClose();
   };
 
