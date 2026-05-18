@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import {
   DashboardDots, Calendar, List, MultiplePages, Settings,
-  SidebarCollapse, SunLight, HalfMoon, DashboardSpeed, Sofa, ProfileCircle, Folder, Database
+  SidebarCollapse, SunLight, HalfMoon, DashboardSpeed, Sofa, ProfileCircle, Folder, Database, Archive
 } from "iconoir-react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import type { Application } from "@application-pal/shared";
 import { useUiStore } from "../lib/store";
 
@@ -121,18 +121,23 @@ type Props = { applications: Application[] };
 
 export function Rail({ applications }: Props) {
   const { railOpen, toggleRail, theme, toggleTheme, density, toggleDensity } = useUiStore();
+  const location  = useLocation();
+  const navigate  = useNavigate();
 
   const countByStage = (id: string) => applications.filter((a) => a.stage === id).length;
+  const isArchive = location.pathname === "/" && new URLSearchParams(location.search).get("archive") === "true";
 
+  // Ordered nav items (Archive handled separately — URL param, not route)
   const navItems = [
-    { to: "/",           label: "Board",      icon: <DashboardDots width={15} height={15} />, count: applications.length },
-    { to: "/profile",    label: "Profil",     icon: <ProfileCircle width={15} height={15} /> },
-    { to: "/documents",  label: "Dokumente",  icon: <Folder width={15} height={15} /> },
-    { to: "/knowledge",  label: "Knowledge",  icon: <Database width={15} height={15} /> },
-    { to: "/calendar",   label: "Calendar",   icon: <Calendar width={15} height={15} /> },
-    { to: "/timeline",   label: "Timeline",   icon: <List width={15} height={15} /> },
-    { to: "/templates",  label: "Templates",  icon: <MultiplePages width={15} height={15} /> },
-    { to: "/settings",   label: "Settings",   icon: <Settings width={15} height={15} /> },
+    { to: "/",           label: "Board",     icon: <DashboardDots  width={15} height={15} />, count: applications.filter(a => a.stage !== undefined).length },
+    { to: "/calendar",   label: "Calendar",  icon: <Calendar       width={15} height={15} /> },
+    { to: "/timeline",   label: "Timeline",  icon: <List           width={15} height={15} /> },
+    // Archive slot handled inline below
+    { to: "/profile",    label: "Profil",    icon: <ProfileCircle  width={15} height={15} /> },
+    { to: "/documents",  label: "Dokumente", icon: <Folder         width={15} height={15} /> },
+    { to: "/knowledge",  label: "Knowledge", icon: <Database       width={15} height={15} /> },
+    { to: "/templates",  label: "Templates", icon: <MultiplePages  width={15} height={15} /> },
+    { to: "/settings",   label: "Settings",  icon: <Settings       width={15} height={15} /> },
   ];
 
   return (
@@ -169,23 +174,37 @@ export function Rail({ applications }: Props) {
       <div className="rail-body">
         <RailSection label="WORKSPACE" open={railOpen} />
         <div className="rail-section">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/"}
-              style={{ textDecoration: "none", display: "block", position: "relative" }}
-            >
-              {({ isActive }) => (
-                <RailBtn
-                  icon={item.icon}
-                  label={item.label}
-                  active={isActive}
-                  open={railOpen}
-                  badge={item.count}
-                />
+          {navItems.map((item, idx) => (
+            <>
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                style={{ textDecoration: "none", display: "block", position: "relative" }}
+              >
+                {({ isActive }) => (
+                  <RailBtn
+                    icon={item.icon}
+                    label={item.label}
+                    active={item.to === "/" ? (isActive && !isArchive) : isActive}
+                    open={railOpen}
+                    badge={item.count}
+                  />
+                )}
+              </NavLink>
+              {/* Insert Archive after Timeline (index 2) */}
+              {idx === 2 && (
+                <div key="archive" style={{ position: "relative" }}>
+                  <RailBtn
+                    icon={<Archive width={15} height={15} />}
+                    label="Archiv"
+                    active={isArchive}
+                    onClick={() => navigate(isArchive ? "/" : "/?archive=true")}
+                    open={railOpen}
+                  />
+                </div>
               )}
-            </NavLink>
+            </>
           ))}
         </div>
 

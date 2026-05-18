@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, Settings, Plus, Check } from "iconoir-react";
+import { useSearchParams } from "react-router-dom";
+import { Settings, Plus, Check } from "iconoir-react";
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
@@ -202,7 +203,8 @@ function ArchiveFilterDropdown({
 
 export function BoardPage() {
   const { cardVariant, isImportModalOpen, setImportModalOpen, selectedApplicationId, setSelectedApplicationId } = useUiStore();
-  const [showArchived, setShowArchived] = useState(false);
+  const [searchParams] = useSearchParams();
+  const showArchived = searchParams.get("archive") === "true";
 
   // Main board filters
   const [visibleStages, setVisibleStages] = useState<string[]>([]);
@@ -249,14 +251,6 @@ export function BoardPage() {
 
   const headerActions = (
     <>
-      <button
-        onClick={() => { setShowArchived(v => !v); setSelectedApplicationId(null); }}
-        className="btn btn-secondary"
-        style={{ gap: 6, ...(showArchived ? { border: "1px solid var(--accent)", background: "var(--accent-08)", color: "var(--accent)" } : {}) }}
-      >
-        <Archive width={13} height={13} /> Archiv
-      </button>
-
       {/* Filter button — works for both board and archive */}
       <div ref={showArchived ? archiveFilterRef : filterRef} style={{ position: "relative" }}>
         <button
