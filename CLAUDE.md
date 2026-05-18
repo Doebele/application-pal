@@ -113,8 +113,8 @@ Verifies `access_token` cookie via JWT; silently refreshes via `refresh_token` c
 
 | Table | Purpose | Exported |
 |---|---|---|
-| `applications` | Jobs: stage, tags, salary, logoUrl, archived, archiveReason, matchScore, matchDetails, googleFolderId, googleFolderUrl, portalUrl, interview1Details, interview2Details, interview1Prep, interview2Prep, glassdoorData | ✅ |
-| `user_profile` | Single-row profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, sessionTimeout | ✅ |
+| `applications` | Jobs: stage, tags, salary, logoUrl, archived, archiveReason, matchScore, matchDetails, googleFolderId, googleFolderUrl, portalUrl, interview1Details, interview2Details, interview1Prep, interview2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache | ✅ |
+| `user_profile` | Single-row profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, sessionTimeout, desiredSalary | ✅ |
 | `user_documents` | Global document library (CV, Zeugnisse, Figma, etc.) | ✅ |
 | `application_documents` | Per-job docs; `userDocumentId` links to library; `googleDocId`/`googleDocUrl` for Drive | ✅ |
 | `application_activities` | Timeline events per job | ✅ |
@@ -146,15 +146,21 @@ All use `callAi()` + `extractJson()` pattern, `resolveHostUrl()`, and `max_token
 | `POST /api/applications/:id/ai/interview-prep` | `{ rollenFragen, starBeispiele, vossFragenWhatHow, rueckfragen }` — result persisted to `interview1Prep`/`interview2Prep` |
 | `POST /api/applications/:id/ai/interview-prep/export-doc` | Creates Google Doc from interview prep; body: `{ interviewPrep }`; returns `{ docUrl }` |
 | `POST /api/applications/:id/ai/salary-tips` | `{ markteinschätzung, taktiken, formulierungen, vossAnker }` |
-| `POST /api/applications/:id/ai/salary-check` | `{ band, median, begründung, quellen }` — Swiss salary estimate for the role |
-| `POST /api/applications/:id/ai/ats-keywords` | `{ mustHave, niceToHave, softSkills }` |
-| `POST /api/applications/:id/ai/company-research` | `{ überblick, kultur, news, markt, wettbewerber }` |
-| `POST /api/applications/:id/ai/ackermann-script` | `{ anker, schritte, formulierungen }` — Ackermann salary negotiation script |
-| `POST /api/applications/:id/ai/letter-review` | `{ bewertung, verbesserungen, alternativen }` |
-| `POST /api/applications/:id/ai/opening-sentences` | `{ sätze: string[] }` — 3 alternative cover letter openers |
-| `POST /api/applications/:id/ai/onboarding` | `{ tage30, tage60, tage90, allgemein }` |
-| `POST /api/applications/:id/ai/glassdoor-check` | `{ rating, reviewCount, ceoApproval, recommendToFriend, confidence, summary, pros, cons, hinweis, glassdoorUrl, kununuUrl, linkedinUrl, updatedAt }` — AI estimate from training data; persisted to `glassdoor_data` |
-| `PATCH /api/applications/:id/ai/glassdoor-check` | Manual override for `rating` + `reviewCount`; body: `{ rating?, reviewCount? }` |
+| `POST /api/applications/:id/ai/salary-check` | `{ lohnband: {min,max,median}, waehrung, basis, begruendung, faktoren }` — persisted to `aiResultsCache` |
+| `POST /api/applications/:id/ai/ats-keywords` | `{ mustHave, niceToHave, softSkills, tools }` — persisted to `aiResultsCache` |
+| `POST /api/applications/:id/ai/company-research` | `{ unternehmensueberblick, branche, marktposition, unternehmenskultur, wettbewerber, aktuelleThemen }` |
+| `POST /api/applications/:id/ai/ackermann-script` | `{ zielgehalt, ankergebot, schritte[], nichtmonetaer[], vossAnker }` |
+| `POST /api/applications/:id/ai/letter-review` | `{ gesamteindruck, staerken, verbesserungen, cliches, tonalitaet, laenge, personalisierung }` |
+| `POST /api/applications/:id/ai/opening-sentences` | `{ saetze: [{satz, ansatz, erklaerung}] }` — 3 alternative cover letter openers |
+| `POST /api/applications/:id/ai/onboarding` | `{ erste30Tage, erste60Tage, erste90Tage, allgemein }` |
+| `POST /api/applications/:id/ai/glassdoor-check` | `{ rating, reviewCount, ceoApproval, recommendToFriend, confidence, summary, pros, cons, hinweis, glassdoorUrl, updatedAt }` — persisted to `glassdoor_data` |
+| `PATCH /api/applications/:id/ai/glassdoor-check` | URL update; body: `{ rating?, reviewCount?, glassdoorUrl? }` |
+| `POST /api/applications/:id/ai/kununu-check` | `{ rating, reviewCount, confidence, summary, hinweis, url, updatedAt }` — persisted to `kununu_data` |
+| `PATCH /api/applications/:id/ai/kununu-check` | URL/rating update; body: `{ rating?, reviewCount?, url? }` |
+| `POST /api/applications/:id/ai/linkedin-profile` | `{ url, employeeCount, description, hinweis, updatedAt }` — persisted to `linkedin_data` |
+| `PATCH /api/applications/:id/ai/linkedin-profile` | URL update; body: `{ url? }` |
+
+**AI Result Cache**: All AI endpoints (except glassdoor/kununu/linkedin which have dedicated columns) call `persistAiResult(appId, key, data)` which stores results in `applications.aiResultsCache` (JSON `{ [actionId]: { ...data, _savedAt: ISO } }`). On drawer open, `resultTimes` and `aiResultsRegistry` are initialized from this cache → checkmarks restored without re-running.
 
 ### Google Drive Endpoints
 
@@ -186,7 +192,17 @@ All require Google OAuth token in DB (`drive` scope — NOT `drive.file`).
 
 **StageAiActions**: For interview stages, interview prep is initialized from `app.interview1Prep`/`app.interview2Prep` (JSON.parse). After generation, persisted to DB via `onSave()`. "Alles kopieren" and "Als Google Doc" buttons appear inline next to "Neu generieren". Receives `onGlassdoorChange` callback for the inbox glassdoor action.
 
-**GlassdoorPanel**: Renders when `glassdoorData` is set (parsed from `app.glassdoorData` JSON). Shows rating stars, CEO approval %, recommend %, pros/cons grid, confidence badge, editable rating + review count inputs (underline style), and direct links to Glassdoor/Kununu/LinkedIn. PATCH call on manual save. All three link URLs are constructed server-side from the company name and stored in the JSON. `glassdoor_data` stores the full `GlassdoorData` JSON object as a TEXT column.
+**StageProgressBar**: Progress bar forks at the end — 7 linear stages (Inbox → 2nd Itw) then a Y-split: `Contract offer` (top, = `accepted`) and `Rejected` (bottom). Vertical stem + two horizontal branches with the same past/active/future color logic.
+
+**GlassdoorPanel** (Aktionen-Tab, Inbox stage): Renders when `glassdoorData` is set. Shows rating stars, CEO approval %, recommend %, pros/cons grid, confidence badge. Header-right: editable glassdoor URL with Open (↗) + Refresh (↺) buttons that PATCH `glassdoor_data`. Kununu/LinkedIn links removed (they have their own dedicated KI action tiles).
+
+**KI-Erkenntnisse (DetailsTab)**: All AI results appear as a tile grid (`repeat(auto-fill, minmax(140px, 1fr))`, `grid-auto-flow: dense`). Double-width tiles (`span 2`) for text-heavy results (salary-check, ats-keywords, company-research, salary-tips, letter-review, opening-sentences). Click on a tile → full-screen expand overlay (same `position:absolute; top:57px` pattern as Stellenbeschreibung). Timestamp shown only in expanded header.
+
+**AiResultTile / AiResultDetail**: Each tile shows 2-3 key data points via `renderTileContent()`. Expanded view renders `AiResultDetail` which dispatches to type-specific components. `GlassdoorCardDetail`, `KununuCardDetail`, `LinkedinCardDetail` have editable URL fields + PATCH calls. `SalaryCheckDetail` fetches profile via `useQuery` to get `desiredSalary` for the `SalaryBandChart`.
+
+**SalaryBandChart**: Horizontal band (min→max) with accent Median line and amber Wunschgehalt line. Labels above markers, values below. Shows annotation if desired salary is outside the band.
+
+**AiBtn (StageAiActions)**: Tile-style buttons — `flexDirection: column`, `minHeight: 58px`, icon centered above label. Checkmark badge (top-right, 14px green circle) when `resultTimes[id]` is set. Spinner replaces icon during loading. `resultTimes` initialized from `aiResultsCache._savedAt` timestamps.
 
 **DocumentsTab**: Three sections: Google Drive folder panel (top, only if connected) → Zugewiesen list → library grid (2-column). Library docs show 3 states: not linked / linked-no-Drive / linked-with-Drive-copy. Adding a Google Doc from library auto-copies to Drive folder if one exists.
 
@@ -203,3 +219,19 @@ Single-user design. JWT in httpOnly cookies (no localStorage). `GET /api/auth/st
 ### Google OAuth
 
 Scope required: `https://www.googleapis.com/auth/drive` (NOT `drive.file`) + `documents` + `openid email profile`. The broader `drive` scope is needed to copy user-owned template files. Re-authentication is required when upgrading from older `drive.file` scope. Flow: Settings → `/api/google/auth-url` → consent → `/api/google/callback` → DB + auto-login.
+
+### Design System
+
+Fonts loaded from Google Fonts in `frontend/index.html`:
+- **Fira Sans** (400/500/600/700 + italic) — all UI text (`--font-sans`)
+- **Fira Sans Condensed** (400/500/600/700) — eyebrow labels (`.eyebrow`)
+- **Libre Caslon Text** (400/700 + italic) — display/serif moments (`--font-serif`)
+- **Fira Mono** (400/500/700) — numbers + tabular-nums (`--font-mono`)
+
+Shadow system (white halo on dark surfaces):
+- `--shadow-card: 0 4px 24px rgba(255,255,255,0.18)` — card glow
+- `--shadow-modal: 0 32px 80px rgba(255,255,255,0.30)` — modal glow
+
+Icons: **Iconoir** v7.11.0 (`iconoir-react` package). `width`/`height` props, no `size` prop. All icons are monochrome (`currentColor` stroke). Do not mix with other icon libraries.
+
+Additional design tokens available: `--bg-elevated`, `--border-bp`, `--border-bp-subtle`, `--border-bp-strong`, `--accent-20`, `--accent-30`, `--green-10`, `--red-10`, `--yellow-10`.
