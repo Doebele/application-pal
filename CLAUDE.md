@@ -99,7 +99,7 @@ Verifies `access_token` cookie via JWT; silently refreshes via `refresh_token` c
 - **Auth**: `AuthProvider` + `useAuth()` in `lib/auth.tsx`. Calls `/api/auth/me` on mount. No token in localStorage — cookies are httpOnly. All routes wrapped in `ProtectedRoute` in `App.tsx`.
 - **API**: `api` from `lib/api.ts` — Axios, `withCredentials: true`, empty `baseURL`
 - **Styling**: single `index.css`, CSS custom properties. No Tailwind. `.input-line` = Notion-style underline input. `.field` = labelled form field. `.hide-scrollbar` = cross-browser scrollbar hiding.
-- **Expand-Logik**: expandable sections use `position: absolute; top: 57px; left/right/bottom: 0; z-index: 10` within `.app-main` (`position: relative`)
+- **Expand-Logik**: expandable sections use `position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 10` within `.drawer-body` which has `position: relative`. Do NOT use `top: 57` — the drawer is `position: fixed` so that was relative to the drawer top (covering header). The correct containing block is `drawer-body`.
 
 ### Ports & Container Names
 
@@ -196,9 +196,13 @@ All require Google OAuth token in DB (`drive` scope — NOT `drive.file`).
 
 **GlassdoorPanel** (Aktionen-Tab, Inbox stage): Renders when `glassdoorData` is set. Shows rating stars, CEO approval %, recommend %, pros/cons grid, confidence badge. Header-right: editable glassdoor URL with Open (↗) + Refresh (↺) buttons that PATCH `glassdoor_data`. Kununu/LinkedIn links removed (they have their own dedicated KI action tiles).
 
-**KI-Erkenntnisse (DetailsTab)**: All AI results appear as a tile grid (`repeat(auto-fill, minmax(140px, 1fr))`, `grid-auto-flow: dense`). Double-width tiles (`span 2`) for text-heavy results (salary-check, ats-keywords, company-research, salary-tips, letter-review, opening-sentences). Click on a tile → full-screen expand overlay (same `position:absolute; top:57px` pattern as Stellenbeschreibung). Timestamp shown only in expanded header.
+**KI-Erkenntnisse (DetailsTab)**: Always-visible tile grid — `STAGE_TILES` mapping in DetailsTab determines which tile IDs are shown for the current stage (e.g. Inbox: glassdoor-check, kununu-check, linkedin-profile, salary-check, ats-keywords). Tiles with no data show an empty state ("Bewertung ermitteln" etc.). Grid: `repeat(auto-fill, minmax(140px, 1fr))`, `grid-auto-flow: dense`. Double-width tiles (`span 2`) for text-heavy results. Tile design: label centered top (fg-3), `Expand` icon top-right (accent), content centered (no check icon, no arrow). Click → `TileExpandView` (full-screen overlay in `drawer-body`).
 
-**AiResultTile / AiResultDetail**: Each tile shows 2-3 key data points via `renderTileContent()`. Expanded view renders `AiResultDetail` which dispatches to type-specific components. `GlassdoorCardDetail`, `KununuCardDetail`, `LinkedinCardDetail` have editable URL fields + PATCH calls. `SalaryCheckDetail` fetches profile via `useQuery` to get `desiredSalary` for the `SalaryBandChart`.
+**AiResultTile**: Figma-style tile. `borderRadius: 12`, `minHeight: 120`. `renderTileContent()` provides compact 2-3-item view. `renderTileContentLarge()` provides 2× scale for the expand right column. `TILE_EMPTY_LABELS` maps action IDs to German placeholder text.
+
+**TileExpandView**: Two-column expand view. Left = `AiResultDetail` (scrollable detail content). Right = `AiResultTileLarge` (200px, same visual style at 2× scale). Header has Run/Update button that directly calls the AI endpoint via `ACTION_ENDPOINTS` map + `useUiStore().ai` config. `onRegister` callback updates `aiResultsRegistry` in `DetailDrawer`.
+
+**AiResultDetail / KununuCardDetail**: `KununuCardDetail` is simplified — no manual editing inputs. Summary text + Kununu link + confidence only. Updates via `TileExpandView`'s "Aktualisieren" button. `GlassdoorCardDetail` keeps only the editable URL field (rating inputs removed).
 
 **SalaryBandChart**: Horizontal band (min→max) with accent Median line and amber Wunschgehalt line. Labels above markers, values below. Shows annotation if desired salary is outside the band.
 
@@ -207,6 +211,10 @@ All require Google OAuth token in DB (`drive` scope — NOT `drive.file`).
 **DocumentsTab**: Three sections: Google Drive folder panel (top, only if connected) → Zugewiesen list → library grid (2-column). Library docs show 3 states: not linked / linked-no-Drive / linked-with-Drive-copy. Adding a Google Doc from library auto-copies to Drive folder if one exists.
 
 **Board filters** (`BoardPage`): `visibleStages[]` + `timeFilter` (TimeFilter type) for the main board; `reasonFilter` (ReasonFilter) + `archiveTime` for the archive view. All filtering is client-side after fetch.
+
+**Archive routing**: `showArchived` is derived from `useSearchParams().get("archive") === "true"` in `BoardPage` — NOT a `useState`. Navigating to `/?archive=true` shows the archive view. The Rail has an Archive item that calls `navigate("/?archive=true")` or `navigate("/")` to toggle. After archiving a job, `DetailDrawer.onArchived` callback fires → `BoardPage` calls `navigate("/?archive=true")` to auto-navigate to the archive. Archive button removed from topbar.
+
+**Navigation Rail** (`Rail.tsx`): Order: Board → Calendar → Timeline → **Archive** → Profil → Dokumente → Knowledge → Templates → Settings. Archive is rendered inline (not NavLink) with custom active detection via `useLocation`. Board item active state is overridden to `isActive && !isArchive` so it's inactive when on `/?archive=true`.
 
 **Logo avatar**: `LogoAvatar` in `DetailDrawer` and `Avatar` in `Card.tsx` try `logoUrl` via `<img>` with `onError` fallback to colored initials.
 
