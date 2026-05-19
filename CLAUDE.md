@@ -77,14 +77,15 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 - `resolveHostUrl(url)` — rewrites `localhost` → `host.docker.internal` for Docker networking
 - `getJwtSecret()` — returns JWT secret; auto-generates ephemeral secret if `JWT_SECRET` env is empty
 - `issueTokens(c, userId, rememberMe, accessTimeout)` — sets `access_token` (lifetime from `user_profile.session_timeout`, default 15min) + `refresh_token` (session or 90d) as httpOnly cookies
-- `getSessionTimeout()` — reads `user_profile.session_timeout`; called by all auth routes before `issueTokens()`
+- `getSessionTimeout(userId?)` — reads `user_profile.session_timeout` for a specific user; called by all auth routes before `issueTokens()`
+- `getUserId(c)` — extracts authenticated `userId` from Hono context (`c.get("userId")`); use in every protected route
 - `SESSION_TIMEOUT_SECONDS` — map of timeout string → seconds: `"15m"|"1h"|"6h"|"24h"|"7d"|"30d"`
 - `STAGE_TASK_TEMPLATES` — predefined task lists per stage; `initTasksForStage(appId, stage)` inserts them (idempotent, no duplicates)
 - `callAi(system, user, ai)` — generic AI caller for LM Studio or Anthropic; used by all coaching endpoints
 - `extractJson(raw)` — strips `<think>` blocks + markdown fences, returns parsed JSON
 - `applyNameRule(rule, vars)` — replaces `{firma}`, `{rolle}`, `{datum}` etc. in Drive naming rules
-- `buildExportPayload()` — assembles all user-data tables for export; used by both download and Drive-save endpoints
-- `getDriveAccessToken()` — retrieves stored Google OAuth access token from DB
+- `buildExportPayload(userId)` — assembles all user-data tables for a specific user; used by both download and Drive-save endpoints
+- `getDriveAccessToken(userId?)` — retrieves Google OAuth token: user-specific first, falls back to shared token (user_id IS NULL)
 
 **Validation**: `zValidator("json", schema)` from `@hono/zod-validator`; schemas from `@application-pal/shared` only.
 
@@ -95,7 +96,7 @@ Verifies `access_token` cookie via JWT; silently refreshes via `refresh_token` c
 
 ### Frontend (`frontend/src/`)
 
-- **State**: Zustand `useUiStore` (persisted localStorage, key `app-pal-ui-v2`) — theme, accent, density, cardVariant, AI config, Drive naming rules (`driveNameFolder`, `driveNameDoc`), Drive parent folder ID (`driveApplicationsFolderId`)
+- **State**: Zustand `useUiStore` (persisted localStorage, key `app-pal-ui-v2`) — theme, accent, density, cardVariant, AI config, Drive naming rules (`driveNameFolder`, `driveNameDoc`). **Note**: `driveApplicationsFolderId` was removed from Zustand — now stored per-user in `user_profile.drive_applications_folder_id` (load via `GET /api/profile`).
 - **Auth**: `AuthProvider` + `useAuth()` in `lib/auth.tsx`. Calls `/api/auth/me` on mount. No token in localStorage — cookies are httpOnly. All routes wrapped in `ProtectedRoute` in `App.tsx`.
 - **API**: `api` from `lib/api.ts` — Axios, `withCredentials: true`, empty `baseURL`
 - **Styling**: single `index.css`, CSS custom properties. No Tailwind. `.input-line` = Notion-style underline input. `.field` = labelled form field. `.hide-scrollbar` = cross-browser scrollbar hiding.
@@ -111,20 +112,21 @@ Verifies `access_token` cookie via JWT; silently refreshes via `refresh_token` c
 
 ### DB Tables
 
-| Table | Purpose | Exported |
-|---|---|---|
-| `applications` | Jobs: stage, tags, salary, logoUrl, archived, archiveReason, matchScore, matchDetails, googleFolderId, googleFolderUrl, portalUrl, interview1Details, interview2Details, interview1Prep, interview2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache | ✅ |
-| `user_profile` | Single-row profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, sessionTimeout, desiredSalary | ✅ |
-| `user_documents` | Global document library (CV, Zeugnisse, Figma, etc.) | ✅ |
-| `application_documents` | Per-job docs; `userDocumentId` links to library; `googleDocId`/`googleDocUrl` for Drive | ✅ |
-| `application_activities` | Timeline events per job | ✅ |
-| `application_contacts` | Contacts per job | ✅ |
-| `application_tasks` | Stage-specific checklists per job; `isDefault` = auto-created, `stage` = which phase | ✅ |
-| `users` | Single user account (email + bcrypt hash) | ❌ auth data |
-| `webauthn_credentials` | Passkey/WebAuthn credentials per user | ❌ auth data |
-| `password_reset_tokens` | OTP codes for password recovery | ❌ auth data |
-| `google_oauth_tokens` | Google Drive/Docs OAuth token (single row) | ❌ credentials |
-| `kb_companies`, `kb_roles`, `kb_sources`, `kb_insights` | Knowledge-base cache | ❌ auto-generated |
+| Table | Purpose | User-isolated | Exported |
+|---|---|---|---|
+| `applications` | Jobs: stage, tags, salary, logoUrl, archived, archiveReason, matchScore, matchDetails, googleFolderId, interview1/2Details, interview1/2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache | ✅ `user_id` FK | ✅ |
+| `user_profile` | Per-user profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, driveApplicationsFolderId, sessionTimeout, desiredSalary | ✅ `user_id` FK | ✅ |
+| `user_documents` | Per-user document library (CV, Zeugnisse, Figma, etc.) | ✅ `user_id` FK | ✅ |
+| `application_documents` | Per-job docs; isolated via `application_id` → `applications.user_id` | via FK | ✅ |
+| `application_activities` | Timeline events per job | via FK | ✅ |
+| `application_contacts` | Contacts per job | via FK | ✅ |
+| `application_tasks` | Stage-specific checklists per job | ✅ `user_id` FK | ✅ |
+| `users` | User accounts (email + bcrypt hash); multiple users supported via invite system | — | ❌ auth |
+| `invites` | Invite tokens; `created_by` FK; `used` flag; optional `email` restriction + `expires_at` | — | ❌ auth |
+| `webauthn_credentials` | Passkey/WebAuthn credentials per user | `user_id` FK | ❌ auth |
+| `password_reset_tokens` | OTP codes for password recovery | `user_id` FK | ❌ auth |
+| `google_oauth_tokens` | Google OAuth token; `user_id` nullable — NULL = shared admin token, non-null = user-specific | `user_id` (nullable) | ❌ credentials |
+| `kb_companies`, `kb_roles`, `kb_sources`, `kb_insights` | Knowledge-base cache (shared across users) | ❌ shared | ❌ auto-generated |
 
 **Archive pattern**: `applications.archived = "true"` hides from board. `archived != "true"` is the default filter. `archiveReason` stores one of `unavailable | irrelevant | taken | other` or free text.
 
@@ -178,7 +180,18 @@ All require Google OAuth token in DB (`drive` scope — NOT `drive.file`).
 | `DELETE /api/applications/:id/drive/files/:fileId` | Deletes file from Drive + removes from `applicationDocuments` |
 | `POST /api/applications/:id/drive/upload-pdf-from-url` | Downloads PDF from URL (or Drive with auth) and uploads to app folder |
 
-**Drive naming rules** (`applyNameRule`): placeholders `{firma}`, `{rolle}`, `{name}`, `{datum}` (YYMMDD), `{jahr}`, `{monat}`, `{doc}`. Defaults: folder = `{firma} – {rolle} – {datum}`, doc = `{doc} – {name} – {firma} – {datum}`. Stored in `useUiStore` (`driveNameFolder`, `driveNameDoc`). Parent folder stored as `driveApplicationsFolderId` in store; sent as `parentFolderId` in `init-folder` request.
+**Drive naming rules** (`applyNameRule`): placeholders `{firma}`, `{rolle}`, `{name}`, `{datum}` (YYMMDD), `{jahr}`, `{monat}`, `{doc}`. Defaults: folder = `{firma} – {rolle} – {datum}`, doc = `{doc} – {name} – {firma} – {datum}`. Stored in `useUiStore` (`driveNameFolder`, `driveNameDoc`). Parent folder (`driveApplicationsFolderId`) is per-user in `user_profile.drive_applications_folder_id` — load via `GET /api/profile`; send as `parentFolderId` in `init-folder` request.
+
+### Google Calendar Endpoints
+
+Require `calendar.readonly` OAuth scope (included in `GOOGLE_SCOPES`). Users must re-connect Google after scope was added.
+
+| Endpoint | Function |
+|---|---|
+| `GET /api/google/calendar/status` | Returns `{ connected, hasCalendarScope }` — checks stored scope string |
+| `GET /api/google/calendar/list` | Lists all calendars from Google Calendar API |
+| `GET /api/google/calendar/events?calendarId=&from=&to=` | Fetches events for a calendar and date range |
+| `GET /api/calendar/events?from=&to=` | Aggregated app activities + JOIN applications, filtered by `userId` |
 
 ### Key Frontend Patterns
 
@@ -218,9 +231,34 @@ All require Google OAuth token in DB (`drive` scope — NOT `drive.file`).
 
 **Logo avatar**: `LogoAvatar` in `DetailDrawer` and `Avatar` in `Card.tsx` try `logoUrl` via `<img>` with `onError` fallback to colored initials.
 
+### Calendar Page (`frontend/src/pages/CalendarPage.tsx`)
+
+Month/week toggle. Events from three sources merged and deduplicated by ID:
+1. **App events**: `applicationsToCalendarEvents(apps)` — interview dates (parsed from `interview1/2Details` JSON), deadlines (`nextDeadline`), stage-change timeline entries
+2. **Activities**: `activityRowsToCalendarEvents(rows)` — from `GET /api/calendar/events?from=&to=`
+3. **Google Calendar**: `googleCalendarEventsToCalendarEvents(items)` — from `GET /api/google/calendar/events`
+
+Event pills use **tinted background + left border** (never solid) for WCAG compliance: `background: ${color}1e` (12% opacity), always dark text `var(--fg-1)`. Month view: max 3 pills + "+N mehr". Week view: up to 4 content lines per pill (`.cal-event-pill-week`).
+
+**Popup**: `FloatingPopup` renders via `createPortal(…, document.body)` — escapes all `overflow:hidden` parents. Positioned using click coordinates with viewport clamping. Closes on outside click via `mousedown` listener.
+
+**Filters**: `useCalendarFilters()` hook reads/writes `?view=`, `?types=`, `?phases=`, `?gcal=` URL params. `filterEvents()` applies active filters.
+
+**Mapping files**: `frontend/src/lib/calendarMapping.ts` (event builders), `frontend/src/types/calendar.ts` (CalendarEvent, EVENT_COLORS), `frontend/src/hooks/useCalendarFilters.ts`.
+
+### Multi-User Architecture
+
+**Isolation**: Every protected route calls `getUserId(c)` and filters all queries by `userId`. Tables with `user_id` FK: `applications`, `user_profile`, `user_documents`, `application_tasks`. Child tables (`application_documents`, `application_activities`, `application_contacts`) are isolated transitively via the `application_id` FK.
+
+**Registration flow**: First user registers freely at `/api/auth/setup`. All subsequent users need an invite token (`inviteToken` field in POST body, or `?invite=TOKEN` URL param on the SetupPage). Invite tokens are created via `POST /api/invites` by any logged-in user. Tokens support expiry + email restriction.
+
+**Google OAuth shared/per-user**: `getDriveAccessToken(userId?)` checks user-specific token first, then falls back to shared token (`user_id IS NULL`). This supports a "family instance" where one admin connects Google Drive and all users benefit, while still allowing individual users to connect their own Google account.
+
+**Auto-profile creation**: `/api/auth/setup` inserts a blank `user_profile` row for every new user immediately after account creation.
+
 ### Authentication
 
-Single-user design. JWT in httpOnly cookies (no localStorage). `GET /api/auth/status` returns `{ setup: bool }` — if `false`, SetupPage is shown. Google Sign-In doubles as Drive authorization (one OAuth consent for both). WebAuthn passkeys supported via `@simplewebauthn/server` with `requireUserVerification: false` for broad authenticator compatibility.
+Multi-user. JWT in httpOnly cookies (no localStorage). `GET /api/auth/status` returns `{ setup: bool }` — if `false`, SetupPage is shown (first-run). If `true`, SetupPage shows login tab by default, or register tab if `?invite=TOKEN` is in the URL. Google Sign-In doubles as Drive + Calendar authorization (one OAuth consent). WebAuthn passkeys supported via `@simplewebauthn/server` with `requireUserVerification: false` for broad authenticator compatibility.
 
 **Session timeout** is configurable per user (Settings → Sicherheit): 15m / 1h / 6h / 24h / 7d / 30d. Stored in `user_profile.session_timeout`. All auth routes call `getSessionTimeout()` before `issueTokens()`. Access token `maxAge` is set accordingly. **Remember-me** checkbox on login: unchecked = session refresh cookie (no `maxAge`), checked = 90-day persistent refresh cookie.
 
