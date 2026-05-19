@@ -96,6 +96,7 @@ export const applications = pgTable("applications", {
   linkedinData: text("linkedin_data"),             // JSON: LinkedinData (url, description)
   aiResultsCache: text("ai_results_cache"),        // JSON: {[actionId]: {data, _savedAt}}
   appliedAt: timestamp("applied_at", { withTimezone: true }),
+  userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
@@ -112,10 +113,12 @@ export const userProfile = pgTable("user_profile", {
   linkedinBio: text("linkedin_bio"),
   photoUrl: text("photo_url"),
   masterCv: text("master_cv"),
-  personalNotes: text("personal_notes"),   // Interview-relevant personal priorities/talking points
-  desiredSalary: text("desired_salary"),   // Wunschgehalt für Balkengrafik (z.B. "110000")
-  googleCalendarId: text("google_calendar_id"),  // e.g. "user@gmail.com" or custom calendar ID
-  sessionTimeout: text("session_timeout").default("15m"),  // JWT access token lifetime
+  personalNotes: text("personal_notes"),
+  desiredSalary: text("desired_salary"),
+  googleCalendarId: text("google_calendar_id"),
+  driveApplicationsFolderId: text("drive_applications_folder_id"), // per-user Drive folder
+  sessionTimeout: text("session_timeout").default("15m"),
+  userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
 });
@@ -266,6 +269,7 @@ export const applicationTasks = pgTable("application_tasks", {
   done: boolean("done").notNull().default(false),
   isDefault: boolean("is_default").notNull().default(true),
   sortOrder: integer("sort_order").notNull().default(0),
+  userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -280,13 +284,25 @@ export type ApplicationTask = z.infer<typeof applicationTaskSelectSchema>;
 export const userDocuments = pgTable("user_documents", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
-  category: text("category").notNull().default("sonstiges"), // 'zeugnis' | 'referenz' | 'zertifikat' | 'figma' | 'portfolio' | 'sonstiges'
-  fileType: text("file_type").notNull().default("link"),     // 'pdf' | 'link' | 'figma' | 'image'
+  category: text("category").notNull().default("sonstiges"),
+  fileType: text("file_type").notNull().default("link"),
   url: text("url"),
   description: text("description"),
   tags: text("tags"),
+  userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+// ─── Invites ──────────────────────────────────────────────────
+export const invites = pgTable("invites", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  token: text("token").notNull().unique(),
+  email: text("email"),               // optional: restrict to specific email
+  used: boolean("used").notNull().default(false),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  createdBy: uuid("created_by"),      // FK → users.id
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
 export const userDocumentSelectSchema = createSelectSchema(userDocuments);
@@ -294,7 +310,7 @@ export const userDocumentInsertSchema = createInsertSchema(userDocuments, {
   name: z.string().trim().min(1),
   category: z.enum(["lebenslauf", "motivationsschreiben", "zeugnis", "referenz", "zertifikat", "figma", "portfolio", "sonstiges"]).default("sonstiges"),
   fileType: z.enum(["pdf", "link", "figma", "image", "gdoc"]).default("link"),
-}).omit({ id: true, createdAt: true, updatedAt: true });
+}).omit({ id: true, createdAt: true, updatedAt: true, userId: true });
 export const userDocumentPatchSchema = userDocumentInsertSchema.partial();
 export type UserDocument = z.infer<typeof userDocumentSelectSchema>;
 

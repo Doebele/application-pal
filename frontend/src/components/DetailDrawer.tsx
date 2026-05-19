@@ -1610,7 +1610,14 @@ function docTileAccent(fileType: string): string {
 type DriveTemplate = { id: string; name: string; mimeType: string; webViewLink: string; capabilities?: { canCopy?: boolean } };
 
 function DocumentsTab({ app }: { app: Application }) {
-  const { driveNameFolder, driveNameDoc, driveApplicationsFolderId } = useUiStore();
+  const { driveNameFolder, driveNameDoc } = useUiStore();
+  // driveApplicationsFolderId is now per-user in the profile — fetch from API
+  const [driveApplicationsFolderId, setDriveApplicationsFolderId_] = useState("");
+  useEffect(() => {
+    api.get<{ driveApplicationsFolderId?: string | null }>("/api/profile")
+      .then(r => setDriveApplicationsFolderId_(r.data.driveApplicationsFolderId ?? ""))
+      .catch(() => {});
+  }, []);
   const { data: appDocs = [], refetch } = useQuery<ApplicationDocument[]>({
     queryKey: ["documents", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/documents`).then((r) => r.data)

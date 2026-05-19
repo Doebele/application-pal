@@ -6,7 +6,18 @@ import {
 } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
-import { useUiStore } from "../lib/store";
+
+
+// ─── Hook: drive folder ID from user profile (per-user, server-side) ─────────
+function useProfileDriveFolder(): string {
+  const [folderId, setFolderId] = useState("");
+  useEffect(() => {
+    api.get<{ driveApplicationsFolderId?: string | null }>("/api/profile")
+      .then(r => setFolderId(r.data.driveApplicationsFolderId ?? ""))
+      .catch(() => {});
+  }, []);
+  return folderId;
+}
 import type { UserDocument } from "@application-pal/shared";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -122,10 +133,10 @@ function CreateGDocButton({ title, onCreated }: {
 // ─── Add Form ─────────────────────────────────────────────────────────────────
 function AddDocForm({ category, onSave, onCancel }: {
   category: Category;
-  onSave: (doc: Omit<UserDocument, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  onSave: (doc: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => Promise<void>;
   onCancel: () => void;
 }) {
-  const { driveApplicationsFolderId } = useUiStore();
+  const driveApplicationsFolderId = useProfileDriveFolder();
   const isGoogleCat = GOOGLE_ENABLED_CATEGORIES.includes(category);
   const [name, setName]         = useState("");
   const [url, setUrl]           = useState("");
@@ -325,7 +336,7 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate }: {
   onUrlUpdate?: (id: string, newUrl: string) => void;
 }) {
   const [hov, setHov] = useState(false);
-  const { driveApplicationsFolderId } = useUiStore();
+  const driveApplicationsFolderId = useProfileDriveFolder();
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
   const [driveConnected, setDriveConnected] = useState(false);
@@ -581,7 +592,7 @@ function EditModal({ doc, onSave, onClose }: {
 function DocList({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
   cat: typeof CATEGORIES[number];
   docs: UserDocument[];
-  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => Promise<void>;
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
   onUrlUpdate?: (id: string, newUrl: string) => void;
@@ -621,7 +632,7 @@ function DocList({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
 function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
   cat: typeof CATEGORIES[number];
   docs: UserDocument[];
-  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => Promise<void>;
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
   onUrlUpdate?: (id: string, newUrl: string) => void;
@@ -664,7 +675,7 @@ function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
 function TabView({ docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
   docs: UserDocument[];
   onUrlUpdate?: (id: string, newUrl: string) => void;
-  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt">) => Promise<void>;
+  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => Promise<void>;
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
 }) {
@@ -793,7 +804,7 @@ export function DocumentsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleAdd = useCallback(async (payload: Omit<UserDocument, "id" | "createdAt" | "updatedAt">) => {
+  const handleAdd = useCallback(async (payload: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => {
     const res = await api.post<UserDocument>("/api/documents", payload);
     setDocs((prev) => [res.data, ...prev]);
   }, []);

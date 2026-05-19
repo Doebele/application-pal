@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Download, Upload, Database, Shield, Key, LogOut, Trash, Folder, OpenNewWindow, Calendar } from "iconoir-react";
+import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Download, Upload, Database, Shield, Key, LogOut, Trash, Folder, OpenNewWindow, Calendar, InfoCircle } from "iconoir-react";
 import { useNavigate } from "react-router-dom";
 import { Topbar } from "../components/Topbar";
 import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
@@ -185,11 +185,192 @@ function ProviderPill({ value, label, active, onClick, color }: {
   );
 }
 
+// ─── Google Calendar sub-section (inside GoogleSection) ──────
+interface GCalItem { id: string; summary: string; backgroundColor?: string; primary?: boolean }
+
+function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
+  const [scopeStatus, setScopeStatus] = useState<"loading" | "ok" | "missing">("loading");
+  const [calendars, setCalendars]     = useState<GCalItem[]>([]);
+  const [calId, setCalId]             = useState("");
+  const [saved, setSaved]             = useState(false);
+  const [loadingCals, setLoadingCals] = useState(false);
+
+  // Check scope + load saved calId
+  useEffect(() => {
+    api.get<{ connected: boolean; hasCalendarScope: boolean }>("/api/google/calendar/status")
+      .then(r => {
+        setScopeStatus(r.data.hasCalendarScope ? "ok" : "missing");
+      })
+      .catch(() => setScopeStatus("missing"));
+    api.get<{ googleCalendarId?: string | null }>("/api/profile")
+      .then(r => setCalId(r.data.googleCalendarId ?? ""))
+      .catch(() => {});
+  }, []);
+
+  // Load calendar list once scope is confirmed
+  useEffect(() => {
+    if (scopeStatus !== "ok") return;
+    setLoadingCals(true);
+    api.get<GCalItem[]>("/api/google/calendar/list")
+      .then(r => setCalendars(r.data))
+      .catch(() => {})
+      .finally(() => setLoadingCals(false));
+  }, [scopeStatus]);
+
+  const saveCalId = async (id: string) => {
+    setCalId(id);
+    await api.patch("/api/profile", { googleCalendarId: id || null }).catch(() => {});
+    setSaved(true);
+    setTimeout(() => setSaved(false), 1800);
+  };
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+        <Calendar width={12} height={12} style={{ color: "#a855f7", flexShrink: 0 }} />
+        <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          Google Kalender
+        </div>
+        {saved && (
+          <span style={{ fontSize: 10, color: "#4ade80", marginLeft: "auto" }}>
+            <CheckCircle width={10} height={10} /> gespeichert
+          </span>
+        )}
+      </div>
+
+      {scopeStatus === "loading" && (
+        <div style={{ fontSize: 12, color: "var(--fg-3)" }}>
+          <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> Prüfe Berechtigungen…
+        </div>
+      )}
+
+      {scopeStatus === "missing" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {/* Status badge */}
+          <div style={{
+            display: "flex", alignItems: "flex-start", gap: 10,
+            padding: "10px 12px", borderRadius: 8,
+            background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)",
+          }}>
+            <InfoCircle width={14} height={14} style={{ color: "#fbbf24", flexShrink: 0, marginTop: 1 }} />
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)", marginBottom: 4 }}>
+                Kalender-Zugriff nicht verfügbar
+              </div>
+              <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>
+                Dein aktueller Google-Token hat keinen <code style={{ fontSize: 10, background: "var(--surface-2)", borderRadius: 3, padding: "1px 4px" }}>calendar.readonly</code>-Scope.
+                Trenne die Verbindung und verbinde Google erneut, um den Kalender-Zugriff zu aktivieren.
+              </div>
+            </div>
+          </div>
+
+          {/* Setup steps */}
+          <div style={{
+            padding: "10px 12px", borderRadius: 8,
+            background: "var(--surface-2)", border: "1px solid var(--border)",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)", marginBottom: 8 }}>
+              Einmalige Einrichtung (Google Cloud Console)
+            </div>
+            <ol style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 6 }}>
+              {[
+                <>
+                  <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+                    Google Calendar API aktivieren
+                  </a>{" "}
+                  <span style={{ color: "var(--fg-3)" }}>(APIs &amp; Services → Bibliothek → „Google Calendar API")</span>
+                </>,
+                <>
+                  OAuth-Zustimmungsbildschirm → <strong style={{ color: "var(--fg-2)" }}>Bereiche hinzufügen</strong>:{" "}
+                  <code style={{ fontSize: 10, background: "var(--surface)", borderRadius: 3, padding: "1px 4px" }}>
+                    .../auth/calendar.readonly
+                  </code>
+                </>,
+                <>
+                  Wenn App im <strong style={{ color: "var(--fg-2)" }}>Test-Modus</strong>: Deine E-Mail als Testnutzer eintragen
+                </>,
+                <>
+                  Unten auf <strong style={{ color: "var(--fg-2)" }}>„Google neu verbinden"</strong> klicken → Neu anmelden
+                </>,
+              ].map((step, i) => (
+                <li key={i} style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.55 }}>{step}</li>
+              ))}
+            </ol>
+          </div>
+
+          <div style={{ display: "flex", gap: 8 }}>
+            <button className="btn btn-secondary" style={{ fontSize: 12, gap: 5 }} onClick={onReconnect}>
+              <Link width={11} height={11} /> Google neu verbinden
+            </button>
+            <a
+              href="https://console.cloud.google.com"
+              target="_blank"
+              rel="noreferrer"
+              className="btn btn-ghost"
+              style={{ fontSize: 11, textDecoration: "none" }}
+            >
+              Google Cloud Console ↗
+            </a>
+          </div>
+        </div>
+      )}
+
+      {scopeStatus === "ok" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>
+            Wähle den Kalender, in dem Interviewtermine und Deadlines angezeigt werden.
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            {loadingCals ? (
+              <div style={{ fontSize: 12, color: "var(--fg-3)", display: "flex", alignItems: "center", gap: 6 }}>
+                <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> Kalender werden geladen…
+              </div>
+            ) : (
+              <select
+                value={calId}
+                onChange={e => saveCalId(e.target.value)}
+                style={{
+                  flex: 1, fontSize: 12, padding: "6px 10px",
+                  borderRadius: 8, border: "1px solid var(--border)",
+                  background: "var(--surface)", color: calId ? "var(--fg-1)" : "var(--fg-3)",
+                  cursor: "pointer", fontFamily: "var(--font-sans)",
+                }}
+              >
+                <option value="">— Primärer Kalender (Standard) —</option>
+                {calendars.map(cal => (
+                  <option key={cal.id} value={cal.id}>
+                    {cal.primary ? `✦ ${cal.summary} (Primär)` : cal.summary}
+                  </option>
+                ))}
+              </select>
+            )}
+            {calId && !loadingCals && (
+              <button
+                className="btn btn-ghost"
+                style={{ fontSize: 11, padding: "4px 8px", whiteSpace: "nowrap" }}
+                onClick={() => saveCalId("")}
+              >
+                Zurücksetzen
+              </button>
+            )}
+          </div>
+          {calId && (
+            <div style={{ fontSize: 10, color: "var(--fg-3)", fontFamily: "var(--font-mono)" }}>
+              ID: {calId}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Google OAuth section ─────────────────────────────────────
 function GoogleSection() {
-  const { driveApplicationsFolderId, setDriveApplicationsFolderId } = useUiStore();
+  // driveApplicationsFolderId now lives in user_profile (per-user), not Zustand
+  const [driveApplicationsFolderId, setDriveApplicationsFolderIdState] = useState("");
   const [status, setStatus] = useState<"loading" | "connected" | "disconnected">("loading");
-  const [folderInput, setFolderInput] = useState(driveApplicationsFolderId);
+  const [folderInput, setFolderInput] = useState("");
   const [folderInfo, setFolderInfo]   = useState<{ id: string; name: string; url: string } | null>(null);
   const [folderErr, setFolderErr]     = useState<string | null>(null);
   const [checkingFolder, setCheckingFolder] = useState(false);
@@ -202,14 +383,28 @@ function GoogleSection() {
 
   useEffect(() => { check(); }, [check]);
 
-  // Validate saved folder ID on mount
+  // Load driveApplicationsFolderId from user profile (per-user, server-side)
   useEffect(() => {
-    if (driveApplicationsFolderId && status === "connected") {
-      api.get<{ id: string; name: string; url: string }>(`/api/drive/folder-info?folderId=${driveApplicationsFolderId}`)
-        .then(r => setFolderInfo(r.data))
-        .catch(() => {});
-    }
-  }, [driveApplicationsFolderId, status]);
+    if (status !== "connected") return;
+    api.get<{ driveApplicationsFolderId?: string | null }>("/api/profile")
+      .then(r => {
+        const savedId = r.data.driveApplicationsFolderId ?? "";
+        setDriveApplicationsFolderIdState(savedId);
+        setFolderInput(savedId);
+        if (savedId) {
+          api.get<{ id: string; name: string; url: string }>(`/api/drive/folder-info?folderId=${savedId}`)
+            .then(fr => setFolderInfo(fr.data))
+            .catch(() => {});
+        }
+      })
+      .catch(() => {});
+  }, [status]);
+
+  // Persist to profile
+  const saveFolderIdToProfile = async (id: string) => {
+    setDriveApplicationsFolderIdState(id);
+    await api.patch("/api/profile", { driveApplicationsFolderId: id || null }).catch(() => {});
+  };
 
   /** Extract folder ID from a Google Drive URL or treat input as raw ID */
   const parseFolderId = (val: string): string => {
@@ -219,12 +414,12 @@ function GoogleSection() {
 
   const validateFolder = async () => {
     const id = parseFolderId(folderInput);
-    if (!id) { setFolderInfo(null); setDriveApplicationsFolderId(""); return; }
+    if (!id) { setFolderInfo(null); await saveFolderIdToProfile(""); return; }
     setCheckingFolder(true); setFolderErr(null);
     try {
       const r = await api.get<{ id: string; name: string; url: string }>(`/api/drive/folder-info?folderId=${id}`);
       setFolderInfo(r.data);
-      setDriveApplicationsFolderId(r.data.id);
+      await saveFolderIdToProfile(r.data.id);
       setFolderInput(r.data.id);
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Ordner nicht gefunden";
@@ -232,9 +427,9 @@ function GoogleSection() {
     } finally { setCheckingFolder(false); }
   };
 
-  const clearFolder = () => {
+  const clearFolder = async () => {
     setFolderInput(""); setFolderInfo(null); setFolderErr(null);
-    setDriveApplicationsFolderId("");
+    await saveFolderIdToProfile("");
   };
 
   const connect = async () => {
@@ -330,6 +525,11 @@ function GoogleSection() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Google Calendar — only when connected */}
+      {status === "connected" && (
+        <CalendarSubSection onReconnect={connect} />
       )}
     </div>
   );
@@ -446,6 +646,142 @@ function CalendarSection() {
           <div style={{ fontSize: 11, color: "var(--fg-3)", lineHeight: 1.6 }}>
             Die Kalender-ID findest du in Google Kalender → Einstellungen → Kalender auswählen → „Kalender-ID" (meist deine Gmail-Adresse für den Primär-Kalender).
           </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Invite Section ───────────────────────────────────────────
+interface InviteRow {
+  id: string;
+  token: string;
+  email: string | null;
+  used: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+function InviteSection() {
+  const [invites, setInvites]       = useState<InviteRow[]>([]);
+  const [email, setEmail]           = useState("");
+  const [days, setDays]             = useState(7);
+  const [creating, setCreating]     = useState(false);
+  const [newToken, setNewToken]     = useState<string | null>(null);
+  const [copied, setCopied]         = useState(false);
+
+  const load = useCallback(() => {
+    api.get<InviteRow[]>("/api/invites").then(r => setInvites(r.data)).catch(() => {});
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const create = async () => {
+    setCreating(true);
+    try {
+      const r = await api.post<InviteRow>("/api/invites", { email: email.trim() || undefined, expiresInDays: days });
+      setNewToken(r.data.token);
+      setEmail("");
+      load();
+    } finally { setCreating(false); }
+  };
+
+  const remove = async (id: string) => {
+    await api.delete(`/api/invites/${id}`).catch(() => {});
+    load();
+  };
+
+  const inviteUrl = newToken
+    ? `${window.location.origin}/setup?invite=${newToken}`
+    : null;
+
+  const copyLink = () => {
+    if (!inviteUrl) return;
+    navigator.clipboard.writeText(inviteUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); });
+  };
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <Key width={13} height={13} style={{ color: "var(--fg-3)" }} />
+        <div className="eyebrow">Nutzer einladen</div>
+      </div>
+      <div className="settings-group">
+        <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
+          <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.6 }}>
+            Erstelle Einladungslinks für weitere Personen. Jede Person erhält ein eigenes Konto mit isolierten Daten, eigenem Profil und eigener Google Drive Verbindung.
+          </div>
+
+          {/* Create form */}
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="E-Mail (optional, schränkt auf diese Adresse ein)"
+              style={{ flex: 1, fontSize: 12, minWidth: 200 }}
+              className="field"
+            />
+            <select
+              value={days}
+              onChange={e => setDays(Number(e.target.value))}
+              style={{ fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--fg-1)", fontFamily: "var(--font-sans)" }}
+            >
+              {[1, 3, 7, 14, 30].map(d => (
+                <option key={d} value={d}>{d} Tag{d !== 1 ? "e" : ""} gültig</option>
+              ))}
+            </select>
+            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={create} disabled={creating}>
+              {creating ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> : <Link width={12} height={12} />}
+              {" "}Einladung erstellen
+            </button>
+          </div>
+
+          {/* New invite link */}
+          {inviteUrl && (
+            <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.25)", display: "flex", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--green)" }}>✓ Einladungslink erstellt</div>
+              <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--fg-2)", wordBreak: "break-all" }}>
+                {inviteUrl}
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={copyLink}>
+                  {copied ? "✓ Kopiert" : "Link kopieren"}
+                </button>
+                <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setNewToken(null)}>
+                  Schliessen
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Existing invites */}
+          {invites.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
+                Ausstehende Einladungen
+              </div>
+              {invites.map(inv => (
+                <div key={inv.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 6, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, color: inv.used ? "var(--fg-3)" : "var(--fg-1)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {inv.token.slice(0, 12)}…
+                    </div>
+                    <div style={{ fontSize: 10, color: "var(--fg-3)" }}>
+                      {inv.email ? inv.email : "Jede E-Mail"}
+                      {" · "}
+                      {inv.used ? "Verwendet" : inv.expiresAt ? `Läuft ab ${new Date(inv.expiresAt).toLocaleDateString("de")}` : "Kein Ablauf"}
+                    </div>
+                  </div>
+                  {inv.used && <span style={{ fontSize: 10, color: "var(--fg-3)" }}>✓ Eingelöst</span>}
+                  {!inv.used && (
+                    <button className="btn btn-ghost" style={{ fontSize: 10, padding: "2px 6px" }} onClick={() => remove(inv.id)}>
+                      <Trash width={10} height={10} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -812,8 +1148,8 @@ export function SettingsPage() {
         {/* Drive Naming */}
         <DriveNamingSection />
 
-        {/* Google Calendar */}
-        <CalendarSection />
+        {/* Invite management */}
+        <InviteSection />
 
         {/* Security */}
         <SecuritySection />

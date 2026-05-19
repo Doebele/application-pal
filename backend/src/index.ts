@@ -48,10 +48,11 @@ import {
   users,
   webauthnCredentials,
   passwordResetTokens,
+  invites,
   type AiConfig
 } from "@application-pal/shared";
 import { PDFParse } from "pdf-parse";
-import { and, desc, eq, ilike, inArray, ne, or, isNull, lt, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
 import { env, KB_BASE_PATH } from "./env.js";
@@ -86,8 +87,15 @@ function issueTokens(c: Parameters<typeof setCookie>[0], userId: string, remembe
   setCookie(c, "refresh_token", refresh, { httpOnly: true, sameSite: "Lax", path: "/", secure, ...(rememberMe ? { maxAge: 60 * 60 * 24 * 90 } : {}) });
 }
 
-async function getSessionTimeout(): Promise<string> {
-  const [p] = await db.select({ sessionTimeout: userProfile.sessionTimeout }).from(userProfile).limit(1);
+function getUserId(c: Parameters<typeof issueTokens>[0]): string {
+  return c.get("userId" as never) as string;
+}
+
+async function getSessionTimeout(userId?: string): Promise<string> {
+  const where = userId ? eq(userProfile.userId, userId) : undefined;
+  const [p] = where
+    ? await db.select({ sessionTimeout: userProfile.sessionTimeout }).from(userProfile).where(where).limit(1)
+    : await db.select({ sessionTimeout: userProfile.sessionTimeout }).from(userProfile).limit(1);
   return p?.sessionTimeout ?? "15m";
 }
 
@@ -136,7 +144,7 @@ app.use("/api/*", async (c, next) => {
     if (refresh) {
       try {
         const rp = jwt.verify(refresh, getJwtSecret()) as { userId: string };
-        issueTokens(c, rp.userId, false, await getSessionTimeout());
+        issueTokens(c, rp.userId, false, await getSessionTimeout(rp.userId));
         c.set("userId" as never, rp.userId);
         return next();
       } catch { /* fall through */ }
@@ -153,18 +161,67 @@ app.get("/api/auth/status", async (c) => {
   return c.json({ setup: !!u });
 });
 
-// First-run: create the single user account
+// First-run or invited: create a user account
 app.post("/api/auth/setup", async (c) => {
-  const [existing] = await db.select({ id: users.id }).from(users).limit(1);
-  if (existing) return c.json({ error: "Account bereits eingerichtet" }, 409);
-  const { email, password, rememberMe } = await c.req.json<{ email: string; password: string; rememberMe?: boolean }>();
+  const { email, password, rememberMe, inviteToken } = await c.req.json<{
+    email: string; password: string; rememberMe?: boolean; inviteToken?: string;
+  }>();
+
   if (!email || !password || password.length < 8) {
     return c.json({ error: "E-Mail und Passwort (min. 8 Zeichen) erforderlich" }, 400);
   }
+
+  // First user (no users exist yet) can always register
+  const [existingAny] = await db.select({ id: users.id }).from(users).limit(1);
+  if (existingAny) {
+    // Subsequent users: require invite token
+    if (!inviteToken) return c.json({ error: "Invite-Token erforderlich" }, 403);
+    const [invite] = await db.select().from(invites).where(eq(invites.token, inviteToken)).limit(1);
+    if (!invite) return c.json({ error: "Ungültiger Invite-Token" }, 403);
+    if (invite.used) return c.json({ error: "Invite-Token bereits verwendet" }, 403);
+    if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) return c.json({ error: "Invite-Token abgelaufen" }, 403);
+    if (invite.email && invite.email.toLowerCase() !== email.toLowerCase()) return c.json({ error: "Invite-Token gilt nicht für diese E-Mail" }, 403);
+    // Mark invite as used
+    await db.update(invites).set({ used: true }).where(eq(invites.id, invite.id));
+  }
+
+  const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email.toLowerCase().trim())).limit(1);
+  if (existing) return c.json({ error: "E-Mail bereits registriert" }, 409);
+
   const passwordHash = await bcrypt.hash(password, 12);
   const [user] = await db.insert(users).values({ email: email.toLowerCase().trim(), passwordHash }).returning();
-  issueTokens(c, user.id, rememberMe === true, await getSessionTimeout());
+  // Create empty profile for new user
+  await db.insert(userProfile).values({ userId: user.id }).onConflictDoNothing();
+  const timeout = await getSessionTimeout(user.id);
+  issueTokens(c, user.id, rememberMe === true, timeout);
   return c.json({ email: user.email });
+});
+
+// ─── Invite management ───────────────────────────────────────
+
+// List invites created by current user
+app.get("/api/invites", async (c) => {
+  const userId = getUserId(c);
+  const rows = await db.select().from(invites).where(eq(invites.createdBy, userId)).orderBy(desc(invites.createdAt));
+  return c.json(rows);
+});
+
+// Create invite
+app.post("/api/invites", async (c) => {
+  const userId = getUserId(c);
+  const { email, expiresInDays = 7 } = await c.req.json<{ email?: string; expiresInDays?: number }>();
+  const token = crypto.randomBytes(16).toString("hex");
+  const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
+  const [invite] = await db.insert(invites).values({ token, email: email ?? null, expiresAt, createdBy: userId }).returning();
+  return c.json(invite, 201);
+});
+
+// Delete invite
+app.delete("/api/invites/:id", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  await db.delete(invites).where(and(eq(invites.id, id), eq(invites.createdBy, userId)));
+  return c.json({ ok: true });
 });
 
 // Login with email + password
@@ -174,7 +231,7 @@ app.post("/api/auth/login", async (c) => {
   if (!user || !user.passwordHash) return c.json({ error: "Ungültige Anmeldedaten" }, 401);
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return c.json({ error: "Ungültige Anmeldedaten" }, 401);
-  issueTokens(c, user.id, rememberMe === true, await getSessionTimeout());
+  issueTokens(c, user.id, rememberMe === true, await getSessionTimeout(user.id));
   return c.json({ email: user.email });
 });
 
@@ -204,7 +261,7 @@ app.post("/api/auth/refresh", async (c) => {
   if (!refresh) return c.json({ error: "Unauthorized" }, 401);
   try {
     const { userId } = jwt.verify(refresh, getJwtSecret()) as { userId: string };
-    issueTokens(c, userId, false, await getSessionTimeout());
+    issueTokens(c, userId, false, await getSessionTimeout(userId));
     return c.json({ ok: true });
   } catch {
     return c.json({ error: "Unauthorized" }, 401);
@@ -348,7 +405,7 @@ app.post("/api/auth/webauthn/login", async (c) => {
     });
     if (!verification.verified) return c.json({ error: "Passkey-Verifizierung fehlgeschlagen" }, 401);
     await db.update(webauthnCredentials).set({ counter: verification.authenticationInfo.newCounter }).where(eq(webauthnCredentials.id, cred.id));
-    issueTokens(c, cred.userId, false, await getSessionTimeout());
+    issueTokens(c, cred.userId, false, await getSessionTimeout(cred.userId));
     webauthnChallenges.delete("login");
     return c.json({ ok: true });
   } catch (err) {
@@ -1106,17 +1163,19 @@ app.get("/health", (c) =>
 );
 
 app.get("/api/applications", async (c) => {
+  const userId = getUserId(c);
   const showArchived = c.req.query("archived") === "true";
   const rows = await db.select().from(applications)
     .where(showArchived
-      ? eq(applications.archived, "true")
-      : or(isNull(applications.archived), ne(applications.archived, "true"))
+      ? and(eq(applications.archived, "true"), eq(applications.userId, userId))
+      : and(or(isNull(applications.archived), ne(applications.archived, "true")), eq(applications.userId, userId))
     )
     .orderBy(desc(applications.updatedAt));
   return c.json(rows);
 });
 
 app.post("/api/applications", zValidator("json", applicationInsertSchema), async (c) => {
+  const userId = getUserId(c);
   const payload = c.req.valid("json");
   const stage = payload.stage ?? "import_validating";
   const shouldSetAppliedAt = stageTriggersAppliedAt.has(stage) && !payload.appliedAt;
@@ -1124,6 +1183,7 @@ app.post("/api/applications", zValidator("json", applicationInsertSchema), async
     .insert(applications)
     .values({
       ...payload,
+      userId,
       stage,
       appliedAt: shouldSetAppliedAt ? new Date() : payload.appliedAt
     })
@@ -1133,13 +1193,14 @@ app.post("/api/applications", zValidator("json", applicationInsertSchema), async
 });
 
 app.patch("/api/applications/:id", zValidator("json", applicationPatchSchema), async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const payload = c.req.valid("json");
   const stage = payload.stage;
   const shouldSetAppliedAt =
     stage !== undefined && stageTriggersAppliedAt.has(stage) && !payload.appliedAt;
 
-  const existing = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const existing = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (existing.length === 0) return c.json({ error: "Application not found" }, 404);
 
   const [updated] = await db
@@ -1173,8 +1234,9 @@ app.patch("/api/applications/:id", zValidator("json", applicationPatchSchema), a
 });
 
 app.delete("/api/applications/:id", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
-  const [deleted] = await db.delete(applications).where(eq(applications.id, id)).returning();
+  const [deleted] = await db.delete(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).returning();
   if (!deleted) {
     return c.json({ error: "Application not found" }, 404);
   }
@@ -1204,6 +1266,7 @@ async function resolveCompanyLogo(companyName: string | null): Promise<string | 
 }
 
 app.post("/api/applications/import", zValidator("json", applicationImportRequestSchema), async (c) => {
+  const _userId = getUserId(c);
   const payload = c.req.valid("json");
   let text = payload.text ?? "";
 
@@ -1423,21 +1486,27 @@ app.get("/api/applications/:id/letter", (c) =>
 // User Profile
 // ─────────────────────────────────────────────────────────────────
 app.get("/api/profile", async (c) => {
-  const rows = await db.select().from(userProfile).limit(1);
-  if (rows.length === 0) return c.json(null, 404);
+  const userId = getUserId(c);
+  const rows = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  if (rows.length === 0) {
+    // Auto-create empty profile for this user
+    const [created] = await db.insert(userProfile).values({ userId }).returning();
+    return c.json(created);
+  }
   return c.json(rows[0]);
 });
 
 app.put("/api/profile", zValidator("json", userProfileInsertSchema), async (c) => {
+  const userId = getUserId(c);
   const payload = c.req.valid("json");
-  const existing = await db.select().from(userProfile).limit(1);
+  const existing = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   if (existing.length === 0) {
-    const [created] = await db.insert(userProfile).values({ ...payload }).returning();
+    const [created] = await db.insert(userProfile).values({ ...payload, userId }).returning();
     return c.json(created, 201);
   }
   const [updated] = await db.update(userProfile)
     .set({ ...payload, updatedAt: new Date() })
-    .where(eq(userProfile.id, existing[0].id))
+    .where(eq(userProfile.userId, userId))
     .returning();
   return c.json(updated);
 });
@@ -1446,13 +1515,15 @@ app.put("/api/profile", zValidator("json", userProfileInsertSchema), async (c) =
 // User Documents (global document vault)
 // ─────────────────────────────────────────────────────────────────
 app.get("/api/documents", async (c) => {
-  const rows = await db.select().from(userDocuments).orderBy(desc(userDocuments.createdAt));
+  const userId = getUserId(c);
+  const rows = await db.select().from(userDocuments).where(eq(userDocuments.userId, userId)).orderBy(desc(userDocuments.createdAt));
   return c.json(rows);
 });
 
 app.post("/api/documents", zValidator("json", userDocumentInsertSchema), async (c) => {
+  const userId = getUserId(c);
   const payload = c.req.valid("json");
-  const [doc] = await db.insert(userDocuments).values(payload).returning();
+  const [doc] = await db.insert(userDocuments).values({ ...payload, userId }).returning();
   return c.json(doc, 201);
 });
 
@@ -1487,6 +1558,7 @@ Regeln:
 - reasoning: vollständige Erklärung wie der Score zustande kommt`;
 
 app.post("/api/applications/:id/match-score", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const body = await c.req.json<{ ai?: AiConfig }>();
   const aiConfig = body.ai;
@@ -1496,16 +1568,16 @@ app.post("/api/applications/:id/match-score", async (c) => {
   }
 
   // Load application
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Bewerbung nicht gefunden" }, 404);
   if (!app_.description?.trim()) return c.json({ error: "Keine Stellenbeschreibung vorhanden" }, 400);
 
   // Load profile
-  const [profile] = await db.select().from(userProfile).limit(1);
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
 
   // Load relevant documents (skills/certs/references)
   const docs = await db.select().from(userDocuments)
-    .where(inArray(userDocuments.category, ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"]));
+    .where(and(eq(userDocuments.userId, userId), inArray(userDocuments.category, ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"])));
 
   // Build profile context
   const profileParts: string[] = [];
@@ -1602,7 +1674,7 @@ app.post("/api/applications/:id/match-score", async (c) => {
   // Persist
   await db.update(applications)
     .set({ matchScore: result.score, matchDetails: JSON.stringify(result), updatedAt: new Date() })
-    .where(eq(applications.id, id));
+    .where(and(eq(applications.id, id), eq(applications.userId, userId)));
 
   return c.json(result);
 });
@@ -1670,6 +1742,95 @@ app.delete("/api/applications/:id/activities/:actId", async (c) => {
   const [deleted] = await db.delete(applicationActivities).where(eq(applicationActivities.id, actId)).returning();
   if (!deleted) return c.json({ error: "Activity not found" }, 404);
   return c.json({ ok: true });
+});
+
+// ─── Aggregated calendar events ────────────────────────────────────────────────
+// Returns all application_activities for a date range, joined with application
+// company/role/stage so the frontend can build CalendarEvent objects.
+app.get("/api/calendar/events", async (c) => {
+  const userId = getUserId(c);
+  const { from, to } = c.req.query();
+  const fromDate = from ? new Date(from) : new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const toDate   = to   ? new Date(to)   : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0);
+
+  const rows = await db
+    .select({
+      id:              applicationActivities.id,
+      applicationId:   applicationActivities.applicationId,
+      type:            applicationActivities.type,
+      title:           applicationActivities.title,
+      description:     applicationActivities.description,
+      activityDate:    applicationActivities.activityDate,
+      createdAt:       applicationActivities.createdAt,
+      company:         applications.company,
+      role:            applications.role,
+      stage:           applications.stage,
+    })
+    .from(applicationActivities)
+    .leftJoin(applications, eq(applicationActivities.applicationId, applications.id))
+    .where(and(
+      gte(applicationActivities.activityDate, fromDate),
+      lte(applicationActivities.activityDate, toDate),
+      eq(applications.userId, userId)
+    ))
+    .orderBy(asc(applicationActivities.activityDate));
+
+  return c.json(rows);
+});
+
+// ─── Google Calendar: list calendars + fetch events ───────────────────────────
+
+// Check whether the stored Google token includes calendar.readonly scope
+app.get("/api/google/calendar/status", async (c) => {
+  const userId = getUserId(c);
+  const [token] = await db.select().from(googleOAuthTokens)
+    .where(or(eq(googleOAuthTokens.userId, userId), isNull(googleOAuthTokens.userId)))
+    .limit(1);
+  if (!token) return c.json({ connected: false, hasCalendarScope: false });
+  const scope = token.scope ?? "";
+  const hasCalendarScope = scope.includes("calendar");
+  return c.json({ connected: true, hasCalendarScope });
+});
+
+// List all calendars the user has access to
+app.get("/api/google/calendar/list", async (c) => {
+  const accessToken = await getDriveAccessToken(getUserId(c));
+  if (!accessToken) return c.json({ error: "Google not connected" }, 503);
+  const res = await fetch("https://www.googleapis.com/calendar/v3/users/me/calendarList?fields=items(id,summary,backgroundColor,primary)", {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!res.ok) {
+    const err = await res.json() as { error?: { message?: string } };
+    return c.json({ error: err.error?.message ?? "Calendar API error" }, res.status as 400 | 401 | 403 | 500);
+  }
+  const data = await res.json() as { items: { id: string; summary: string; backgroundColor?: string; primary?: boolean }[] };
+  return c.json(data.items ?? []);
+});
+
+// Fetch events from a specific calendar (or primary) for a date range
+app.get("/api/google/calendar/events", async (c) => {
+  const accessToken = await getDriveAccessToken(getUserId(c));
+  if (!accessToken) return c.json({ error: "Google not connected" }, 503);
+
+  const { calendarId = "primary", from, to } = c.req.query();
+  const timeMin = from ? new Date(from).toISOString() : new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+  const timeMax = to   ? new Date(to).toISOString()   : new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+  const params = new URLSearchParams({
+    timeMin, timeMax,
+    singleEvents: "true",
+    orderBy: "startTime",
+    maxResults: "250",
+    fields: "items(id,summary,description,start,end,htmlLink,colorId,location)",
+  });
+  const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) {
+    const err = await res.json() as { error?: { message?: string } };
+    return c.json({ error: err.error?.message ?? "Calendar events error" }, res.status as 400 | 401 | 403 | 500);
+  }
+  const data = await res.json() as { items: unknown[] };
+  return c.json(data.items ?? []);
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -1807,11 +1968,12 @@ async function persistAiResult(appId: string, key: string, data: Record<string, 
 
 // CV Highlights
 app.post("/api/applications/:id/ai/cv-highlights", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [profile] = await db.select().from(userProfile).limit(1);
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   if (!profile?.masterCv?.trim()) return c.json({ error: "Kein Master-CV im Profil hinterlegt" }, 400);
   const system = `Du bist ein Karriere-Coach. Analysiere den Lebenslauf des Kandidaten und die Stellenbeschreibung.
 Antworte NUR mit diesem JSON:
@@ -1834,14 +1996,15 @@ Antworte NUR mit diesem JSON:
 
 // CV Google Doc — creates a Google Doc from Master-CV with a "Für diese Stelle relevant" section
 app.post("/api/applications/:id/ai/cv-doc", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [profile] = await db.select().from(userProfile).limit(1);
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   if (!profile?.masterCv?.trim()) return c.json({ error: "Kein Master-CV im Profil hinterlegt" }, 400);
-  const [token] = await db.select().from(googleOAuthTokens).limit(1);
-  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const accessTokenForDoc = await getDriveAccessToken(userId);
+  if (!accessTokenForDoc) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
   // Generate highlights to prepend
   let highlightText = "";
@@ -1867,7 +2030,7 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
   try {
     const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${accessTokenForDoc}`, "Content-Type": "application/json" },
       body: JSON.stringify({ title: docTitle })
     });
     if (!docRes.ok) return c.json({ error: "Google Doc konnte nicht erstellt werden" }, 502);
@@ -1877,7 +2040,7 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
     // Insert content
     await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${accessTokenForDoc}`, "Content-Type": "application/json" },
       body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: docContent } }] })
     });
 
@@ -1890,11 +2053,12 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
 
 // Cover Letter generation (+ optional Google Doc)
 app.post("/api/applications/:id/ai/cover-letter", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai, createDoc } = await c.req.json<{ ai: AiConfig; createDoc?: boolean }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [profile] = await db.select().from(userProfile).limit(1);
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const system = `Du bist ein erfahrener HR-Berater. Schreibe ein professionelles, prägnantes Bewerbungsanschreiben (max. 350 Wörter).
 Erkenne automatisch die Sprache der Stellenbeschreibung und verwende dieselbe Sprache.
 Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Text mit Absätzen durch \\n\\n getrennt>" }`;
@@ -1908,11 +2072,11 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
     const parsed = extractJson(raw) as { subject: string; body: string };
     let docUrl: string | null = null;
     if (createDoc) {
-      const [token] = await db.select().from(googleOAuthTokens).limit(1);
-      if (token) {
+      const coverLetterToken = await getDriveAccessToken(userId);
+      if (coverLetterToken) {
         const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
           method: "POST",
-          headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+          headers: { "Authorization": `Bearer ${coverLetterToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({ title: `Anschreiben – ${app_.role} @ ${app_.company}` })
         });
         if (docRes.ok) {
@@ -1921,7 +2085,7 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
           // Insert text into the doc
           await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
             method: "POST",
-            headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+            headers: { "Authorization": `Bearer ${coverLetterToken}`, "Content-Type": "application/json" },
             body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: `${parsed.subject}\n\n${parsed.body}` } }] })
           });
         }
@@ -1936,11 +2100,12 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
 
 // Email Draft
 app.post("/api/applications/:id/ai/email-draft", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai, type } = await c.req.json<{ ai: AiConfig; type: "application" | "followup" | "decline" | "feedback" | "linkedin" }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [profile] = await db.select().from(userProfile).limit(1);
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const typeDescriptions = {
     application: "eine Bewerbungs-Email (kurze Begleit-Email zur Bewerbung)",
     followup: "eine freundliche Follow-up-Email (3-4 Wochen nach Bewerbung, höflich nach Stand fragen)",
@@ -1966,11 +2131,12 @@ Antworte NUR mit JSON: { "subject": "<Betreff>", "body": "<Email-Text>" }`;
 
 // Interview Preparation (Chris Voss method + STAR + role-specific)
 app.post("/api/applications/:id/ai/interview-prep", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [profile] = await db.select().from(userProfile).limit(1);
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const system = `Du bist ein erfahrener Interview-Coach und kennst die Methoden von Chris Voss ("Never Split the Difference").
 Erstelle eine umfassende Interviewvorbereitung basierend auf der Rolle und dem Kandidatenprofil.
 Antworte NUR mit diesem JSON:
@@ -2005,6 +2171,7 @@ Regeln:
 
 // Export Interview Prep to Google Doc
 app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { interviewPrep } = await c.req.json<{ interviewPrep: {
     rollenFragen: string[];
@@ -2014,9 +2181,9 @@ app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
   } }>();
   if (!interviewPrep) return c.json({ error: "Keine Interview-Daten übergeben" }, 400);
 
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [token] = await db.select().from(googleOAuthTokens).limit(1);
+  const token = await getDriveAccessToken(userId);
   if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
   const sep = "═".repeat(48);
@@ -2033,16 +2200,11 @@ app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
   content += `${sep}\nMEINE RÜCKFRAGEN\n${sep}\n\n`;
   content += interviewPrep.rueckfragen.map(q => `? ${q}`).join("\n");
 
-  // Verify token not expired
-  if (token.expiresAt && new Date(token.expiresAt) < new Date()) {
-    return c.json({ error: "Google-Verbindung abgelaufen — bitte in Settings → Integrationen neu verbinden" }, 400);
-  }
-
   const docTitle = `Interview-Prep – ${app_.role} @ ${app_.company}`;
   try {
     const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ title: docTitle })
     });
     if (!docRes.ok) {
@@ -2054,7 +2216,7 @@ app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
 
     await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
     });
 
@@ -2062,7 +2224,7 @@ app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
     if (app_.googleFolderId) {
       await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
         method: "PATCH",
-        headers: { "Authorization": `Bearer ${token.accessToken}` }
+        headers: { "Authorization": `Bearer ${token}` }
       });
     }
 
@@ -2081,9 +2243,10 @@ app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
 
 // Salary Negotiation Tips
 app.post("/api/applications/:id/ai/salary-tips", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const system = `Du bist ein Gehaltsverhandlungs-Coach mit Chris Voss Methodik. Gib konkrete, taktische Tipps.
 Antworte NUR mit JSON:
@@ -2108,9 +2271,10 @@ Antworte NUR mit JSON:
 // Gehalts-Check Schweiz (Inbox stage)
 // ── Glassdoor / Unternehmens-Rating ──
 app.post("/api/applications/:id/ai/glassdoor-check", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
 
   const companySlug = (app_.company ?? "")
@@ -2155,20 +2319,22 @@ Felder sind null wenn keine verlässlichen Daten vorhanden. confidence="niedrig"
 
 // Manuell gespeichertes Rating aktualisieren
 app.patch("/api/applications/:id/ai/glassdoor-check", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const body = await c.req.json<{ rating?: number | null; reviewCount?: number | null; glassdoorUrl?: string }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const existing = app_.glassdoorData ? JSON.parse(app_.glassdoorData) : {};
   const updated = { ...existing, ...body, manuallyEdited: true, updatedAt: new Date().toISOString() };
-  await db.update(applications).set({ glassdoorData: JSON.stringify(updated) }).where(eq(applications.id, id));
+  await db.update(applications).set({ glassdoorData: JSON.stringify(updated) }).where(and(eq(applications.id, id), eq(applications.userId, userId)));
   return c.json(updated);
 });
 
 app.post("/api/applications/:id/ai/kununu-check", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
 
   const companySlug = (app_.company ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -2199,20 +2365,22 @@ rating ist null wenn keine Daten bekannt. confidence="niedrig" für unbekannte/s
 });
 
 app.patch("/api/applications/:id/ai/kununu-check", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const body = await c.req.json<{ rating?: number | null; reviewCount?: number | null; url?: string }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const existing = app_.kununuData ? JSON.parse(app_.kununuData) : {};
   const updated = { ...existing, ...body, manuallyEdited: true, updatedAt: new Date().toISOString() };
-  await db.update(applications).set({ kununuData: JSON.stringify(updated) }).where(eq(applications.id, id));
+  await db.update(applications).set({ kununuData: JSON.stringify(updated) }).where(and(eq(applications.id, id), eq(applications.userId, userId)));
   return c.json(updated);
 });
 
 app.post("/api/applications/:id/ai/linkedin-profile", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
 
   const companySlug = (app_.company ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -2241,20 +2409,22 @@ Antworte NUR mit diesem JSON:
 });
 
 app.patch("/api/applications/:id/ai/linkedin-profile", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const body = await c.req.json<{ url?: string }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const existing = app_.linkedinData ? JSON.parse(app_.linkedinData) : {};
   const updated = { ...existing, ...body, manuallyEdited: true, updatedAt: new Date().toISOString() };
-  await db.update(applications).set({ linkedinData: JSON.stringify(updated) }).where(eq(applications.id, id));
+  await db.update(applications).set({ linkedinData: JSON.stringify(updated) }).where(and(eq(applications.id, id), eq(applications.userId, userId)));
   return c.json(updated);
 });
 
 app.post("/api/applications/:id/ai/salary-check", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const system = `Du bist ein Schweizer Lohnexperte. Analysiere die Stellenausschreibung und ermittle ein realistisches Lohnband für die Schweiz. Berücksichtige: Titel/Level, Branche, Region (falls angegeben), Unternehmensgrösse. Antworte NUR mit JSON:
 { "lohnband": { "min": number, "max": number, "median": number }, "waehrung": "CHF", "basis": "Jahresbrutto", "begruendung": "<string 2-3 Sätze>", "faktoren": ["<string>"] }`;
@@ -2272,13 +2442,13 @@ app.post("/api/applications/:id/ai/salary-check", async (c) => {
 
 // Export Salary Check to Google Doc
 app.post("/api/applications/:id/ai/salary-check/export-doc", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { salaryCheck } = await c.req.json<{ salaryCheck: { lohnband: { min: number; max: number; median: number }; waehrung: string; basis: string; begruendung: string; faktoren: string[] } }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [token] = await db.select().from(googleOAuthTokens).limit(1);
-  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
-  if (token.expiresAt && new Date(token.expiresAt) < new Date()) return c.json({ error: "Google-Verbindung abgelaufen" }, 400);
+  const salaryDocToken = await getDriveAccessToken(userId);
+  if (!salaryDocToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "─".repeat(40);
   let content = `Gehalts-Check Schweiz: ${app_.role} @ ${app_.company}\n${date}\n\n`;
@@ -2296,19 +2466,19 @@ app.post("/api/applications/:id/ai/salary-check/export-doc", async (c) => {
   try {
     const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${salaryDocToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ title: docTitle })
     });
     if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
     const doc = await docRes.json() as { documentId: string };
     await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${salaryDocToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
     });
     if (app_.googleFolderId) {
       await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
-        method: "PATCH", headers: { "Authorization": `Bearer ${token.accessToken}` }
+        method: "PATCH", headers: { "Authorization": `Bearer ${salaryDocToken}` }
       });
     }
     const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
@@ -2321,9 +2491,10 @@ app.post("/api/applications/:id/ai/salary-check/export-doc", async (c) => {
 
 // ATS-Keywords extrahieren (Inbox stage)
 app.post("/api/applications/:id/ai/ats-keywords", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const system = `Du bist ein Recruiting-Experte. Extrahiere die wichtigsten Keywords für ATS-Systeme aus der Stellenbeschreibung. Antworte NUR mit JSON:
 { "mustHave": ["<string>"], "niceToHave": ["<string>"], "softSkills": ["<string>"], "tools": ["<string>"] }`;
@@ -2341,9 +2512,10 @@ app.post("/api/applications/:id/ai/ats-keywords", async (c) => {
 
 // Unternehmens- & Branchenrecherche (Pending stage)
 app.post("/api/applications/:id/ai/company-research", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const system = `Du bist ein Business-Analyst. Erstelle eine strukturierte Unternehmens- und Branchenrecherche basierend auf den verfügbaren Informationen. Antworte NUR mit JSON:
 { "unternehmensueberblick": "<string>", "branche": "<string>", "marktposition": "<string>", "unternehmenskultur": "<string>", "wettbewerber": ["<string>"], "aktuelleThemen": ["<string>"], "gespraechsthemen": ["<string>"] }`;
@@ -2361,13 +2533,13 @@ app.post("/api/applications/:id/ai/company-research", async (c) => {
 
 // Export Company Research to Google Doc
 app.post("/api/applications/:id/ai/company-research/export-doc", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { research } = await c.req.json<{ research: { unternehmensueberblick: string; branche: string; marktposition: string; unternehmenskultur: string; wettbewerber: string[]; aktuelleThemen: string[]; gespraechsthemen: string[] } }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [token] = await db.select().from(googleOAuthTokens).limit(1);
-  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
-  if (token.expiresAt && new Date(token.expiresAt) < new Date()) return c.json({ error: "Google-Verbindung abgelaufen" }, 400);
+  const compResToken = await getDriveAccessToken(userId);
+  if (!compResToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "─".repeat(40);
   let content = `Unternehmensrecherche: ${app_.company} – ${app_.role}\n${date}\n\n`;
@@ -2388,19 +2560,19 @@ app.post("/api/applications/:id/ai/company-research/export-doc", async (c) => {
   try {
     const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${compResToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ title: docTitle })
     });
     if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
     const doc = await docRes.json() as { documentId: string };
     await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${compResToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
     });
     if (app_.googleFolderId) {
       await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
-        method: "PATCH", headers: { "Authorization": `Bearer ${token.accessToken}` }
+        method: "PATCH", headers: { "Authorization": `Bearer ${compResToken}` }
       });
     }
     const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
@@ -2413,11 +2585,12 @@ app.post("/api/applications/:id/ai/company-research/export-doc", async (c) => {
 
 // Ackermann-Verhandlungs-Script (Pending stage)
 app.post("/api/applications/:id/ai/ackermann-script", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [profile] = await db.select().from(userProfile).limit(1);
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const system = `Du bist ein Experte für Gehaltsverhandlung nach dem Ackermann-Modell (FBI-Verhandlungsmethode, Chris Voss). Erstelle ein konkretes, mehrstufiges Verhandlungs-Script. Das Ackermann-Modell: Startgebot = 65% des Zielgehalts, dann Angebote bei 85%, 95%, 100% mit abnehmenden Steigerungen und einer ungeraden Endzahl. Antworte NUR mit JSON:
 { "zielgehalt": number, "ankergebot": number, "schritte": [{ "runde": number, "angebot": number, "formulierung": "<string>", "taktik": "<string>" }], "nichtmonetaer": ["<string>"], "vossAnker": "<string>" }`;
   const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nLohnband (falls bekannt): ${app_.salary ?? "nicht angegeben"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1500) ?? ""}\nProfil des Kandidaten: ${profile?.masterCv?.slice(0, 1000) ?? "Kein Profil hinterlegt"}`;
@@ -2434,13 +2607,13 @@ app.post("/api/applications/:id/ai/ackermann-script", async (c) => {
 
 // Export Ackermann Script to Google Doc
 app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { script } = await c.req.json<{ script: { zielgehalt: number; ankergebot: number; schritte: Array<{ runde: number; angebot: number; formulierung: string; taktik: string }>; nichtmonetaer: string[]; vossAnker: string } }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [token] = await db.select().from(googleOAuthTokens).limit(1);
-  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
-  if (token.expiresAt && new Date(token.expiresAt) < new Date()) return c.json({ error: "Google-Verbindung abgelaufen" }, 400);
+  const ackerToken = await getDriveAccessToken(userId);
+  if (!ackerToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "═".repeat(48);
   let content = `Ackermann-Verhandlungs-Script: ${app_.role} @ ${app_.company}\n${date}\n\n`;
@@ -2460,19 +2633,19 @@ app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
   try {
     const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${ackerToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ title: docTitle })
     });
     if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
     const doc = await docRes.json() as { documentId: string };
     await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${ackerToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
     });
     if (app_.googleFolderId) {
       await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
-        method: "PATCH", headers: { "Authorization": `Bearer ${token.accessToken}` }
+        method: "PATCH", headers: { "Authorization": `Bearer ${ackerToken}` }
       });
     }
     const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
@@ -2485,9 +2658,10 @@ app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
 
 // Anschreiben reviewen (Letter stage)
 app.post("/api/applications/:id/ai/letter-review", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai, coverLetterContent } = await c.req.json<{ ai: AiConfig; coverLetterContent?: string }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const system = `Du bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch. Antworte NUR mit JSON:
 { "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "zu lang | angemessen | zu kurz", "personalisierung": "schwach | mittel | stark" }`;
@@ -2506,11 +2680,12 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
 
 // Eröffnungssätze (Letter stage)
 app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [profile] = await db.select().from(userProfile).limit(1);
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const system = `Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend). Antworte NUR mit JSON:
 { "saetze": [{ "satz": "<string>", "ansatz": "<string>", "erklaerung": "<string>" }] }`;
   const user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
@@ -2527,9 +2702,10 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
 
 // Onboarding-Checkliste (Accepted stage)
 app.post("/api/applications/:id/ai/onboarding", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { ai } = await c.req.json<{ ai: AiConfig }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const system = `Du bist ein Karriere-Coach. Erstelle eine strukturierte Onboarding-Checkliste für die ersten 90 Tage in der neuen Stelle. Antworte NUR mit JSON:
 { "erste30Tage": ["<string>"], "erste60Tage": ["<string>"], "erste90Tage": ["<string>"], "allgemein": ["<string>"] }`;
@@ -2547,13 +2723,13 @@ app.post("/api/applications/:id/ai/onboarding", async (c) => {
 
 // Export Onboarding Checklist to Google Doc
 app.post("/api/applications/:id/ai/onboarding/export-doc", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { checklist } = await c.req.json<{ checklist: { erste30Tage: string[]; erste60Tage: string[]; erste90Tage: string[]; allgemein: string[] } }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const [token] = await db.select().from(googleOAuthTokens).limit(1);
-  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
-  if (token.expiresAt && new Date(token.expiresAt) < new Date()) return c.json({ error: "Google-Verbindung abgelaufen" }, 400);
+  const onboardToken = await getDriveAccessToken(userId);
+  if (!onboardToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "─".repeat(40);
   let content = `Onboarding-Checkliste: ${app_.role} @ ${app_.company}\n${date}\n\n`;
@@ -2571,19 +2747,19 @@ app.post("/api/applications/:id/ai/onboarding/export-doc", async (c) => {
   try {
     const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${onboardToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ title: docTitle })
     });
     if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
     const doc = await docRes.json() as { documentId: string };
     await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
       method: "POST",
-      headers: { "Authorization": `Bearer ${token.accessToken}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${onboardToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
     });
     if (app_.googleFolderId) {
       await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
-        method: "PATCH", headers: { "Authorization": `Bearer ${token.accessToken}` }
+        method: "PATCH", headers: { "Authorization": `Bearer ${onboardToken}` }
       });
     }
     const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
@@ -2603,7 +2779,7 @@ const GOOGLE_REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI ?? "http://localhos
 const GOOGLE_FRONTEND_URL  = process.env.GOOGLE_FRONTEND_URL ?? "http://localhost";
 // Scopes include openid+email so Google Sign-In + Drive work in one consent
 const GOOGLE_SCOPES = (process.env.GOOGLE_SCOPES ?? "") ||
-  "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents";
+  "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly";
 
 app.get("/api/google/auth-url", (c) => {
   if (!GOOGLE_CLIENT_ID) return c.json({ error: "Google credentials not configured" }, 503);
@@ -2646,14 +2822,27 @@ app.get("/api/google/callback", async (c) => {
       ? await db.select().from(users).where(eq(users.email, googleEmail.toLowerCase())).limit(1)
       : [];
 
+    // Get current user from JWT if available (for non-Google-Sign-In OAuth flows)
+    const authToken = getCookie(c, "access_token");
+    let currentUserId: string | null = null;
+    if (authToken) {
+      try {
+        currentUserId = (jwt.verify(authToken, getJwtSecret()) as { userId: string }).userId;
+      } catch { /* ignore */ }
+    }
+
     const expiresAt = data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null;
-    await db.delete(googleOAuthTokens);
+    await db.delete(googleOAuthTokens).where(
+      currentUserId
+        ? eq(googleOAuthTokens.userId, currentUserId)
+        : isNull(googleOAuthTokens.userId)
+    );
     await db.insert(googleOAuthTokens).values({
       accessToken: data.access_token,
       refreshToken: data.refresh_token ?? null,
       expiresAt,
       scope: data.scope ?? GOOGLE_SCOPES,
-      userId: existingUser?.id ?? null
+      userId: currentUserId ?? existingUser?.id ?? null
     });
 
     // If this is a Google Sign-In (we have their email), log them in or create account
@@ -2661,7 +2850,7 @@ app.get("/api/google/callback", async (c) => {
       const [appUser] = existingUser
         ? [existingUser]
         : await db.insert(users).values({ email: googleEmail.toLowerCase() }).returning();
-      issueTokens(c, appUser.id, false, await getSessionTimeout());
+      issueTokens(c, appUser.id, false, await getSessionTimeout(appUser.id));
       return c.redirect(`${GOOGLE_FRONTEND_URL}/?google_connected=1`);
     }
 
@@ -2673,7 +2862,10 @@ app.get("/api/google/callback", async (c) => {
 });
 
 app.get("/api/google/status", async (c) => {
-  const tokens = await db.select().from(googleOAuthTokens).limit(1);
+  const userId = getUserId(c);
+  const tokens = await db.select().from(googleOAuthTokens)
+    .where(or(eq(googleOAuthTokens.userId, userId), isNull(googleOAuthTokens.userId)))
+    .limit(1);
   if (tokens.length === 0) return c.json({ connected: false });
   const token = tokens[0];
   // Connected as long as we have a refresh token (can always renew) OR a non-expired access token
@@ -2684,9 +2876,8 @@ app.get("/api/google/status", async (c) => {
 
 app.post("/api/google/docs/create", async (c) => {
   const { title } = await c.req.json<{ title: string }>();
-  const tokens = await db.select().from(googleOAuthTokens).limit(1);
-  if (tokens.length === 0) return c.json({ error: "Not connected to Google" }, 401);
-  const accessToken = tokens[0].accessToken;
+  const accessToken = await getDriveAccessToken(getUserId(c));
+  if (!accessToken) return c.json({ error: "Not connected to Google" }, 401);
   const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
@@ -2702,7 +2893,8 @@ app.post("/api/google/docs/create", async (c) => {
 });
 
 app.delete("/api/google/disconnect", async (c) => {
-  await db.delete(googleOAuthTokens);
+  const userId = getUserId(c);
+  await db.delete(googleOAuthTokens).where(eq(googleOAuthTokens.userId, userId));
   return c.json({ ok: true });
 });
 
@@ -2712,8 +2904,20 @@ function applyNameRule(rule: string, vars: Record<string, string>): string {
   return rule.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? k);
 }
 
-async function getDriveAccessToken(): Promise<string | null> {
-  const [token] = await db.select().from(googleOAuthTokens).limit(1);
+async function getDriveAccessToken(userId?: string): Promise<string | null> {
+  let token;
+  if (userId) {
+    // Try user-specific token first
+    const [userToken] = await db.select().from(googleOAuthTokens)
+      .where(eq(googleOAuthTokens.userId, userId)).limit(1);
+    token = userToken;
+  }
+  // Fallback to shared token (user_id IS NULL, set by admin)
+  if (!token) {
+    const [shared] = await db.select().from(googleOAuthTokens)
+      .where(isNull(googleOAuthTokens.userId)).limit(1);
+    token = shared;
+  }
   if (!token) return null;
 
   // Auto-refresh if expired or expiring within 5 minutes
@@ -2738,15 +2942,11 @@ async function getDriveAccessToken(): Promise<string | null> {
         const expiresAt = data.expires_in
           ? new Date(Date.now() + data.expires_in * 1000)
           : new Date(Date.now() + 3600 * 1000);
-        await db.update(googleOAuthTokens).set({
-          accessToken: data.access_token,
-          expiresAt,
-        });
+        await db.update(googleOAuthTokens).set({ accessToken: data.access_token, expiresAt })
+          .where(eq(googleOAuthTokens.id, token.id));
         return data.access_token;
       }
-    } catch {
-      // fall through — return existing token and let caller handle 401
-    }
+    } catch { /* fall through — return existing token and let caller handle 401 */ }
   }
 
   return token.accessToken;
@@ -2754,9 +2954,10 @@ async function getDriveAccessToken(): Promise<string | null> {
 
 // Create/get Drive folder for an application
 app.post("/api/applications/:id/drive/init-folder", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const body = await c.req.json<{ folderRule?: string; parentFolderId?: string }>().catch(() => ({ folderRule: undefined, parentFolderId: undefined }));
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
 
   // Idempotent: return existing folder
@@ -2764,7 +2965,7 @@ app.post("/api/applications/:id/drive/init-folder", async (c) => {
     return c.json({ folderId: app_.googleFolderId, folderUrl: app_.googleFolderUrl });
   }
 
-  const accessToken = await getDriveAccessToken();
+  const accessToken = await getDriveAccessToken(userId);
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
   // Build folder name from rule
@@ -2779,7 +2980,7 @@ app.post("/api/applications/:id/drive/init-folder", async (c) => {
     name:   "", // profile name added below
     doc:    ""
   };
-  const [profile] = await db.select({ name: userProfile.name }).from(userProfile).limit(1);
+  const [profile] = await db.select({ name: userProfile.name }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   vars.name = profile?.name ?? "";
 
   const rule = body.folderRule || "{firma} – {rolle} – {datum}";
@@ -2827,11 +3028,12 @@ const TEMPLATE_MIME_ALLOWLIST = new Set([
 // Validate a Drive folder ID and return its name
 // List all files in an application's Drive folder (live from Drive, not DB)
 app.get("/api/applications/:id/drive/files", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const [app_] = await db.select({ googleFolderId: applications.googleFolderId })
-    .from(applications).where(eq(applications.id, id)).limit(1);
+    .from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_?.googleFolderId) return c.json({ error: "Kein Drive-Ordner für diese Bewerbung" }, 400);
-  const accessToken = await getDriveAccessToken();
+  const accessToken = await getDriveAccessToken(userId);
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const files = await listDriveFiles(accessToken, app_.googleFolderId);
   // Return only non-folder files
@@ -2840,9 +3042,10 @@ app.get("/api/applications/:id/drive/files", async (c) => {
 
 // Delete a file from Drive AND optionally from applicationDocuments
 app.delete("/api/applications/:id/drive/files/:fileId", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const fileId = c.req.param("fileId");
-  const accessToken = await getDriveAccessToken();
+  const accessToken = await getDriveAccessToken(userId);
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   // Delete from Drive
   const delRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
@@ -2860,11 +3063,12 @@ app.delete("/api/applications/:id/drive/files/:fileId", async (c) => {
 
 // Upload a PDF from a URL directly into the application's Drive folder
 app.post("/api/applications/:id/drive/upload-pdf-from-url", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
-  const accessToken = await getDriveAccessToken();
+  const accessToken = await getDriveAccessToken(userId);
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Bewerbung nicht gefunden" }, 404);
   if (!app_.googleFolderId) return c.json({ error: "Kein Drive-Ordner für diese Bewerbung" }, 400);
 
@@ -2919,7 +3123,7 @@ app.post("/api/applications/:id/drive/upload-pdf-from-url", async (c) => {
 app.get("/api/drive/folder-info", async (c) => {
   const folderId = c.req.query("folderId");
   if (!folderId) return c.json({ error: "folderId required" }, 400);
-  const accessToken = await getDriveAccessToken();
+  const accessToken = await getDriveAccessToken(getUserId(c));
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const res = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name,mimeType`, {
     headers: { "Authorization": `Bearer ${accessToken}` }
@@ -2949,7 +3153,7 @@ async function listDriveFiles(accessToken: string, folderId: string): Promise<Dr
 app.get("/api/drive/templates", async (c) => {
   const masterFolderId = env.GOOGLE_MASTER_FOLDER_ID;
   if (!masterFolderId) return c.json({ error: "GOOGLE_MASTER_FOLDER_ID nicht konfiguriert" }, 400);
-  const accessToken = await getDriveAccessToken();
+  const accessToken = await getDriveAccessToken(getUserId(c));
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
   const allFiles = await listDriveFiles(accessToken, masterFolderId);
@@ -2981,13 +3185,14 @@ app.get("/api/drive/templates", async (c) => {
 
 // Copy a template file into an application's Drive folder
 app.post("/api/applications/:id/drive/copy-template", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { templateFileId, docRule } = await c.req.json<{ templateFileId: string; docRule?: string }>();
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   if (!app_.googleFolderId) return c.json({ error: "Bitte zuerst einen Drive-Ordner erstellen" }, 400);
 
-  const accessToken = await getDriveAccessToken();
+  const accessToken = await getDriveAccessToken(userId);
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
   // Get original file name for the rule
@@ -2999,7 +3204,7 @@ app.post("/api/applications/:id/drive/copy-template", async (c) => {
 
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  const [profile] = await db.select({ name: userProfile.name }).from(userProfile).limit(1);
+  const [profile] = await db.select({ name: userProfile.name }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const vars = {
     doc:    meta.name,
     firma:  app_.company ?? "Firma",
@@ -3085,14 +3290,21 @@ app.post("/api/applications/:id/drive/copy-template", async (c) => {
 // ─────────────────────────────────────────────────────────────────
 // Export / Import
 // ─────────────────────────────────────────────────────────────────
-async function buildExportPayload() {
+async function buildExportPayload(userId: string) {
+  const appIds = (await db.select({ id: applications.id }).from(applications).where(eq(applications.userId, userId))).map(a => a.id);
   const [apps, docs, activities, contacts, profiles, userDocs] = await Promise.all([
-    db.select().from(applications).orderBy(applications.createdAt),
-    db.select().from(applicationDocuments).orderBy(applicationDocuments.createdAt),
-    db.select().from(applicationActivities).orderBy(applicationActivities.createdAt),
-    db.select().from(applicationContacts).orderBy(applicationContacts.createdAt),
-    db.select().from(userProfile).limit(1),
-    db.select().from(userDocuments).orderBy(userDocuments.createdAt),
+    db.select().from(applications).where(eq(applications.userId, userId)).orderBy(applications.createdAt),
+    appIds.length > 0
+      ? db.select().from(applicationDocuments).where(inArray(applicationDocuments.applicationId, appIds)).orderBy(applicationDocuments.createdAt)
+      : Promise.resolve([]),
+    appIds.length > 0
+      ? db.select().from(applicationActivities).where(inArray(applicationActivities.applicationId, appIds)).orderBy(applicationActivities.createdAt)
+      : Promise.resolve([]),
+    appIds.length > 0
+      ? db.select().from(applicationContacts).where(inArray(applicationContacts.applicationId, appIds)).orderBy(applicationContacts.createdAt)
+      : Promise.resolve([]),
+    db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1),
+    db.select().from(userDocuments).where(eq(userDocuments.userId, userId)).orderBy(userDocuments.createdAt),
   ]);
   return {
     meta: { version: 1, exportedAt: new Date().toISOString(), app: "application-pal" },
@@ -3131,7 +3343,7 @@ async function findOrCreateDriveFolder(accessToken: string, name: string, parent
 
 // Upload a PDF from an existing URL to Google Drive "Application-PDF" folder
 app.post("/api/drive/upload-pdf-from-url", async (c) => {
-  const accessToken = await getDriveAccessToken();
+  const accessToken = await getDriveAccessToken(getUserId(c));
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
   const { url, fileName, parentFolderId } = await c.req.json<{ url: string; fileName: string; parentFolderId?: string }>();
@@ -3190,7 +3402,7 @@ app.post("/api/drive/upload-pdf-from-url", async (c) => {
 
 // Upload a PDF file to Google Drive "Application-PDF" folder
 app.post("/api/drive/upload-pdf", async (c) => {
-  const accessToken = await getDriveAccessToken();
+  const accessToken = await getDriveAccessToken(getUserId(c));
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
   const formData = await c.req.formData();
@@ -3241,14 +3453,15 @@ app.post("/api/drive/upload-pdf", async (c) => {
 
 // Copy a user-library document (by userDocumentId) into the application's Drive folder
 app.post("/api/applications/:id/drive/copy-doc", async (c) => {
+  const userId = getUserId(c);
   const id = c.req.param("id");
   const { userDocumentId, docRule } = await c.req.json<{ userDocumentId: string; docRule?: string }>();
 
-  const [app_] = await db.select().from(applications).where(eq(applications.id, id)).limit(1);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Bewerbung nicht gefunden" }, 404);
   if (!app_.googleFolderId) return c.json({ error: "Kein Drive-Ordner für diese Bewerbung" }, 400);
 
-  const [libDoc] = await db.select().from(userDocuments).where(eq(userDocuments.id, userDocumentId)).limit(1);
+  const [libDoc] = await db.select().from(userDocuments).where(and(eq(userDocuments.id, userDocumentId), eq(userDocuments.userId, userId))).limit(1);
   if (!libDoc) return c.json({ error: "Dokument nicht gefunden" }, 404);
   if (!libDoc.url) return c.json({ error: "Dokument hat keine URL" }, 400);
 
@@ -3262,12 +3475,12 @@ app.post("/api/applications/:id/drive/copy-doc", async (c) => {
   if (!docIdMatch) return c.json({ error: "Ungültige Google Docs URL" }, 400);
   const fileId = docIdMatch[1];
 
-  const accessToken = await getDriveAccessToken();
+  const accessToken = await getDriveAccessToken(userId);
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
-  const [profile] = await db.select({ name: userProfile.name }).from(userProfile).limit(1);
+  const [profile] = await db.select({ name: userProfile.name }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const vars = {
     doc:    libDoc.name,
     firma:  app_.company ?? "Firma",
@@ -3324,7 +3537,7 @@ app.post("/api/applications/:id/drive/copy-doc", async (c) => {
 });
 
 app.get("/api/export", async (c) => {
-  const payload = await buildExportPayload();
+  const payload = await buildExportPayload(getUserId(c));
   const date = new Date().toISOString().slice(0, 10);
   c.header("Content-Disposition", `attachment; filename="application-pal-export-${date}.json"`);
   c.header("Content-Type", "application/json");
@@ -3333,10 +3546,11 @@ app.get("/api/export", async (c) => {
 
 // Save export to Google Drive
 app.post("/api/export/drive", async (c) => {
-  const accessToken = await getDriveAccessToken();
+  const userId = getUserId(c);
+  const accessToken = await getDriveAccessToken(userId);
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
-  const payload = await buildExportPayload();
+  const payload = await buildExportPayload(userId);
   const date     = new Date().toISOString().slice(0, 10);
   const fileName = `application-pal-backup-${date}.json`;
   const content  = JSON.stringify(payload, null, 2);
@@ -3374,6 +3588,7 @@ app.post("/api/export/drive", async (c) => {
 });
 
 app.post("/api/import", async (c) => {
+  const userId = getUserId(c);
   const body = await c.req.json<{
     mode?: "replace" | "merge";
     data: {
@@ -3394,22 +3609,23 @@ app.post("/api/import", async (c) => {
   }
 
   if (mode === "replace") {
-    // Delete in FK-safe order
-    await db.delete(applicationActivities);
-    await db.delete(applicationContacts);
-    await db.delete(applicationDocuments);
-    await db.delete(applications);
-    await db.delete(userDocuments);
-    await db.delete(userProfile);
+    // Delete only this user's data in FK-safe order
+    const userAppIds = (await db.select({ id: applications.id }).from(applications).where(eq(applications.userId, userId))).map(a => a.id);
+    if (userAppIds.length > 0) {
+      await db.delete(applicationActivities).where(inArray(applicationActivities.applicationId, userAppIds));
+      await db.delete(applicationContacts).where(inArray(applicationContacts.applicationId, userAppIds));
+      await db.delete(applicationDocuments).where(inArray(applicationDocuments.applicationId, userAppIds));
+    }
+    await db.delete(applications).where(eq(applications.userId, userId));
+    await db.delete(userDocuments).where(eq(userDocuments.userId, userId));
+    await db.delete(userProfile).where(eq(userProfile.userId, userId));
   }
 
-  // Insert all records — skip duplicates on conflict (for merge mode)
+  // Insert all records — add userId, skip duplicates on conflict (for merge mode)
   if (data.applications?.length) {
     for (const row of data.applications) {
-      await db.insert(applications).values(row as never).onConflictDoUpdate({
-        target: applications.id,
-        set: row as never,
-      });
+      const r = Object.assign({}, row, { userId }) as never;
+      await db.insert(applications).values(r).onConflictDoUpdate({ target: applications.id, set: r });
     }
   }
   if (data.applicationDocuments?.length) {
@@ -3438,17 +3654,13 @@ app.post("/api/import", async (c) => {
   }
   if (data.userDocuments?.length) {
     for (const row of data.userDocuments) {
-      await db.insert(userDocuments).values(row as never).onConflictDoUpdate({
-        target: userDocuments.id,
-        set: row as never,
-      });
+      const r = Object.assign({}, row, { userId }) as never;
+      await db.insert(userDocuments).values(r).onConflictDoUpdate({ target: userDocuments.id, set: r });
     }
   }
   if (data.userProfile) {
-    await db.insert(userProfile).values(data.userProfile as never).onConflictDoUpdate({
-      target: userProfile.id,
-      set: data.userProfile as never,
-    });
+    const rp = Object.assign({}, data.userProfile, { userId }) as never;
+    await db.insert(userProfile).values(rp).onConflictDoUpdate({ target: userProfile.id, set: rp });
   }
 
   return c.json({ ok: true, mode, imported: {

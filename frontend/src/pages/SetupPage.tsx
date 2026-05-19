@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
@@ -10,16 +10,25 @@ type Mode = "setup" | "login";
 export function SetupPage() {
   const { refetch } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
 
   // Determine initial mode: if an account already exists → login, else → setup
   const [mode, setMode] = useState<Mode>("setup");
   const [hasAccount, setHasAccount] = useState(false);
 
+  // Invite token from URL (?invite=TOKEN) — set automatically when using invite link
+  const [inviteToken, setInviteToken] = useState(searchParams.get("invite") ?? "");
+  const hasInvite = !!inviteToken;
+
   useEffect(() => {
     api.get<{ setup: boolean }>("/api/auth/status").then(r => {
-      if (r.data.setup) { setHasAccount(true); setMode("login"); }
+      if (r.data.setup) {
+        setHasAccount(true);
+        // If we have an invite token, show registration form; otherwise show login
+        setMode(hasInvite ? "setup" : "login");
+      }
     }).catch(() => {});
-  }, []);
+  }, [hasInvite]);
 
   // Shared fields
   const [email, setEmail]     = useState("");
@@ -39,7 +48,8 @@ export function SetupPage() {
       if (mode === "setup") {
         if (password !== confirm) { setError("Passwörter stimmen nicht überein"); setLoading(false); return; }
         if (password.length < 8)  { setError("Passwort muss mindestens 8 Zeichen haben"); setLoading(false); return; }
-        await api.post("/api/auth/setup", { email, password });
+        // Send invite token when registering additional users
+        await api.post("/api/auth/setup", { email, password, inviteToken: inviteToken || undefined });
       } else {
         await api.post("/api/auth/login", { email, password, rememberMe });
       }
@@ -146,11 +156,33 @@ export function SetupPage() {
               placeholder={mode === "setup" ? "Mindestens 8 Zeichen" : "Passwort"} required />
           </div>
           {mode === "setup" && (
-            <div className="field">
-              <label>Passwort bestätigen</label>
-              <input className="input-line" type="password" value={confirm}
-                onChange={e => setConfirm(e.target.value)} placeholder="Passwort wiederholen" required />
-            </div>
+            <>
+              <div className="field">
+                <label>Passwort bestätigen</label>
+                <input className="input-line" type="password" value={confirm}
+                  onChange={e => setConfirm(e.target.value)} placeholder="Passwort wiederholen" required />
+              </div>
+              {/* Invite token — pre-filled if arriving via invite link, or manual entry */}
+              {hasAccount && (
+                <div className="field">
+                  <label>Einladungstoken</label>
+                  <input
+                    className="input-line"
+                    type="text"
+                    value={inviteToken}
+                    onChange={e => setInviteToken(e.target.value)}
+                    placeholder="Token aus der Einladungs-E-Mail"
+                    required
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
+                  />
+                  {hasInvite && (
+                    <div style={{ fontSize: 11, color: "#4ade80", marginTop: 4 }}>
+                      ✓ Einladungslink aktiv
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
           )}
           {mode === "login" && (
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none" }}>

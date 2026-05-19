@@ -26,11 +26,10 @@ type UiState = {
   selectedApplicationId: string | null;
   isImportModalOpen: boolean;
   ai: AiConfig;
-  // Google Drive naming rules
+  // Google Drive naming rules (UI preferences, kept in local store)
   driveNameFolder: string;
   driveNameDoc: string;
-  // Google Drive parent folder for new application folders (empty = My Drive root)
-  driveApplicationsFolderId: string;
+  // NOTE: driveApplicationsFolderId moved to user_profile (per-user, server-side)
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   setAccent: (accent: Accent) => void;
@@ -44,7 +43,6 @@ type UiState = {
   setAi: (ai: Partial<AiConfig>) => void;
   setDriveNameFolder: (rule: string) => void;
   setDriveNameDoc: (rule: string) => void;
-  setDriveApplicationsFolderId: (id: string) => void;
 };
 
 export const useUiStore = create<UiState>()(
@@ -65,7 +63,6 @@ export const useUiStore = create<UiState>()(
       },
       driveNameFolder: DEFAULT_FOLDER_RULE,
       driveNameDoc:    DEFAULT_DOC_RULE,
-      driveApplicationsFolderId: "",
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
       setAccent: (accent) => set({ accent }),
@@ -79,7 +76,6 @@ export const useUiStore = create<UiState>()(
       setAi: (patch) => set((s) => ({ ai: { ...s.ai, ...patch } })),
       setDriveNameFolder: (driveNameFolder) => set({ driveNameFolder }),
       setDriveNameDoc:    (driveNameDoc)    => set({ driveNameDoc }),
-      setDriveApplicationsFolderId: (driveApplicationsFolderId) => set({ driveApplicationsFolderId }),
     }),
     {
       name: "app-pal-ui-v2",
@@ -87,9 +83,10 @@ export const useUiStore = create<UiState>()(
         const s = persisted as Record<string, unknown>;
         if (s?.density === "compact") s.density = "high";
         if (s?.density === "comfortable") s.density = "low";
-        // Seed defaults for new drive naming fields
         if (!s?.driveNameFolder) s.driveNameFolder = DEFAULT_FOLDER_RULE;
         if (!s?.driveNameDoc)    s.driveNameDoc    = DEFAULT_DOC_RULE;
+        // Remove legacy field (now stored in user_profile)
+        delete s.driveApplicationsFolderId;
         return s;
       }
     }
