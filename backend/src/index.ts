@@ -81,7 +81,8 @@ function issueTokens(c: Parameters<typeof setCookie>[0], userId: string, remembe
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const access  = jwt.sign({ userId }, getJwtSecret(), { expiresIn: accessTimeout } as any);
   const refreshExpiry = rememberMe ? "90d" : "1d";
-  const refresh = jwt.sign({ userId }, getJwtSecret(), { expiresIn: refreshExpiry });
+  // Include rememberMe in the refresh token payload so silent refresh can preserve it
+  const refresh = jwt.sign({ userId, rememberMe }, getJwtSecret(), { expiresIn: refreshExpiry });
   const secure  = env.APP_URL.startsWith("https");
   setCookie(c, "access_token",  access,  { httpOnly: true, sameSite: "Lax", path: "/", secure, maxAge });
   setCookie(c, "refresh_token", refresh, { httpOnly: true, sameSite: "Lax", path: "/", secure, ...(rememberMe ? { maxAge: 60 * 60 * 24 * 90 } : {}) });
@@ -143,8 +144,8 @@ app.use("/api/*", async (c, next) => {
     const refresh = getCookie(c, "refresh_token");
     if (refresh) {
       try {
-        const rp = jwt.verify(refresh, getJwtSecret()) as { userId: string };
-        issueTokens(c, rp.userId, false, await getSessionTimeout(rp.userId));
+        const rp = jwt.verify(refresh, getJwtSecret()) as { userId: string; rememberMe?: boolean };
+        issueTokens(c, rp.userId, rp.rememberMe === true, await getSessionTimeout(rp.userId));
         c.set("userId" as never, rp.userId);
         return next();
       } catch { /* fall through */ }
@@ -243,16 +244,29 @@ app.post("/api/auth/logout", (c) => {
 
 // Current user
 app.get("/api/auth/me", async (c) => {
+  // 1. Try access_token
   const token = getCookie(c, "access_token");
-  if (!token) return c.json({ error: "Unauthorized" }, 401);
-  try {
-    const { userId } = jwt.verify(token, getJwtSecret()) as { userId: string };
-    const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
-    if (!user) return c.json({ error: "Unauthorized" }, 401);
-    return c.json({ email: user.email });
-  } catch {
-    return c.json({ error: "Unauthorized" }, 401);
+  if (token) {
+    try {
+      const { userId } = jwt.verify(token, getJwtSecret()) as { userId: string };
+      const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
+      if (user) return c.json({ email: user.email });
+    } catch { /* expired — fall through to refresh */ }
   }
+  // 2. access_token missing/expired → try refresh_token (silent refresh)
+  const refresh = getCookie(c, "refresh_token");
+  if (refresh) {
+    try {
+      const rp = jwt.verify(refresh, getJwtSecret()) as { userId: string; rememberMe?: boolean };
+      const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, rp.userId)).limit(1);
+      if (user) {
+        const timeout = await getSessionTimeout(rp.userId);
+        issueTokens(c, rp.userId, rp.rememberMe === true, timeout);
+        return c.json({ email: user.email });
+      }
+    } catch { /* refresh invalid or expired */ }
+  }
+  return c.json({ error: "Unauthorized" }, 401);
 });
 
 // Refresh access token
@@ -1174,6 +1188,17 @@ app.get("/api/applications", async (c) => {
   return c.json(rows);
 });
 
+// Single application — used by DetailDrawer to get fresh AI data on mount
+app.get("/api/applications/:id", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const [row] = await db.select().from(applications)
+    .where(and(eq(applications.id, id), eq(applications.userId, userId)))
+    .limit(1);
+  if (!row) return c.json({ error: "Not found" }, 404);
+  return c.json(row);
+});
+
 app.post("/api/applications", zValidator("json", applicationInsertSchema), async (c) => {
   const userId = getUserId(c);
   const payload = c.req.valid("json");
@@ -1506,6 +1531,27 @@ app.put("/api/profile", zValidator("json", userProfileInsertSchema), async (c) =
   }
   const [updated] = await db.update(userProfile)
     .set({ ...payload, updatedAt: new Date() })
+    .where(eq(userProfile.userId, userId))
+    .returning();
+  return c.json(updated);
+});
+
+// PATCH /api/profile — partial update (subset of fields, no full-schema validation)
+// Used by Settings dropdowns: sessionTimeout, googleCalendarId, driveApplicationsFolderId, etc.
+app.patch("/api/profile", async (c) => {
+  const userId = getUserId(c);
+  const patch = await c.req.json<Partial<typeof userProfile.$inferInsert>>();
+  // Ensure userId is never overwritten via the patch body
+  delete (patch as Record<string, unknown>).userId;
+  delete (patch as Record<string, unknown>).id;
+
+  const existing = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  if (existing.length === 0) {
+    const [created] = await db.insert(userProfile).values({ ...patch, userId }).returning();
+    return c.json(created, 201);
+  }
+  const [updated] = await db.update(userProfile)
+    .set({ ...patch, updatedAt: new Date() })
     .where(eq(userProfile.userId, userId))
     .returning();
   return c.json(updated);

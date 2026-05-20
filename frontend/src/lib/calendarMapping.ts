@@ -85,7 +85,7 @@ function parseInterviewEvent(app: Application, round: 1 | 2): CalendarEvent | nu
     source:      "local",
     color:       stageColor(app.stage),
     description: descParts.join(" · "),
-    metadata:    { appId: app.id, company: app.company, role: app.role, stage: app.stage, round, details: d },
+    metadata:    { appId: app.id, company: app.company, role: app.role, stage: app.stage, round, details: d, matchScore: app.matchScore ?? null },
   };
 }
 
@@ -175,7 +175,7 @@ export function applicationsToCalendarEvents(apps: Application[]): CalendarEvent
         color:       stageColor(app.stage),
         // No phase label — color encodes phase. Show role + date for context.
         description: app.role || undefined,
-        metadata:    { appId: app.id, company: app.company, role: app.role, stage: app.stage },
+        metadata:    { appId: app.id, company: app.company, role: app.role, stage: app.stage, matchScore: app.matchScore ?? null },
       });
     }
     // Created event

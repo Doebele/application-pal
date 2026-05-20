@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { OpenNewWindow, FloppyDisk, User, Linkedin, Page, RefreshCircle, Expand, Collapse, LightBulb } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 import type { UserProfile } from "@application-pal/shared";
 
-function AutoResizeTextarea({ value, onChange, placeholder, minRows = 4 }: {
+function AutoResizeTextarea({ value, onChange, onBlur, placeholder, minRows = 4 }: {
   value: string;
   onChange: (v: string) => void;
+  onBlur?: () => void;
   placeholder?: string;
   minRows?: number;
 }) {
@@ -22,6 +25,7 @@ function AutoResizeTextarea({ value, onChange, placeholder, minRows = 4 }: {
       ref={ref}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={onBlur}
       placeholder={placeholder}
       rows={minRows}
       style={{ resize: "none", overflow: "hidden", background: "transparent", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none" }}
@@ -42,6 +46,9 @@ export function ProfilePage() {
   const [saved, setSaved] = useState(false);
   const [linkedinExpanded, setLinkedinExpanded] = useState(false);
   const [cvExpanded, setCvExpanded] = useState(false);
+  // Vorschau / Bearbeiten modes
+  const [cvMode, setCvMode]       = useState<"preview" | "edit">("preview");
+  const [notesMode, setNotesMode] = useState<"preview" | "edit">("preview");
 
   useEffect(() => {
     api.get<UserProfile>("/api/profile")
@@ -224,6 +231,22 @@ export function ProfilePage() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <Page width={14} height={14} style={{ color: "var(--accent)" }} />
             <div className="eyebrow" style={{ flex: 1 }}>Master-Lebenslauf</div>
+            {/* Vorschau / Bearbeiten toggle */}
+            <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", borderRadius: 6, padding: 2 }}>
+              {(["preview", "edit"] as const).map(m => (
+                <button key={m} onClick={() => setCvMode(m)} style={{
+                  fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: "pointer",
+                  background: cvMode === m ? "var(--surface)" : "transparent",
+                  color: cvMode === m ? "var(--fg-1)" : "var(--fg-3)",
+                  fontFamily: "var(--font-sans)", fontWeight: 600,
+                }}>
+                  {m === "preview" ? "Vorschau" : "Bearbeiten"}
+                </button>
+              ))}
+            </div>
+            <span style={{ fontSize: 10, color: "var(--fg-3)", marginLeft: 4 }}>
+              {(profile.masterCv?.length ?? 0).toLocaleString()} Z.
+            </span>
             <button
               className="btn btn-ghost btn-icon"
               onClick={() => setCvExpanded((v) => !v)}
@@ -241,13 +264,33 @@ export function ProfilePage() {
           <div className="settings-group" style={cvExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
             <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", ...(cvExpanded ? { flex: 1 } : {}) }}>
               <div className="field" style={cvExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
-                <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span>Lebenslauf (Volltext, Markdown möglich)</span>
-                  <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 400 }}>
-                    {(profile.masterCv?.length ?? 0).toLocaleString()} Zeichen
-                  </span>
-                </label>
-                {cvExpanded ? (
+                {cvMode === "preview" ? (
+                  <div
+                    className="md-body"
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: 8,
+                      border: "1px solid var(--border)",
+                      background: "var(--surface-2)",
+                      overflow: "auto",
+                      ...(cvExpanded
+                        ? { flex: 1 }                          // fills parent in expand mode
+                        : { maxHeight: 480, minHeight: 160 }), // scrollable box in normal mode
+                    }}
+                  >
+                    {profile.masterCv
+                      ? <ReactMarkdown remarkPlugins={[remarkGfm]}
+                          components={{ a: ({ href, children }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                          )}}>
+                          {profile.masterCv}
+                        </ReactMarkdown>
+                      : <div style={{ fontSize: 12, color: "var(--fg-3)", fontStyle: "italic" }}>
+                          Noch kein Lebenslauf vorhanden — wechsle zu „Bearbeiten" um Text einzufügen.
+                        </div>
+                    }
+                  </div>
+                ) : cvExpanded ? (
                   <textarea
                     value={profile.masterCv ?? ""}
                     onChange={(e) => setProfile((p) => ({ ...p, masterCv: e.target.value }))}
@@ -280,6 +323,19 @@ export function ProfilePage() {
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <LightBulb width={14} height={14} style={{ color: "#f59e0b" }} />
             <div className="eyebrow" style={{ flex: 1 }}>Persönliche Stichpunkte</div>
+            {/* Vorschau / Bearbeiten toggle */}
+            <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", borderRadius: 6, padding: 2 }}>
+              {(["preview", "edit"] as const).map(m => (
+                <button key={m} onClick={() => setNotesMode(m)} style={{
+                  fontSize: 10, padding: "2px 8px", borderRadius: 4, border: "none", cursor: "pointer",
+                  background: notesMode === m ? "var(--surface)" : "transparent",
+                  color: notesMode === m ? "var(--fg-1)" : "var(--fg-3)",
+                  fontFamily: "var(--font-sans)", fontWeight: 600,
+                }}>
+                  {m === "preview" ? "Vorschau" : "Bearbeiten"}
+                </button>
+              ))}
+            </div>
             <button
               className="btn btn-ghost btn-icon"
               onClick={() => setNotesExpanded((v) => !v)}
@@ -296,13 +352,33 @@ export function ProfilePage() {
           <div className="settings-group" style={notesExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
             <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", ...(notesExpanded ? { flex: 1 } : {}) }}>
               <div className="field" style={notesExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
-                <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <span>Stichpunkte (Freitext)</span>
-                  <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 400 }}>
-                    {(profile.personalNotes?.length ?? 0).toLocaleString()} Zeichen
-                  </span>
-                </label>
-                {notesExpanded ? (
+                {notesMode === "preview" ? (
+                  <div
+                    className="md-body"
+                    style={{
+                      padding: "12px 14px",
+                      borderRadius: 8,
+                      border: "1px solid var(--border)",
+                      background: "var(--surface-2)",
+                      overflow: "auto",
+                      ...(notesExpanded
+                        ? { flex: 1 }
+                        : { maxHeight: 320, minHeight: 80 }),
+                    }}
+                  >
+                    {profile.personalNotes
+                      ? <ReactMarkdown remarkPlugins={[remarkGfm]}
+                          components={{ a: ({ href, children }) => (
+                            <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
+                          )}}>
+                          {profile.personalNotes}
+                        </ReactMarkdown>
+                      : <div style={{ fontSize: 12, color: "var(--fg-3)", fontStyle: "italic" }}>
+                          Noch keine Stichpunkte vorhanden — wechsle zu „Bearbeiten" um Text einzufügen.
+                        </div>
+                    }
+                  </div>
+                ) : notesExpanded ? (
                   <textarea
                     value={profile.personalNotes ?? ""}
                     onChange={(e) => setProfile((p) => ({ ...p, personalNotes: e.target.value }))}
@@ -311,13 +387,12 @@ export function ProfilePage() {
                     style={{ flex: 1, resize: "none", minHeight: 200, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none" }}
                   />
                 ) : (
-                  <textarea
+                  <AutoResizeTextarea
                     value={profile.personalNotes ?? ""}
-                    onChange={(e) => setProfile((p) => ({ ...p, personalNotes: e.target.value }))}
+                    onChange={(v) => setProfile((p) => ({ ...p, personalNotes: v }))}
                     onBlur={() => save({ personalNotes: profile.personalNotes })}
                     placeholder={`- Gehaltsvorstellung: CHF 110–130k\n- Remote-first bevorzugt\n- Stärken: UX Research, Design Systems\n- Wichtig: flache Hierarchien, agiles Umfeld`}
-                    rows={4}
-                    style={{ resize: "vertical", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none", width: "100%" }}
+                    minRows={4}
                   />
                 )}
               </div>

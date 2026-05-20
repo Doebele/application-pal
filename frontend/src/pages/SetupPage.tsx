@@ -94,21 +94,15 @@ export function SetupPage() {
           </div>
         </div>
 
-        {/* Tab switcher — only show both tabs when no account exists yet */}
-        {!hasAccount ? (
-          <div style={{ display: "flex", background: "var(--surface-2)", borderRadius: 10, padding: 3, marginBottom: 24, border: "1px solid var(--border)" }}>
-            <TabBtn active={mode === "setup"} onClick={() => { setMode("setup"); setError(""); }}>
-              Konto erstellen
-            </TabBtn>
-            <TabBtn active={mode === "login"} onClick={() => { setMode("login"); setError(""); }}>
-              Anmelden
-            </TabBtn>
-          </div>
-        ) : (
-          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-2)", marginBottom: 20 }}>
+        {/* Tab switcher — always visible */}
+        <div style={{ display: "flex", background: "var(--surface-2)", borderRadius: 10, padding: 3, marginBottom: 24, border: "1px solid var(--border)" }}>
+          <TabBtn active={mode === "login"} onClick={() => { setMode("login"); setError(""); }}>
             Anmelden
-          </div>
-        )}
+          </TabBtn>
+          <TabBtn active={mode === "setup"} onClick={() => { setMode("setup"); setError(""); }}>
+            Registrieren
+          </TabBtn>
+        </div>
 
         {/* Google + Passkey buttons */}
         <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 20 }}>
@@ -120,7 +114,7 @@ export function SetupPage() {
               <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/>
               <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
             </svg>
-            Mit Google {mode === "setup" ? "registrieren" : "anmelden"}
+            {mode === "setup" ? "Mit Google registrieren" : "Mit Google anmelden"}
           </button>
 
           {supportsPasskey && mode === "login" && (
@@ -162,22 +156,31 @@ export function SetupPage() {
                 <input className="input-line" type="password" value={confirm}
                   onChange={e => setConfirm(e.target.value)} placeholder="Passwort wiederholen" required />
               </div>
-              {/* Invite token — pre-filled if arriving via invite link, or manual entry */}
+              {/* Invite token — required for additional users, pre-filled via ?invite= URL */}
               {hasAccount && (
                 <div className="field">
-                  <label>Einladungstoken</label>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    Einladungscode
+                    <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 400 }}>
+                      — erforderlich für neue Konten
+                    </span>
+                  </label>
                   <input
                     className="input-line"
                     type="text"
                     value={inviteToken}
                     onChange={e => setInviteToken(e.target.value)}
-                    placeholder="Token aus der Einladungs-E-Mail"
+                    placeholder="Code aus dem Einladungslink"
                     required
-                    style={{ fontFamily: "var(--font-mono)", fontSize: 12 }}
+                    style={{ fontFamily: "var(--font-mono)", fontSize: 12, letterSpacing: "0.04em" }}
                   />
-                  {hasInvite && (
+                  {hasInvite ? (
                     <div style={{ fontSize: 11, color: "#4ade80", marginTop: 4 }}>
                       ✓ Einladungslink aktiv
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 4, lineHeight: 1.5 }}>
+                      Einladungslinks werden in den Einstellungen unter „Nutzer einladen" erstellt.
                     </div>
                   )}
                 </div>

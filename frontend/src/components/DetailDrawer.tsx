@@ -1293,6 +1293,7 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
   onRegister?: (id: string, data: unknown) => void;
 }) {
   const { ai } = useUiStore();
+  const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -1311,6 +1312,9 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
       const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
       const r = await api.post<Record<string, unknown>>(`/api/applications/${appId}${endpoint}`, aiBody);
       onRegister?.(id, r.data);
+      // Invalidate so the parent re-fetches fresh aiResultsCache from DB
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["application", appId] });
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Fehler";
       setErr(msg);
@@ -1346,9 +1350,9 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
       {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, flexShrink: 0 }}>{err}</div>}
 
       {/* Two-column: left = detail content, right = large tile */}
-      <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0 }}>
+      <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0, alignItems: "flex-start" }}>
         {/* Left column — detail content */}
-        <div style={{ flex: 1, overflow: "auto" }}>
+        <div style={{ flex: 1, overflow: "auto", alignSelf: "stretch" }}>
           {hasData ? (
             <AiResultDetail id={id} data={entry.data} appId={appId} onUpdate={onRegister} />
           ) : (
@@ -2555,6 +2559,7 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
   };
 
   const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+  const queryClient = useQueryClient();
 
   const run = async (key: string, fn: () => Promise<void>) => {
     if (ai.provider === "none") { setErr("KI-Modell in Settings konfigurieren"); return; }
@@ -2562,6 +2567,9 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
     try {
       await fn();
       setResultTimes(prev => ({ ...prev, [key]: new Date() }));
+      // Refresh application data so aiResultsCache is up-to-date in all views
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["application", app.id] });
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Fehler";
       setErr(msg);
@@ -3786,6 +3794,7 @@ function MiniBar({ label, value, color }: { label: string; value: number; color:
 
 function AgentTab({ app }: { app: Application }) {
   const { ai } = useUiStore();
+  const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
   const [stepN, setStepN] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -3816,6 +3825,9 @@ function AgentTab({ app }: { app: Application }) {
       });
       setResult(res.data);
       setStepN(4);
+      // Persist: refresh cache so matchScore badge + next drawer open show correct data
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["application", app.id] });
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Unbekannter Fehler";
       setError(msg);
@@ -4284,6 +4296,72 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
     setAiResultsRegistry(prev => ({ ...prev, [id]: { data, createdAt: new Date() } }));
   }, []);
 
+  // Live-sync: whenever the React Query cache for this application is refreshed
+  // (e.g. after an AI call or background refetch), merge fresh DB data into the registry.
+  // This ensures results generated in other sessions or while the drawer was closed are shown.
+  const { data: freshApp } = useQuery<Application>({
+    queryKey: ["application", app.id],
+    queryFn: () => api.get<Application>(`/api/applications/${app.id}`).then(r => r.data),
+    staleTime: 0,          // always consider stale so it refetches on mount
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+  });
+
+  // Merge fresh data into registry whenever the live query or parent prop updates
+  useEffect(() => {
+    const source = freshApp ?? app;
+    const patch: Record<string, { data: unknown; createdAt: Date }> = {};
+
+    if ((source as Application & { glassdoorData?: string }).glassdoorData) {
+      try {
+        const d = JSON.parse((source as Application & { glassdoorData?: string }).glassdoorData!);
+        patch["glassdoor-check"] = { data: d, createdAt: d.updatedAt ? new Date(d.updatedAt) : new Date() };
+      } catch {}
+    }
+    if ((source as Application & { kununuData?: string }).kununuData) {
+      try {
+        const d = JSON.parse((source as Application & { kununuData?: string }).kununuData!);
+        patch["kununu-check"] = { data: d, createdAt: d.updatedAt ? new Date(d.updatedAt) : new Date() };
+      } catch {}
+    }
+    if ((source as Application & { linkedinData?: string }).linkedinData) {
+      try {
+        const d = JSON.parse((source as Application & { linkedinData?: string }).linkedinData!);
+        patch["linkedin-profile"] = { data: d, createdAt: d.updatedAt ? new Date(d.updatedAt) : new Date() };
+      } catch {}
+    }
+    const prep = source.stage === "interview_1" ? source.interview1Prep : source.stage === "interview_2" ? source.interview2Prep : null;
+    if (prep) {
+      try { patch["interview-prep"] = { data: JSON.parse(prep), createdAt: new Date() }; } catch {}
+    }
+    const cache = (source as Application & { aiResultsCache?: string }).aiResultsCache;
+    if (cache) {
+      try {
+        const parsed = JSON.parse(cache) as Record<string, Record<string, unknown> & { _savedAt?: string }>;
+        for (const [key, entry] of Object.entries(parsed)) {
+          patch[key] = { data: entry, createdAt: entry._savedAt ? new Date(entry._savedAt) : new Date() };
+        }
+      } catch {}
+    }
+    if (Object.keys(patch).length > 0) {
+      setAiResultsRegistry(prev => {
+        const merged = { ...prev };
+        for (const [key, dbEntry] of Object.entries(patch)) {
+          const memEntry = prev[key];
+          // Use the fresher entry based on timestamp.
+          // DB wins when:  (a) no in-memory entry yet, or
+          //                (b) DB timestamp is strictly newer (result was generated while drawer was closed)
+          // In-memory wins when it was just generated in this session (its timestamp is newer).
+          if (!memEntry || dbEntry.createdAt.getTime() > memEntry.createdAt.getTime()) {
+            merged[key] = dbEntry;
+          }
+        }
+        return merged;
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [freshApp]);
+
   const patchMutation = useMutation({
     mutationFn: (patch: Partial<Application>) =>
       api.patch(`/api/applications/${app.id}`, patch).then((r) => r.data),
@@ -4373,12 +4451,13 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
         </div>
 
         <div className="drawer-body" style={{ paddingTop: 16 }}>
-          {tab === "process"      && <ProcessTab      app={app} onSave={(p) => patchMutation.mutate(p)} onAiResult={registerAiResult} />}
-          {tab === "details"      && <DetailsTab      app={app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} aiResults={aiResultsRegistry} onAiResultUpdate={updateAiResult} />}
-          {tab === "documents"    && <DocumentsTab    app={app} />}
-          {tab === "insights"     && <AgentTab        app={app} />}
-          {tab === "contacts"     && <ContactsTab     app={app} />}
-          {tab === "notes"        && <NotesTab        app={app} onSave={(p) => patchMutation.mutate(p)} />}
+          {/* Use freshApp wherever available so DB data is always current after tab switches */}
+          {tab === "process"      && <ProcessTab      app={freshApp ?? app} onSave={(p) => patchMutation.mutate(p)} onAiResult={registerAiResult} />}
+          {tab === "details"      && <DetailsTab      app={freshApp ?? app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} aiResults={aiResultsRegistry} onAiResultUpdate={updateAiResult} />}
+          {tab === "documents"    && <DocumentsTab    app={freshApp ?? app} />}
+          {tab === "insights"     && <AgentTab        app={freshApp ?? app} />}
+          {tab === "contacts"     && <ContactsTab     app={freshApp ?? app} />}
+          {tab === "notes"        && <NotesTab        app={freshApp ?? app} onSave={(p) => patchMutation.mutate(p)} />}
         </div>
       </aside>
 

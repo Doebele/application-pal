@@ -183,29 +183,35 @@ function EventPill({
     onSelect(event, x, rect.top);
   };
 
+  const matchScore = event.metadata?.matchScore as number | null | undefined;
+
   return (
     <button
       className={`cal-event-pill${weekView ? " cal-event-pill-week" : ""}`}
       style={{
-        // Tinted background: passes WCAG regardless of color
-        background: `${color}1e`,      // ~12% opacity
+        background: `${color}1e`,      // ~12% opacity tint — WCAG safe
         borderLeft: `3px solid ${color}`,
-        color: "var(--fg-1)",          // always dark
+        color: "var(--fg-1)",
       }}
       onClick={handleClick}
       title={`${event.title}${event.description ? "\n" + event.description : ""}`}
     >
-      <span className="cal-pill-title" style={{ color: "var(--fg-1)" }}>
-        {event.title}
-      </span>
+      <div style={{ display: "flex", alignItems: "center", gap: 4, minWidth: 0 }}>
+        {matchScore != null && (
+          <span className="cal-match-badge" style={{
+            color: matchScore >= 75 ? "#22c55e" : matchScore >= 50 ? "#f59e0b" : "#f87171",
+          }}>
+            {matchScore}%
+          </span>
+        )}
+        <span className="cal-pill-title" style={{ color: "var(--fg-1)", flex: 1, minWidth: 0 }}>
+          {event.title}
+        </span>
+      </div>
       {event.description && (
         <span
           className="cal-pill-sub"
-          style={{
-            // In week view show more lines; month view stays compact
-            WebkitLineClamp: weekView ? 3 : 1,
-            color: "var(--fg-2)",
-          }}
+          style={{ WebkitLineClamp: weekView ? 3 : 1, color: "var(--fg-2)" }}
         >
           {event.description}
         </span>
@@ -261,11 +267,11 @@ function MonthView({
             className={`cal-day${!day ? " muted" : ""}${isToday ? " today" : ""}`}
           >
             {day && <div className="cal-day-num">{day.getDate()}</div>}
-            {dayEvents.slice(0, 3).map((ev) => (
+            {dayEvents.slice(0, 6).map((ev) => (
               <EventPill key={ev.id} event={ev} onSelect={onSelectEvent} />
             ))}
-            {dayEvents.length > 3 && (
-              <div className="cal-more">+{dayEvents.length - 3}</div>
+            {dayEvents.length > 6 && (
+              <div className="cal-more">+{dayEvents.length - 6}</div>
             )}
           </div>
         );
