@@ -392,37 +392,6 @@ export function Rail({ applications }: Props) {
             ))}
           </div>
 
-          {/* ── Pipeline ── */}
-          <RailSection label="PIPELINE" open={railOpen} />
-          <div className="rail-section">
-            {STAGES.map((stage) => {
-              const count = countByStage(stage.id);
-              return (
-                <NavLink
-                  key={stage.id}
-                  to={`/?stage=${stage.id}`}
-                  style={{ textDecoration: "none", display: "block", position: "relative" }}
-                >
-                  {() => (
-                    <RailBtn
-                      icon={
-                        <span
-                          style={{
-                            width: 9, height: 9, borderRadius: 2,
-                            background: `var(--stage-color-${stage.id})`,
-                            display: "inline-block", flexShrink: 0
-                          }}
-                        />
-                      }
-                      label={stage.title}
-                      open={railOpen}
-                      badge={count}
-                    />
-                  )}
-                </NavLink>
-              );
-            })}
-          </div>
         </div>
 
         {/* ── Footer ── */}

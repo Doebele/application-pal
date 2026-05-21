@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import imgSchulabgaenger   from "../assets/personas/schulabgaenger.png";
+import imgBerufseinsteiger from "../assets/personas/berufseinsteiger.png";
+import imgBerufsumsteiger  from "../assets/personas/berufsumsteiger.png";
 import { OpenNewWindow, FloppyDisk, User, Linkedin, Page, RefreshCircle, Expand, Collapse, LightBulb } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
@@ -114,19 +117,19 @@ export function ProfilePage() {
             {([
               {
                 value: "schulabgaenger",
-                emoji: "🎓",
+                img: imgSchulabgaenger,
                 label: "Schulabgänger",
                 sub: "Schnupperlehre, Ausbildung oder Praktikum",
               },
               {
                 value: "berufseinsteiger",
-                emoji: "🚀",
+                img: imgBerufseinsteiger,
                 label: "Berufseinsteiger",
                 sub: "Nach Studium oder abgeschlossener Berufsausbildung",
               },
               {
                 value: "berufsumsteiger",
-                emoji: "🔄",
+                img: imgBerufsumsteiger,
                 label: "Berufsumsteiger",
                 sub: "Wechsel in eine neue Branche oder Rolle",
               },
@@ -148,7 +151,7 @@ export function ProfilePage() {
                     display: "flex", flexDirection: "column", gap: 6,
                   }}
                 >
-                  <span style={{ fontSize: 24 }}>{p.emoji}</span>
+                  <img src={p.img} alt={p.label} style={{ width: 64, height: 64, objectFit: "contain", borderRadius: 4, opacity: active ? 1 : 0.75 }} />
                   <div>
                     <div style={{ fontSize: 13, fontWeight: active ? 700 : 600, color: active ? "var(--accent)" : "var(--fg-1)", marginBottom: 2 }}>
                       {p.label}
