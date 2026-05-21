@@ -4,6 +4,20 @@ Persönliches Bewerbungs-Management-Tool mit KI-Unterstützung. Läuft vollstän
 
 ---
 
+## Screenshots
+
+| Board | Tabellen-Ansicht |
+|-------|-----------------|
+| ![Board](docs/screenshots/board.png) | ![Liste](docs/screenshots/table.png) |
+
+| Profil | Templates |
+|--------|-----------|
+| ![Profil](docs/screenshots/profile.png) | ![Templates](docs/screenshots/templates.png) |
+
+![Kalender](docs/screenshots/calendar.png)
+
+---
+
 ## Ansichten
 
 ### Board

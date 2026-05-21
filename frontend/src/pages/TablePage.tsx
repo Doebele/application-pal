@@ -165,6 +165,7 @@ export function TablePage() {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
   const [hoveredColId, setHoveredColId] = useState<string | null>(null);
+  const [hoveredRowIndex, setHoveredRowIndex] = useState<number | null>(null);
   const colPanelRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
@@ -627,38 +628,40 @@ export function TablePage() {
             </DragDropContext>
           </thead>
           <tbody>
-            {table.getRowModel().rows.map((row, ri) => (
-              <tr
-                key={row.id}
-                onClick={() => setSelectedApp(row.original)}
-                style={{
-                  cursor: "pointer",
-                  background: ri % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)",
-                  borderBottom: "1px solid var(--border)",
-                  transition: "background 0.1s",
-                }}
-                onMouseEnter={e => (e.currentTarget.style.background = "var(--surface)")}
-                onMouseLeave={e => (e.currentTarget.style.background = ri % 2 === 0 ? "transparent" : "rgba(255,255,255,0.015)")}
-              >
-                {row.getVisibleCells().map(cell => {
-                  const tooltip  = cell.column.columnDef.meta?.tooltip?.(row.original);
-                  const isPinned = cell.column.getIsPinned();
-                  const stickyCell: React.CSSProperties = isPinned === "left"
-                    ? { position: "sticky", left: cell.column.getStart("left"), background: "inherit", zIndex: 2, boxShadow: "2px 0 4px rgba(0,0,0,0.1)" }
-                    : isPinned === "right"
-                    ? { position: "sticky", right: cell.column.getAfter("right"), background: "inherit", zIndex: 2, boxShadow: "-2px 0 4px rgba(0,0,0,0.1)" }
-                    : {};
-                  return (
-                    <td key={cell.id} title={tooltip}
-                      style={{ padding: "9px 12px", overflow: "hidden", width: cell.column.getSize(), maxWidth: cell.column.getSize(), ...stickyCell }}>
-                      <div style={{ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {table.getRowModel().rows.map((row, ri) => {
+              // Solid row background — no transparent so sticky cells never show through
+              const rowBg = hoveredRowIndex === ri
+                ? "var(--surface)"
+                : ri % 2 === 0 ? "var(--bg)" : "color-mix(in srgb, var(--bg) 97%, white 3%)";
+              return (
+                <tr
+                  key={row.id}
+                  onClick={() => setSelectedApp(row.original)}
+                  style={{ cursor: "pointer", background: rowBg, borderBottom: "1px solid var(--border)", transition: "background 0.1s" }}
+                  onMouseEnter={() => setHoveredRowIndex(ri)}
+                  onMouseLeave={() => setHoveredRowIndex(null)}
+                >
+                  {row.getVisibleCells().map(cell => {
+                    const tooltip  = cell.column.columnDef.meta?.tooltip?.(row.original);
+                    const isPinned = cell.column.getIsPinned();
+                    // Sticky cells need an explicit solid background — use same rowBg so they match
+                    const stickyCell: React.CSSProperties = isPinned === "left"
+                      ? { position: "sticky", left: cell.column.getStart("left"), background: rowBg, zIndex: 2, boxShadow: "2px 0 6px rgba(0,0,0,0.18)" }
+                      : isPinned === "right"
+                      ? { position: "sticky", right: cell.column.getAfter("right"), background: rowBg, zIndex: 2, boxShadow: "-2px 0 6px rgba(0,0,0,0.18)" }
+                      : {};
+                    return (
+                      <td key={cell.id} title={tooltip}
+                        style={{ padding: "9px 12px", overflow: "hidden", width: cell.column.getSize(), maxWidth: cell.column.getSize(), ...stickyCell }}>
+                        <div style={{ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </div>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
             {table.getRowModel().rows.length === 0 && (
               <tr>
                 <td colSpan={table.getVisibleLeafColumns().length} style={{ padding: "48px 20px", textAlign: "center", color: "var(--fg-4)", fontSize: 13 }}>
