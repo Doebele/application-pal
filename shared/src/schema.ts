@@ -117,6 +117,8 @@ export const userProfile = pgTable("user_profile", {
   desiredSalary: text("desired_salary"),
   googleCalendarId: text("google_calendar_id"),
   driveApplicationsFolderId: text("drive_applications_folder_id"), // per-user Drive folder
+  docTemplates: text("doc_templates"),                             // JSON: DocTemplateConfig per content type
+  persona: text("persona"),                                        // 'schulabgaenger' | 'berufseinsteiger' | 'berufsumsteiger'
   sessionTimeout: text("session_timeout").default("15m"),
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -30,6 +30,15 @@ type UiState = {
   driveNameFolder: string;
   driveNameDoc: string;
   // NOTE: driveApplicationsFolderId moved to user_profile (per-user, server-side)
+  // Table view column config
+  tableColumnOrder: string[];
+  tableColumnVisibility: Record<string, boolean>;
+  tableColumnPinning: { left: string[]; right: string[] };
+  tableColumnSizing: Record<string, number>;
+  setTableColumnOrder: (order: string[]) => void;
+  setTableColumnVisibility: (vis: Record<string, boolean>) => void;
+  setTableColumnPinning: (pinning: { left: string[]; right: string[] }) => void;
+  setTableColumnSizing: (sizing: Record<string, number>) => void;
   setTheme: (theme: Theme) => void;
   toggleTheme: () => void;
   setAccent: (accent: Accent) => void;
@@ -63,6 +72,14 @@ export const useUiStore = create<UiState>()(
       },
       driveNameFolder: DEFAULT_FOLDER_RULE,
       driveNameDoc:    DEFAULT_DOC_RULE,
+      tableColumnOrder: [],
+      tableColumnVisibility: {},
+      tableColumnPinning: { left: ["company"], right: [] },
+      tableColumnSizing: {},
+      setTableColumnOrder: (tableColumnOrder) => set({ tableColumnOrder }),
+      setTableColumnVisibility: (tableColumnVisibility) => set({ tableColumnVisibility }),
+      setTableColumnPinning: (tableColumnPinning) => set({ tableColumnPinning }),
+      setTableColumnSizing: (tableColumnSizing) => set({ tableColumnSizing }),
       setTheme: (theme) => set({ theme }),
       toggleTheme: () => set((s) => ({ theme: s.theme === "dark" ? "light" : "dark" })),
       setAccent: (accent) => set({ accent }),

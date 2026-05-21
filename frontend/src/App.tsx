@@ -15,6 +15,7 @@ import { TimelinePage } from "./pages/TimelinePage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
+import { TablePage } from "./pages/TablePage";
 import { LoginPage } from "./pages/LoginPage";
 import { SetupPage } from "./pages/SetupPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
@@ -38,6 +39,7 @@ function MainApp() {
       <div className="app-main">
         <Routes>
           <Route path="/"          element={<BoardPage />} />
+          <Route path="/table"     element={<TablePage />} />
           <Route path="/calendar"  element={<CalendarPage />} />
           <Route path="/templates" element={<TemplatesPage />} />
           <Route path="/settings"  element={<SettingsPage />} />

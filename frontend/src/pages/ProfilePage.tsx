@@ -105,6 +105,74 @@ export function ProfilePage() {
       />
       <div className="page-content" style={{ maxWidth: 720 }}>
 
+        {/* Persona selector — shown prominently at top */}
+        <div style={{ marginBottom: 32 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+            <div className="eyebrow">Bewerbungs-Fokus</div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+            {([
+              {
+                value: "schulabgaenger",
+                emoji: "🎓",
+                label: "Schulabgänger",
+                sub: "Schnupperlehre, Ausbildung oder Praktikum",
+              },
+              {
+                value: "berufseinsteiger",
+                emoji: "🚀",
+                label: "Berufseinsteiger",
+                sub: "Nach Studium oder abgeschlossener Berufsausbildung",
+              },
+              {
+                value: "berufsumsteiger",
+                emoji: "🔄",
+                label: "Berufsumsteiger",
+                sub: "Wechsel in eine neue Branche oder Rolle",
+              },
+            ] as const).map(p => {
+              const active = (profile.persona ?? "") === p.value;
+              return (
+                <button
+                  key={p.value}
+                  onClick={() => {
+                    setProfile(prev => ({ ...prev, persona: p.value }));
+                    save({ persona: p.value });
+                  }}
+                  style={{
+                    padding: "14px 16px", borderRadius: 12, textAlign: "left",
+                    border: `2px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                    background: active ? "var(--accent-08)" : "var(--surface-2)",
+                    cursor: "pointer", fontFamily: "var(--font-sans)",
+                    transition: "all 0.15s ease",
+                    display: "flex", flexDirection: "column", gap: 6,
+                  }}
+                >
+                  <span style={{ fontSize: 24 }}>{p.emoji}</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: active ? 700 : 600, color: active ? "var(--accent)" : "var(--fg-1)", marginBottom: 2 }}>
+                      {p.label}
+                    </div>
+                    <div style={{ fontSize: 11, color: "var(--fg-3)", lineHeight: 1.4 }}>
+                      {p.sub}
+                    </div>
+                  </div>
+                  {active && (
+                    <div style={{ fontSize: 10, color: "var(--accent)", fontWeight: 700, marginTop: 2 }}>
+                      ✓ Aktiv
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          {!(profile.persona) && (
+            <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 8 }}>
+              Wähle deinen Bewerbungs-Fokus — beeinflusst KI-Prompts, Aufgaben und Vorschläge.
+            </div>
+          )}
+        </div>
+
         {/* Personal Info */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>

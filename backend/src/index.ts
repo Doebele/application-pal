@@ -2072,25 +2072,42 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
 
   const docTitle = `CV – ${app_.role} @ ${app_.company}`;
   const docContent = highlightText + profile.masterCv;
+  const templateFileId = getActiveTemplateId(profile?.docTemplates, "cv");
 
   try {
-    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${accessTokenForDoc}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ title: docTitle })
-    });
-    if (!docRes.ok) return c.json({ error: "Google Doc konnte nicht erstellt werden" }, 502);
-    const doc = await docRes.json() as { documentId: string };
-    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+    if (templateFileId) {
+      const placeholders: Record<string, string> = {
+        FIRMA: app_.company,
+        ROLLE: app_.role ?? "",
+        DATUM: new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        NAME: profile?.name ?? "",
+        HEADLINE: profile?.headline ?? "",
+        EMAIL: profile?.email ?? "",
+        ORT: profile?.location ?? "",
+        HIGHLIGHTS: highlightText.replace(/[═✓]/g, "").trim(),
+        LEBENSLAUF: profile.masterCv,
+      };
+      const { docUrl } = await createDocFromTemplate(accessTokenForDoc, templateFileId, docTitle, placeholders, app_.googleFolderId ?? null);
+      return c.json({ docUrl, title: docTitle });
+    } else {
+      const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${accessTokenForDoc}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ title: docTitle })
+      });
+      if (!docRes.ok) return c.json({ error: "Google Doc konnte nicht erstellt werden" }, 502);
+      const doc = await docRes.json() as { documentId: string };
+      const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
 
-    // Insert content
-    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${accessTokenForDoc}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: docContent } }] })
-    });
+      // Insert content
+      await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${accessTokenForDoc}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: docContent } }] })
+      });
 
-    return c.json({ docUrl, title: docTitle });
+      return c.json({ docUrl, title: docTitle });
+    }
   } catch (err) {
     console.error("cv-doc error:", err);
     return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
@@ -2120,20 +2137,36 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
     if (createDoc) {
       const coverLetterToken = await getDriveAccessToken(userId);
       if (coverLetterToken) {
-        const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${coverLetterToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ title: `Anschreiben – ${app_.role} @ ${app_.company}` })
-        });
-        if (docRes.ok) {
-          const doc = await docRes.json() as { documentId: string };
-          docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
-          // Insert text into the doc
-          await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+        const coverDocTitle = `Anschreiben – ${app_.role} @ ${app_.company}`;
+        const templateFileId = getActiveTemplateId(profile?.docTemplates, "cover-letter");
+        if (templateFileId) {
+          const placeholders: Record<string, string> = {
+            FIRMA: app_.company,
+            ROLLE: app_.role ?? "",
+            DATUM: new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" }),
+            NAME: profile?.name ?? "",
+            ORT: profile?.location ?? "",
+            BETREFF: parsed.subject ?? "",
+            ANSCHREIBEN: parsed.body ?? "",
+          };
+          const result = await createDocFromTemplate(coverLetterToken, templateFileId, coverDocTitle, placeholders, app_.googleFolderId ?? null);
+          docUrl = result.docUrl;
+        } else {
+          const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
             method: "POST",
             headers: { "Authorization": `Bearer ${coverLetterToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: `${parsed.subject}\n\n${parsed.body}` } }] })
+            body: JSON.stringify({ title: coverDocTitle })
           });
+          if (docRes.ok) {
+            const doc = await docRes.json() as { documentId: string };
+            docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+            // Insert text into the doc
+            await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+              method: "POST",
+              headers: { "Authorization": `Bearer ${coverLetterToken}`, "Content-Type": "application/json" },
+              body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: `${parsed.subject}\n\n${parsed.body}` } }] })
+            });
+          }
         }
       }
     }
@@ -2231,6 +2264,8 @@ app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const token = await getDriveAccessToken(userId);
   if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const [interviewPrepProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const interviewTemplateId = getActiveTemplateId(interviewPrepProfile?.docTemplates, "interview-prep");
 
   const sep = "═".repeat(48);
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -2248,39 +2283,58 @@ app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
 
   const docTitle = `Interview-Prep – ${app_.role} @ ${app_.company}`;
   try {
-    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ title: docTitle })
-    });
-    if (!docRes.ok) {
-      const errBody = await docRes.json().catch(() => ({})) as { error?: { message?: string } };
-      const msg = errBody?.error?.message ?? `HTTP ${docRes.status}`;
-      return c.json({ error: `Google Docs API: ${msg}` }, 502);
-    }
-    const doc = await docRes.json() as { documentId: string };
-
-    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
-    });
-
-    // Move to application Drive folder if one exists
-    if (app_.googleFolderId) {
-      await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
-        method: "PATCH",
-        headers: { "Authorization": `Bearer ${token}` }
+    if (interviewTemplateId) {
+      const placeholders: Record<string, string> = {
+        FIRMA: app_.company,
+        ROLLE: app_.role ?? "",
+        DATUM: date,
+        NAME: interviewPrepProfile?.name ?? "",
+        FRAGEN: interviewPrep.rollenFragen.map((q, i) => `${i+1}. ${q}`).join("\n"),
+        STAR: interviewPrep.starBeispiele.map((s, i) => `Beispiel ${i+1}: ${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"),
+        VOSS_FRAGEN: interviewPrep.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"),
+        RUECKFRAGEN: interviewPrep.rueckfragen.map(q => `• ${q}`).join("\n"),
+      };
+      const { docId, docUrl } = await createDocFromTemplate(token, interviewTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
+      await db.insert(applicationDocuments).values({
+        applicationId: id, type: "other", name: docTitle,
+        status: "draft", googleDocId: docId, googleDocUrl: docUrl
       });
-    }
+      return c.json({ docUrl, title: docTitle });
+    } else {
+      const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ title: docTitle })
+      });
+      if (!docRes.ok) {
+        const errBody = await docRes.json().catch(() => ({})) as { error?: { message?: string } };
+        const msg = errBody?.error?.message ?? `HTTP ${docRes.status}`;
+        return c.json({ error: `Google Docs API: ${msg}` }, 502);
+      }
+      const doc = await docRes.json() as { documentId: string };
 
-    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
-    // Save as applicationDocument
-    await db.insert(applicationDocuments).values({
-      applicationId: id, type: "other", name: docTitle,
-      status: "draft", googleDocId: doc.documentId, googleDocUrl: docUrl
-    });
-    return c.json({ docUrl, title: docTitle });
+      await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+      });
+
+      // Move to application Drive folder if one exists
+      if (app_.googleFolderId) {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
+          method: "PATCH",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+      }
+
+      const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+      // Save as applicationDocument
+      await db.insert(applicationDocuments).values({
+        applicationId: id, type: "other", name: docTitle,
+        status: "draft", googleDocId: doc.documentId, googleDocUrl: docUrl
+      });
+      return c.json({ docUrl, title: docTitle });
+    }
   } catch (err) {
     console.error("interview-prep export-doc error:", err);
     return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
@@ -2495,6 +2549,8 @@ app.post("/api/applications/:id/ai/salary-check/export-doc", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const salaryDocToken = await getDriveAccessToken(userId);
   if (!salaryDocToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const [salaryProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const salaryTemplateId = getActiveTemplateId(salaryProfile?.docTemplates, "salary-check");
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "─".repeat(40);
   let content = `Gehalts-Check Schweiz: ${app_.role} @ ${app_.company}\n${date}\n\n`;
@@ -2510,25 +2566,40 @@ app.post("/api/applications/:id/ai/salary-check/export-doc", async (c) => {
   }
   const docTitle = `Gehalts-Check – ${app_.role} @ ${app_.company}`;
   try {
-    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${salaryDocToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ title: docTitle })
-    });
-    if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
-    const doc = await docRes.json() as { documentId: string };
-    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${salaryDocToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
-    });
-    if (app_.googleFolderId) {
-      await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
-        method: "PATCH", headers: { "Authorization": `Bearer ${salaryDocToken}` }
+    if (salaryTemplateId) {
+      const salaryData = salaryCheck as unknown as Record<string, unknown>;
+      const placeholders: Record<string, string> = {
+        FIRMA: app_.company,
+        ROLLE: app_.role ?? "",
+        DATUM: date,
+        LOHNBAND: `${salaryCheck.lohnband?.min ?? "?"} – ${salaryCheck.lohnband?.max ?? "?"} ${salaryCheck.waehrung ?? "CHF"} (Median: ${salaryCheck.lohnband?.median ?? "?"})`,
+        TAKTIKEN: (Array.isArray(salaryData.taktiken) ? (salaryData.taktiken as string[]) : []).join("\n"),
+        FORMULIERUNGEN: (Array.isArray(salaryData.formulierungen) ? (salaryData.formulierungen as string[]) : []).join("\n"),
+        VOSS_ANKER: String(salaryData.vossAnker ?? ""),
+      };
+      const { docUrl } = await createDocFromTemplate(salaryDocToken, salaryTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
+      return c.json({ docUrl });
+    } else {
+      const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${salaryDocToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ title: docTitle })
       });
+      if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
+      const doc = await docRes.json() as { documentId: string };
+      await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${salaryDocToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+      });
+      if (app_.googleFolderId) {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
+          method: "PATCH", headers: { "Authorization": `Bearer ${salaryDocToken}` }
+        });
+      }
+      const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+      return c.json({ docUrl });
     }
-    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
-    return c.json({ docUrl });
   } catch (err) {
     console.error("salary-check export-doc error:", err);
     return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
@@ -2586,6 +2657,8 @@ app.post("/api/applications/:id/ai/company-research/export-doc", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const compResToken = await getDriveAccessToken(userId);
   if (!compResToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const [compResProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const compResTemplateId = getActiveTemplateId(compResProfile?.docTemplates, "company-research");
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "─".repeat(40);
   let content = `Unternehmensrecherche: ${app_.company} – ${app_.role}\n${date}\n\n`;
@@ -2603,26 +2676,43 @@ app.post("/api/applications/:id/ai/company-research/export-doc", async (c) => {
     content += `${sep}\nGESPRÄCHSTHEMEN FÜRS INTERVIEW\n${sep}\n\n${research.gespraechsthemen.map(t => `💡 ${t}`).join("\n")}`;
   }
   const docTitle = `Unternehmensrecherche – ${app_.company}`;
+  const researchData = research as unknown as Record<string, unknown>;
   try {
-    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${compResToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ title: docTitle })
-    });
-    if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
-    const doc = await docRes.json() as { documentId: string };
-    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${compResToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
-    });
-    if (app_.googleFolderId) {
-      await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
-        method: "PATCH", headers: { "Authorization": `Bearer ${compResToken}` }
+    if (compResTemplateId) {
+      const placeholders: Record<string, string> = {
+        FIRMA: app_.company,
+        ROLLE: app_.role ?? "",
+        DATUM: date,
+        UNTERNEHMENSUEBERBLICK: String(researchData.unternehmensueberblick ?? ""),
+        BRANCHE: String(researchData.branche ?? ""),
+        MARKTPOSITION: String(researchData.marktposition ?? ""),
+        KULTUR: String(researchData.unternehmenskultur ?? ""),
+        WETTBEWERBER: Array.isArray(researchData.wettbewerber) ? (researchData.wettbewerber as string[]).join("\n") : String(researchData.wettbewerber ?? ""),
+        AKTUELLE_THEMEN: Array.isArray(researchData.aktuelleThemen) ? (researchData.aktuelleThemen as string[]).join("\n") : String(researchData.aktuelleThemen ?? ""),
+      };
+      const { docUrl } = await createDocFromTemplate(compResToken, compResTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
+      return c.json({ docUrl });
+    } else {
+      const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${compResToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ title: docTitle })
       });
+      if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
+      const doc = await docRes.json() as { documentId: string };
+      await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${compResToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+      });
+      if (app_.googleFolderId) {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
+          method: "PATCH", headers: { "Authorization": `Bearer ${compResToken}` }
+        });
+      }
+      const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+      return c.json({ docUrl });
     }
-    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
-    return c.json({ docUrl });
   } catch (err) {
     console.error("company-research export-doc error:", err);
     return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
@@ -2637,7 +2727,20 @@ app.post("/api/applications/:id/ai/ackermann-script", async (c) => {
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const system = `Du bist ein Experte für Gehaltsverhandlung nach dem Ackermann-Modell (FBI-Verhandlungsmethode, Chris Voss). Erstelle ein konkretes, mehrstufiges Verhandlungs-Script. Das Ackermann-Modell: Startgebot = 65% des Zielgehalts, dann Angebote bei 85%, 95%, 100% mit abnehmenden Steigerungen und einer ungeraden Endzahl. Antworte NUR mit JSON:
+  const system = `Du bist ein Experte für Gehaltsverhandlung aus BEWERBER-Perspektive nach dem Ackermann-Modell (Chris Voss, "Never Split the Difference"). Der Bewerber ist der VERKÄUFER seiner Arbeitskraft — er verhandelt von OBEN nach UNTEN zum Zielgehalt hin, nicht umgekehrt.
+
+Ackermann-Modell für Bewerber (Verkäufer-Perspektive):
+1. Zielgehalt = was der Bewerber wirklich erhalten möchte (aus Lohnband / Profil ableiten)
+2. Ankergebot (Einstieg) = ca. 120–130% des Zielgehalts — deutlich HÖHER ansetzen, um den Verhandlungsrahmen nach oben zu verschieben
+3. Verhandlungsschritte: In 3–4 Runden mit ABNEHMENDEN Zugeständnissen zum Zielgehalt hin
+   - Runde 1: Ankergebot nennen (kalibrierte Voss-Frage anhängen)
+   - Runde 2: ca. 65% des Abstands (Anker→Ziel) abbauen → immer noch deutlich über Ziel
+   - Runde 3: ca. 85% des Abstands abbauen → nahe am Ziel
+   - Runde 4 (falls nötig): Zielgehalt mit ungerader Zahl (z.B. 131'750 statt 132'000) + nicht-monetäre Punkte anbieten
+4. Ungerade Endzahl signalisiert: "Das ist meine exakte Untergrenze, sorgfältig kalkuliert"
+5. Voss-Anker-Formulierung: Empathisch-taktische Eröffnung die den hohen Anker begründet
+
+Antworte NUR mit JSON:
 { "zielgehalt": number, "ankergebot": number, "schritte": [{ "runde": number, "angebot": number, "formulierung": "<string>", "taktik": "<string>" }], "nichtmonetaer": ["<string>"], "vossAnker": "<string>" }`;
   const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nLohnband (falls bekannt): ${app_.salary ?? "nicht angegeben"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1500) ?? ""}\nProfil des Kandidaten: ${profile?.masterCv?.slice(0, 1000) ?? "Kein Profil hinterlegt"}`;
   try {
@@ -2660,12 +2763,14 @@ app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const ackerToken = await getDriveAccessToken(userId);
   if (!ackerToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const [ackerProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const ackerTemplateId = getActiveTemplateId(ackerProfile?.docTemplates, "ackermann-script");
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "═".repeat(48);
   let content = `Ackermann-Verhandlungs-Script: ${app_.role} @ ${app_.company}\n${date}\n\n`;
   content += `${sep}\nZIELGEHALT & ANKERLOHN\n${sep}\n\n`;
   content += `Zielgehalt:   CHF ${script.zielgehalt.toLocaleString("de-CH")}\n`;
-  content += `Ankergebot:   CHF ${script.ankergebot.toLocaleString("de-CH")} (65% des Zielgehalts)\n\n`;
+  content += `Ankergebot:   CHF ${script.ankergebot.toLocaleString("de-CH")} (Einstiegsangebot ~120–130% des Zielgehalts)\n\n`;
   content += `${sep}\nVERHANDLUNGSSCHRITTE\n${sep}\n\n`;
   content += script.schritte.map(s =>
     `Runde ${s.runde} — CHF ${s.angebot.toLocaleString("de-CH")}\nFormulierung: "${s.formulierung}"\nTaktik: ${s.taktik}`
@@ -2676,26 +2781,41 @@ app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
     content += script.nichtmonetaer.map(n => `• ${n}`).join("\n");
   }
   const docTitle = `Ackermann-Script – ${app_.role} @ ${app_.company}`;
+  const scriptData = script as unknown as Record<string, unknown>;
   try {
-    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${ackerToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ title: docTitle })
-    });
-    if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
-    const doc = await docRes.json() as { documentId: string };
-    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${ackerToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
-    });
-    if (app_.googleFolderId) {
-      await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
-        method: "PATCH", headers: { "Authorization": `Bearer ${ackerToken}` }
+    if (ackerTemplateId) {
+      const placeholders: Record<string, string> = {
+        FIRMA: app_.company,
+        ROLLE: app_.role ?? "",
+        DATUM: date,
+        ZIELGEHALT_ANKER: `Zielgehalt: ${scriptData.zielgehalt ?? "?"}\nAnkergebot: ${scriptData.ankergebot ?? "?"}`,
+        SCHRITTE: Array.isArray(scriptData.schritte) ? (scriptData.schritte as string[]).map((s, i) => `${i+1}. ${s}`).join("\n") : String(scriptData.schritte ?? ""),
+        NICHTMONETAER: Array.isArray(scriptData.nichtmonetaer) ? (scriptData.nichtmonetaer as string[]).join("\n") : String(scriptData.nichtmonetaer ?? ""),
+        VOSS_ANKER: String(scriptData.vossAnker ?? ""),
+      };
+      const { docUrl } = await createDocFromTemplate(ackerToken, ackerTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
+      return c.json({ docUrl });
+    } else {
+      const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${ackerToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ title: docTitle })
       });
+      if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
+      const doc = await docRes.json() as { documentId: string };
+      await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${ackerToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+      });
+      if (app_.googleFolderId) {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
+          method: "PATCH", headers: { "Authorization": `Bearer ${ackerToken}` }
+        });
+      }
+      const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+      return c.json({ docUrl });
     }
-    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
-    return c.json({ docUrl });
   } catch (err) {
     console.error("ackermann-script export-doc error:", err);
     return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
@@ -2776,6 +2896,8 @@ app.post("/api/applications/:id/ai/onboarding/export-doc", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const onboardToken = await getDriveAccessToken(userId);
   if (!onboardToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const [onboardProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const onboardTemplateId = getActiveTemplateId(onboardProfile?.docTemplates, "onboarding");
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "─".repeat(40);
   let content = `Onboarding-Checkliste: ${app_.role} @ ${app_.company}\n${date}\n\n`;
@@ -2790,26 +2912,41 @@ app.post("/api/applications/:id/ai/onboarding/export-doc", async (c) => {
     content += checklist.allgemein.map(t => `• ${t}`).join("\n");
   }
   const docTitle = `Onboarding-Checkliste – ${app_.role} @ ${app_.company}`;
+  const onboardingData = checklist as unknown as Record<string, unknown>;
   try {
-    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${onboardToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ title: docTitle })
-    });
-    if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
-    const doc = await docRes.json() as { documentId: string };
-    await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${onboardToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
-    });
-    if (app_.googleFolderId) {
-      await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
-        method: "PATCH", headers: { "Authorization": `Bearer ${onboardToken}` }
+    if (onboardTemplateId) {
+      const placeholders: Record<string, string> = {
+        FIRMA: app_.company,
+        ROLLE: app_.role ?? "",
+        DATUM: date,
+        ERSTE_30_TAGE: Array.isArray(onboardingData.erste30Tage) ? (onboardingData.erste30Tage as string[]).map(t => `• ${t}`).join("\n") : String(onboardingData.erste30Tage ?? ""),
+        ERSTE_60_TAGE: Array.isArray(onboardingData.erste60Tage) ? (onboardingData.erste60Tage as string[]).map(t => `• ${t}`).join("\n") : String(onboardingData.erste60Tage ?? ""),
+        ERSTE_90_TAGE: Array.isArray(onboardingData.erste90Tage) ? (onboardingData.erste90Tage as string[]).map(t => `• ${t}`).join("\n") : String(onboardingData.erste90Tage ?? ""),
+        ALLGEMEIN: Array.isArray(onboardingData.allgemein) ? (onboardingData.allgemein as string[]).map(t => `• ${t}`).join("\n") : String(onboardingData.allgemein ?? ""),
+      };
+      const { docUrl } = await createDocFromTemplate(onboardToken, onboardTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
+      return c.json({ docUrl });
+    } else {
+      const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${onboardToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ title: docTitle })
       });
+      if (!docRes.ok) return c.json({ error: "Google Docs API fehlgeschlagen" }, 502);
+      const doc = await docRes.json() as { documentId: string };
+      await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${onboardToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+      });
+      if (app_.googleFolderId) {
+        await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${app_.googleFolderId}&removeParents=root&fields=id`, {
+          method: "PATCH", headers: { "Authorization": `Bearer ${onboardToken}` }
+        });
+      }
+      const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+      return c.json({ docUrl });
     }
-    const docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
-    return c.json({ docUrl });
   } catch (err) {
     console.error("onboarding export-doc error:", err);
     return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
@@ -2996,6 +3133,46 @@ async function getDriveAccessToken(userId?: string): Promise<string | null> {
   }
 
   return token.accessToken;
+}
+
+function getActiveTemplateId(docTemplates: string | null | undefined, type: string): string | null {
+  if (!docTemplates) return null;
+  try {
+    const config = JSON.parse(docTemplates) as Record<string, { activeId?: string | null }>;
+    return config[type]?.activeId ?? null;
+  } catch { return null; }
+}
+
+async function createDocFromTemplate(
+  accessToken: string,
+  templateFileId: string,
+  fileName: string,
+  placeholders: Record<string, string>,
+  parentFolderId?: string | null
+): Promise<{ docId: string; docUrl: string }> {
+  const copyBody: Record<string, unknown> = { name: fileName };
+  if (parentFolderId) copyBody.parents = [parentFolderId];
+  const copyRes = await fetch(`https://www.googleapis.com/drive/v3/files/${templateFileId}/copy`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify(copyBody)
+  });
+  if (!copyRes.ok) throw new Error(`Template copy failed: HTTP ${copyRes.status}`);
+  const { id: docId } = await copyRes.json() as { id: string };
+  const requests = Object.entries(placeholders).map(([key, value]) => ({
+    replaceAllText: {
+      containsText: { text: `{{${key}}}`, matchCase: true },
+      replaceText: value
+    }
+  }));
+  if (requests.length > 0) {
+    await fetch(`https://docs.googleapis.com/v1/documents/${docId}:batchUpdate`, {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ requests })
+    });
+  }
+  return { docId, docUrl: `https://docs.google.com/document/d/${docId}/edit` };
 }
 
 // Create/get Drive folder for an application
@@ -3195,6 +3372,209 @@ async function listDriveFiles(accessToken: string, folderId: string): Promise<Dr
   const data = await res.json() as { files?: DriveFile[] };
   return data.files ?? [];
 }
+
+app.post("/api/drive/templates/create", async (c) => {
+  const userId = getUserId(c);
+  const { type } = await c.req.json<{ type: string }>();
+  const accessToken = await getDriveAccessToken(userId);
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+
+  // Template definitions per content type
+  type Section = { text: string; heading?: 'HEADING_1' | 'HEADING_2'; bold?: boolean; italic?: boolean; gray?: boolean };
+  const templates: Record<string, { title: string; sections: Section[] }> = {
+    "interview-prep": {
+      title: `Interview-Vorbereitung Vorlage`,
+      sections: [
+        { text: "Interview-Vorbereitung — {{FIRMA}}", heading: "HEADING_1" },
+        { text: "Rolle: {{ROLLE}}  ·  Datum: {{DATUM}}  ·  Erstellt von: {{NAME}}", gray: true },
+        { text: "" },
+        { text: "Rollenspezifische Fragen", heading: "HEADING_2" },
+        { text: "{{FRAGEN}}" },
+        { text: "" },
+        { text: "Chris Voss · What / How Fragen", heading: "HEADING_2" },
+        { text: "{{VOSS_FRAGEN}}" },
+        { text: "" },
+        { text: "STAR-Beispiele", heading: "HEADING_2" },
+        { text: "{{STAR}}" },
+        { text: "" },
+        { text: "Meine Rückfragen an das Unternehmen", heading: "HEADING_2" },
+        { text: "{{RUECKFRAGEN}}" },
+        { text: "" },
+        { text: `Erstellt mit Application Pal · ${date}`, gray: true, italic: true },
+      ]
+    },
+    "cv": {
+      title: "Lebenslauf Vorlage",
+      sections: [
+        { text: "{{NAME}}", heading: "HEADING_1" },
+        { text: "{{HEADLINE}}", gray: true },
+        { text: "{{EMAIL}}  ·  {{ORT}}", gray: true },
+        { text: "" },
+        { text: "Für diese Stelle relevante Erfahrungen", heading: "HEADING_2" },
+        { text: "Stelle: {{ROLLE}} bei {{FIRMA}}", italic: true, gray: true },
+        { text: "{{HIGHLIGHTS}}" },
+        { text: "" },
+        { text: "Vollständiger Lebenslauf", heading: "HEADING_2" },
+        { text: "{{LEBENSLAUF}}" },
+      ]
+    },
+    "cover-letter": {
+      title: "Anschreiben Vorlage",
+      sections: [
+        { text: "{{NAME}}  ·  {{ORT}}  ·  {{DATUM}}", gray: true },
+        { text: "" },
+        { text: "{{FIRMA}}", bold: true },
+        { text: "z.H. Personalabteilung" },
+        { text: "" },
+        { text: "Bewerbung als {{ROLLE}}", heading: "HEADING_2" },
+        { text: "" },
+        { text: "{{ANSCHREIBEN}}" },
+        { text: "" },
+        { text: "Mit freundlichen Grüssen," },
+        { text: "{{NAME}}", bold: true },
+      ]
+    },
+    "salary-check": {
+      title: "Gehalts-Check Vorlage",
+      sections: [
+        { text: "Gehaltsanalyse — {{ROLLE}} bei {{FIRMA}}", heading: "HEADING_1" },
+        { text: "{{DATUM}}", gray: true },
+        { text: "" },
+        { text: "Marktübliches Lohnband", heading: "HEADING_2" },
+        { text: "{{LOHNBAND}}" },
+        { text: "" },
+        { text: "Verhandlungsstrategie", heading: "HEADING_2" },
+        { text: "{{TAKTIKEN}}" },
+        { text: "" },
+        { text: "Formulierungsvorschläge", heading: "HEADING_2" },
+        { text: "{{FORMULIERUNGEN}}" },
+        { text: "" },
+        { text: "Voss-Anker", heading: "HEADING_2" },
+        { text: "{{VOSS_ANKER}}" },
+      ]
+    },
+    "company-research": {
+      title: "Unternehmensrecherche Vorlage",
+      sections: [
+        { text: "Unternehmensrecherche — {{FIRMA}}", heading: "HEADING_1" },
+        { text: "Stelle: {{ROLLE}}  ·  {{DATUM}}", gray: true },
+        { text: "" },
+        { text: "Unternehmensüberblick", heading: "HEADING_2" },
+        { text: "{{UNTERNEHMENSUEBERBLICK}}" },
+        { text: "" },
+        { text: "Branche & Marktposition", heading: "HEADING_2" },
+        { text: "{{BRANCHE}}" },
+        { text: "" },
+        { text: "Unternehmenskultur", heading: "HEADING_2" },
+        { text: "{{KULTUR}}" },
+        { text: "" },
+        { text: "Wettbewerber", heading: "HEADING_2" },
+        { text: "{{WETTBEWERBER}}" },
+        { text: "" },
+        { text: "Aktuelle Themen", heading: "HEADING_2" },
+        { text: "{{AKTUELLE_THEMEN}}" },
+      ]
+    },
+    "ackermann-script": {
+      title: "Gehaltsverhandlungs-Script Vorlage",
+      sections: [
+        { text: "Gehaltsverhandlungs-Script — {{FIRMA}}", heading: "HEADING_1" },
+        { text: "Stelle: {{ROLLE}}  ·  {{DATUM}}", gray: true },
+        { text: "" },
+        { text: "Zielgehalt & Ankergebot", heading: "HEADING_2" },
+        { text: "{{ZIELGEHALT_ANKER}}" },
+        { text: "" },
+        { text: "Verhandlungsschritte", heading: "HEADING_2" },
+        { text: "{{SCHRITTE}}" },
+        { text: "" },
+        { text: "Nicht-monetäre Alternativen", heading: "HEADING_2" },
+        { text: "{{NICHTMONETAER}}" },
+        { text: "" },
+        { text: "Voss-Anker-Formulierungen", heading: "HEADING_2" },
+        { text: "{{VOSS_ANKER}}" },
+      ]
+    },
+    "onboarding": {
+      title: "Onboarding-Checkliste Vorlage",
+      sections: [
+        { text: "Onboarding-Plan — {{FIRMA}}", heading: "HEADING_1" },
+        { text: "Rolle: {{ROLLE}}  ·  Datum: {{DATUM}}", gray: true },
+        { text: "" },
+        { text: "Erste 30 Tage", heading: "HEADING_2" },
+        { text: "{{ERSTE_30_TAGE}}" },
+        { text: "" },
+        { text: "Erste 60 Tage", heading: "HEADING_2" },
+        { text: "{{ERSTE_60_TAGE}}" },
+        { text: "" },
+        { text: "Erste 90 Tage", heading: "HEADING_2" },
+        { text: "{{ERSTE_90_TAGE}}" },
+        { text: "" },
+        { text: "Allgemeine Hinweise", heading: "HEADING_2" },
+        { text: "{{ALLGEMEIN}}" },
+      ]
+    }
+  };
+
+  const tmpl = templates[type];
+  if (!tmpl) return c.json({ error: `Unbekannter Template-Typ: ${type}` }, 400);
+
+  // Build batchUpdate requests
+  const requests: unknown[] = [];
+  let idx = 1;
+  for (const sec of tmpl.sections) {
+    const text = sec.text ? sec.text + "\n" : "\n";
+    requests.push({ insertText: { location: { index: idx }, text } });
+    const range = { startIndex: idx, endIndex: idx + text.length - 1 };
+    if (sec.heading) {
+      requests.push({ updateParagraphStyle: { range, paragraphStyle: { namedStyleType: sec.heading }, fields: "namedStyleType" } });
+    }
+    const styleFields: string[] = [];
+    const textStyle: Record<string, unknown> = {};
+    if (sec.bold)   { textStyle.bold = true; styleFields.push("bold"); }
+    if (sec.italic) { textStyle.italic = true; styleFields.push("italic"); }
+    if (sec.gray)   { textStyle.foregroundColor = { color: { rgbColor: { red: 0.5, green: 0.5, blue: 0.5 } } }; styleFields.push("foregroundColor"); }
+    if (styleFields.length > 0) {
+      requests.push({ updateTextStyle: { range, textStyle, fields: styleFields.join(",") } });
+    }
+    idx += text.length;
+  }
+
+  try {
+    // Create the doc
+    const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ title: tmpl.title })
+    });
+    if (!docRes.ok) return c.json({ error: "Google Doc konnte nicht erstellt werden" }, 502);
+    const doc = await docRes.json() as { documentId: string };
+
+    // Apply content and styles
+    if (requests.length > 0) {
+      await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requests })
+      });
+    }
+
+    // Move into "Pal-Templates" subfolder (inside master folder if configured, else Drive root)
+    const masterFolderId = env.GOOGLE_MASTER_FOLDER_ID || undefined;
+    const palTemplatesFolderId = await findOrCreateDriveFolder(accessToken, "Pal-Templates", masterFolderId);
+    await fetch(`https://www.googleapis.com/drive/v3/files/${doc.documentId}?addParents=${palTemplatesFolderId}&removeParents=root&fields=id`, {
+      method: "PATCH",
+      headers: { "Authorization": `Bearer ${accessToken}` }
+    });
+
+    const fileUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+    return c.json({ fileId: doc.documentId, fileName: tmpl.title, fileUrl });
+  } catch (err) {
+    console.error("template create error:", err);
+    return c.json({ error: "Template-Erstellung fehlgeschlagen" }, 502);
+  }
+});
 
 app.get("/api/drive/templates", async (c) => {
   const masterFolderId = env.GOOGLE_MASTER_FOLDER_ID;
@@ -3420,7 +3800,7 @@ app.post("/api/drive/upload-pdf-from-url", async (c) => {
   }
 
   const parent = parentFolderId || env.GOOGLE_APPLICATIONS_FOLDER_ID || undefined;
-  const pdfFolderId = await findOrCreateDriveFolder(accessToken, "Application-PDF", parent);
+  const pdfFolderId = await findOrCreateDriveFolder(accessToken, "Pal-PDFs", parent);
   const safeName = fileName.endsWith(".pdf") ? fileName : `${fileName}.pdf`;
 
   const boundary = "----PdfUrlUploadBoundary";
@@ -3461,8 +3841,8 @@ app.post("/api/drive/upload-pdf", async (c) => {
   }
 
   try {
-    // Find or create "Application-PDF" folder
-    const pdfFolderId = await findOrCreateDriveFolder(accessToken, "Application-PDF", parentFolderId);
+    // Find or create "Pal-PDFs" folder
+    const pdfFolderId = await findOrCreateDriveFolder(accessToken, "Pal-PDFs", parentFolderId);
 
     // Multipart upload
     const boundary = "----PdfUploadBoundary";

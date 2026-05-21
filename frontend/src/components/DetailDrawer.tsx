@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import cloud from "d3-cloud";
 import {
   Xmark, OpenNewWindow, MoreHoriz, Check, Sparks, Refresh,
   NavArrowRight, Link, Plus, Mail, Phone, Calendar, Page,
@@ -18,7 +19,7 @@ import type {
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
 
-type Tab = "process" | "details" | "documents" | "insights" | "contacts" | "notes";
+type Tab = "process" | "details" | "documents" | "ki";
 
 // Clipboard helper: tries modern API first, falls back to execCommand for focus/permission issues
 async function copyText(text: string): Promise<void> {
@@ -35,12 +36,10 @@ async function copyText(text: string): Promise<void> {
 }
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: "process",     label: "Aktionen"       },
-  { id: "details",     label: "Details"        },
-  { id: "documents",   label: "Dokumente"      },
-  { id: "insights",     label: "Insights"       },
-  { id: "contacts",    label: "Kontakte"       },
-  { id: "notes",       label: "Notizen"        },
+  { id: "process",   label: "Aktionen"   },
+  { id: "details",   label: "Details"    },
+  { id: "documents", label: "Dokumente"  },
+  { id: "ki",        label: "KI-Inhalte" },
 ];
 
 const STAGES = [
@@ -69,6 +68,25 @@ const STAGE_COLORS: Record<string, string> = {
   application_sent: "#a78bfa", pending: "#fbbf24", interview_1: "#34d399",
   interview_2: "#10b981", rejected: "#f87171", accepted: "#84cc16"
 };
+
+const STAGE_TILES: Record<string, string[]> = {
+  import_validating: ["glassdoor-check","kununu-check","linkedin-profile","salary-check","ats-keywords"],
+  preparing_cv:      ["cv-highlights"],
+  preparing_letter:  ["letter-review","opening-sentences"],
+  application_sent:  ["company-research","salary-tips"],
+  pending:           ["company-research","ackermann-script","salary-tips"],
+  interview_1:       ["interview-prep","salary-tips"],
+  interview_2:       ["interview-prep","salary-tips"],
+  rejected:          [],
+  accepted:          ["onboarding"],
+};
+
+const ALL_TILE_IDS = [
+  "match-score",
+  "glassdoor-check","kununu-check","linkedin-profile","salary-check","ats-keywords",
+  "cv-highlights","letter-review","opening-sentences",
+  "company-research","salary-tips","ackermann-script","interview-prep","onboarding",
+];
 
 // ─── Stage Picker (header) ────────────────────────────────────
 function StagePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -431,19 +449,20 @@ function DescriptionTab({ app, onSave }: { app: Application; onSave: (patch: Par
 
 // ─── Details Tab (Übersicht + Beschreibung) ───────────────────
 const AI_RESULT_LABELS: Record<string, string> = {
-  "glassdoor-check": "Glassdoor Rating",
-  "kununu-check": "Kununu Rating",
-  "linkedin-profile": "LinkedIn Firmenprofil",
-  "salary-check": "Gehalts-Check Schweiz",
-  "ats-keywords": "ATS-Keywords",
-  "cv-highlights": "CV-Highlights",
-  "interview-prep": "Interview-Vorbereitung",
-  "salary-tips": "Gehaltsverhandlung",
-  "company-research": "Unternehmensrecherche",
-  "ackermann-script": "Ackermann-Script",
-  "letter-review": "Anschreiben-Review",
+  "match-score":       "Match Score",
+  "glassdoor-check":   "Glassdoor Rating",
+  "kununu-check":      "Kununu Rating",
+  "linkedin-profile":  "LinkedIn Firmenprofil",
+  "salary-check":      "Gehalts-Check Schweiz",
+  "ats-keywords":      "ATS-Keywords",
+  "cv-highlights":     "CV-Highlights",
+  "interview-prep":    "Interview-Vorbereitung",
+  "salary-tips":       "Gehaltsverhandlung",
+  "company-research":  "Unternehmensrecherche",
+  "ackermann-script":  "Ackermann-Script",
+  "letter-review":     "Anschreiben-Review",
   "opening-sentences": "Eröffnungssätze",
-  "onboarding": "Onboarding-Checkliste",
+  "onboarding":        "Onboarding-Checkliste",
 };
 
 function aiResultSummary(id: string, data: unknown): string {
@@ -772,9 +791,268 @@ function SalaryCheckDetail({ data, appId }: { data: SalaryCheck; appId: string }
   );
 }
 
+function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appId: string; showToast?: (msg: string, type?: string) => void }) {
+  const [exporting, setExporting] = useState(false);
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
+
+  const copyAll = () => {
+    const sep = "─".repeat(40);
+    const text = [
+      "ROLLENSPEZIFISCHE FRAGEN",
+      sep,
+      iv.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"),
+      `\nCHRIS VOSS FRAGEN`,
+      sep,
+      iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"),
+      `\nSTAR-BEISPIELE`,
+      sep,
+      iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"),
+      `\nMEINE RÜCKFRAGEN`,
+      sep,
+      iv.rueckfragen.map(q => `? ${q}`).join("\n"),
+    ].join("\n");
+    copyText(text);
+    showToast?.("Alles kopiert");
+  };
+
+  const exportDoc = async () => {
+    setExporting(true);
+    try {
+      const r = await api.post<{ docUrl: string }>(`/api/applications/${appId}/ai/interview-prep/export-doc`, { interviewPrep: iv });
+      setExportUrl(r.data.docUrl);
+      showToast?.("Google Doc erstellt");
+    } catch { showToast?.("Export fehlgeschlagen", "error"); }
+    finally { setExporting(false); }
+  };
+
+  return (
+    <div>
+      {/* Action bar */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={copyAll}>
+          <IcCopy width={11} height={11} /> Alles kopieren
+        </button>
+        {exportUrl ? (
+          <a href={exportUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
+            <Page width={11} height={11} /> Google Doc öffnen ↗
+          </a>
+        ) : (
+          <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={exportDoc} disabled={exporting}>
+            {exporting ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />}
+            Als Google Doc
+          </button>
+        )}
+      </div>
+
+      {/* Rollenspezifische Fragen */}
+      <Accordion title="Rollenspezifische Fragen" count={iv.rollenFragen?.length ?? 0} color="#a78bfa"
+        onCopy={() => copyText(iv.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"))}>
+        {iv.rollenFragen?.map((q, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < iv.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
+            <span style={{ color: "var(--fg-3)", flexShrink: 0 }}>{i + 1}.</span>
+            <span style={{ flex: 1 }}>{q}</span>
+            <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+              <IcCopy width={10} height={10} />
+            </button>
+          </div>
+        ))}
+      </Accordion>
+
+      {/* Chris Voss Fragen */}
+      <Accordion title='Chris Voss "What / How"-Fragen' count={iv.vossFragenWhatHow?.length ?? 0} color="#34d399"
+        onCopy={() => copyText(iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"))}>
+        <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>
+        {iv.vossFragenWhatHow?.map((q, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < iv.vossFragenWhatHow.length - 1 ? "1px solid var(--border)" : "none" }}>
+            <span style={{ color: "#34d399", flexShrink: 0 }}>→</span>
+            <span style={{ flex: 1 }}>{q}</span>
+            <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+              <IcCopy width={10} height={10} />
+            </button>
+          </div>
+        ))}
+      </Accordion>
+
+      {/* STAR-Beispiele */}
+      <Accordion title="STAR-Beispiele" count={iv.starBeispiele?.length ?? 0} color="#fbbf24"
+        onCopy={() => copyText(iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"))}>
+        {iv.starBeispiele?.map((s, i) => (
+          <div key={i} style={{ position: "relative", marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
+            <button onClick={() => copyText(`${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`)} title="Kopieren"
+              style={{ position: "absolute", top: 8, right: 8, background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+              <IcCopy width={11} height={11} />
+            </button>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 6, paddingRight: 20 }}>❓ {s.frage}</div>
+            {([["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]] as [string, string][]).map(([k, v]) => (
+              <div key={k} style={{ fontSize: 11, color: "var(--fg-2)", padding: "2px 0" }}>
+                <span style={{ fontWeight: 700, color: "#fbbf24", marginRight: 6 }}>{k}:</span>{v}
+              </div>
+            ))}
+          </div>
+        ))}
+      </Accordion>
+
+      {/* Rückfragen */}
+      <Accordion title="Meine Rückfragen" count={iv.rueckfragen?.length ?? 0} color="#60a5fa"
+        onCopy={() => copyText(iv.rueckfragen.map(q => `? ${q}`).join("\n"))}>
+        {iv.rueckfragen?.map((q, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < iv.rueckfragen.length - 1 ? "1px solid var(--border)" : "none" }}>
+            <span style={{ color: "#60a5fa", flexShrink: 0 }}>?</span>
+            <span style={{ flex: 1 }}>{q}</span>
+            <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+              <IcCopy width={10} height={10} />
+            </button>
+          </div>
+        ))}
+      </Accordion>
+    </div>
+  );
+}
+
+function AckermannScriptDetail({ script, appId }: { script: AckermannScript; appId: string }) {
+  const [exporting, setExporting] = useState(false);
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
+
+  const copyAll = () => {
+    const sep = "─".repeat(40);
+    const lines = [
+      `ZIELGEHALT: CHF ${script.zielgehalt?.toLocaleString("de-CH")}`,
+      `ANKERGEBOT: CHF ${script.ankergebot?.toLocaleString("de-CH")} (~125% des Zielgehalts)`,
+      `\n${sep}\nVERHANDLUNGSSCHRITTE\n${sep}`,
+      ...(script.schritte ?? []).map(s =>
+        `\nRunde ${s.runde} — CHF ${s.angebot?.toLocaleString("de-CH")}\n"${s.formulierung}"\nTaktik: ${s.taktik}`),
+      `\n${sep}\nCHRIS VOSS ANKER-FORMULIERUNG\n${sep}\n${script.vossAnker}`,
+      ...(script.nichtmonetaer?.length > 0
+        ? [`\n${sep}\nNICHT-MONETÄRE ALTERNATIVEN\n${sep}`, ...script.nichtmonetaer.map(n => `• ${n}`)]
+        : []),
+    ];
+    copyText(lines.join("\n"));
+  };
+
+  const exportDoc = async () => {
+    setExporting(true);
+    try {
+      const r = await api.post<{ docUrl: string }>(`/api/applications/${appId}/ai/ackermann-script/export-doc`, { script });
+      setExportUrl(r.data.docUrl);
+    } catch { /* silent */ }
+    finally { setExporting(false); }
+  };
+
+  return (
+    <div>
+      {/* Action bar */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={copyAll}>
+          <IcCopy width={11} height={11} /> Alles kopieren
+        </button>
+        {exportUrl ? (
+          <a href={exportUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
+            <Page width={11} height={11} /> Google Doc öffnen ↗
+          </a>
+        ) : (
+          <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={exportDoc} disabled={exporting}>
+            {exporting ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />}
+            Als Google Doc
+          </button>
+        )}
+      </div>
+
+      {/* Ziel / Anker */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+        <div style={{ flex: 1, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+          <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>ZIELGEHALT</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "var(--accent)" }}>{script.zielgehalt?.toLocaleString("de-CH")}</div>
+        </div>
+        <div style={{ flex: 1, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
+          <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>ANKERGEBOT (~125%)</div>
+          <div style={{ fontSize: 18, fontWeight: 800, color: "#34d399" }}>{script.ankergebot?.toLocaleString("de-CH")}</div>
+        </div>
+      </div>
+
+      {/* Verhandlungsschritte */}
+      {script.schritte?.map((s, i) => (
+        <div key={i} style={{ display: "flex", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
+          <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-3)", minWidth: 58, flexShrink: 0, paddingTop: 2 }}>RUNDE {s.runde}</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 15, fontWeight: 800, color: "var(--accent)" }}>CHF {s.angebot?.toLocaleString("de-CH")}</span>
+              <button onClick={() => copyText(`${s.formulierung}`)} title="Formulierung kopieren"
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+                onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+                <IcCopy width={10} height={10} />
+              </button>
+            </div>
+            <div style={{ fontSize: 11, color: "var(--fg-2)", fontStyle: "italic", lineHeight: 1.6, marginBottom: 4 }}>„{s.formulierung}"</div>
+            <div style={{ fontSize: 10, color: "var(--fg-3)", lineHeight: 1.4 }}>🧠 {s.taktik}</div>
+          </div>
+        </div>
+      ))}
+
+      {/* Voss-Anker */}
+      {script.vossAnker && (
+        <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 8, background: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.25)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", textTransform: "uppercase", letterSpacing: "0.06em" }}>Chris Voss Anker-Formulierung</div>
+            <button onClick={() => copyText(script.vossAnker)} title="Kopieren"
+              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+              onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
+              <IcCopy width={10} height={10} />
+            </button>
+          </div>
+          <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6 }}>{script.vossAnker}</div>
+        </div>
+      )}
+
+      {/* Nicht-monetäre Alternativen */}
+      {script.nichtmonetaer?.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <AiSection title="Nicht-monetäre Alternativen">
+            <div>{script.nichtmonetaer.map((n, i) => <TagBadge key={i} text={n} />)}</div>
+          </AiSection>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AiResultDetail({ id, data, appId, onUpdate }: {
   id: string; data: unknown; appId: string; onUpdate?: (id: string, data: unknown) => void;
 }) {
+  if (id === "match-score") {
+    const r = data as MatchResult;
+    const scoreColor = r.score >= 75 ? "#34d399" : r.score >= 50 ? "#fbbf24" : "#f87171";
+    return (
+      <>
+        <div style={{ fontSize: 12, fontWeight: 700, color: scoreColor, marginBottom: 12 }}>
+          {r.score >= 75 ? "Starke Übereinstimmung" : r.score >= 50 ? "Moderate Übereinstimmung" : "Schwache Übereinstimmung"}
+        </div>
+        <MiniBar label="Fachkompetenz"     value={r.breakdown.fachkompetenz}     color={scoreColor} />
+        <MiniBar label="Erfahrung"          value={r.breakdown.erfahrung}          color={scoreColor} />
+        <MiniBar label="Soft Skills"        value={r.breakdown.soft_skills}        color={scoreColor} />
+        <MiniBar label="Kulturelle Passung" value={r.breakdown.kulturelle_passung} color={scoreColor} />
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16, marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>✓ Stärken</div>
+            {r.staerken.map((s, i) => <div key={i} style={{ fontSize: 11, color: "var(--fg-2)", padding: "3px 0", borderBottom: "1px solid var(--border)", lineHeight: 1.5 }}>{s}</div>)}
+          </div>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "#f87171", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>✗ Lücken</div>
+            {r.luecken.map((l, i) => <div key={i} style={{ fontSize: 11, color: "var(--fg-2)", padding: "3px 0", borderBottom: "1px solid var(--border)", lineHeight: 1.5 }}>{l}</div>)}
+          </div>
+        </div>
+        {r.reasoning && (
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>KI-Begründung</div>
+            <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.75, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>{r.reasoning}</div>
+          </div>
+        )}
+      </>
+    );
+  }
   if (id === "glassdoor-check") {
     return <GlassdoorCardDetail data={data as GlassdoorData} appId={appId} onUpdate={v => onUpdate?.(id, v)} />;
   }
@@ -810,27 +1088,7 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
   }
   if (id === "interview-prep") {
     const iv = data as InterviewPrep;
-    return (
-      <>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-          {([
-            { label: "FRAGEN",    val: iv.rollenFragen?.length ?? 0,      color: "var(--accent)" },
-            { label: "STAR",      val: iv.starBeispiele?.length ?? 0,     color: "#34d399" },
-            { label: "VOSS",      val: iv.vossFragenWhatHow?.length ?? 0, color: "#fbbf24" },
-            { label: "RÜCKFRAGEN",val: iv.rueckfragen?.length ?? 0,       color: "#a78bfa" },
-          ]).map(({ label, val, color }) => (
-            <div key={label} style={{ flex: 1, minWidth: 70, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
-              <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>{label}</div>
-              <div style={{ fontSize: 22, fontWeight: 800, color }}>{val}</div>
-            </div>
-          ))}
-        </div>
-        {iv.rollenFragen?.slice(0, 3).map((q, i) => (
-          <div key={i} style={{ fontSize: 11, color: "var(--fg-2)", padding: "5px 0", borderBottom: i < 2 ? "1px solid var(--border)" : "none", lineHeight: 1.5 }}>{i + 1}. {q}</div>
-        ))}
-        {(iv.rollenFragen?.length ?? 0) > 3 && <div style={{ fontSize: 10, color: "var(--fg-3)", marginTop: 6 }}>+{(iv.rollenFragen?.length ?? 0) - 3} weitere Fragen im Aktionen-Tab</div>}
-      </>
-    );
+    return <InterviewPrepDetail iv={iv} appId={appId} />;
   }
   if (id === "salary-tips") {
     const st = data as SalaryTips;
@@ -856,30 +1114,7 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
   }
   if (id === "ackermann-script") {
     const as_ = data as AckermannScript;
-    return (
-      <>
-        <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-          <div style={{ flex: 1, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
-            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>ZIELGEHALT</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "var(--accent)" }}>{as_.zielgehalt?.toLocaleString("de-CH")}</div>
-          </div>
-          <div style={{ flex: 1, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", textAlign: "center" }}>
-            <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>ANKERGEBOT</div>
-            <div style={{ fontSize: 18, fontWeight: 800, color: "#34d399" }}>{as_.ankergebot?.toLocaleString("de-CH")}</div>
-          </div>
-        </div>
-        {as_.schritte?.map((s, i) => (
-          <div key={i} style={{ display: "flex", gap: 10, padding: "8px 0", borderBottom: "1px solid var(--border)", alignItems: "flex-start" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-3)", minWidth: 22, flexShrink: 0, paddingTop: 2 }}>R{s.runde}</div>
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>{s.angebot?.toLocaleString("de-CH")}</div>
-              <div style={{ fontSize: 11, color: "var(--fg-2)", marginTop: 2, lineHeight: 1.5 }}>{s.formulierung}</div>
-            </div>
-          </div>
-        ))}
-        {as_.nichtmonetaer?.length > 0 && <div style={{ marginTop: 12 }}><AiSection title="Nicht-monetäre Punkte"><div>{as_.nichtmonetaer.map((n, i) => <TagBadge key={i} text={n} />)}</div></AiSection></div>}
-      </>
-    );
+    return <AckermannScriptDetail script={as_} appId={appId} />;
   }
   if (id === "letter-review") {
     const lr = data as LetterReview;
@@ -935,12 +1170,115 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
 
 // IDs die die doppelte Kachelbreite benötigen (textintensiver Inhalt)
 const DOUBLE_WIDTH_IDS = new Set([
-  "salary-check", "ats-keywords", "company-research",
+  "match-score",
+  "salary-check", "company-research",
   "salary-tips", "letter-review", "opening-sentences",
 ]);
 
+// IDs die drei Spalten breit sind
+const TRIPLE_WIDTH_IDS = new Set(["ats-keywords"]);
+
+// IDs die zusätzlich die doppelte Kachelhöhe benötigen
+const DOUBLE_HEIGHT_IDS = new Set(["ats-keywords"]);
+
+// ─── Word Cloud (d3-cloud) ───────────────────────────────────────────────────
+interface WcWord { text: string; weight: number; color: string; }
+interface WcLayout { text?: string; x?: number; y?: number; rotate?: number; size?: number; color?: string; }
+
+/**
+ * Build word list from a category with exponential weight decay by position.
+ * baseWeight controls the category's prominence vs. other categories.
+ * Each subsequent word within the category gets ~20% less weight.
+ */
+function wcWords(items: string[], baseWeight: number, color: string, maxItems = 6): WcWord[] {
+  return items.slice(0, maxItems).map((text, i) => ({
+    text,
+    weight: baseWeight * Math.pow(0.80, i),
+    color,
+  }));
+}
+
+function WordCloudViz({ words, width, height }: { words: WcWord[]; width: number; height: number }) {
+  const [placed, setPlaced] = useState<WcLayout[]>([]);
+
+  const stable = useMemo(
+    () => words,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [words.map(w => w.text + w.weight).join()]
+  );
+
+  useEffect(() => {
+    if (!stable.length) return;
+    const max = Math.max(...stable.map(w => w.weight));
+    // font range: 8px (lightest) → 22px (heaviest) — kept compact so more words fit
+    const layout = cloud<WcWord & { size: number; color: string }>()
+      .size([width, height])
+      .words(stable.map(w => ({
+        ...w,
+        size: 8 + Math.round((w.weight / max) * 14),
+        color: w.color,
+      })))
+      .padding(2)
+      // d3-cloud uses canvas for measurement — tell it to use condensed font
+      .font("'Arial Narrow', 'Helvetica Neue', Arial, sans-serif")
+      // ~20% chance of 90° rotation
+      .rotate(() => (Math.random() < 0.2 ? (Math.random() > 0.5 ? 90 : -90) : 0))
+      .fontSize(d => d.size ?? 10)
+      .on("end", (out) => setPlaced(out as WcLayout[]))
+      .start();
+    return () => { layout.stop(); };
+  }, [stable, width, height]);
+
+  return (
+    <svg width={width} height={height} style={{ overflow: "visible" }}>
+      <g transform={`translate(${width / 2},${height / 2})`}>
+        {placed.map((w, i) => (
+          <text key={i}
+            textAnchor="middle"
+            transform={`translate(${w.x ?? 0},${w.y ?? 0}) rotate(${w.rotate ?? 0})`}
+            style={{
+              fontSize: w.size,
+              // Map size range 8–22 → font-weight 200–800 (snapped to nearest 100)
+              fontWeight: Math.round((200 + (((w.size ?? 10) - 8) / 14) * 600) / 100) * 100,
+              fill: w.color ?? "var(--fg-2)",
+              fontFamily: "'Arial Narrow', 'Helvetica Neue', Arial, sans-serif",
+              fontStretch: "condensed",
+              letterSpacing: "-0.01em",
+              cursor: "default",
+            }}
+          >
+            <title>{w.text}</title>
+            {w.text}
+          </text>
+        ))}
+      </g>
+    </svg>
+  );
+}
+
 function renderTileContent(id: string, data: unknown): React.ReactNode {
   const d = data as Record<string, unknown>;
+
+  if (id === "match-score") {
+    const score = d.score as number | undefined;
+    if (score == null) return null;
+    const color = score >= 75 ? "#34d399" : score >= 50 ? "#fbbf24" : "#f87171";
+    const r = 28; const circ = 2 * Math.PI * r; const progress = (score / 100) * circ;
+    return (
+      <div style={{ position: "relative", width: 72, height: 72 }}>
+        <svg width="72" height="72" viewBox="0 0 72 72">
+          <circle cx="36" cy="36" r={r} fill="none" stroke="var(--border)" strokeWidth="6" />
+          <circle cx="36" cy="36" r={r} fill="none" stroke={color} strokeWidth="6"
+            strokeDasharray={`${progress} ${circ}`} strokeLinecap="round"
+            transform="rotate(-90 36 36)" style={{ transition: "stroke-dasharray 0.6s ease" }} />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 18, fontWeight: 800, color, lineHeight: 1 }}>{score}</span>
+          <span style={{ fontSize: 9, color: "var(--fg-3)", fontWeight: 600 }}>%</span>
+        </div>
+      </div>
+    );
+  }
 
   if (id === "glassdoor-check" || id === "kununu-check") {
     const rating = d.rating as number | null;
@@ -979,19 +1317,16 @@ function renderTileContent(id: string, data: unknown): React.ReactNode {
     );
   }
   if (id === "ats-keywords") {
-    const kws = (d.mustHave as string[] | undefined) ?? [];
-    return (
-      <div style={{ lineHeight: 1.8 }}>
-        {kws.slice(0, 5).map((k, i) => (
-          <span key={i} style={{
-            display: "inline-block", padding: "1px 7px", borderRadius: 3,
-            marginRight: 4, fontSize: 10, fontWeight: 600,
-            background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--accent)",
-          }}>{k}</span>
-        ))}
-        {kws.length > 5 && <span style={{ fontSize: 9, color: "var(--fg-4)" }}>+{kws.length - 5}</span>}
-      </div>
-    );
+    const kw = d as AtsKeywords;
+    // 3 per category max in the compact tile — condensed font fits them comfortably
+    const words: WcWord[] = [
+      ...wcWords(kw.mustHave   ?? [], 10,  "#60a5fa", 3),
+      ...wcWords(kw.niceToHave ?? [], 6.5, "#a78bfa", 3),
+      ...wcWords(kw.softSkills ?? [], 4.5, "#34d399", 3),
+      ...wcWords(kw.tools      ?? [], 4.0, "#fbbf24", 3),
+    ];
+    if (!words.length) return null;
+    return <WordCloudViz words={words} width={280} height={190} />;
   }
   if (id === "cv-highlights") {
     const h = (d.highlights as string[] | undefined ?? []).length;
@@ -1066,7 +1401,26 @@ function renderTileContent(id: string, data: unknown): React.ReactNode {
   return null;
 }
 
+// Phase color per tile — filled tiles get this color as background tint
+const TILE_PHASE_COLORS: Record<string, string> = {
+  "match-score":       "#60a5fa",  // blue  (universal)
+  "glassdoor-check":   "#94a3b8",  // slate (Inbox)
+  "kununu-check":      "#94a3b8",
+  "linkedin-profile":  "#94a3b8",
+  "salary-check":      "#94a3b8",
+  "ats-keywords":      "#94a3b8",
+  "cv-highlights":     "#60a5fa",  // blue  (CV)
+  "letter-review":     "#22d3ee",  // cyan  (Letter)
+  "opening-sentences": "#22d3ee",
+  "company-research":  "#a78bfa",  // purple (Sent/Pending)
+  "salary-tips":       "#a78bfa",
+  "ackermann-script":  "#fbbf24",  // amber (Pending)
+  "interview-prep":    "#34d399",  // green (Interview)
+  "onboarding":        "#84cc16",  // lime  (Accepted)
+};
+
 const TILE_EMPTY_LABELS: Record<string, string> = {
+  "match-score":       "Analyse starten",
   "glassdoor-check":   "Bewertung ermitteln",
   "kununu-check":      "Bewertung ermitteln",
   "linkedin-profile":  "Profil ermitteln",
@@ -1087,32 +1441,50 @@ function AiResultTile({ id, entry, onExpand }: {
   entry: { data: unknown; createdAt: Date } | null;
   onExpand: () => void;
 }) {
-  const label    = AI_RESULT_LABELS[id] ?? id;
-  const isDouble = DOUBLE_WIDTH_IDS.has(id);
-  const content  = entry ? renderTileContent(id, entry.data) : null;
-  const hasData  = !!content;
+  const label        = AI_RESULT_LABELS[id] ?? id;
+  const isDouble     = DOUBLE_WIDTH_IDS.has(id);
+  const isTriple     = TRIPLE_WIDTH_IDS.has(id);
+  const isDoubleH    = DOUBLE_HEIGHT_IDS.has(id);
+  const content      = entry ? renderTileContent(id, entry.data) : null;
+  const hasData      = !!content;
+  const phaseColor   = TILE_PHASE_COLORS[id];
+
+  // Filled tile: colored bg + border; empty: neutral surface
+  const tileStyle: React.CSSProperties = hasData && phaseColor ? {
+    background: `${phaseColor}18`,
+    border: `1px solid ${phaseColor}50`,
+  } : {
+    background: "var(--surface)",
+    border: "1px solid var(--border)",
+  };
+
+  // Label & icon colors: phase color when filled, muted when empty
+  const labelColor   = hasData && phaseColor ? `${phaseColor}cc` : "var(--fg-4)";
+  const expandColor  = hasData && phaseColor ? phaseColor         : "var(--accent)";
 
   return (
     <button onClick={onExpand} style={{
-      gridColumn: isDouble ? "span 2" : undefined,
+      gridColumn: isTriple ? "span 3" : isDouble ? "span 2" : undefined,
+      gridRow:    isDoubleH ? "span 2" : undefined,
       position: "relative",
       display: "flex", flexDirection: "column", alignItems: "center",
-      padding: "12px 12px 14px", borderRadius: 12, minHeight: 120,
-      border: "1px solid var(--border)", background: "var(--surface)",
+      padding: "12px 12px 14px", borderRadius: 12, minHeight: isDoubleH ? 240 : 120,
       cursor: "pointer", fontFamily: "var(--font-sans)",
+      transition: "background 0.2s, border-color 0.2s",
+      ...tileStyle,
     }}>
       {/* Label zentriert oben */}
-      <span style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 10, lineHeight: 1, textAlign: "center" }}>
+      <span style={{ fontSize: 11, color: labelColor, marginBottom: 10, lineHeight: 1, textAlign: "center", fontWeight: hasData ? 600 : 400 }}>
         {label}
       </span>
-      {/* Expand-Icon oben-rechts — immer sichtbar, Accent-Farbe */}
-      <div style={{ position: "absolute", top: 8, right: 8, color: "var(--accent)", display: "flex" }}>
+      {/* Expand-Icon oben-rechts */}
+      <div style={{ position: "absolute", top: 8, right: 8, color: expandColor, display: "flex" }}>
         <Expand width={13} height={13} />
       </div>
       {/* Hauptinhalt — mit oder ohne Daten */}
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 64 }}>
         {hasData ? (
-          <div style={{ display: "flex", alignItems: isDouble ? "flex-start" : "center", justifyContent: "center", width: "100%" }}>
+          <div style={{ display: "flex", alignItems: (isDouble || isTriple) ? "flex-start" : "center", justifyContent: "center", width: "100%" }}>
             {content}
           </div>
         ) : (
@@ -1128,6 +1500,26 @@ function AiResultTile({ id, entry, onExpand }: {
 // ─── Large tile (2× scale) for expand right column ───────────
 function renderTileContentLarge(id: string, data: unknown): React.ReactNode {
   const d = data as Record<string, unknown>;
+  if (id === "match-score") {
+    const score = d.score as number | undefined;
+    if (score == null) return null;
+    const color = score >= 75 ? "#34d399" : score >= 50 ? "#fbbf24" : "#f87171";
+    const r = 54; const circ = 2 * Math.PI * r; const progress = (score / 100) * circ;
+    return (
+      <div style={{ position: "relative", width: 140, height: 140, margin: "0 auto" }}>
+        <svg width="140" height="140" viewBox="0 0 140 140">
+          <circle cx="70" cy="70" r={r} fill="none" stroke="var(--border)" strokeWidth="9" />
+          <circle cx="70" cy="70" r={r} fill="none" stroke={color} strokeWidth="9"
+            strokeDasharray={`${progress} ${circ}`} strokeLinecap="round"
+            transform="rotate(-90 70 70)" style={{ transition: "stroke-dasharray 0.6s ease" }} />
+        </svg>
+        <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+          <span style={{ fontSize: 36, fontWeight: 800, color, lineHeight: 1 }}>{score}</span>
+          <span style={{ fontSize: 12, color: "var(--fg-3)", fontWeight: 600 }}>%</span>
+        </div>
+      </div>
+    );
+  }
   if (id === "glassdoor-check" || id === "kununu-check") {
     const rating  = d.rating as number | null;
     const stars   = rating != null ? "★".repeat(Math.round(rating)) + "☆".repeat(5 - Math.round(rating)) : null;
@@ -1227,15 +1619,16 @@ function renderTileContentLarge(id: string, data: unknown): React.ReactNode {
     return <span style={{ fontSize: 13, color: "var(--fg-2)", lineHeight: 1.5, textAlign: "center" }}>{text}{textMap[id].length > 80 ? "…" : ""}</span>;
   }
   if (id === "ats-keywords") {
-    const kws = (d.mustHave as string[] | undefined) ?? [];
-    return (
-      <div style={{ lineHeight: 2.2, textAlign: "center" }}>
-        {kws.slice(0, 4).map((k, i) => (
-          <span key={i} style={{ display: "inline-block", padding: "3px 10px", borderRadius: 4, margin: "2px 3px", fontSize: 12, fontWeight: 600, background: "var(--surface-2)", border: "1px solid var(--border)", color: "var(--accent)" }}>{k}</span>
-        ))}
-        {kws.length > 4 && <span style={{ fontSize: 11, color: "var(--fg-4)" }}> +{kws.length - 4}</span>}
-      </div>
-    );
+    const kw = d as AtsKeywords;
+    // Large tile (expand view right column): 4 per category
+    const words: WcWord[] = [
+      ...wcWords(kw.mustHave   ?? [], 10,  "#60a5fa", 4),
+      ...wcWords(kw.niceToHave ?? [], 6.5, "#a78bfa", 4),
+      ...wcWords(kw.softSkills ?? [], 4.5, "#34d399", 4),
+      ...wcWords(kw.tools      ?? [], 4.0, "#fbbf24", 4),
+    ];
+    if (!words.length) return null;
+    return <WordCloudViz words={words} width={185} height={210} />;
   }
   if (id === "opening-sentences") {
     const saetze = d.saetze as Array<{ satz: string }> | undefined;
@@ -1270,6 +1663,7 @@ function AiResultTileLarge({ id, entry }: { id: string; entry: { data: unknown }
 
 // Endpoint map for direct execution from expand view
 const ACTION_ENDPOINTS: Record<string, string> = {
+  "match-score":       "/match-score",
   "glassdoor-check":   "/ai/glassdoor-check",
   "kununu-check":      "/ai/kununu-check",
   "linkedin-profile":  "/ai/linkedin-profile",
@@ -1349,7 +1743,50 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
       </div>
       {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, flexShrink: 0 }}>{err}</div>}
 
-      {/* Two-column: left = detail content, right = large tile */}
+      {/* ATS-Keywords: full-width cloud + 4-column category list */}
+      {id === "ats-keywords" && hasData ? (() => {
+        const kw = entry.data as AtsKeywords;
+        const allWords: WcWord[] = [
+          ...wcWords(kw.mustHave   ?? [], 10,  "#60a5fa", 999),
+          ...wcWords(kw.niceToHave ?? [], 6.5, "#a78bfa", 999),
+          ...wcWords(kw.softSkills ?? [], 4.5, "#34d399", 999),
+          ...wcWords(kw.tools      ?? [], 4.0, "#fbbf24", 999),
+        ];
+        const categories = [
+          { title: "Must Have",         items: kw.mustHave   ?? [], color: "#60a5fa" },
+          { title: "Nice to Have",      items: kw.niceToHave ?? [], color: "#a78bfa" },
+          { title: "Soft Skills",       items: kw.softSkills ?? [], color: "#34d399" },
+          { title: "Tools & Technologien", items: kw.tools  ?? [], color: "#fbbf24" },
+        ].filter(c => c.items.length > 0);
+        return (
+          <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            {/* Full-width word cloud */}
+            <div style={{ flexShrink: 0, display: "flex", justifyContent: "center", marginBottom: 16 }}>
+              <WordCloudViz words={allWords} width={640} height={200} />
+            </div>
+            {/* 4-column category grid */}
+            <div style={{ flex: 1, overflow: "auto" }}>
+              <div style={{ display: "grid", gridTemplateColumns: `repeat(${categories.length}, 1fr)`, gap: 12 }}>
+                {categories.map(cat => (
+                  <div key={cat.title}>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: cat.color, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>{cat.title}</div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                      {cat.items.map((kw, i) => (
+                        <span key={i} style={{
+                          padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 500,
+                          background: `${cat.color}14`, color: cat.color,
+                          border: `1px solid ${cat.color}30`,
+                        }}>{kw}</span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      })() : (
+      /* Default: two-column: left = detail content, right = large tile */
       <div style={{ display: "flex", gap: 20, flex: 1, minHeight: 0, alignItems: "flex-start" }}>
         {/* Left column — detail content */}
         <div style={{ flex: 1, overflow: "auto", alignSelf: "stretch" }}>
@@ -1370,21 +1807,196 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
           <AiResultTileLarge id={id} entry={entry} />
         </div>
       </div>
+      )}
     </div>
   );
 }
 
-function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResultUpdate }: {
+// ─── Contact form helpers (shared by ContactsSection + ContactsTab) ──
+const EMPTY_CONTACT_FORM = { name: "", role: "", email: "", phone: "", linkedinUrl: "", notes: "" };
+type ContactForm = typeof EMPTY_CONTACT_FORM;
+
+function ContactForm({
+  form, onChange, onSave, onCancel, saveLabel
+}: {
+  form: ContactForm;
+  onChange: (f: ContactForm) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saveLabel: string;
+}) {
+  const set = (k: keyof ContactForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    onChange({ ...form, [k]: e.target.value });
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <datalist id="contact-role-opts">
+        <option value="Recruiter" />
+        <option value="Hiring Manager" />
+        <option value="HR Business Partner" />
+        <option value="Teamleiter" />
+        <option value="CEO" />
+        <option value="CTO" />
+        <option value="Sonstiges" />
+      </datalist>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div className="field" style={{ margin: 0 }}>
+          <label>Name *</label>
+          <input value={form.name} onChange={set("name")} placeholder="Max Muster" autoFocus />
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <label>Rolle</label>
+          <input list="contact-role-opts" value={form.role} onChange={set("role")} placeholder="Recruiter, Teamleiter …" />
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <label>E-Mail</label>
+          <input value={form.email} onChange={set("email")} placeholder="kontakt@firma.de" type="email" />
+        </div>
+        <div className="field" style={{ margin: 0 }}>
+          <label>Telefon</label>
+          <input value={form.phone} onChange={set("phone")} placeholder="+41 79 …" />
+        </div>
+      </div>
+      <div className="field" style={{ margin: 0 }}>
+        <label>LinkedIn URL</label>
+        <input value={form.linkedinUrl} onChange={set("linkedinUrl")} placeholder="https://linkedin.com/in/…" />
+      </div>
+      <div className="field" style={{ margin: 0 }}>
+        <label>Notizen</label>
+        <textarea value={form.notes} onChange={set("notes")} placeholder="Gesprächsnotizen, Eindrücke …" rows={3} style={{ resize: "vertical" }} />
+      </div>
+      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <button className="btn btn-secondary" onClick={onCancel}>Abbrechen</button>
+        <button className="btn btn-primary" onClick={onSave} disabled={!form.name.trim()}>{saveLabel}</button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Contacts Section (inline in DetailsTab) ──────────────────
+function ContactsSection({ app }: { app: Application }) {
+  const { data: contacts = [], refetch } = useQuery<ApplicationContact[]>({
+    queryKey: ["contacts", app.id],
+    queryFn: () => api.get(`/api/applications/${app.id}/contacts`).then((r) => r.data)
+  });
+  const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [addForm, setAddForm] = useState<ContactForm>(EMPTY_CONTACT_FORM);
+  const [editForm, setEditForm] = useState<ContactForm>(EMPTY_CONTACT_FORM);
+
+  const add = async () => {
+    if (!addForm.name.trim()) return;
+    await api.post(`/api/applications/${app.id}/contacts`, { ...addForm, name: addForm.name.trim() });
+    setAddForm(EMPTY_CONTACT_FORM); setAdding(false); refetch();
+  };
+  const startEdit = (c: ApplicationContact) => {
+    setEditId(c.id);
+    setEditForm({ name: c.name, role: c.role ?? "", email: c.email ?? "", phone: c.phone ?? "", linkedinUrl: c.linkedinUrl ?? "", notes: c.notes ?? "" });
+  };
+  const saveEdit = async () => {
+    if (!editForm.name.trim() || !editId) return;
+    await api.patch(`/api/applications/${app.id}/contacts/${editId}`, { ...editForm, name: editForm.name.trim() });
+    setEditId(null); refetch();
+  };
+  const del = async (cId: string) => {
+    await api.delete(`/api/applications/${app.id}/contacts/${cId}`); refetch();
+  };
+
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: open ? 10 : 0, cursor: "pointer" }}
+        onClick={() => setOpen(v => !v)}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          Kontakte {contacts.length > 0 && `(${contacts.length})`}
+        </div>
+        <NavArrowDown width={11} height={11} style={{ color: "var(--fg-3)", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+      </div>
+      {open && (
+        <>
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
+            <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, padding: "5px 10px" }}
+              onClick={(e) => { e.stopPropagation(); setAdding(v => !v); setEditId(null); }}>
+              <Plus width={11} height={11} /> Kontakt
+            </button>
+          </div>
+          {adding && (
+            <div style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", marginBottom: 14 }}>
+              <ContactForm form={addForm} onChange={setAddForm} onSave={add} onCancel={() => setAdding(false)} saveLabel="Hinzufügen" />
+            </div>
+          )}
+          {contacts.length === 0 && !adding && (
+            <div style={{ color: "var(--fg-3)", fontSize: 12, textAlign: "center", padding: "24px 0", border: "1px dashed var(--border)", borderRadius: 8 }}>
+              Noch keine Kontakte
+            </div>
+          )}
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {contacts.map((c) => (
+              <div key={c.id} style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${editId === c.id ? "var(--accent-40)" : "var(--border)"}`, background: "var(--surface)" }}>
+                {editId === c.id ? (
+                  <ContactForm form={editForm} onChange={setEditForm} onSave={saveEdit} onCancel={() => setEditId(null)} saveLabel="Speichern" />
+                ) : (
+                  <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--fg-1)" }}>{c.name}</div>
+                      {c.role && <div style={{ fontSize: 13, color: "var(--fg-3)", marginTop: 1 }}>{c.role}</div>}
+                      <div style={{ display: "flex", gap: 8, marginTop: 5, flexWrap: "wrap" }}>
+                        {c.email && <a href={`mailto:${c.email}`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 13, textDecoration: "none" }}><Mail width={12} height={12} />{c.email}</a>}
+                        {c.phone && <a href={`tel:${c.phone}`} style={{ display: "flex", alignItems: "center", gap: 3, color: "var(--accent)", fontSize: 13, textDecoration: "none" }}><Phone width={12} height={12} />{c.phone}</a>}
+                        {c.linkedinUrl && <a href={c.linkedinUrl} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 3, color: "#0a66c2", fontSize: 13, textDecoration: "none" }}><OpenNewWindow width={12} height={12} />LinkedIn</a>}
+                      </div>
+                      {c.notes && <div style={{ marginTop: 6, fontSize: 13, color: "var(--fg-2)", whiteSpace: "pre-wrap" }}>{c.notes}</div>}
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Bearbeiten" onClick={() => startEdit(c)}><EditPencil width={11} height={11} /></button>
+                      <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Löschen" onClick={() => del(c.id)}><Trash width={12} height={12} /></button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Notes Section (inline in DetailsTab) ─────────────────────
+function NotesSection({ app, onSave }: { app: Application; onSave: (patch: Partial<Application>) => void }) {
+  const [notes, setNotes] = useState(app.notes ?? "");
+  const [saved, setSaved] = useState(false);
+  const [open, setOpen] = useState(false);
+  const save = () => { onSave({ notes }); setSaved(true); setTimeout(() => setSaved(false), 1500); };
+  return (
+    <div style={{ marginTop: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: open ? 10 : 0, cursor: "pointer" }}
+        onClick={() => setOpen(v => !v)}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Notizen</div>
+        <NavArrowDown width={11} height={11} style={{ color: "var(--fg-3)", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+      </div>
+      {open && (
+        <>
+          <div className="field" style={{ marginTop: 8 }}>
+            <AutoTextarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={save} placeholder="Notizen, Eindrücke, nächste Schritte…" minRows={5} />
+          </div>
+          <div className="autosave-indicator">
+            <span className="dot" style={{ background: saved ? "var(--accent)" : "var(--green)" }} />
+            {saved ? "Gespeichert." : "Wird beim Verlassen gespeichert."}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
   app: Application; stage: string;
   url: string; onUrlChange: (url: string) => void;
   onSave: (patch: Partial<Application>) => void;
-  aiResults?: Record<string, { data: unknown; createdAt: Date }>;
-  onAiResultUpdate?: (id: string, data: unknown) => void;
 }) {
   const [description, setDescription] = useState(app.description ?? "");
   const [descSaved,   setDescSaved]   = useState(false);
   const [descExpanded,  setDescExpanded]  = useState(false);
-  const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
   const [descMode,    setDescMode]    = useState<"preview" | "edit">("preview");
 
   const saveDesc = () => {
@@ -1399,58 +2011,16 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave, aiResults, onAiResul
     display: "flex", flexDirection: "column", overflow: "hidden",
   };
 
-  const STAGE_TILES: Record<string, string[]> = {
-    import_validating: ["glassdoor-check","kununu-check","linkedin-profile","salary-check","ats-keywords"],
-    preparing_cv:      ["cv-highlights"],
-    preparing_letter:  ["letter-review","opening-sentences"],
-    application_sent:  ["company-research","salary-tips"],
-    pending:           ["company-research","ackermann-script","salary-tips"],
-    interview_1:       ["interview-prep","salary-tips"],
-    interview_2:       ["interview-prep","salary-tips"],
-    rejected:          [],
-    accepted:          ["onboarding"],
-  };
-
-  const stageTileIds = STAGE_TILES[app.stage] ?? [];
-  // Merge: stage-tiles (immer sichtbar) + weitere bereits generierte Ergebnisse anderer Phasen
-  const tileIds = [...new Set([
-    ...stageTileIds,
-    ...Object.keys(aiResults ?? {}).filter(k => aiResults?.[k]?.data),
-  ])];
-  const tileEntries: [string, { data: unknown; createdAt: Date } | null][] =
-    tileIds.map(id => [id, aiResults?.[id] ?? null]);
-
-  const expandedEntry = expandedResultId ? (aiResults?.[expandedResultId] ?? null) : null;
-
   return (
     <>
       {/* Übersicht-Inhalt */}
       <OverviewTab app={app} stage={stage} url={url} onUrlChange={onUrlChange} onSave={onSave} />
 
-      {/* KI-Erkenntnisse — Grid aus Kacheln (immer sichtbar für stage-relevante Aktionen) */}
-      {tileEntries.length > 0 && (
-        <div style={{ marginTop: 16, marginBottom: 8 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>
-            KI-Erkenntnisse
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gridAutoFlow: "dense", gap: 6 }}>
-            {tileEntries.map(([id, entry]) => (
-              <AiResultTile key={id} id={id} entry={entry} onExpand={() => setExpandedResultId(id)} />
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Kontakte */}
+      <ContactsSection app={app} />
 
-      {/* Vollbild-Expand — auch für leere Kacheln */}
-      {expandedResultId && (
-        <TileExpandView
-          id={expandedResultId}
-          entry={expandedEntry}
-          appId={app.id}
-          onClose={() => setExpandedResultId(null)}
-          onRegister={onAiResultUpdate}
-        />
-      )}
+      {/* Notizen */}
+      <NotesSection app={app} onSave={onSave} />
 
       {/* Stellenbeschreibung — expandierbar */}
       <div style={descExpanded ? expandStyle : { marginTop: 8 }}>
@@ -2373,25 +2943,9 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
 }
 
 // ── Stage AI Actions ──
-function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChange, onSalaryTipsChange,
-  onSalaryCheckChange, onAtsKeywordsChange, onCompanyResearchChange, onAckermannScriptChange,
-  onLetterReviewChange, onOpeningSentencesChange, onOnboardingChange, onGlassdoorChange,
-  onKununuChange, onLinkedinChange, onAiResult }: {
+function StageAiActions({ app, onSave, onAiResult }: {
   app: Application;
   onSave?: (patch: Partial<Application>) => void;
-  onCvHighlightsChange?: (v: CvHighlights | null) => void;
-  onInterviewPrepChange?: (v: InterviewPrep | null) => void;
-  onSalaryTipsChange?: (v: SalaryTips | null) => void;
-  onSalaryCheckChange?: (v: SalaryCheck | null) => void;
-  onAtsKeywordsChange?: (v: AtsKeywords | null) => void;
-  onCompanyResearchChange?: (v: CompanyResearch | null) => void;
-  onAckermannScriptChange?: (v: AckermannScript | null) => void;
-  onLetterReviewChange?: (v: LetterReview | null) => void;
-  onOpeningSentencesChange?: (v: OpeningSentences | null) => void;
-  onOnboardingChange?: (v: OnboardingChecklist | null) => void;
-  onGlassdoorChange?: (v: GlassdoorData | null) => void;
-  onKununuChange?: (v: KununuData | null) => void;
-  onLinkedinChange?: (v: LinkedinData | null) => void;
   onAiResult?: (id: string, data: unknown) => void;
 }) {
   const { ai } = useUiStore();
@@ -2457,19 +3011,19 @@ function StageAiActions({ app, onSave, onCvHighlightsChange, onInterviewPrepChan
     try { return (app as Application & { linkedinData?: string }).linkedinData ? JSON.parse((app as Application & { linkedinData?: string }).linkedinData!) : null; } catch { return null; }
   });
 
-  const updateCvHighlights    = (v: CvHighlights | null)    => { setCvHighlights(v);     onCvHighlightsChange?.(v);     if (v) onAiResult?.("cv-highlights", v);     };
-  const updateInterviewPrep   = (v: InterviewPrep | null)   => { setInterviewPrep(v);    onInterviewPrepChange?.(v);    if (v) onAiResult?.("interview-prep", v);    };
-  const updateSalaryTips      = (v: SalaryTips | null)      => { setSalaryTips(v);       onSalaryTipsChange?.(v);       if (v) onAiResult?.("salary-tips", v);       };
-  const updateSalaryCheck     = (v: SalaryCheck | null)     => { setSalaryCheck(v);      onSalaryCheckChange?.(v);      if (v) onAiResult?.("salary-check", v);      };
-  const updateAtsKeywords     = (v: AtsKeywords | null)     => { setAtsKeywords(v);      onAtsKeywordsChange?.(v);      if (v) onAiResult?.("ats-keywords", v);      };
-  const updateCompanyResearch = (v: CompanyResearch | null) => { setCompanyResearch(v);  onCompanyResearchChange?.(v);  if (v) onAiResult?.("company-research", v);  };
-  const updateAckermannScript = (v: AckermannScript | null) => { setAckermannScript(v);  onAckermannScriptChange?.(v);  if (v) onAiResult?.("ackermann-script", v);  };
-  const updateLetterReview    = (v: LetterReview | null)    => { setLetterReview(v);     onLetterReviewChange?.(v);     if (v) onAiResult?.("letter-review", v);     };
-  const updateOpeningSentences= (v: OpeningSentences | null)=> { setOpeningSentences(v); onOpeningSentencesChange?.(v); if (v) onAiResult?.("opening-sentences", v); };
-  const updateOnboarding      = (v: OnboardingChecklist | null) => { setOnboarding(v);   onOnboardingChange?.(v);       if (v) onAiResult?.("onboarding", v);        };
-  const updateGlassdoor       = (v: GlassdoorData | null)       => { setGlassdoor(v);    onGlassdoorChange?.(v);        if (v) onAiResult?.("glassdoor-check", v);   };
-  const updateKununu          = (v: KununuData | null)           => { setKununu(v);       onKununuChange?.(v);           if (v) onAiResult?.("kununu-check", v);      };
-  const updateLinkedin        = (v: LinkedinData | null)         => { setLinkedin(v);     onLinkedinChange?.(v);         if (v) onAiResult?.("linkedin-profile", v);  };
+  const updateCvHighlights    = (v: CvHighlights | null)        => { setCvHighlights(v);     if (v) onAiResult?.("cv-highlights", v);     };
+  const updateInterviewPrep   = (v: InterviewPrep | null)       => { setInterviewPrep(v);    if (v) onAiResult?.("interview-prep", v);    };
+  const updateSalaryTips      = (v: SalaryTips | null)          => { setSalaryTips(v);       if (v) onAiResult?.("salary-tips", v);       };
+  const updateSalaryCheck     = (v: SalaryCheck | null)         => { setSalaryCheck(v);      if (v) onAiResult?.("salary-check", v);      };
+  const updateAtsKeywords     = (v: AtsKeywords | null)         => { setAtsKeywords(v);      if (v) onAiResult?.("ats-keywords", v);      };
+  const updateCompanyResearch = (v: CompanyResearch | null)     => { setCompanyResearch(v);  if (v) onAiResult?.("company-research", v);  };
+  const updateAckermannScript = (v: AckermannScript | null)     => { setAckermannScript(v);  if (v) onAiResult?.("ackermann-script", v);  };
+  const updateLetterReview    = (v: LetterReview | null)        => { setLetterReview(v);     if (v) onAiResult?.("letter-review", v);     };
+  const updateOpeningSentences= (v: OpeningSentences | null)    => { setOpeningSentences(v); if (v) onAiResult?.("opening-sentences", v); };
+  const updateOnboarding      = (v: OnboardingChecklist | null) => { setOnboarding(v);       if (v) onAiResult?.("onboarding", v);        };
+  const updateGlassdoor       = (v: GlassdoorData | null)       => { setGlassdoor(v);        if (v) onAiResult?.("glassdoor-check", v);   };
+  const updateKununu          = (v: KununuData | null)           => { setKununu(v);           if (v) onAiResult?.("kununu-check", v);      };
+  const updateLinkedin        = (v: LinkedinData | null)         => { setLinkedin(v);         if (v) onAiResult?.("linkedin-profile", v);  };
 
   void salaryCheck; void atsKeywords; void companyResearch; void ackermannScript;
   void letterReview; void openingSentences; void onboarding; void glassdoor; void kununu; void linkedin;
@@ -3198,7 +3752,12 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
   );
 }
 
-function ProcessTab({ app, onSave, onAiResult }: { app: Application; onSave?: (patch: Partial<Application>) => void; onAiResult?: (id: string, data: unknown) => void }) {
+function ProcessTab({ app, onSave, onAiResult, aiResults }: {
+  app: Application;
+  onSave?: (patch: Partial<Application>) => void;
+  onAiResult?: (id: string, data: unknown) => void;
+  aiResults?: Record<string, { data: unknown; createdAt: Date }>;
+}) {
   const { data: activities = [], refetch } = useQuery<ApplicationActivity[]>({
     queryKey: ["activities", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/activities`).then((r) => r.data)
@@ -3207,35 +3766,10 @@ function ProcessTab({ app, onSave, onAiResult }: { app: Application; onSave?: (p
   const [newType, setNewType] = useState("note");
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
+  const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
 
-  // AI-generated content — rendered full-width below the column grid
-  const [aiCvHighlights,    setAiCvHighlights]    = useState<CvHighlights | null>(null);
-  const [aiInterviewPrep,   setAiInterviewPrep]   = useState<InterviewPrep | null>(() => {
-    const raw = app.stage === "interview_1" ? app.interview1Prep
-              : app.stage === "interview_2" ? app.interview2Prep : null;
-    try { return raw ? JSON.parse(raw) as InterviewPrep : null; } catch { return null; }
-  });
-  const [aiSalaryTips,      setAiSalaryTips]      = useState<SalaryTips | null>(null);
-  const [aiSalaryCheck,     setAiSalaryCheck]     = useState<SalaryCheck | null>(null);
-  const [aiAtsKeywords,     setAiAtsKeywords]     = useState<AtsKeywords | null>(null);
-  const [aiCompanyResearch, setAiCompanyResearch] = useState<CompanyResearch | null>(null);
-  const [aiAckermannScript, setAiAckermannScript] = useState<AckermannScript | null>(null);
-  const [aiLetterReview,    setAiLetterReview]    = useState<LetterReview | null>(null);
-  const [aiOpeningSentences,setAiOpeningSentences]= useState<OpeningSentences | null>(null);
-  const [aiOnboarding,      setAiOnboarding]      = useState<OnboardingChecklist | null>(null);
-  const [aiGlassdoor,       setAiGlassdoor]       = useState<GlassdoorData | null>(() => {
-    try { return app.glassdoorData ? JSON.parse(app.glassdoorData as string) : null; } catch { return null; }
-  });
-  const [aiKununu,          setAiKununu]          = useState<KununuData | null>(() => {
-    try { return (app as Application & { kununuData?: string }).kununuData ? JSON.parse((app as Application & { kununuData?: string }).kununuData!) : null; } catch { return null; }
-  });
-  const [aiLinkedin,        setAiLinkedin]        = useState<LinkedinData | null>(() => {
-    try { return (app as Application & { linkedinData?: string }).linkedinData ? JSON.parse((app as Application & { linkedinData?: string }).linkedinData!) : null; } catch { return null; }
-  });
-
-  // Expand-Logik for the three content blocks
+  // Expand-Logik for the content blocks
   const [interviewExpanded, setInterviewExpanded] = useState(false);
-  const [aiExpanded,        setAiExpanded]        = useState(false);
   const [activitiesExpanded,setActivitiesExpanded]= useState(false);
 
   const expandStyle: React.CSSProperties = {
@@ -3261,19 +3795,6 @@ function ProcessTab({ app, onSave, onAiResult }: { app: Application; onSave?: (p
         <TaskChecklist app={app} />
         <StageAiActions
           app={app} onSave={onSave}
-          onCvHighlightsChange={setAiCvHighlights}
-          onInterviewPrepChange={setAiInterviewPrep}
-          onSalaryTipsChange={setAiSalaryTips}
-          onSalaryCheckChange={setAiSalaryCheck}
-          onAtsKeywordsChange={setAiAtsKeywords}
-          onCompanyResearchChange={setAiCompanyResearch}
-          onAckermannScriptChange={setAiAckermannScript}
-          onLetterReviewChange={setAiLetterReview}
-          onOpeningSentencesChange={setAiOpeningSentences}
-          onOnboardingChange={setAiOnboarding}
-          onGlassdoorChange={setAiGlassdoor}
-          onKununuChange={setAiKununu}
-          onLinkedinChange={setAiLinkedin}
           onAiResult={onAiResult}
         />
       </div>
@@ -3291,381 +3812,32 @@ function ProcessTab({ app, onSave, onAiResult }: { app: Application; onSave?: (p
         </div>
       )}
 
-      {/* 2. KI-generierte Inhalte */}
-      {(aiCvHighlights || aiInterviewPrep || aiSalaryTips || aiSalaryCheck || aiAtsKeywords || aiCompanyResearch || aiAckermannScript || aiLetterReview || aiOpeningSentences || aiOnboarding) && (
-        <div style={aiExpanded ? expandStyle : {}}>
-          {/* Header with expand toggle */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>KI-Inhalte</div>
-            <button onClick={() => setAiExpanded(v => !v)} title={aiExpanded ? "Minimieren" : "Maximieren"}
-              style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
-              {aiExpanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
-            </button>
-          </div>
-          <div style={aiExpanded ? { flex: 1, overflow: "auto" } : {}}>
-            {aiCvHighlights && (
-              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-                <Accordion title="Besonders relevant" count={aiCvHighlights.highlights.length} color="#34d399">
-                  {aiCvHighlights.highlights.map((h, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0", borderBottom: i < aiCvHighlights.highlights.length - 1 ? "1px solid var(--border)" : "none" }}>✓ {h}</div>)}
-                </Accordion>
-                <Accordion title="Keywords Match" count={aiCvHighlights.keywords.length} color="#60a5fa">
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                    {aiCvHighlights.keywords.map((k, i) => <span key={i} className="tag" style={{ background: "rgba(96,165,250,0.1)", color: "#60a5fa", borderColor: "rgba(96,165,250,0.3)" }}>{k}</span>)}
-                  </div>
-                </Accordion>
-                <Accordion title="Lücken" count={aiCvHighlights.gaps.length} color="#f87171">
-                  {aiCvHighlights.gaps.map((g, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-2)", padding: "3px 0" }}>⚠ {g}</div>)}
-                </Accordion>
-              </div>
-            )}
-            {aiInterviewPrep && (
-              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-                <Accordion title="Rollenspezifische Fragen" count={aiInterviewPrep.rollenFragen.length} color="#a78bfa"
-                  onCopy={() => copyText(aiInterviewPrep.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"))}>
-                  {aiInterviewPrep.rollenFragen.map((q, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < aiInterviewPrep.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
-                      <span style={{ color: "var(--fg-3)", flexShrink: 0 }}>{i + 1}.</span>
-                      <span style={{ flex: 1 }}>{q}</span>
-                      <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                        <IcCopy width={10} height={10} />
-                      </button>
-                    </div>
-                  ))}
-                </Accordion>
-                <Accordion title='Chris Voss "What / How"-Fragen' count={aiInterviewPrep.vossFragenWhatHow.length} color="#34d399"
-                  onCopy={() => copyText(aiInterviewPrep.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"))}>
-                  <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>
-                  {aiInterviewPrep.vossFragenWhatHow.map((q, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < aiInterviewPrep.vossFragenWhatHow.length - 1 ? "1px solid var(--border)" : "none" }}>
-                      <span style={{ color: "#34d399", flexShrink: 0 }}>→</span>
-                      <span style={{ flex: 1 }}>{q}</span>
-                      <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                        <IcCopy width={10} height={10} />
-                      </button>
-                    </div>
-                  ))}
-                </Accordion>
-                <Accordion title="STAR-Beispiele" count={aiInterviewPrep.starBeispiele.length} color="#fbbf24"
-                  onCopy={() => copyText(aiInterviewPrep.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"))}>
-                  {aiInterviewPrep.starBeispiele.map((s, i) => (
-                    <div key={i} style={{ position: "relative", marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
-                      <button onClick={() => copyText(`${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`)} title="Kopieren"
-                        style={{ position: "absolute", top: 8, right: 8, background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                        <IcCopy width={11} height={11} />
-                      </button>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 6, paddingRight: 20 }}>❓ {s.frage}</div>
-                      {[["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]].map(([k, v]) => (
-                        <div key={k} style={{ fontSize: 11, color: "var(--fg-2)", padding: "2px 0" }}>
-                          <span style={{ fontWeight: 700, color: "#fbbf24", marginRight: 6 }}>{k}:</span>{v}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </Accordion>
-                <Accordion title="Meine Rückfragen" count={aiInterviewPrep.rueckfragen.length} color="#60a5fa"
-                  onCopy={() => copyText(aiInterviewPrep.rueckfragen.map(q => `? ${q}`).join("\n"))}>
-                  {aiInterviewPrep.rueckfragen.map((q, i) => (
-                    <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < aiInterviewPrep.rueckfragen.length - 1 ? "1px solid var(--border)" : "none" }}>
-                      <span style={{ color: "#60a5fa", flexShrink: 0 }}>?</span>
-                      <span style={{ flex: 1 }}>{q}</span>
-                      <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
-                        onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
-                        <IcCopy width={10} height={10} />
-                      </button>
-                    </div>
-                  ))}
-                </Accordion>
-              </div>
-            )}
-            {aiSalaryTips && (
-              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-                <div style={{ fontSize: 11, color: "var(--fg-2)", marginBottom: 10, lineHeight: 1.6 }}>{aiSalaryTips["markteinschätzung"]}</div>
-                <Accordion title="Taktiken" count={aiSalaryTips.taktiken.length} color="#34d399">
-                  {aiSalaryTips.taktiken.map((t, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>• {t}</div>)}
-                </Accordion>
-                <Accordion title="Formulierungen" count={aiSalaryTips.formulierungen.length} color="#60a5fa">
-                  {aiSalaryTips.formulierungen.map((f, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "4px 0", fontStyle: "italic", borderBottom: i < aiSalaryTips.formulierungen.length - 1 ? "1px solid var(--border)" : "none" }}>„{f}"</div>)}
-                </Accordion>
-                <div style={{ marginTop: 10, padding: "10px 12px", borderRadius: 8, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.2)" }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: "#34d399", marginBottom: 4 }}>Chris Voss Anker-Taktik</div>
-                  <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6 }}>{aiSalaryTips.vossAnker}</div>
-                </div>
-              </div>
-            )}
-
-            {/* Glassdoor Rating panel */}
-            {aiGlassdoor && <GlassdoorPanel data={aiGlassdoor} appId={app.id} onChange={setAiGlassdoor} />}
-
-            {/* Salary Check panel */}
-            {aiSalaryCheck && (
-              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Gehalts-Check Schweiz</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
-                      onClick={() => copyText(`Lohnband: ${aiSalaryCheck.waehrung} ${aiSalaryCheck.lohnband.min.toLocaleString()}–${aiSalaryCheck.lohnband.max.toLocaleString()} (Median: ${aiSalaryCheck.lohnband.median.toLocaleString()})\n\n${aiSalaryCheck.begruendung}`)}>
-                      <IcCopy width={11} height={11} /> Kopieren
-                    </button>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
-                      onClick={async () => {
-                        const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/salary-check/export-doc`, { salaryCheck: aiSalaryCheck });
-                        window.open(r.data.docUrl, "_blank");
-                      }}>
-                      <Page width={11} height={11} /> Google Doc
-                    </button>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 16, marginBottom: 12 }}>
-                  <div style={{ textAlign: "center", flex: 1, padding: 12, borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
-                    <div style={{ fontSize: 10, color: "var(--fg-3)", marginBottom: 4 }}>MINIMUM</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: "var(--fg-1)" }}>CHF {aiSalaryCheck.lohnband.min.toLocaleString()}</div>
-                  </div>
-                  <div style={{ textAlign: "center", flex: 1, padding: 12, borderRadius: 8, background: "var(--accent-08)", border: "1px solid var(--accent)" }}>
-                    <div style={{ fontSize: 10, color: "var(--accent)", marginBottom: 4, fontWeight: 700 }}>MEDIAN</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: "var(--accent)" }}>CHF {aiSalaryCheck.lohnband.median.toLocaleString()}</div>
-                  </div>
-                  <div style={{ textAlign: "center", flex: 1, padding: 12, borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
-                    <div style={{ fontSize: 10, color: "var(--fg-3)", marginBottom: 4 }}>MAXIMUM</div>
-                    <div style={{ fontSize: 18, fontWeight: 800, color: "var(--fg-1)" }}>CHF {aiSalaryCheck.lohnband.max.toLocaleString()}</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 10 }}>{aiSalaryCheck.begruendung}</div>
-                {aiSalaryCheck.faktoren.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
-                    {aiSalaryCheck.faktoren.map((f, i) => <span key={i} className="tag">{f}</span>)}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* ATS Keywords panel */}
-            {aiAtsKeywords && (
-              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>ATS-Keywords</div>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
-                    onClick={() => copyText([
-                      "MUST-HAVE:\n" + aiAtsKeywords.mustHave.join(", "),
-                      "NICE-TO-HAVE:\n" + aiAtsKeywords.niceToHave.join(", "),
-                      "SOFT SKILLS:\n" + aiAtsKeywords.softSkills.join(", "),
-                      "TOOLS:\n" + aiAtsKeywords.tools.join(", "),
-                    ].join("\n\n"))}>
-                    <IcCopy width={11} height={11} /> Kopieren
-                  </button>
-                </div>
-                {[
-                  { label: "Must-Have", items: aiAtsKeywords.mustHave, color: "#f87171" },
-                  { label: "Nice-to-Have", items: aiAtsKeywords.niceToHave, color: "#fbbf24" },
-                  { label: "Soft Skills", items: aiAtsKeywords.softSkills, color: "#34d399" },
-                  { label: "Tools", items: aiAtsKeywords.tools, color: "#60a5fa" },
-                ].filter(g => g.items.length > 0).map(group => (
-                  <div key={group.label} style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: group.color, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{group.label}</div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                      {group.items.map((k, i) => <span key={i} className="tag" style={{ background: `${group.color}15`, color: group.color, borderColor: `${group.color}40` }}>{k}</span>)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Company Research panel */}
-            {aiCompanyResearch && (
-              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Unternehmensrecherche</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
-                      onClick={() => copyText(Object.entries(aiCompanyResearch).map(([k, v]) => `${k.toUpperCase()}:\n${Array.isArray(v) ? (v as string[]).join(", ") : v}`).join("\n\n"))}>
-                      <IcCopy width={11} height={11} /> Kopieren
-                    </button>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
-                      onClick={async () => {
-                        const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/company-research/export-doc`, { research: aiCompanyResearch });
-                        window.open(r.data.docUrl, "_blank");
-                      }}>
-                      <Page width={11} height={11} /> Google Doc
-                    </button>
-                  </div>
-                </div>
-                <Accordion title="Unternehmensüberblick" count={0} color="#60a5fa">
-                  <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6 }}>{aiCompanyResearch.unternehmensueberblick}</div>
-                </Accordion>
-                <Accordion title="Marktposition & Kultur" count={0} color="#a78bfa">
-                  <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6, marginBottom: 8 }}>{aiCompanyResearch.marktposition}</div>
-                  <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.6 }}>{aiCompanyResearch.unternehmenskultur}</div>
-                </Accordion>
-                {aiCompanyResearch.wettbewerber.length > 0 && (
-                  <Accordion title="Wettbewerber" count={aiCompanyResearch.wettbewerber.length} color="#fbbf24">
-                    {aiCompanyResearch.wettbewerber.map((w, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>• {w}</div>)}
-                  </Accordion>
-                )}
-                {aiCompanyResearch.aktuelleThemen.length > 0 && (
-                  <Accordion title="Aktuelle Themen" count={aiCompanyResearch.aktuelleThemen.length} color="#34d399">
-                    {aiCompanyResearch.aktuelleThemen.map((t, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>• {t}</div>)}
-                  </Accordion>
-                )}
-                {aiCompanyResearch.gespraechsthemen.length > 0 && (
-                  <Accordion title="Gesprächsthemen fürs Interview" count={aiCompanyResearch.gespraechsthemen.length} color="#f87171">
-                    {aiCompanyResearch.gespraechsthemen.map((t, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "5px 0" }}>💡 {t}</div>)}
-                  </Accordion>
-                )}
-              </div>
-            )}
-
-            {/* Ackermann Script panel */}
-            {aiAckermannScript && (
-              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Ackermann-Verhandlungs-Script</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
-                      onClick={() => copyText(`ZIELGEHALT: CHF ${aiAckermannScript.zielgehalt.toLocaleString()}\nANKERGEBOT: CHF ${aiAckermannScript.ankergebot.toLocaleString()}\n\n` +
-                        aiAckermannScript.schritte.map(s => `Runde ${s.runde} (CHF ${s.angebot.toLocaleString()}):\n"${s.formulierung}"\nTaktik: ${s.taktik}`).join("\n\n") +
-                        `\n\nCHRIS VOSS ANKER:\n${aiAckermannScript.vossAnker}`)}>
-                      <IcCopy width={11} height={11} /> Kopieren
-                    </button>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
-                      onClick={async () => {
-                        const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/ackermann-script/export-doc`, { script: aiAckermannScript });
-                        window.open(r.data.docUrl, "_blank");
-                      }}>
-                      <Page width={11} height={11} /> Google Doc
-                    </button>
-                  </div>
-                </div>
-                <div style={{ display: "flex", gap: 12, marginBottom: 14 }}>
-                  <div style={{ flex: 1, padding: 10, borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)", textAlign: "center" }}>
-                    <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 3 }}>ZIELGEHALT</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: "var(--accent)" }}>CHF {aiAckermannScript.zielgehalt.toLocaleString()}</div>
-                  </div>
-                  <div style={{ flex: 1, padding: 10, borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.3)", textAlign: "center" }}>
-                    <div style={{ fontSize: 9, color: "#fbbf24", marginBottom: 3 }}>ANKERLOHN (65%)</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: "#fbbf24" }}>CHF {aiAckermannScript.ankergebot.toLocaleString()}</div>
-                  </div>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
-                  {aiAckermannScript.schritte.map((s, i) => (
-                    <div key={i} style={{ padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase" }}>Runde {s.runde}</span>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: "var(--fg-1)" }}>CHF {s.angebot.toLocaleString()}</span>
-                      </div>
-                      <div style={{ fontSize: 12, color: "var(--fg-1)", fontStyle: "italic", marginBottom: 4 }}>„{s.formulierung}"</div>
-                      <div style={{ fontSize: 11, color: "var(--fg-3)" }}>🧠 {s.taktik}</div>
-                    </div>
-                  ))}
-                </div>
-                <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.2)" }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", marginBottom: 4 }}>CHRIS VOSS ANKER-FORMULIERUNG</div>
-                  <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.6 }}>{aiAckermannScript.vossAnker}</div>
-                </div>
-                {aiAckermannScript.nichtmonetaer.length > 0 && (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 6 }}>Nicht-monetäre Alternativen</div>
-                    {aiAckermannScript.nichtmonetaer.map((n, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-2)", padding: "2px 0" }}>• {n}</div>)}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Letter Review panel */}
-            {aiLetterReview && (
-              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Anschreiben-Review</div>
-                  <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
-                    onClick={() => copyText(`${aiLetterReview.gesamteindruck}\n\nStärken:\n${aiLetterReview.staerken.map(s => `• ${s}`).join("\n")}\n\nVerbesserungen:\n${aiLetterReview.verbesserungen.map(v => `• ${v}`).join("\n")}`)}>
-                    <IcCopy width={11} height={11} /> Kopieren
-                  </button>
-                </div>
-                <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-                  <span className="tag" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>Tonalität: {aiLetterReview.tonalitaet}</span>
-                  <span className="tag" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>Länge: {aiLetterReview.laenge}</span>
-                  <span className="tag" style={{ background: "var(--surface)", border: "1px solid var(--border)" }}>Personalisierung: {aiLetterReview.personalisierung}</span>
-                </div>
-                <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 12 }}>{aiLetterReview.gesamteindruck}</div>
-                <Accordion title="Stärken" count={aiLetterReview.staerken.length} color="#34d399">
-                  {aiLetterReview.staerken.map((s, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>✓ {s}</div>)}
-                </Accordion>
-                <Accordion title="Verbesserungen" count={aiLetterReview.verbesserungen.length} color="#fbbf24">
-                  {aiLetterReview.verbesserungen.map((v, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>→ {v}</div>)}
-                </Accordion>
-                {aiLetterReview.cliches.length > 0 && (
-                  <Accordion title="Clichés / Floskeln" count={aiLetterReview.cliches.length} color="#f87171">
-                    {aiLetterReview.cliches.map((c, i) => <div key={i} style={{ fontSize: 12, color: "#f87171", padding: "3px 0" }}>⚠ {c}</div>)}
-                  </Accordion>
-                )}
-              </div>
-            )}
-
-            {/* Opening Sentences panel */}
-            {aiOpeningSentences && (
-              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)", marginBottom: 12 }}>3 Eröffnungssätze</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  {aiOpeningSentences.saetze.map((s, i) => (
-                    <div key={i} style={{ padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", marginBottom: 4 }}>{s.ansatz}</div>
-                          <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.5, marginBottom: 4 }}>„{s.satz}"</div>
-                          <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{s.erklaerung}</div>
-                        </div>
-                        <button onClick={() => copyText(s.satz)} title="Kopieren"
-                          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 2, flexShrink: 0 }}>
-                          <IcCopy width={10} height={10} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Onboarding Checklist panel */}
-            {aiOnboarding && (
-              <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)" }}>Onboarding-Checkliste</div>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
-                      onClick={() => copyText(`Erste 30 Tage:\n${aiOnboarding.erste30Tage.map(t => `• ${t}`).join("\n")}\n\nErste 60 Tage:\n${aiOnboarding.erste60Tage.map(t => `• ${t}`).join("\n")}\n\nErste 90 Tage:\n${aiOnboarding.erste90Tage.map(t => `• ${t}`).join("\n")}`)}>
-                      <IcCopy width={11} height={11} /> Kopieren
-                    </button>
-                    <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4 }}
-                      onClick={async () => {
-                        const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/onboarding/export-doc`, { checklist: aiOnboarding });
-                        window.open(r.data.docUrl, "_blank");
-                      }}>
-                      <Page width={11} height={11} /> Google Doc
-                    </button>
-                  </div>
-                </div>
-                {[
-                  { label: "Erste 30 Tage", items: aiOnboarding.erste30Tage, color: "#60a5fa" },
-                  { label: "Erste 60 Tage", items: aiOnboarding.erste60Tage, color: "#a78bfa" },
-                  { label: "Erste 90 Tage", items: aiOnboarding.erste90Tage, color: "#34d399" },
-                ].map(phase => (
-                  <Accordion key={phase.label} title={phase.label} count={phase.items.length} color={phase.color}>
-                    {phase.items.map((item, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>☐ {item}</div>)}
-                  </Accordion>
-                ))}
-                {aiOnboarding.allgemein.length > 0 && (
-                  <Accordion title="Allgemein" count={aiOnboarding.allgemein.length} color="#fbbf24">
-                    {aiOnboarding.allgemein.map((item, i) => <div key={i} style={{ fontSize: 12, color: "var(--fg-1)", padding: "3px 0" }}>• {item}</div>)}
-                  </Accordion>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
+      {/* Phase KI-Kacheln */}
+      {(() => {
+        const stageTileIds = STAGE_TILES[app.stage] ?? [];
+        if (stageTileIds.length === 0) return null;
+        return (
+          <>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-4)", letterSpacing: "0.07em", textTransform: "uppercase", marginTop: 20, marginBottom: 8 }}>KI-Auswertungen</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 6, marginBottom: 16 }}>
+              {stageTileIds.map(id => (
+                <AiResultTile key={id} id={id} entry={aiResults?.[id] ?? null} onExpand={() => setExpandedResultId(id)} />
+              ))}
+            </div>
+          </>
+        );
+      })()}
+      {expandedResultId && (
+        <TileExpandView
+          id={expandedResultId}
+          entry={aiResults?.[expandedResultId] ?? null}
+          appId={app.id}
+          onClose={() => setExpandedResultId(null)}
+          onRegister={(id, data) => { onAiResult?.(id, data); }}
+        />
       )}
 
-      {/* 3. Aktivitäten */}
+      {/* 2. Aktivitäten */}
       <div style={activitiesExpanded ? expandStyle : {}}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Aktivitäten</div>
@@ -3792,12 +3964,17 @@ function MiniBar({ label, value, color }: { label: string; value: number; color:
   );
 }
 
-function AgentTab({ app }: { app: Application }) {
+function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
+  app: Application;
+  aiResults?: Record<string, { data: unknown; createdAt: Date }>;
+  onAiResultUpdate?: (id: string, data: unknown) => void;
+}) {
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
   const [stepN, setStepN] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
 
   // Parse stored match details from app
   const stored: MatchResult | null = (() => {
@@ -3825,6 +4002,8 @@ function AgentTab({ app }: { app: Application }) {
       });
       setResult(res.data);
       setStepN(4);
+      // Push into tile registry so the tile updates immediately
+      onAiResultUpdate?.("match-score", res.data);
       // Persist: refresh cache so matchScore badge + next drawer open show correct data
       queryClient.invalidateQueries({ queryKey: ["applications"] });
       queryClient.invalidateQueries({ queryKey: ["application", app.id] });
@@ -3838,6 +4017,10 @@ function AgentTab({ app }: { app: Application }) {
 
   const scoreColor = result ? (result.score >= 75 ? "#34d399" : result.score >= 50 ? "#fbbf24" : "#f87171") : "var(--fg-3)";
 
+  // Sync result state from aiResults registry (updated externally when tile re-runs)
+  const registryResult = aiResults?.["match-score"]?.data as MatchResult | undefined;
+  const displayResult = result ?? registryResult ?? null;
+
   return (
     <>
       {/* No AI warning */}
@@ -3847,34 +4030,13 @@ function AgentTab({ app }: { app: Application }) {
           <a href="/settings" style={{ color: "inherit", fontWeight: 700 }}>Settings → AI Integration →</a>
         </div>
       )}
-
       {error && (
         <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(244,63,94,0.08)", border: "1px solid rgba(244,63,94,0.25)", fontSize: 12, color: "#f43f5e", marginBottom: 14 }}>
           {error}
         </div>
       )}
 
-      {/* Score + Bars */}
-      {result ? (
-        <div style={{ display: "flex", gap: 20, alignItems: "flex-start", marginBottom: 20 }}>
-          <ScoreRing score={result.score} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: scoreColor, marginBottom: 10 }}>
-              {result.score >= 75 ? "Starke Übereinstimmung" : result.score >= 50 ? "Moderate Übereinstimmung" : "Schwache Übereinstimmung"}
-            </div>
-            <MiniBar label="Fachkompetenz"      value={result.breakdown.fachkompetenz}      color={scoreColor} />
-            <MiniBar label="Erfahrung"           value={result.breakdown.erfahrung}           color={scoreColor} />
-            <MiniBar label="Soft Skills"         value={result.breakdown.soft_skills}         color={scoreColor} />
-            <MiniBar label="Kulturelle Passung"  value={result.breakdown.kulturelle_passung}  color={scoreColor} />
-          </div>
-        </div>
-      ) : !running && (
-        <div style={{ textAlign: "center", padding: "24px 0", color: "var(--fg-3)", fontSize: 13, marginBottom: 16 }}>
-          Noch keine Analyse vorhanden
-        </div>
-      )}
-
-      {/* Live steps */}
+      {/* Live analysis steps */}
       {running && (
         <div className="card" style={{ background: "var(--surface-2)", padding: 14, marginBottom: 14 }}>
           <AgentStep done={stepN >= 1} active={stepN === 0} label="Profil laden" meta="Master-CV · Dokumente · Stichpunkte" />
@@ -3884,112 +4046,28 @@ function AgentTab({ app }: { app: Application }) {
         </div>
       )}
 
-      {/* Stärken / Lücken */}
-      {result && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-          <div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>✓ Stärken</div>
-            {result.staerken.map((s, i) => (
-              <div key={i} style={{ fontSize: 12, color: "var(--fg-2)", padding: "4px 0", borderBottom: "1px solid var(--border)", lineHeight: 1.5 }}>{s}</div>
-            ))}
-          </div>
-          <div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "#f87171", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>✗ Lücken</div>
-            {result.luecken.map((l, i) => (
-              <div key={i} style={{ fontSize: 12, color: "var(--fg-2)", padding: "4px 0", borderBottom: "1px solid var(--border)", lineHeight: 1.5 }}>{l}</div>
-            ))}
-          </div>
-        </div>
+      {/* Alle KI-Auswertungen — match-score tile is first */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 6 }}>
+        {ALL_TILE_IDS.map(id => (
+          <AiResultTile key={id} id={id}
+            entry={id === "match-score" && displayResult ? { data: displayResult, createdAt: aiResults?.["match-score"]?.createdAt ?? new Date() } : (aiResults?.[id] ?? null)}
+            onExpand={() => setExpandedResultId(id)} />
+        ))}
+      </div>
+      {expandedResultId && (
+        <TileExpandView
+          id={expandedResultId}
+          entry={expandedResultId === "match-score" && displayResult ? { data: displayResult, createdAt: aiResults?.["match-score"]?.createdAt ?? new Date() } : (aiResults?.[expandedResultId] ?? null)}
+          appId={app.id}
+          onClose={() => setExpandedResultId(null)}
+          onRegister={(id, data) => { onAiResultUpdate?.(id, data); if (id === "match-score") setResult(data as MatchResult); }}
+        />
       )}
-
-      {/* Begründung */}
-      {result?.reasoning && (
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>KI-Begründung</div>
-          <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.75, padding: "12px 14px", borderRadius: 10, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
-            {result.reasoning}
-          </div>
-        </div>
-      )}
-
-      {/* Analyse button */}
-      <button
-        className="btn btn-primary"
-        onClick={runAnalysis}
-        disabled={running || ai.provider === "none"}
-        style={{ alignSelf: "flex-start" }}
-      >
-        {running
-          ? <><RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} /> Analysiere…</>
-          : result
-            ? <><Refresh width={13} height={13} /> Neu analysieren</>
-            : <><Sparks width={13} height={13} /> Analyse starten</>
-        }
-      </button>
     </>
   );
 }
 
-// ─── Contacts Tab ─────────────────────────────────────────────
-const EMPTY_CONTACT_FORM = { name: "", role: "", email: "", phone: "", linkedinUrl: "", notes: "" };
-type ContactForm = typeof EMPTY_CONTACT_FORM;
-
-function ContactForm({
-  form, onChange, onSave, onCancel, saveLabel
-}: {
-  form: ContactForm;
-  onChange: (f: ContactForm) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  saveLabel: string;
-}) {
-  const set = (k: keyof ContactForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
-    onChange({ ...form, [k]: e.target.value });
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <datalist id="contact-role-opts">
-        <option value="Recruiter" />
-        <option value="Hiring Manager" />
-        <option value="HR Business Partner" />
-        <option value="Teamleiter" />
-        <option value="CEO" />
-        <option value="CTO" />
-        <option value="Sonstiges" />
-      </datalist>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        <div className="field" style={{ margin: 0 }}>
-          <label>Name *</label>
-          <input value={form.name} onChange={set("name")} placeholder="Max Muster" autoFocus />
-        </div>
-        <div className="field" style={{ margin: 0 }}>
-          <label>Rolle</label>
-          <input list="contact-role-opts" value={form.role} onChange={set("role")} placeholder="Recruiter, Teamleiter …" />
-        </div>
-        <div className="field" style={{ margin: 0 }}>
-          <label>E-Mail</label>
-          <input value={form.email} onChange={set("email")} placeholder="kontakt@firma.de" type="email" />
-        </div>
-        <div className="field" style={{ margin: 0 }}>
-          <label>Telefon</label>
-          <input value={form.phone} onChange={set("phone")} placeholder="+41 79 …" />
-        </div>
-      </div>
-      <div className="field" style={{ margin: 0 }}>
-        <label>LinkedIn URL</label>
-        <input value={form.linkedinUrl} onChange={set("linkedinUrl")} placeholder="https://linkedin.com/in/…" />
-      </div>
-      <div className="field" style={{ margin: 0 }}>
-        <label>Notizen</label>
-        <textarea value={form.notes} onChange={set("notes")} placeholder="Gesprächsnotizen, Eindrücke …" rows={3} style={{ resize: "vertical" }} />
-      </div>
-      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button className="btn btn-secondary" onClick={onCancel}>Abbrechen</button>
-        <button className="btn btn-primary" onClick={onSave} disabled={!form.name.trim()}>{saveLabel}</button>
-      </div>
-    </div>
-  );
-}
-
+// ─── Contacts Tab (standalone, kept for potential future use) ─────────────────────────────────────────────
 function ContactsTab({ app }: { app: Application }) {
   const { data: contacts = [], refetch } = useQuery<ApplicationContact[]>({
     queryKey: ["contacts", app.id],
@@ -4334,6 +4412,10 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
     if (prep) {
       try { patch["interview-prep"] = { data: JSON.parse(prep), createdAt: new Date() }; } catch {}
     }
+    // Inject match-score from dedicated DB columns
+    if (source.matchScore != null && source.matchDetails) {
+      try { patch["match-score"] = { data: JSON.parse(source.matchDetails as string), createdAt: new Date() }; } catch {}
+    }
     const cache = (source as Application & { aiResultsCache?: string }).aiResultsCache;
     if (cache) {
       try {
@@ -4378,6 +4460,10 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
     patchMutation.mutate({ stage: s as Application["stage"] });
   };
 
+  // effectiveApp: merges freshDB data with the locally-selected stage so all tabs
+  // react immediately to stage changes without waiting for the DB refetch.
+  const effectiveApp = { ...(freshApp ?? app), stage } as Application;
+
   const handleArchive = (reason?: string) => {
     patchMutation.mutate({ archived: "true", archiveReason: reason } as Partial<Application>);
     queryClient.invalidateQueries({ queryKey: ["applications"] });
@@ -4413,8 +4499,8 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
                 )}
                 {app.matchScore != null && (
                   <span
-                    onClick={() => setTab("insights")}
-                    title="Insights öffnen"
+                    onClick={() => setTab("ki")}
+                    title="KI-Inhalte öffnen"
                     style={{
                       padding: "1px 7px", borderRadius: 999, fontSize: 11, fontWeight: 300, whiteSpace: "nowrap", cursor: "pointer",
                       background: app.matchScore >= 75 ? "rgba(52,211,153,0.15)" : app.matchScore >= 50 ? "rgba(251,191,36,0.15)" : "rgba(248,113,113,0.15)",
@@ -4435,10 +4521,7 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
             </div>
           </div>
 
-          {/* Stage Progress — above tabs */}
-          <div style={{ paddingBottom: 4 }}>
-            <StageProgressBar stage={stage} />
-          </div>
+
 
           {/* Tabs — scrollable */}
           <div className="hide-scrollbar" style={{ display: "flex", borderBottom: "1px solid var(--border)", overflowX: "auto", gap: 0 }}>
@@ -4452,12 +4535,10 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
 
         <div className="drawer-body" style={{ paddingTop: 16 }}>
           {/* Use freshApp wherever available so DB data is always current after tab switches */}
-          {tab === "process"      && <ProcessTab      app={freshApp ?? app} onSave={(p) => patchMutation.mutate(p)} onAiResult={registerAiResult} />}
-          {tab === "details"      && <DetailsTab      app={freshApp ?? app} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} aiResults={aiResultsRegistry} onAiResultUpdate={updateAiResult} />}
-          {tab === "documents"    && <DocumentsTab    app={freshApp ?? app} />}
-          {tab === "insights"     && <AgentTab        app={freshApp ?? app} />}
-          {tab === "contacts"     && <ContactsTab     app={freshApp ?? app} />}
-          {tab === "notes"        && <NotesTab        app={freshApp ?? app} onSave={(p) => patchMutation.mutate(p)} />}
+          {tab === "process"   && <ProcessTab    app={effectiveApp} onSave={(p) => patchMutation.mutate(p)} onAiResult={registerAiResult} aiResults={aiResultsRegistry} />}
+          {tab === "details"   && <DetailsTab    app={effectiveApp} stage={stage} url={url} onUrlChange={setUrl} onSave={(p) => patchMutation.mutate(p)} />}
+          {tab === "documents" && <DocumentsTab  app={effectiveApp} />}
+          {tab === "ki"        && <KiInhalteTab  app={effectiveApp} aiResults={aiResultsRegistry} onAiResultUpdate={updateAiResult} />}
         </div>
       </aside>
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import {
-  DashboardDots, Calendar, List, MultiplePages, Settings,
+  DashboardDots, Calendar, List, MultiplePages, Settings, Table2Columns,
   SidebarCollapse, SunLight, HalfMoon, DashboardSpeed, Sofa, ProfileCircle, Folder, Database, Archive,
   LogOut, SwitchOff, WarningCircle,
 } from "iconoir-react";
@@ -310,6 +310,7 @@ export function Rail({ applications }: Props) {
   // Ordered nav items
   const navItems = [
     { to: "/",           label: "Board",     icon: <DashboardDots  width={15} height={15} />, count: applications.filter(a => a.stage !== undefined).length },
+    { to: "/table",      label: "Liste",     icon: <Table2Columns  width={15} height={15} /> },
     { to: "/calendar",   label: "Calendar",  icon: <Calendar       width={15} height={15} /> },
     { to: "/timeline",   label: "Timeline",  icon: <List           width={15} height={15} /> },
     { to: "/profile",    label: "Profil",    icon: <ProfileCircle  width={15} height={15} /> },
