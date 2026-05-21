@@ -4,6 +4,7 @@ import remarkGfm from "remark-gfm";
 import imgSchulabgaenger   from "../assets/personas/schulabgaenger.png";
 import imgBerufseinsteiger from "../assets/personas/berufseinsteiger.png";
 import imgBerufsumsteiger  from "../assets/personas/berufsumsteiger.png";
+import { useUiStore } from "../lib/store";
 import { OpenNewWindow, FloppyDisk, User, Linkedin, Page, RefreshCircle, Expand, Collapse, LightBulb } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
@@ -39,6 +40,8 @@ function AutoResizeTextarea({ value, onChange, onBlur, placeholder, minRows = 4 
 // Notion-style underline — use className="input-line" instead of inline styles
 
 export function ProfilePage() {
+  const { theme } = useUiStore();
+  const isDark = theme === "dark";
   const [profile, setProfile] = useState<Partial<UserProfile>>({
     name: "", email: "", phone: "", location: "", headline: "",
     linkedinUrl: "", linkedinBio: "", photoUrl: "", masterCv: "", personalNotes: "", desiredSalary: ""
@@ -143,28 +146,50 @@ export function ProfilePage() {
                     save({ persona: p.value });
                   }}
                   style={{
-                    padding: "14px 16px", borderRadius: 12, textAlign: "left",
+                    padding: 0, borderRadius: 12, textAlign: "left",
                     border: `2px solid ${active ? "var(--accent)" : "var(--border)"}`,
                     background: active ? "var(--accent-08)" : "var(--surface-2)",
                     cursor: "pointer", fontFamily: "var(--font-sans)",
                     transition: "all 0.15s ease",
-                    display: "flex", flexDirection: "column", gap: 6,
+                    display: "flex", flexDirection: "column",
+                    overflow: "hidden",
                   }}
                 >
-                  <img src={p.img} alt={p.label} style={{ width: 64, height: 64, objectFit: "contain", borderRadius: 4, opacity: active ? 1 : 0.75 }} />
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: active ? 700 : 600, color: active ? "var(--accent)" : "var(--fg-1)", marginBottom: 2 }}>
+                  {/* Full-bleed image — top half of card */}
+                  <div style={{
+                    width: "100%", aspectRatio: "16/9",
+                    overflow: "hidden",
+                    background: isDark ? "#000" : "#f5f0e8",
+                    borderBottom: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
+                  }}>
+                    <img
+                      src={p.img}
+                      alt={p.label}
+                      style={{
+                        width: "100%", height: "100%",
+                        objectFit: "cover", objectPosition: "center top",
+                        display: "block",
+                        // Invert for dark mode: white bg + black ink → black bg + white ink
+                        filter: isDark ? "invert(1) brightness(0.85) contrast(1.1)" : "brightness(1) contrast(1.05)",
+                        opacity: active ? 1 : 0.7,
+                        transition: "opacity 0.15s",
+                      }}
+                    />
+                  </div>
+                  {/* Text — bottom half */}
+                  <div style={{ padding: "10px 14px 12px" }}>
+                    <div style={{ fontSize: 13, fontWeight: active ? 700 : 600, color: active ? "var(--accent)" : "var(--fg-1)", marginBottom: 3 }}>
                       {p.label}
                     </div>
                     <div style={{ fontSize: 11, color: "var(--fg-3)", lineHeight: 1.4 }}>
                       {p.sub}
                     </div>
+                    {active && (
+                      <div style={{ fontSize: 10, color: "var(--accent)", fontWeight: 700, marginTop: 6 }}>
+                        ✓ Aktiv
+                      </div>
+                    )}
                   </div>
-                  {active && (
-                    <div style={{ fontSize: 10, color: "var(--accent)", fontWeight: 700, marginTop: 2 }}>
-                      ✓ Aktiv
-                    </div>
-                  )}
                 </button>
               );
             })}
