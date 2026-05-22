@@ -21,6 +21,20 @@ import { api } from "../lib/api";
 import { useUiStore, type AiConfig } from "../lib/store";
 import { ContractField, PensumField } from "./ImportDrawer";
 
+// ─── Simplified circular language icon (monochrome, Iconoir-style) ────────────
+function FlagIcon({ lang, size = 16 }: { lang: "de" | "en"; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none"
+      xmlns="http://www.w3.org/2000/svg" aria-label={lang === "de" ? "Deutsch" : "English"}>
+      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+      <text x="8" y="11.5" textAnchor="middle" fontSize="6" fontWeight="700"
+        fill="currentColor" fontFamily="system-ui,sans-serif" letterSpacing="0.02em">
+        {lang.toUpperCase()}
+      </text>
+    </svg>
+  );
+}
+
 type Tab = "process" | "details" | "documents" | "ki";
 
 // Clipboard helper: tries modern API first, falls back to execCommand for focus/permission issues
@@ -3743,7 +3757,8 @@ function StageAiActions({ app, onSave, onAiResult }: {
                   fontSize: 12, fontWeight: lang === l ? 700 : 400,
                   cursor: "pointer", fontFamily: "var(--font-sans)",
                 }}>
-                  {l === "de" ? "🇩🇪 Deutsch" : "🇬🇧 English"}
+                  <FlagIcon lang={l} size={14} />
+                  {l === "de" ? "Deutsch" : "English"}
                 </button>
               ))}
             </div>

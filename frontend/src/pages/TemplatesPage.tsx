@@ -3,6 +3,20 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   OpenNewWindow, Trash, Plus, RefreshCircle, Check, Calendar,
 } from "iconoir-react";
+
+// Simplified circular language icon — monochrome, scales with currentColor
+function FlagIcon({ lang, size = 16 }: { lang: "de" | "en"; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none"
+      xmlns="http://www.w3.org/2000/svg" aria-label={lang === "de" ? "Deutsch" : "English"}>
+      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
+      <text x="8" y="11.5" textAnchor="middle" fontSize="6" fontWeight="700"
+        fill="currentColor" fontFamily="system-ui,sans-serif" letterSpacing="0.02em">
+        {lang.toUpperCase()}
+      </text>
+    </svg>
+  );
+}
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 
@@ -168,7 +182,6 @@ function DrivePickerModal({
   });
 
   const ct = CONTENT_TYPES.find(c => c.id === type);
-  const flag = lang === "de" ? "🇩🇪" : "🇬🇧";
   const langLabel = lang === "de" ? "Deutsch" : "English";
 
   return (
@@ -182,7 +195,7 @@ function DrivePickerModal({
         boxShadow: "var(--shadow-modal)",
       }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg-1)", marginBottom: 4 }}>
-          {flag} {langLabel} — Vorlage aus Drive hinzufügen
+          <FlagIcon lang={lang} size={14} /> {langLabel} — Vorlage aus Drive hinzufügen
         </div>
         <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 16 }}>
           {ct?.label} — Wähle ein Google Doc aus deinem Drive-Master-Ordner
@@ -256,7 +269,6 @@ function LangSection({
   onCreateNew: () => void;
 }) {
   const [creating, setCreating] = useState(false);
-  const flag   = lang === "de" ? "🇩🇪" : "🇬🇧";
   const label  = lang === "de" ? "Deutsch" : "English";
 
   const handleCreate = async () => {
@@ -277,7 +289,7 @@ function LangSection({
         background: "var(--surface-2)",
         borderBottom: templates.length > 0 ? "1px solid var(--border)" : undefined,
       }}>
-        <span style={{ fontSize: 14 }}>{flag}</span>
+        <FlagIcon lang={lang} size={16} />
         <span style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-2)", flex: 1 }}>{label}</span>
         <button
           onClick={onAddFromDrive}
@@ -520,7 +532,8 @@ export function TemplatesPage() {
           fontSize: 12, color: "var(--fg-2)", lineHeight: 1.7,
         }}>
           <strong style={{ color: "var(--fg-1)" }}>So funktioniert es:</strong>{" "}
-          Für jede Vorlage gibt es eine <strong style={{ color: "var(--fg-1)" }}>🇩🇪 Deutsch</strong> und eine <strong style={{ color: "var(--fg-1)" }}>🇬🇧 English</strong> Version.
+          Für jede Vorlage gibt es eine <strong style={{ color: "var(--fg-1)", display: "inline-flex", alignItems: "center", gap: 4 }}><FlagIcon lang="de" size={13} /> Deutsch</strong>{" "}
+          und eine <strong style={{ color: "var(--fg-1)", display: "inline-flex", alignItems: "center", gap: 4 }}><FlagIcon lang="en" size={13} /> English</strong> Version.
           „Neu erstellen" legt ein formatiertes Google Doc mit Platzhaltern wie{" "}
           <code style={{ fontFamily: "var(--font-mono)", fontSize: 10, background: "var(--surface)", borderRadius: 3, padding: "1px 4px", color: "var(--accent)" }}>{"{{FIRMA}}"}</code>{" "}
           an. Beim Export wählt die App automatisch die Vorlage passend zur Bewerbungssprache.
