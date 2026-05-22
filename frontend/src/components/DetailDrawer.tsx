@@ -21,17 +21,19 @@ import { api } from "../lib/api";
 import { useUiStore, type AiConfig } from "../lib/store";
 import { ContractField, PensumField } from "./ImportDrawer";
 
-// ─── Simplified circular language icon (monochrome, Iconoir-style) ────────────
-function FlagIcon({ lang, size = 16 }: { lang: "de" | "en"; size?: number }) {
+// ─── Round flag icon (round-flag-icons library) ───────────────
+// @ts-ignore
+import deFlagUrl from "round-flag-icons/flags/de.svg?url";
+// @ts-ignore
+import gbFlagUrl from "round-flag-icons/flags/gb.svg?url";
+function FlagIcon({ lang, size = 18 }: { lang: "de" | "en"; size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none"
-      xmlns="http://www.w3.org/2000/svg" aria-label={lang === "de" ? "Deutsch" : "English"}>
-      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
-      <text x="8" y="11.5" textAnchor="middle" fontSize="6" fontWeight="700"
-        fill="currentColor" fontFamily="system-ui,sans-serif" letterSpacing="0.02em">
-        {lang.toUpperCase()}
-      </text>
-    </svg>
+    <img
+      src={lang === "de" ? deFlagUrl as string : gbFlagUrl as string}
+      width={size} height={size}
+      alt={lang === "de" ? "Deutsch" : "English"}
+      style={{ borderRadius: "50%", display: "block", flexShrink: 0, objectFit: "cover" }}
+    />
   );
 }
 
@@ -3757,7 +3759,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
                   fontSize: 12, fontWeight: lang === l ? 700 : 400,
                   cursor: "pointer", fontFamily: "var(--font-sans)",
                 }}>
-                  <FlagIcon lang={l} size={14} />
+                  <FlagIcon lang={l} size={18} />
                   {l === "de" ? "Deutsch" : "English"}
                 </button>
               ))}

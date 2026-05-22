@@ -2,23 +2,26 @@ import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   OpenNewWindow, Trash, Plus, RefreshCircle, Check, Calendar,
+  ChatBubbleCheck, PageEdit, SendMail, Coins, Search, HandCash, TaskList,
 } from "iconoir-react";
-
-// Simplified circular language icon — monochrome, scales with currentColor
-function FlagIcon({ lang, size = 16 }: { lang: "de" | "en"; size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none"
-      xmlns="http://www.w3.org/2000/svg" aria-label={lang === "de" ? "Deutsch" : "English"}>
-      <circle cx="8" cy="8" r="7" stroke="currentColor" strokeWidth="1.5" />
-      <text x="8" y="11.5" textAnchor="middle" fontSize="6" fontWeight="700"
-        fill="currentColor" fontFamily="system-ui,sans-serif" letterSpacing="0.02em">
-        {lang.toUpperCase()}
-      </text>
-    </svg>
-  );
-}
+// @ts-ignore — round-flag-icons ships plain SVG files, no TS types needed
+import deFlagUrl from "round-flag-icons/flags/de.svg?url";
+// @ts-ignore
+import gbFlagUrl from "round-flag-icons/flags/gb.svg?url";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
+
+// ─── Round flag icon (round-flag-icons library) ───────────────
+function FlagIcon({ lang, size = 20 }: { lang: "de" | "en"; size?: number }) {
+  return (
+    <img
+      src={lang === "de" ? deFlagUrl as string : gbFlagUrl as string}
+      width={size} height={size}
+      alt={lang === "de" ? "Deutsch" : "English"}
+      style={{ borderRadius: "50%", display: "block", flexShrink: 0, objectFit: "cover" }}
+    />
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────
 interface DriveTemplate {
@@ -49,53 +52,54 @@ interface DocTemplateConfig {
 type Lang = "de" | "en";
 
 // ─── Content type definitions ─────────────────────────────────
+// Icons: all from Iconoir (monochrome), rendered at 28×28
 const CONTENT_TYPES = [
   {
     id: "interview-prep",
     label: "Interview-Vorbereitung",
-    icon: "🎯",
+    Icon: ChatBubbleCheck,
     description: "Fragen, STAR-Beispiele, Chris-Voss-Fragen, Rückfragen",
     placeholders: ["{{FIRMA}}", "{{ROLLE}}", "{{DATUM}}", "{{NAME}}", "{{FRAGEN}}", "{{STAR}}", "{{VOSS_FRAGEN}}", "{{RUECKFRAGEN}}"],
   },
   {
     id: "cv",
     label: "Lebenslauf / CV",
-    icon: "📄",
+    Icon: PageEdit,
     description: "Master-CV mit KI-generierten Highlights für die Stelle",
     placeholders: ["{{NAME}}", "{{HEADLINE}}", "{{EMAIL}}", "{{ORT}}", "{{FIRMA}}", "{{ROLLE}}", "{{HIGHLIGHTS}}", "{{LEBENSLAUF}}"],
   },
   {
     id: "cover-letter",
     label: "Anschreiben",
-    icon: "✉️",
+    Icon: SendMail,
     description: "Motivationsschreiben",
     placeholders: ["{{FIRMA}}", "{{ROLLE}}", "{{DATUM}}", "{{NAME}}", "{{ORT}}", "{{BETREFF}}", "{{ANSCHREIBEN}}"],
   },
   {
     id: "salary-check",
     label: "Gehalts-Check",
-    icon: "💰",
+    Icon: Coins,
     description: "Lohnband-Analyse mit Verhandlungstaktiken",
     placeholders: ["{{FIRMA}}", "{{ROLLE}}", "{{DATUM}}", "{{LOHNBAND}}", "{{TAKTIKEN}}", "{{FORMULIERUNGEN}}", "{{VOSS_ANKER}}"],
   },
   {
     id: "company-research",
     label: "Unternehmensrecherche",
-    icon: "🔍",
+    Icon: Search,
     description: "Unternehmensüberblick, Kultur, Wettbewerber, Trends",
     placeholders: ["{{FIRMA}}", "{{ROLLE}}", "{{DATUM}}", "{{UNTERNEHMENSUEBERBLICK}}", "{{BRANCHE}}", "{{KULTUR}}", "{{WETTBEWERBER}}", "{{AKTUELLE_THEMEN}}"],
   },
   {
     id: "ackermann-script",
     label: "Gehaltsverhandlung",
-    icon: "🤝",
+    Icon: HandCash,
     description: "Ackermann-Script mit Schritten und Voss-Ankern",
     placeholders: ["{{FIRMA}}", "{{ROLLE}}", "{{DATUM}}", "{{ZIELGEHALT_ANKER}}", "{{SCHRITTE}}", "{{NICHTMONETAER}}", "{{VOSS_ANKER}}"],
   },
   {
     id: "onboarding",
     label: "Onboarding-Checkliste",
-    icon: "✅",
+    Icon: TaskList,
     description: "30/60/90-Tage-Plan für den neuen Job",
     placeholders: ["{{FIRMA}}", "{{ROLLE}}", "{{DATUM}}", "{{ERSTE_30_TAGE}}", "{{ERSTE_60_TAGE}}", "{{ERSTE_90_TAGE}}", "{{ALLGEMEIN}}"],
   },
@@ -195,7 +199,7 @@ function DrivePickerModal({
         boxShadow: "var(--shadow-modal)",
       }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg-1)", marginBottom: 4 }}>
-          <FlagIcon lang={lang} size={14} /> {langLabel} — Vorlage aus Drive hinzufügen
+          <FlagIcon lang={lang} size={18} /> {langLabel} — Vorlage aus Drive hinzufügen
         </div>
         <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 16 }}>
           {ct?.label} — Wähle ein Google Doc aus deinem Drive-Master-Ordner
@@ -289,7 +293,7 @@ function LangSection({
         background: "var(--surface-2)",
         borderBottom: templates.length > 0 ? "1px solid var(--border)" : undefined,
       }}>
-        <FlagIcon lang={lang} size={16} />
+        <FlagIcon lang={lang} size={20} />
         <span style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-2)", flex: 1 }}>{label}</span>
         <button
           onClick={onAddFromDrive}
@@ -412,7 +416,7 @@ function ContentTypeSection({
     <div style={{ marginBottom: 32 }}>
       {/* Type header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 16 }}>{contentType.icon}</span>
+        <contentType.Icon width={28} height={28} style={{ color: "var(--fg-2)", flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>{contentType.label}</div>
           <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{contentType.description}</div>
@@ -532,8 +536,8 @@ export function TemplatesPage() {
           fontSize: 12, color: "var(--fg-2)", lineHeight: 1.7,
         }}>
           <strong style={{ color: "var(--fg-1)" }}>So funktioniert es:</strong>{" "}
-          Für jede Vorlage gibt es eine <strong style={{ color: "var(--fg-1)", display: "inline-flex", alignItems: "center", gap: 4 }}><FlagIcon lang="de" size={13} /> Deutsch</strong>{" "}
-          und eine <strong style={{ color: "var(--fg-1)", display: "inline-flex", alignItems: "center", gap: 4 }}><FlagIcon lang="en" size={13} /> English</strong> Version.
+          Für jede Vorlage gibt es eine <strong style={{ color: "var(--fg-1)", display: "inline-flex", alignItems: "center", gap: 4, verticalAlign: "middle" }}><FlagIcon lang="de" size={15} /> Deutsch</strong>{" "}
+          und eine <strong style={{ color: "var(--fg-1)", display: "inline-flex", alignItems: "center", gap: 4, verticalAlign: "middle" }}><FlagIcon lang="en" size={15} /> English</strong> Version.
           „Neu erstellen" legt ein formatiertes Google Doc mit Platzhaltern wie{" "}
           <code style={{ fontFamily: "var(--font-mono)", fontSize: 10, background: "var(--surface)", borderRadius: 3, padding: "1px 4px", color: "var(--accent)" }}>{"{{FIRMA}}"}</code>{" "}
           an. Beim Export wählt die App automatisch die Vorlage passend zur Bewerbungssprache.
