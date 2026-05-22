@@ -353,7 +353,7 @@ function ArchiveTable({ applications, onRowClick }: { applications: Application[
 }
 
 export function BoardPage() {
-  const { cardVariant, isImportModalOpen, setImportModalOpen, selectedApplicationId, setSelectedApplicationId } = useUiStore();
+  const { cardVariant, setCardVariant, isImportModalOpen, setImportModalOpen, selectedApplicationId, setSelectedApplicationId } = useUiStore();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const showArchived = searchParams.get("archive") === "true";
@@ -426,6 +426,25 @@ export function BoardPage() {
             <List width={13} height={13} />
           </button>
         </div>
+      )}
+
+      {/* Card style selector — only on board (not archive) */}
+      {!showArchived && (
+        <select
+          value={cardVariant}
+          onChange={e => setCardVariant(e.target.value as import("../lib/store").CardVariant)}
+          title="Karten-Stil"
+          style={{
+            height: 32, padding: "0 8px", borderRadius: 8, border: "1px solid var(--border)",
+            background: "var(--surface)", color: "var(--fg-2)", fontSize: 12,
+            fontFamily: "var(--font-sans)", cursor: "pointer", outline: "none",
+          }}
+        >
+          <option value="rich">Rich</option>
+          <option value="compact">Compact</option>
+          <option value="minimal">Minimal</option>
+          <option value="editorial">Editorial</option>
+        </select>
       )}
 
       {/* Filter button — works for both board and archive */}

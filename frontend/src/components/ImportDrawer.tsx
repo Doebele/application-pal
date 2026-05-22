@@ -133,16 +133,84 @@ type ExtractedRaw = {
   tags?: string | null;
   source?: string | null;
   logoUrl?: string | null;
+  jobType?: string | null;
+  workModel?: string | null;
+  contractType?: string | null;
 };
 
 type FormState = {
   company: string; role: string; location: string;
   salary: string; description: string; tags: string[]; source: string;
+  jobType: string; workModel: string; contractType: string;
 };
 
 function parseTags(raw: string | null | undefined): string[] {
   if (!raw) return [];
   try { return JSON.parse(raw) as string[]; } catch { return []; }
+}
+
+export const PENSUM_OPTIONS = [
+  "100%",
+  "80–100%",
+  "80%",
+  "60–80%",
+  "60%",
+  "50%",
+  "40%",
+  "Auf Anfrage",
+];
+
+/** Dropdown + optional custom text input for work percentage (Pensum) */
+export function PensumField({ value, onChange, compact = false }: { value: string; onChange: (v: string) => void; compact?: boolean }) {
+  const isCustom = value !== "" && !PENSUM_OPTIONS.includes(value);
+  const selectVal = isCustom ? "__custom" : value;
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: compact ? "4px 6px" : "6px 8px", borderRadius: 6,
+    border: "1px solid var(--border)", background: "var(--surface-2)",
+    color: "var(--fg-1)", fontSize: 12, fontFamily: "var(--font-sans)", outline: "none",
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <select value={selectVal} onChange={e => { if (e.target.value === "__custom") onChange(""); else onChange(e.target.value); }} style={inputStyle}>
+        <option value="">—</option>
+        {PENSUM_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+        <option value="__custom">Individuell…</option>
+      </select>
+      {(selectVal === "__custom" || isCustom) && (
+        <input value={value} onChange={e => onChange(e.target.value)} placeholder="z.B. 70%" style={inputStyle} autoFocus />
+      )}
+    </div>
+  );
+}
+
+const CONTRACT_PRESETS = ["Unbefristet", "6 Monate", "9 Monate", "12 Monate"];
+
+/** Dropdown + optional custom text input for contract type */
+export function ContractField({ value, onChange, compact = false }: { value: string; onChange: (v: string) => void; compact?: boolean }) {
+  const isCustom = value !== "" && !CONTRACT_PRESETS.includes(value);
+  const selectVal = isCustom ? "__custom" : value;
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: compact ? "4px 6px" : "6px 8px", borderRadius: 6,
+    border: "1px solid var(--border)", background: "var(--surface-2)",
+    color: "var(--fg-1)", fontSize: 12, fontFamily: "var(--font-sans)", outline: "none",
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <select value={selectVal} onChange={e => { if (e.target.value === "__custom") onChange(""); else onChange(e.target.value); }} style={inputStyle}>
+        <option value="">—</option>
+        {CONTRACT_PRESETS.map(p => <option key={p} value={p}>{p}</option>)}
+        <option value="__custom">Individuell…</option>
+      </select>
+      {(selectVal === "__custom" || isCustom) && (
+        <input
+          value={value} onChange={e => onChange(e.target.value)}
+          placeholder="z.B. 18 Monate"
+          style={inputStyle}
+          autoFocus
+        />
+      )}
+    </div>
+  );
 }
 
 type Props = { onClose: () => void };
@@ -162,7 +230,8 @@ export function ImportDrawer({ onClose }: Props) {
   const [descExpanded, setDescExpanded] = useState(false);
 
   const [form, setForm] = useState<FormState>({
-    company: "", role: "", location: "", salary: "", description: "", tags: [], source: ""
+    company: "", role: "", location: "", salary: "", description: "", tags: [], source: "",
+    jobType: "", workModel: "", contractType: "",
   });
 
   const usingAi = ai.provider !== "none";
@@ -182,23 +251,26 @@ export function ImportDrawer({ onClose }: Props) {
   const createMutation = useMutation({
     mutationFn: () =>
       api.post("/api/applications", {
-        company:     form.company     || "Unknown",
-        role:        form.role        || "Unknown",
-        location:    form.location    || null,
-        salary:      form.salary      || null,
-        description: form.description || null,
-        tags:        form.tags.length > 0 ? JSON.stringify(form.tags) : null,
-        source:      form.source      || null,
-        url:         mode === "url" ? url || null : null,
-        logoUrl:     logoUrl || null,
-        stage
+        company:      form.company      || "Unknown",
+        role:         form.role         || "Unknown",
+        location:     form.location     || null,
+        salary:       form.salary       || null,
+        description:  form.description  || null,
+        tags:         form.tags.length > 0 ? JSON.stringify(form.tags) : null,
+        source:       form.source       || null,
+        url:          mode === "url" ? url || null : null,
+        logoUrl:      logoUrl || null,
+        stage,
+        jobType:      form.jobType      || null,
+        workModel:    form.workModel    || null,
+        contractType: form.contractType || null,
       }).then((r) => r.data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["applications"] }); onClose(); }
   });
 
   const runExtraction = async () => {
     setPhase("reading"); setStep(0); setLogoUrl(null); setLogoOk(false); setDescExpanded(false);
-    setForm({ company: "", role: "", location: "", salary: "", description: "", tags: [], source: "" });
+    setForm({ company: "", role: "", location: "", salary: "", description: "", tags: [], source: "", jobType: "", workModel: "", contractType: "" });
     const advance = (n: number, p: ExtractionPhase) => setTimeout(() => { setStep(n); setPhase(p); }, n * 600);
     advance(1, "reading"); advance(2, "extracting"); advance(3, "extracting");
     try {
@@ -207,13 +279,16 @@ export function ImportDrawer({ onClose }: Props) {
         setStep(4); setPhase("done");
         setLogoUrl(result.logoUrl ?? null); setLogoOk(false);
         setForm({
-          company:     result.company     ?? "",
-          role:        result.role        ?? "",
-          location:    result.location    ?? "",
-          salary:      result.salary      ?? "",
-          description: result.description ?? "",
-          tags:        parseTags(result.tags),
-          source:      result.source      ?? ""
+          company:      result.company      ?? "",
+          role:         result.role         ?? "",
+          location:     result.location     ?? "",
+          salary:       result.salary       ?? "",
+          description:  result.description  ?? "",
+          tags:         parseTags(result.tags),
+          source:       result.source       ?? "",
+          jobType:      result.jobType      ?? "",
+          workModel:    result.workModel    ?? "",
+          contractType: result.contractType ?? "",
         });
       }, 2400);
     } catch { setPhase("idle"); }
@@ -372,6 +447,37 @@ export function ImportDrawer({ onClose }: Props) {
                       : <input className="input-line" placeholder="—" disabled style={{ fontSize: 13 }} />}
                 </div>
               ))}
+            </div>
+
+            {/* Job Type + Work Model + Contract */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 12px", marginBottom: 10 }}>
+              {/* Job Type */}
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Pensum</div>
+                {ready ? (
+                  <PensumField value={form.jobType} onChange={v => patch("jobType", v)} compact />
+                ) : phase !== "idle" ? <Skeleton height={28} /> : <div style={{ height: 28 }} />}
+              </div>
+              {/* Work Model */}
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Arbeitsmodell</div>
+                {ready ? (
+                  <select value={form.workModel} onChange={e => patch("workModel", e.target.value)}
+                    style={{ width: "100%", padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontSize: 12, fontFamily: "var(--font-sans)", outline: "none" }}>
+                    <option value="">—</option>
+                    <option value="onsite">Vor Ort</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="remote">Remote</option>
+                  </select>
+                ) : phase !== "idle" ? <Skeleton height={28} /> : <div style={{ height: 28 }} />}
+              </div>
+              {/* Contract */}
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Vertrag</div>
+                {ready ? (
+                  <ContractField value={form.contractType} onChange={v => patch("contractType", v)} compact />
+                ) : phase !== "idle" ? <Skeleton height={28} /> : <div style={{ height: 28 }} />}
+              </div>
             </div>
 
             {/* Tags */}

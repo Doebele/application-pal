@@ -51,13 +51,19 @@ docker exec application-pal-frontend grep -r "SomeNewString" /usr/share/nginx/ht
 
 **nginx proxy timeout**: `frontend/nginx.conf` sets `proxy_read_timeout 600s`. AI endpoints can take up to 240s. Never reduce.
 
+**Dropdown fields in OverviewTab**: All three select fields (Pensum, Arbeitsmodell, Vertrag) in `OverviewTab` MUST have local `useState` — do NOT read `value` directly from `app` prop. The mutation is async; without local state the dropdown reverts on every render before React Query refetches.
+
+**Table sticky columns**: The table in `TablePage.tsx` uses a single `<table>` with `border-collapse: separate; border-spacing: 0`. The `<thead>` has `position: sticky; top: 0` for vertical sticking; individual `<th>`/`<td>` have `position: sticky; left/right` for horizontal pinning. Do NOT put `top: 0` on `<th>` — two-axis sticky on the same element fails in browsers. Do NOT use `@hello-pangea/dnd` in `<thead>` — it conflicts with sticky. Column reordering uses native HTML5 drag (`draggable` on handle span only).
+
+**OverviewTab local state pattern**: `company`, `role`, `location`, `salary`, `jobType`, `workModel`, `contractType` all use `useState(app.fieldName)`. Changes call `save(patch)` immediately (no `onBlur` for selects) and update local state simultaneously.
+
 ## Architecture
 
 npm workspaces monorepo: `shared`, `backend`, `frontend`.
 
 ```
 shared/src/schema.ts   ← single source of truth: Drizzle tables + Zod schemas + TS types
-backend/src/index.ts   ← entire Hono API (~3600 lines, all routes in one file, no sub-routers)
+backend/src/index.ts   ← entire Hono API (~4000 lines, all routes in one file, no sub-routers)
 frontend/src/          ← React 19 + Vite SPA
 ```
 
@@ -82,16 +88,22 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | `buildExportPayload(userId)` | Assembles all user-data tables for a specific user |
 | `applyNameRule(rule, vars)` | Replaces `{firma}`, `{rolle}`, `{datum}` etc. in Drive naming rules |
 | `initTasksForStage(appId, stage)` | Inserts `STAGE_TASK_TEMPLATES` entries idempotently |
+| `detectJobType(text)` | Regex: extracts pensum % (`"80–100%"`, `"100%"`, etc.) from job text |
+| `detectWorkModel(text)` | Regex: extracts `"onsite"` / `"hybrid"` / `"remote"` from job text |
+| `detectContractType(text)` | Regex: extracts `"Unbefristet"`, `"9 Monate"`, etc. from job text |
+| `normalisePensum(raw)` | Normalises raw % string to nearest standard option (en-dash format) |
 
 **Auth middleware** (`/api/*` except `/api/auth/*`, `/api/google/callback`, `/health`): verifies `access_token` cookie; silently refreshes via `refresh_token` if expired; sets `userId` in context.
 
 **Stage-change hook**: `PATCH /api/applications/:id` detects stage changes → calls `initTasksForStage()` and logs a `stage_change` activity automatically.
 
+**Import extraction** (`POST /api/applications/import`): calls LLM via `extractWithAi()` for structured fields. LLM returns `jobType` (pensum %), `workModel`, `contractType` alongside standard fields. If LLM fails or omits a field, regex detectors (`detectJobType`, `detectWorkModel`, `detectContractType`) provide fallback values. `normalisePensum()` standardises all percentage strings to the en-dash format matching the UI dropdown.
+
 **Validation**: `zValidator("json", schema)` from `@hono/zod-validator`; schemas from `@application-pal/shared` only.
 
 ### Frontend (`frontend/src/`)
 
-- **State**: Zustand `useUiStore` (persisted localStorage, key `app-pal-ui-v2`) — theme, accent, density, cardVariant, AI config, Drive naming rules (`driveNameFolder`, `driveNameDoc`). `driveApplicationsFolderId` is per-user in `user_profile.drive_applications_folder_id` — load via `GET /api/profile`, NOT from Zustand.
+- **State**: Zustand `useUiStore` (persisted localStorage, key `app-pal-ui-v2`) — theme, accent, density, cardVariant, AI config, Drive naming rules (`driveNameFolder`, `driveNameDoc`), table column config (`tableColumnOrder`, `tableColumnVisibility`, `tableColumnPinning`, `tableColumnSizing`). `driveApplicationsFolderId` is per-user in `user_profile.drive_applications_folder_id` — load via `GET /api/profile`, NOT from Zustand.
 - **Auth**: `AuthProvider` + `useAuth()` in `lib/auth.tsx`. Calls `GET /api/auth/me` on mount (with silent refresh). All routes wrapped in `ProtectedRoute` in `App.tsx`.
 - **API**: `api` from `lib/api.ts` — Axios, `withCredentials: true`, empty `baseURL`, global 401 interceptor → redirects to `/setup`.
 - **Styling**: single `index.css`, CSS custom properties. No Tailwind. `.input-line` = underline input. `.field` = labelled form field. `.md-body` = rendered Markdown.
@@ -109,7 +121,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 
 | Table | Purpose | User-isolated | Exported |
 |---|---|---|---|
-| `applications` | Jobs: stage, tags, salary, archived, archiveReason, matchScore, interview1/2Details, interview1/2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache, googleFolderId | ✅ `user_id` FK | ✅ |
+| `applications` | Jobs: stage, tags, salary, archived, archiveReason, matchScore, interview1/2Details, interview1/2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache, googleFolderId, **jobType** (pensum %), **workModel**, **contractType** | ✅ `user_id` FK | ✅ |
 | `user_profile` | Per-user profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, driveApplicationsFolderId, sessionTimeout, desiredSalary | ✅ `user_id` FK | ✅ |
 | `user_documents` | Document library (CV, Zeugnisse, Figma, etc.) | ✅ `user_id` FK | ✅ |
 | `application_documents` | Per-job docs; `googleDocId`/`googleDocUrl` for Drive | via `application_id` | ✅ |
@@ -123,6 +135,11 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | `kb_*` | Knowledge-base cache (shared across users) | ❌ shared | ❌ auto-generated |
 
 **Archive pattern**: `applications.archived = "true"` — default filter is `archived != "true"`. `archiveReason`: `unavailable | irrelevant | taken | other` or free text.
+
+**New application fields** (added via `ALTER TABLE`):
+- `job_type` — work pensum as percentage string: `"100%"`, `"80–100%"`, `"80%"`, `"60–80%"`, `"60%"`, `"50%"`, `"40%"`, or custom. Auto-detected on import.
+- `work_model` — `"onsite"` | `"hybrid"` | `"remote"`. Auto-detected on import.
+- `contract_type` — `"Unbefristet"` | `"6 Monate"` | `"9 Monate"` | `"12 Monate"` | custom string. Auto-detected on import.
 
 ### Export/Import
 
@@ -194,13 +211,17 @@ Require `calendar.readonly` scope (in `GOOGLE_SCOPES`). Users must re-connect Go
 
 ### Key Frontend Patterns
 
-**DetailDrawer**: Main job detail view. `stage` and `url` are lifted to component state for immediate header updates. Tab type: `"process" | "details" | "documents" | "insights" | "contacts" | "notes"`. Default tab: `"process"`. Uses `useQuery(["application", app.id], { staleTime: 0, refetchOnMount: true })` to always load fresh AI data from DB on open.
+**DetailDrawer**: Main job detail view. `stage` and `url` are lifted to component state for immediate header updates. Tab type: `"process" | "details" | "documents" | "ki" | "contacts" | "notes"`. Default tab: `"process"`. Uses `useQuery(["application", app.id], { staleTime: 0, refetchOnMount: true })` to always load fresh AI data from DB on open.
 
 **ProcessTab** (top → bottom): `InterviewDetailsPanel` (interview stages only) → `TaskChecklist` → `StageAiActions` → `GlassdoorPanel` (inbox only) → AI content blocks → activity timeline. `onSave` passed to both `InterviewDetailsPanel` and `StageAiActions`.
 
-**DetailsTab**: Overview fields + `react-markdown`/`remark-gfm` Stellenbeschreibung with Vorschau/Bearbeiten toggle (`descMode` state). Autosave on `onBlur`. Styled via `.md-body`.
+**DetailsTab**: `OverviewTab` (all editable fields incl. Pensum/Arbeitsmodell/Vertrag) + `react-markdown`/`remark-gfm` Stellenbeschreibung with Vorschau/Bearbeiten toggle (`descMode` state). Autosave on `onBlur`. Styled via `.md-body`.
 
 **KI-Erkenntnisse (DetailsTab)**: `STAGE_TILES` mapping determines which tile IDs show per stage. Click → `TileExpandView` (two-column overlay). After AI generation, invalidates `["applications"]` + `["application", appId]` queries.
+
+**AI Tiles — direct generation**: `AiResultTile` with `onRun` prop. Empty tile click = triggers generation immediately (no expand). Filled tile click = opens `TileExpandView`. `buildTileRunner(id, appId, ai, queryClient, onRegister)` factory creates the async run callback used by both `ProcessTab` and `KiInhalteTab`. During generation: button shows spinner + "Wird generiert…", is disabled to prevent double-trigger. In-tile toast shows status.
+
+**TileExpandView**: Overlay for a single AI result. Header actions: „Kopieren" (`copyText()`) and „Als Google Doc" (via `EXPORT_DOC_ENDPOINTS` map). Local toast for copy/export feedback. `onRegister` callback updates parent `aiResultsRegistry` after in-place regeneration.
 
 **StageAiActions**: `resultTimes` from `aiResultsCache._savedAt`. After generation, invalidates both queries. Uses `queryClient` via `useQueryClient()`.
 
@@ -208,9 +229,21 @@ Require `calendar.readonly` scope (in `GOOGLE_SCOPES`). Users must re-connect Go
 
 **Calendar Page** (`CalendarPage.tsx`): Events merged from 3 sources (deduplicated by ID): `applicationsToCalendarEvents()`, `activityRowsToCalendarEvents()` (DB), `googleCalendarEventsToCalendarEvents()` (GCal). Event pills: tinted bg (`${color}1e`) + left border for WCAG. `FloatingPopup` via `createPortal(…, document.body)` escapes `overflow:hidden`. Match score badge on pills (colored text, no bg/border). Month view: 6 pills max, `minmax(0,1fr)` columns for equal width.
 
-**Navigation Rail** (`Rail.tsx`): Board → Calendar → Timeline → Archive → Profil → Dokumente → Knowledge → Templates → Settings. User section at bottom is clickable → opens `UserModal` (portal, anchored above trigger). Modal has: email + app count, „Nutzer wechseln" → `/setup`, „Abmelden" with two-step confirmation.
+**Table Page** (`/table`, `TablePage.tsx`): TanStack Table v8 with column pinning (left only — right pinning disabled), resizing, ordering (native HTML5 drag on handle span), sorting, visibility. Column config persisted in Zustand (`tableColumnOrder`, `tableColumnVisibility`, `tableColumnPinning`, `tableColumnSizing`). Default sort: `createdAt` descending. `RunAiButton` component triggers AI endpoints per-row. Sticky layout: `thead { position: sticky; top: 0 }` + pinned `th`/`td` horizontal-only sticky. No shadow on pinned `th`, shadow preserved on `td`.
+
+**Shared field components** (exported from `ImportDrawer.tsx`):
+- `PensumField` — dropdown (100%, 80–100%, 80%, 60–80%, 60%, 50%, 40%, Auf Anfrage) + "Individuell…" with free-text input. Used in ImportDrawer review and OverviewTab.
+- `ContractField` — dropdown (Unbefristet, 6/9/12 Monate) + "Individuell…" with free-text input. Used in ImportDrawer review and OverviewTab.
+
+**Navigation Rail** (`Rail.tsx`): Board → Liste → Kalender → Timeline → Archiv → Profil → Dokumente → Knowledge → Templates → Einstellungen. User section at bottom is clickable → opens `UserModal` (portal, anchored above trigger). Modal has: email + app count, „Nutzer wechseln" → `/setup`, „Abmelden" with two-step confirmation.
+
+**Board Card** (`Card.tsx` `CardRich`): Stage badge removed — cards are already in their stage column. Match score badge only (top-right). Colors use CSS vars `--score-high/mid/low` (WCAG AA compliant in both themes).
 
 **Archive routing**: `showArchived = useSearchParams().get("archive") === "true"` in `BoardPage` (not `useState`). After archiving, `DetailDrawer.onArchived` fires → `navigate("/?archive=true")`.
+
+**Board Topbar**: Card-style selector (`<select>` for Rich/Compact/Minimal/Editorial) placed left of Filter button. Only shown on main board, hidden in archive view.
+
+**Topbar component** (`Topbar.tsx`): Accepts `searchValue` + `onSearchChange` for controlled search. `actions` slot for right-side buttons. Used by both Board and Table pages.
 
 ### Multi-User Architecture
 
@@ -242,4 +275,8 @@ Shadows (white halo on dark surfaces): `--shadow-card: 0 4px 24px rgba(255,255,2
 
 Icons: **Iconoir** v7.11.0 (`iconoir-react`). Use `width`/`height` props (no `size`). Do not mix with other icon libraries.
 
-Stage colors: `--stage-color-{stage}` CSS variables + `.stage-{stage}` classes with `--stage` + `--stage-bg` local vars.
+**Stage colors**: CSS variables `--stage-color-{stage}` defined in `:root` (dark) and `[data-theme="light"]` (WCAG AA overrides). Use `var(--stage-color-import_validating)` etc. — never hardcode hex stage colors in components.
+
+**Score badge colors**: CSS variables `--score-high/mid/low` with matching `-bg` and `-border` variants. Dark mode: bright greens/yellows/reds. Light mode: WCAG AA compliant darker shades (verified ≥4.5:1 contrast on white). Use these variables everywhere match score is displayed.
+
+**Accessibility**: All badge colors (stage + score) verified WCAG AA (≥4.5:1 contrast ratio) in both light and dark mode. Light mode overrides live in `[data-theme="light"]` block of `index.css`.

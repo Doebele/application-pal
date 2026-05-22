@@ -20,12 +20,16 @@ import {
   type ColumnPinningState,
   type ColumnSizingState,
 } from "@tanstack/react-table";
-import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
-import { NavArrowUp, NavArrowDown, Settings, Xmark, Search, Drag, Sparks, Refresh, RefreshCircle, Pin, PinSlash } from "iconoir-react";
+import {
+  NavArrowUp, NavArrowDown, Settings, Plus, Check,
+  Drag, Sparks, Refresh, RefreshCircle, Pin, PinSlash,
+} from "iconoir-react";
+import { Topbar } from "../components/Topbar";
 import { DetailDrawer } from "../components/DetailDrawer";
+import { ImportDrawer } from "../components/ImportDrawer";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -46,18 +50,31 @@ const SOURCE_LABELS: Record<string, string> = {
   xing: "XING", stepstone: "StepStone",
 };
 
+const ALL_STAGES = Object.keys(STAGE_LABELS);
+
+// Pensum values are stored as-is ("100%", "80-100%", etc.) — no mapping needed
+
+const WORK_MODEL_LABELS: Record<string, string> = {
+  onsite: "Vor Ort",
+  hybrid: "Hybrid",
+  remote: "Remote",
+};
+
 const DEFAULT_VISIBLE: VisibilityState = {
   company: true, role: true, stage: true, location: true,
   matchScore: true, salaryMedian: true, glassdoor: true, kununu: true,
   salary: false, source: false, tags: false, appliedAt: true,
-  interview1: false, createdAt: false, updatedAt: false,
+  interview1: false, createdAt: true, updatedAt: false,
+  jobType: true, workModel: true, contractType: false,
 };
 
 const DEFAULT_ORDER = [
-  "company","role","stage","location","matchScore","salaryMedian",
-  "glassdoor","kununu","salary","source","tags","appliedAt",
-  "interview1","createdAt","updatedAt",
+  "company","role","stage","location","jobType","workModel","contractType",
+  "matchScore","salaryMedian","glassdoor","kununu","salary","source","tags",
+  "appliedAt","interview1","createdAt","updatedAt",
 ];
+
+const DEFAULT_PINNING: ColumnPinningState = { left: ["company"], right: [] };
 
 // ── Data helpers ─────────────────────────────────────────────────────────────
 
@@ -101,7 +118,7 @@ function fmtDate(d: Date | string | null | undefined): string {
 
 function RunAiButton({ appId, endpoint, hasValue }: {
   appId: string;
-  endpoint: string;    // e.g. "/match-score" or "/ai/glassdoor-check"
+  endpoint: string;
   hasValue: boolean;
 }) {
   const { ai } = useUiStore();
@@ -160,14 +177,18 @@ export function TablePage() {
   } = useUiStore();
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<string[]>([]);
-  const [stageOpen, setStageOpen] = useState(false);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [colPanelOpen, setColPanelOpen] = useState(false);
-  const [sorting, setSorting] = useState<SortingState>([]);
+  const [sorting, setSorting] = useState<SortingState>([{ id: "createdAt", desc: true }]);
   const [selectedApp, setSelectedApp] = useState<Application | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
   const [hoveredColId, setHoveredColId] = useState<string | null>(null);
   const [hoveredRowIndex, setHoveredRowIndex] = useState<number | null>(null);
+  // Native HTML5 drag-and-drop for column reorder (no DnD library = no sticky conflict)
+  const [dragColId, setDragColId] = useState<string | null>(null);
+  const [dragOverColId, setDragOverColId] = useState<string | null>(null);
   const colPanelRef = useRef<HTMLDivElement>(null);
-  const stageRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   const { data: apps = [] } = useQuery<Application[]>({
     queryKey: ["applications"],
@@ -178,7 +199,7 @@ export function TablePage() {
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (colPanelRef.current && !colPanelRef.current.contains(e.target as Node)) setColPanelOpen(false);
-      if (stageRef.current && !stageRef.current.contains(e.target as Node)) setStageOpen(false);
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setFilterOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -232,11 +253,14 @@ export function TablePage() {
       meta: { tooltip: (app) => STAGE_LABELS[app.stage ?? ""] ?? app.stage ?? undefined },
       cell: ({ getValue }) => {
         const s = getValue() ?? "";
-        const color = STAGE_COLORS[s] ?? "#94a3b8";
+        // Use CSS variables for WCAG-accessible colours in both light/dark modes
+        const colorVar = `var(--stage-color-${s}, #94a3b8)`;
         return (
           <span style={{
             padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 700, whiteSpace: "nowrap",
-            background: `${color}18`, color, border: `1px solid ${color}40`,
+            color: colorVar,
+            background: `color-mix(in srgb, ${colorVar} 12%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${colorVar} 27%, transparent)`,
           }}>
             {STAGE_LABELS[s] ?? s}
           </span>
@@ -253,10 +277,15 @@ export function TablePage() {
       meta: { tooltip: (app) => app.matchScore != null ? `${app.matchScore}%` : undefined },
       cell: ({ getValue, row }) => {
         const v = getValue();
-        const color = v != null ? (v >= 75 ? "#34d399" : v >= 50 ? "#fbbf24" : "#f87171") : "var(--fg-4)";
+        const level = v != null ? (v >= 75 ? "high" : v >= 50 ? "mid" : "low") : null;
         return (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-            <span style={{ color, fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>{v != null ? `${v}%` : "—"}</span>
+            <span style={{
+              fontWeight: 700, fontVariantNumeric: "tabular-nums",
+              color: level ? `var(--score-${level})` : "var(--fg-4)",
+            }}>
+              {v != null ? `${v}%` : "—"}
+            </span>
             <RunAiButton appId={row.original.id} endpoint="/match-score" hasValue={v != null} />
           </span>
         );
@@ -314,6 +343,39 @@ export function TablePage() {
         );
       },
     }),
+    ch.accessor("jobType", {
+      header: "Pensum",
+      meta: { tooltip: (app) => (app as Application & { jobType?: string }).jobType ?? undefined },
+      cell: ({ row }) => {
+        const v = (row.original as Application & { jobType?: string }).jobType;
+        return v
+          ? <span style={{ padding: "1px 7px", borderRadius: 999, fontSize: 10, fontWeight: 700, background: "var(--accent-08)", color: "var(--accent)", border: "1px solid var(--accent-15)", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{v}</span>
+          : <span style={{ color: "var(--fg-4)" }}>—</span>;
+      },
+    }),
+    ch.accessor("workModel", {
+      header: "Arbeitsmodell",
+      meta: { tooltip: (app) => WORK_MODEL_LABELS[(app as Application & { workModel?: string }).workModel ?? ""] ?? undefined },
+      cell: ({ row }) => {
+        const v = (row.original as Application & { workModel?: string }).workModel;
+        const label = v ? (WORK_MODEL_LABELS[v] ?? v) : null;
+        const colorMap: Record<string, string> = { onsite: "#60a5fa", hybrid: "#a78bfa", remote: "#34d399" };
+        const color = v ? (colorMap[v] ?? "var(--fg-3)") : "var(--fg-4)";
+        return label
+          ? <span style={{ padding: "1px 7px", borderRadius: 999, fontSize: 10, fontWeight: 600, background: `color-mix(in srgb, ${color} 12%, transparent)`, color, border: `1px solid color-mix(in srgb, ${color} 27%, transparent)`, whiteSpace: "nowrap" }}>{label}</span>
+          : <span style={{ color: "var(--fg-4)" }}>—</span>;
+      },
+    }),
+    ch.accessor("contractType", {
+      header: "Vertrag",
+      meta: { tooltip: (app) => (app as Application & { contractType?: string }).contractType ?? undefined },
+      cell: ({ row }) => {
+        const v = (row.original as Application & { contractType?: string }).contractType;
+        if (!v) return <span style={{ color: "var(--fg-4)" }}>—</span>;
+        const isUnlimited = v.toLowerCase() === "unlimited" || v.toLowerCase() === "unbefristet";
+        return <span style={{ color: isUnlimited ? "var(--fg-2)" : "var(--fg-3)", fontSize: 11 }}>{isUnlimited ? "Unbefristet" : v}</span>;
+      },
+    }),
     ch.accessor("salary", {
       header: "Lohn (Inserat)",
       meta: { tooltip: (app) => app.salary ?? undefined },
@@ -354,7 +416,21 @@ export function TablePage() {
     }),
     ch.accessor("createdAt", {
       header: "Erstellt",
-      cell: ({ getValue }) => <span style={{ color: "var(--fg-4)", fontVariantNumeric: "tabular-nums" }}>{fmtDate(getValue())}</span>,
+      cell: ({ getValue }) => {
+        const d = getValue();
+        if (!d) return <span style={{ color: "var(--fg-4)" }}>—</span>;
+        const date = new Date(d);
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+            <span style={{ color: "var(--fg-4)", fontVariantNumeric: "tabular-nums" }}>
+              {date.toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit" })}
+            </span>
+            <span style={{ color: "var(--fg-4)", fontVariantNumeric: "tabular-nums", fontSize: 10, opacity: 0.7 }}>
+              {date.toLocaleTimeString("de-CH", { hour: "2-digit", minute: "2-digit" })}
+            </span>
+          </div>
+        );
+      },
     }),
     ch.accessor("updatedAt", {
       header: "Aktualisiert",
@@ -365,7 +441,7 @@ export function TablePage() {
   // Resolve column config from store (with defaults)
   const columnOrder: ColumnOrderState      = tableColumnOrder.length > 0 ? tableColumnOrder : DEFAULT_ORDER;
   const columnVisibility: VisibilityState  = Object.keys(tableColumnVisibility).length > 0 ? tableColumnVisibility : DEFAULT_VISIBLE;
-  const columnPinning: ColumnPinningState  = tableColumnPinning;
+  const columnPinning: ColumnPinningState  = (tableColumnPinning.left.length > 0 || tableColumnPinning.right.length > 0) ? tableColumnPinning : DEFAULT_PINNING;
   const columnSizing: ColumnSizingState    = tableColumnSizing;
 
   const table = useReactTable({
@@ -384,8 +460,8 @@ export function TablePage() {
       setTableColumnVisibility(next as Record<string, boolean>);
     },
     onColumnPinningChange: (updater) => {
-      const next = typeof updater === "function" ? updater(columnPinning) : updater;
-      setTableColumnPinning(next as { left: string[]; right: string[] });
+      const raw = typeof updater === "function" ? updater(columnPinning) : updater;
+      setTableColumnPinning({ left: (raw.left ?? []) as string[], right: (raw.right ?? []) as string[] });
     },
     onColumnSizingChange: (updater) => {
       const next = typeof updater === "function" ? updater(columnSizing) : updater;
@@ -395,241 +471,243 @@ export function TablePage() {
     getSortedRowModel: getSortedRowModel(),
   });
 
-  // Drag-and-drop column reorder
-  const handleDragEnd = (result: DropResult) => {
-    if (!result.destination) return;
-    const src = result.source.index;
-    const dst = result.destination.index;
-    if (src === dst) return;
-    const visibleIds = table.getVisibleLeafColumns().map(c => c.id);
+  // Native HTML5 column reorder handlers
+  const handleColDragStart = (colId: string) => setDragColId(colId);
+  const handleColDragOver  = (e: React.DragEvent, colId: string) => { e.preventDefault(); setDragOverColId(colId); };
+  const handleColDrop      = (e: React.DragEvent, targetColId: string) => {
+    e.preventDefault();
+    if (!dragColId || dragColId === targetColId) { setDragColId(null); setDragOverColId(null); return; }
     const allIds = [...columnOrder];
-    const moving = visibleIds[src];
-    const target = visibleIds[dst];
-    const fromIdx = allIds.indexOf(moving);
-    const toIdx   = allIds.indexOf(target);
+    const fromIdx = allIds.indexOf(dragColId);
+    const toIdx   = allIds.indexOf(targetColId);
+    if (fromIdx < 0 || toIdx < 0) { setDragColId(null); setDragOverColId(null); return; }
     const next = [...allIds];
     next.splice(fromIdx, 1);
-    next.splice(toIdx, 0, moving);
+    next.splice(toIdx, 0, dragColId);
     setTableColumnOrder(next);
+    setDragColId(null);
+    setDragOverColId(null);
   };
+  const handleColDragEnd   = () => { setDragColId(null); setDragOverColId(null); };
 
   const resetColumns = () => {
     setTableColumnOrder(DEFAULT_ORDER);
     setTableColumnVisibility(DEFAULT_VISIBLE);
-    setTableColumnPinning({ left: ["company"], right: [] });
+    setTableColumnPinning({ left: [...DEFAULT_PINNING.left!], right: [...DEFAULT_PINNING.right!] });
     setTableColumnSizing({});
   };
 
-  const pinColumn = (colId: string, side: "left" | "right" | false) => {
-    const cur = tableColumnPinning;
-    const left  = cur.left.filter(c => c !== colId);
-    const right = cur.right.filter(c => c !== colId);
-    if (side === "left")  left.push(colId);
-    if (side === "right") right.push(colId);
-    setTableColumnPinning({ left, right });
+  // Only left-pinning is supported; right-pinning is disabled
+  const pinColumn = (colId: string, side: "left" | false) => {
+    const left = tableColumnPinning.left.filter(c => c !== colId);
+    if (side === "left") left.push(colId);
+    setTableColumnPinning({ left, right: [] });
   };
 
-  const allStages = Object.keys(STAGE_LABELS);
+  // ── Topbar actions ───────────────────────────────────────────────────────────
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden", background: "var(--bg)" }}>
-      {/* Toolbar */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 8, padding: "12px 20px",
-        borderBottom: "1px solid var(--border)", flexShrink: 0, flexWrap: "wrap",
-      }}>
-        <div style={{ fontWeight: 700, fontSize: 14, color: "var(--fg-1)", marginRight: 4 }}>
-          Alle Bewerbungen
-          <span style={{ fontSize: 11, fontWeight: 400, color: "var(--fg-4)", marginLeft: 6 }}>{filtered.length}</span>
-        </div>
+  const isFiltered = stageFilter.length > 0;
 
-        {/* Search */}
-        <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-          <Search width={12} height={12} style={{ position: "absolute", left: 8, color: "var(--fg-4)", pointerEvents: "none" }} />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Suchen…"
-            style={{
-              paddingLeft: 26, paddingRight: 8, height: 28, borderRadius: 6, fontSize: 12,
-              background: "var(--surface)", border: "1px solid var(--border)", color: "var(--fg-1)",
-              outline: "none", width: 160, fontFamily: "var(--font-sans)",
-            }}
-          />
-          {search && (
-            <button onClick={() => setSearch("")} style={{ position: "absolute", right: 6, background: "none", border: "none", cursor: "pointer", color: "var(--fg-4)", padding: 0, display: "flex" }}>
-              <Xmark width={10} height={10} />
+  const actions = (
+    <>
+      {/* Column settings — left of filter */}
+      <div style={{ position: "relative" }} ref={colPanelRef}>
+        <button onClick={() => setColPanelOpen(v => !v)} className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
+          <Settings width={12} height={12} /> Spalten
+        </button>
+        {colPanelOpen && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50,
+            background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
+            padding: 8, minWidth: 260, maxHeight: 420, overflowY: "auto",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+          }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, padding: "0 4px" }}>Spalten</div>
+            {table.getAllLeafColumns().map(col => {
+              const pinned = col.getIsPinned();
+              const label = typeof col.columnDef.header === "string" ? col.columnDef.header : col.id;
+              return (
+                <div key={col.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 4px", borderRadius: 5 }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "")}>
+                  <input type="checkbox" checked={col.getIsVisible()} onChange={col.getToggleVisibilityHandler()}
+                    style={{ accentColor: "var(--accent)", width: 13, height: 13, flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: 12, color: "var(--fg-2)", cursor: "default" }}>{label}</span>
+                  <button onClick={() => pinColumn(col.id, pinned === "left" ? false : "left")} title={pinned === "left" ? "Links lösen" : "Links fixieren"}
+                    style={{ background: "none", border: "none", cursor: "pointer", padding: "1px 3px", borderRadius: 3, display: "flex", alignItems: "center", color: pinned === "left" ? "var(--accent)" : "var(--fg-4)" }}>
+                    {pinned === "left" ? <PinSlash width={11} height={11} /> : <Pin width={11} height={11} />}
+                  </button>
+                </div>
+              );
+            })}
+            <button onClick={resetColumns} style={{ width: "100%", marginTop: 8, padding: "5px 8px", borderRadius: 5, border: "1px solid var(--border)", background: "none", cursor: "pointer", fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font-sans)" }}>
+              Zurücksetzen
             </button>
-          )}
-        </div>
-
-        {/* Stage Filter */}
-        <div style={{ position: "relative" }} ref={stageRef}>
-          <button
-            onClick={() => setStageOpen(v => !v)}
-            className="btn btn-secondary"
-            style={{ fontSize: 11, gap: 5, background: stageFilter.length > 0 ? "var(--accent-08)" : undefined, color: stageFilter.length > 0 ? "var(--accent)" : undefined }}
-          >
-            Phase {stageFilter.length > 0 && `(${stageFilter.length})`}
-            <NavArrowDown width={10} height={10} />
-          </button>
-          {stageOpen && (
-            <div style={{
-              position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50,
-              background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
-              padding: 6, minWidth: 160, boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
-            }}>
-              {allStages.map(s => {
-                const color = STAGE_COLORS[s] ?? "#94a3b8";
-                const checked = stageFilter.includes(s);
-                return (
-                  <label key={s} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 8px", borderRadius: 5, cursor: "pointer", fontSize: 12, color: checked ? "var(--fg-1)" : "var(--fg-2)" }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "")}>
-                    <input type="checkbox" checked={checked} onChange={() => setStageFilter(prev => checked ? prev.filter(x => x !== s) : [...prev, s])}
-                      style={{ accentColor: color, width: 13, height: 13 }} />
-                    <span style={{ width: 7, height: 7, borderRadius: 999, background: color, flexShrink: 0 }} />
-                    {STAGE_LABELS[s]}
-                  </label>
-                );
-              })}
-              {stageFilter.length > 0 && (
-                <button onClick={() => setStageFilter([])} style={{ width: "100%", marginTop: 4, padding: "4px 8px", borderRadius: 5, border: "none", background: "none", cursor: "pointer", fontSize: 11, color: "var(--fg-4)", textAlign: "left", fontFamily: "var(--font-sans)" }}>
-                  Alle entfernen
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div style={{ flex: 1 }} />
-
-        {/* Column settings */}
-        <div style={{ position: "relative" }} ref={colPanelRef}>
-          <button onClick={() => setColPanelOpen(v => !v)} className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
-            <Settings width={12} height={12} /> Spalten
-          </button>
-          {colPanelOpen && (
-            <div style={{
-              position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50,
-              background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 8,
-              padding: 8, minWidth: 260, maxHeight: 420, overflowY: "auto",
-              boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
-            }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, padding: "0 4px" }}>Spalten</div>
-              {table.getAllLeafColumns().map(col => {
-                const pinned = col.getIsPinned();
-                const label = typeof col.columnDef.header === "string" ? col.columnDef.header : col.id;
-                return (
-                  <div key={col.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 4px", borderRadius: 5 }}
-                    onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-                    onMouseLeave={e => (e.currentTarget.style.background = "")}>
-                    <input type="checkbox" checked={col.getIsVisible()} onChange={col.getToggleVisibilityHandler()}
-                      style={{ accentColor: "var(--accent)", width: 13, height: 13, flexShrink: 0 }} />
-                    <span style={{ flex: 1, fontSize: 12, color: "var(--fg-2)", cursor: "default" }}>{label}</span>
-                    {/* Pin buttons */}
-                    <button onClick={() => pinColumn(col.id, pinned === "left" ? false : "left")} title={pinned === "left" ? "Links lösen" : "Links fixieren"}
-                      style={{ background: "none", border: "none", cursor: "pointer", padding: "1px 3px", borderRadius: 3, display: "flex", alignItems: "center", color: pinned === "left" ? "var(--accent)" : "var(--fg-4)" }}>
-                      {pinned === "left" ? <PinSlash width={11} height={11} /> : <Pin width={11} height={11} />}
-                    </button>
-                    <span style={{ fontSize: 9, color: "var(--fg-4)" }}>L</span>
-                    <button onClick={() => pinColumn(col.id, pinned === "right" ? false : "right")} title={pinned === "right" ? "Rechts lösen" : "Rechts fixieren"}
-                      style={{ background: "none", border: "none", cursor: "pointer", padding: "1px 3px", borderRadius: 3, display: "flex", alignItems: "center", color: pinned === "right" ? "var(--accent)" : "var(--fg-4)" }}>
-                      {pinned === "right" ? <PinSlash width={11} height={11} /> : <Pin width={11} height={11} />}
-                    </button>
-                    <span style={{ fontSize: 9, color: "var(--fg-4)" }}>R</span>
-                  </div>
-                );
-              })}
-              <button onClick={resetColumns} style={{ width: "100%", marginTop: 8, padding: "5px 8px", borderRadius: 5, border: "1px solid var(--border)", background: "none", cursor: "pointer", fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font-sans)" }}>
-                Zurücksetzen
-              </button>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Table — horizontal scroll */}
-      <div style={{ flex: 1, overflow: "auto" }}>
-        <table style={{ borderCollapse: "collapse", fontSize: 12, tableLayout: "fixed", width: table.getTotalSize() }}>
-          <thead>
-            <DragDropContext onDragEnd={handleDragEnd}>
-              <Droppable droppableId="columns" direction="horizontal">
-                {(provided) => (
-                  <tr ref={provided.innerRef} {...provided.droppableProps}
-                    style={{ position: "sticky", top: 0, zIndex: 20, background: "var(--surface)" }}>
-                    {table.getVisibleLeafColumns().map((col, index) => {
-                      const isSorted  = col.getIsSorted();
-                      const isPinned  = col.getIsPinned();
-                      const isHovered = hoveredColId === col.id;
-                      const stickyStyle: React.CSSProperties = isPinned === "left"
-                        ? { position: "sticky", left: col.getStart("left"), zIndex: 21, boxShadow: "2px 0 4px rgba(0,0,0,0.15)" }
-                        : isPinned === "right"
-                        ? { position: "sticky", right: col.getAfter("right"), zIndex: 21, boxShadow: "-2px 0 4px rgba(0,0,0,0.15)" }
-                        : {};
-                      return (
-                        <Draggable key={col.id} draggableId={col.id} index={index}>
-                          {(drag, snap) => {
-                            // Get the actual header object for resize handler
-                            const header = table.getHeaderGroups()[0]?.headers.find(h => h.column.id === col.id);
-                            return (<th
-                              ref={drag.innerRef}
-                              {...drag.draggableProps}
-                              onMouseEnter={() => setHoveredColId(col.id)}
-                              onMouseLeave={() => setHoveredColId(null)}
-                              style={{
-                                ...(drag.draggableProps.style ?? {}),
-                                ...stickyStyle,
-                                width: col.getSize(), minWidth: col.getSize(),
-                                padding: "8px 12px", textAlign: "left", fontWeight: 600,
-                                fontSize: 10, color: "var(--fg-3)", textTransform: "uppercase",
-                                letterSpacing: "0.06em", userSelect: "none", whiteSpace: "nowrap",
-                                borderBottom: "1px solid var(--border)",
-                                background: snap.isDragging ? "var(--surface-2)" : "var(--surface)",
-                                position: (drag.draggableProps.style as React.CSSProperties | undefined)?.position ?? stickyStyle.position ?? "relative",
-                                overflow: "hidden",
-                              }}
-                            >
-                              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <span
-                                  onClick={col.getCanSort() ? col.getToggleSortingHandler() : undefined}
-                                  style={{ cursor: col.getCanSort() ? "pointer" : "default", display: "flex", alignItems: "center", gap: 3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}
-                                >
-                                  {typeof col.columnDef.header === "string" ? col.columnDef.header : col.id}
-                                  {isSorted === "asc"  && <NavArrowUp   width={10} height={10} style={{ color: "var(--accent)", flexShrink: 0 }} />}
-                                  {isSorted === "desc" && <NavArrowDown  width={10} height={10} style={{ color: "var(--accent)", flexShrink: 0 }} />}
-                                </span>
-                                {/* Drag handle — only on hover, right of name */}
-                                <span {...drag.dragHandleProps}
-                                  style={{ opacity: isHovered ? 0.5 : 0, display: "flex", cursor: "grab", transition: "opacity 0.15s", flexShrink: 0 }}>
-                                  <Drag width={10} height={10} />
-                                </span>
-                              </div>
-                              {/* Resize handle */}
-                              <div
-                                onMouseDown={header?.getResizeHandler()}
-                                style={{
-                                  position: "absolute", right: 0, top: 0, height: "100%", width: 4,
-                                  cursor: "col-resize", userSelect: "none", touchAction: "none",
-                                  background: col.getIsResizing() ? "var(--accent)" : isHovered ? "var(--border)" : "transparent",
-                                  transition: "background 0.15s",
-                                }}
-                              />
-                            </th>
-                            );
-                          }}
-                        </Draggable>
-                      );
-                    })}
-                    {provided.placeholder}
-                  </tr>
-                )}
-              </Droppable>
-            </DragDropContext>
+      {/* Stage filter */}
+      <div style={{ position: "relative" }} ref={filterRef}>
+        <button
+          onClick={() => setFilterOpen(v => !v)}
+          className="btn btn-secondary"
+          style={{
+            fontSize: 11, gap: 5,
+            background: isFiltered ? "var(--accent-08)" : undefined,
+            color: isFiltered ? "var(--accent)" : undefined,
+          }}
+        >
+          <Settings width={12} height={12} />
+          Filter {isFiltered && `(${stageFilter.length})`}
+          <NavArrowDown width={10} height={10} />
+        </button>
+        {filterOpen && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", right: 0, zIndex: 50,
+            background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 12,
+            padding: 8, minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px 8px", borderBottom: "1px solid var(--border)", marginBottom: 6 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Phasen</span>
+              {stageFilter.length > 0 && (
+                <button onClick={() => setStageFilter([])} style={{ fontSize: 10, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", padding: "2px 4px" }}>Alle</button>
+              )}
+            </div>
+            {ALL_STAGES.map(s => {
+              const colorVar = `var(--stage-color-${s}, #94a3b8)`;
+              const checked = stageFilter.includes(s);
+              return (
+                <button key={s} onClick={() => setStageFilter(prev => checked ? prev.filter(x => x !== s) : [...prev, s])} style={{
+                  display: "flex", alignItems: "center", gap: 10, width: "100%",
+                  padding: "7px 10px", borderRadius: 8, border: "none",
+                  background: checked ? `color-mix(in srgb, ${colorVar} 12%, transparent)` : "transparent",
+                  cursor: "pointer", fontFamily: "var(--font-sans)", transition: "background 0.1s",
+                }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0, background: checked ? colorVar : "var(--border)", transition: "background 0.1s" }} />
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: checked ? 600 : 400, color: checked ? "var(--fg-1)" : "var(--fg-3)", textAlign: "left" }}>{STAGE_LABELS[s]}</span>
+                  {checked && <Check width={12} height={12} style={{ color: colorVar, flexShrink: 0 }} />}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Import */}
+      <button className="btn btn-primary" onClick={() => setImportOpen(true)}>
+        <Plus width={13} height={13} /> Import Job
+      </button>
+    </>
+  );
+
+  // ── Table ─────────────────────────────────────────────────────────────────────
+
+  return (
+    <>
+      <Topbar
+        title="Liste"
+        sub={`${filtered.length} Bewerbungen`}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchPlaceholder="Suchen nach Firma, Stelle, Ort…"
+        actions={actions}
+      />
+
+      {/*
+        SINGLE-TABLE layout — the only approach that guarantees header/body column alignment.
+
+        Rule: NEVER put two sticky axes on the same element.
+          thead  → position:sticky top:0     (vertical only — stays visible when scrolling down)
+          th/td  → position:sticky left/right (horizontal only — stays visible when scrolling sideways)
+
+        thead sticky + child th/td horizontal-sticky both resolve to the SAME scroll container
+        (div.overflow-auto). They don't interfere with each other.
+        No DnD library wrappers. No two-table approach.
+      */}
+      <div style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}>
+        <table style={{
+          borderCollapse: "separate", borderSpacing: 0,
+          fontSize: 12, tableLayout: "fixed", width: table.getTotalSize(),
+        }}>
+          {/* colgroup forces identical column widths for header and body rows */}
+          <colgroup>
+            {table.getVisibleLeafColumns().map(col => (
+              <col key={col.id} style={{ width: col.getSize(), minWidth: col.getSize() }} />
+            ))}
+          </colgroup>
+
+          {/* thead sticky top:0 — vertical anchor only */}
+          <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+            <tr>
+              {table.getVisibleLeafColumns().map(col => {
+                const isSorted     = col.getIsSorted();
+                const isPinned     = col.getIsPinned();
+                const isHovered    = hoveredColId === col.id;
+                const isDragging   = dragColId === col.id;
+                const isDragTarget = dragOverColId === col.id && dragColId !== col.id;
+                const header       = table.getHeaderGroups()[0]?.headers.find(h => h.column.id === col.id);
+
+                // th: horizontal sticky ONLY (no top — thead handles vertical); no shadow on header
+                const thStyle: React.CSSProperties = isPinned === "left"
+                  ? { position: "sticky", left: col.getStart("left"),  zIndex: 2, background: "var(--surface)" }
+                  : { background: "var(--surface)" };
+
+                return (
+                  <th
+                    key={col.id}
+                    onMouseEnter={() => setHoveredColId(col.id)}
+                    onMouseLeave={() => setHoveredColId(null)}
+                    onDragOver={e => handleColDragOver(e, col.id)}
+                    onDrop={e => handleColDrop(e, col.id)}
+                    style={{
+                      ...thStyle,
+                      padding: "8px 12px", textAlign: "left", fontWeight: 600,
+                      fontSize: 10, color: "var(--fg-3)", textTransform: "uppercase",
+                      letterSpacing: "0.06em", userSelect: "none", whiteSpace: "nowrap",
+                      borderBottom: "1px solid var(--border)",
+                      overflow: "hidden",
+                      opacity: isDragging ? 0.4 : 1,
+                      outline: isDragTarget ? "2px solid var(--accent)" : undefined,
+                      outlineOffset: isDragTarget ? "-2px" : undefined,
+                      transition: "opacity 0.15s",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <span
+                        onClick={col.getCanSort() ? col.getToggleSortingHandler() : undefined}
+                        style={{ cursor: col.getCanSort() ? "pointer" : "default", display: "flex", alignItems: "center", gap: 3, flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}
+                      >
+                        {typeof col.columnDef.header === "string" ? col.columnDef.header : col.id}
+                        {isSorted === "asc"  && <NavArrowUp   width={10} height={10} style={{ color: "var(--accent)", flexShrink: 0 }} />}
+                        {isSorted === "desc" && <NavArrowDown  width={10} height={10} style={{ color: "var(--accent)", flexShrink: 0 }} />}
+                      </span>
+                      <span
+                        draggable
+                        onDragStart={() => handleColDragStart(col.id)}
+                        onDragEnd={handleColDragEnd}
+                        style={{ opacity: isHovered ? 0.5 : 0, display: "flex", cursor: "grab", transition: "opacity 0.15s", flexShrink: 0 }}
+                      >
+                        <Drag width={10} height={10} />
+                      </span>
+                    </div>
+                    <div
+                      onMouseDown={header?.getResizeHandler()}
+                      style={{
+                        position: "absolute", right: 0, top: 0, height: "100%", width: 4,
+                        cursor: "col-resize", userSelect: "none", touchAction: "none",
+                        background: col.getIsResizing() ? "var(--accent)" : isHovered ? "var(--border)" : "transparent",
+                        transition: "background 0.15s",
+                      }}
+                    />
+                  </th>
+                );
+              })}
+            </tr>
           </thead>
+
           <tbody>
             {table.getRowModel().rows.map((row, ri) => {
-              // Solid row background — no transparent so sticky cells never show through
               const rowBg = hoveredRowIndex === ri
                 ? "var(--surface)"
                 : ri % 2 === 0 ? "var(--bg)" : "color-mix(in srgb, var(--bg) 97%, white 3%)";
@@ -644,15 +722,15 @@ export function TablePage() {
                   {row.getVisibleCells().map(cell => {
                     const tooltip  = cell.column.columnDef.meta?.tooltip?.(row.original);
                     const isPinned = cell.column.getIsPinned();
-                    // Sticky cells need an explicit solid background — use same rowBg so they match
-                    const stickyCell: React.CSSProperties = isPinned === "left"
-                      ? { position: "sticky", left: cell.column.getStart("left"), background: rowBg, zIndex: 2, boxShadow: "2px 0 6px rgba(0,0,0,0.18)" }
+                    // td: horizontal sticky ONLY
+                    const tdStyle: React.CSSProperties = isPinned === "left"
+                      ? { position: "sticky", left: cell.column.getStart("left"),  background: rowBg, zIndex: 2, boxShadow: "2px 0 5px rgba(0,0,0,0.10)" }
                       : isPinned === "right"
-                      ? { position: "sticky", right: cell.column.getAfter("right"), background: rowBg, zIndex: 2, boxShadow: "-2px 0 6px rgba(0,0,0,0.18)" }
+                      ? { position: "sticky", right: cell.column.getAfter("right"), background: rowBg, zIndex: 2, boxShadow: "-2px 0 5px rgba(0,0,0,0.10)" }
                       : {};
                     return (
                       <td key={cell.id} title={tooltip}
-                        style={{ padding: "9px 12px", overflow: "hidden", width: cell.column.getSize(), maxWidth: cell.column.getSize(), ...stickyCell }}>
+                        style={{ padding: "9px 12px", overflow: "hidden", ...tdStyle }}>
                         <div style={{ overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </div>
@@ -681,6 +759,9 @@ export function TablePage() {
           onArchived={() => setSelectedApp(null)}
         />
       )}
-    </div>
+
+      {/* Import */}
+      {importOpen && <ImportDrawer onClose={() => setImportOpen(false)} />}
+    </>
   );
 }

@@ -17,7 +17,8 @@ import type {
   Application, ApplicationDocument, ApplicationActivity, ApplicationContact, UserDocument
 } from "@application-pal/shared";
 import { api } from "../lib/api";
-import { useUiStore } from "../lib/store";
+import { useUiStore, type AiConfig } from "../lib/store";
+import { ContractField, PensumField } from "./ImportDrawer";
 
 type Tab = "process" | "details" | "documents" | "ki";
 
@@ -320,13 +321,16 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
   url: string; onUrlChange: (url: string) => void;
   onSave: (patch: Partial<Application>) => void
 }) {
-  const [company, setCompany] = useState(app.company);
-  const [role, setRole]       = useState(app.role);
-  const [location, setLocation] = useState(app.location ?? "");
-  const [salary, setSalary]   = useState(app.salary ?? "");
-  const [tags, setTags]       = useState<string[]>(parseTags(app.tags));
-  const [newTag, setNewTag]   = useState("");
-  const [saved, setSaved]     = useState(false);
+  const [company, setCompany]       = useState(app.company);
+  const [role, setRole]             = useState(app.role);
+  const [location, setLocation]     = useState(app.location ?? "");
+  const [salary, setSalary]         = useState(app.salary ?? "");
+  const [jobType, setJobType]       = useState((app as Application & { jobType?: string }).jobType ?? "");
+  const [workModel, setWorkModel]   = useState((app as Application & { workModel?: string }).workModel ?? "");
+  const [contractType, setContractType] = useState((app as Application & { contractType?: string }).contractType ?? "");
+  const [tags, setTags]             = useState<string[]>(parseTags(app.tags));
+  const [newTag, setNewTag]         = useState("");
+  const [saved, setSaved]           = useState(false);
 
   const save = useCallback((patch: Partial<Application>) => {
     onSave(patch);
@@ -394,6 +398,37 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
         <div className="field">
           <label>Nächster Schritt</label>
           <input value={app.nextDeadline ?? ""} onChange={(e) => save({ nextDeadline: e.target.value })} placeholder="z.B. Interview 15. Mai" />
+        </div>
+      </div>
+
+      {/* Row 5: Job Type + Work Model + Contract */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        <div className="field">
+          <label>Pensum</label>
+          <PensumField
+            value={jobType}
+            onChange={v => { setJobType(v); save({ jobType: v || null } as Partial<Application>); }}
+          />
+        </div>
+        <div className="field">
+          <label>Arbeitsmodell</label>
+          <select
+            value={workModel}
+            onChange={e => { setWorkModel(e.target.value); save({ workModel: e.target.value || null } as Partial<Application>); }}
+            style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontSize: 12, fontFamily: "var(--font-sans)", outline: "none" }}
+          >
+            <option value="">—</option>
+            <option value="onsite">Vor Ort</option>
+            <option value="hybrid">Hybrid</option>
+            <option value="remote">Remote</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>Vertrag</label>
+          <ContractField
+            value={contractType}
+            onChange={v => { setContractType(v); save({ contractType: v || null } as Partial<Application>); }}
+          />
         </div>
       </div>
 
@@ -1436,65 +1471,150 @@ const TILE_EMPTY_LABELS: Record<string, string> = {
   "salary-tips":       "Tipps generieren",
 };
 
-function AiResultTile({ id, entry, onExpand }: {
+function AiResultTile({ id, entry, onExpand, onRun }: {
   id: string;
   entry: { data: unknown; createdAt: Date } | null;
   onExpand: () => void;
+  onRun?: () => Promise<void>;
 }) {
-  const label        = AI_RESULT_LABELS[id] ?? id;
-  const isDouble     = DOUBLE_WIDTH_IDS.has(id);
-  const isTriple     = TRIPLE_WIDTH_IDS.has(id);
-  const isDoubleH    = DOUBLE_HEIGHT_IDS.has(id);
-  const content      = entry ? renderTileContent(id, entry.data) : null;
-  const hasData      = !!content;
-  const phaseColor   = TILE_PHASE_COLORS[id];
+  const label      = AI_RESULT_LABELS[id] ?? id;
+  const isDouble   = DOUBLE_WIDTH_IDS.has(id);
+  const isTriple   = TRIPLE_WIDTH_IDS.has(id);
+  const isDoubleH  = DOUBLE_HEIGHT_IDS.has(id);
+  const content    = entry ? renderTileContent(id, entry.data) : null;
+  const hasData    = !!content;
+  const phaseColor = TILE_PHASE_COLORS[id];
 
-  // Filled tile: colored bg + border; empty: neutral surface
-  const tileStyle: React.CSSProperties = hasData && phaseColor ? {
-    background: `${phaseColor}18`,
-    border: `1px solid ${phaseColor}50`,
-  } : {
-    background: "var(--surface)",
-    border: "1px solid var(--border)",
+  const [running, setRunning] = useState(false);
+  const [tileToast, setTileToast] = useState<{ msg: string; ok: boolean; leaving: boolean } | null>(null);
+  const tileToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const fireTileToast = (msg: string, ok = true) => {
+    if (tileToastTimer.current) clearTimeout(tileToastTimer.current);
+    setTileToast({ msg, ok, leaving: false });
+    tileToastTimer.current = setTimeout(() => {
+      setTileToast(t => t ? { ...t, leaving: true } : null);
+      setTimeout(() => setTileToast(null), 200);
+    }, 2600);
   };
 
-  // Label & icon colors: phase color when filled, muted when empty
-  const labelColor   = hasData && phaseColor ? `${phaseColor}cc` : "var(--fg-4)";
-  const expandColor  = hasData && phaseColor ? phaseColor         : "var(--accent)";
+  const handleRun = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (running || !onRun) return;
+    setRunning(true);
+    fireTileToast("Generierung wird durchgeführt…");
+    try {
+      await onRun();
+    } catch {
+      fireTileToast("Generierung fehlgeschlagen", false);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const tileStyle: React.CSSProperties = hasData && phaseColor ? {
+    background: `${phaseColor}18`, border: `1px solid ${phaseColor}50`,
+  } : { background: "var(--surface)", border: "1px solid var(--border)" };
+
+  const labelColor  = hasData && phaseColor ? `${phaseColor}cc` : "var(--fg-4)";
+  const expandColor = hasData && phaseColor ? phaseColor : "var(--accent)";
+
+  // Empty tile: main click = run (if onRun provided); expand icon = expand
+  // Filled tile: main click = expand
+  const handleTileClick = (!hasData && onRun) ? handleRun : onExpand;
 
   return (
-    <button onClick={onExpand} style={{
-      gridColumn: isTriple ? "span 3" : isDouble ? "span 2" : undefined,
-      gridRow:    isDoubleH ? "span 2" : undefined,
-      position: "relative",
-      display: "flex", flexDirection: "column", alignItems: "center",
-      padding: "12px 12px 14px", borderRadius: 12, minHeight: isDoubleH ? 240 : 120,
-      cursor: "pointer", fontFamily: "var(--font-sans)",
-      transition: "background 0.2s, border-color 0.2s",
-      ...tileStyle,
-    }}>
-      {/* Label zentriert oben */}
+    <button
+      onClick={handleTileClick}
+      style={{
+        gridColumn: isTriple ? "span 3" : isDouble ? "span 2" : undefined,
+        gridRow:    isDoubleH ? "span 2" : undefined,
+        position: "relative",
+        display: "flex", flexDirection: "column", alignItems: "center",
+        padding: "12px 12px 14px", borderRadius: 12, minHeight: isDoubleH ? 240 : 120,
+        cursor: "pointer", fontFamily: "var(--font-sans)",
+        transition: "background 0.2s, border-color 0.2s",
+        ...tileStyle,
+      }}
+    >
+      {/* Label */}
       <span style={{ fontSize: 11, color: labelColor, marginBottom: 10, lineHeight: 1, textAlign: "center", fontWeight: hasData ? 600 : 400 }}>
         {label}
       </span>
-      {/* Expand-Icon oben-rechts */}
-      <div style={{ position: "absolute", top: 8, right: 8, color: expandColor, display: "flex" }}>
+
+      {/* Expand icon — always opens expand, stops propagation */}
+      <div
+        role="button"
+        aria-label="Vollbild"
+        onClick={e => { e.stopPropagation(); onExpand(); }}
+        style={{ position: "absolute", top: 8, right: 8, color: expandColor, display: "flex", padding: 2, borderRadius: 4, cursor: "pointer" }}
+      >
         <Expand width={13} height={13} />
       </div>
-      {/* Hauptinhalt — mit oder ohne Daten */}
+
+      {/* Main content */}
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%", minHeight: 64 }}>
         {hasData ? (
           <div style={{ display: "flex", alignItems: (isDouble || isTriple) ? "flex-start" : "center", justifyContent: "center", width: "100%" }}>
             {content}
           </div>
         ) : (
-          <span style={{ fontSize: 12, color: "var(--fg-3)", fontWeight: 500, textAlign: "center", lineHeight: 1.4, padding: "0 4px" }}>
-            {TILE_EMPTY_LABELS[id] ?? "Analyse starten"}
+          // Empty state: shows a pill-button that triggers generation
+          <span style={{
+            display: "inline-flex", alignItems: "center", gap: 5,
+            fontSize: 11, fontWeight: 500, textAlign: "center", lineHeight: 1.4,
+            color: running ? "var(--fg-4)" : onRun ? "var(--accent)" : "var(--fg-3)",
+            padding: "5px 10px", borderRadius: 6,
+            border: `1px solid ${running ? "var(--border)" : onRun ? "var(--accent-15)" : "var(--border)"}`,
+            background: running ? "var(--surface-2)" : onRun ? "var(--accent-08)" : "transparent",
+            transition: "all 0.15s",
+          }}>
+            {running && <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />}
+            {running ? "Wird generiert…" : (TILE_EMPTY_LABELS[id] ?? "Analyse starten")}
           </span>
         )}
       </div>
+
+      {/* In-tile toast */}
+      {tileToast && (
+        <div
+          className={tileToast.leaving ? "toast-leave" : "toast-enter"}
+          style={{
+            position: "absolute", bottom: 8, left: "50%", transform: "translateX(-50%)",
+            display: "flex", alignItems: "center", gap: 5,
+            padding: "5px 10px", borderRadius: 8, zIndex: 5, whiteSpace: "nowrap",
+            background: tileToast.ok ? "rgba(52,211,153,0.12)" : "rgba(248,113,113,0.12)",
+            border: `1px solid ${tileToast.ok ? "rgba(52,211,153,0.3)" : "rgba(248,113,113,0.3)"}`,
+            fontSize: 10, fontWeight: 600,
+            color: tileToast.ok ? "#34d399" : "#f87171",
+          }}
+        >
+          <span>{tileToast.ok ? "✓" : "✕"}</span>
+          {tileToast.msg}
+        </div>
+      )}
     </button>
   );
+}
+
+// ─── Build an onRun callback for a tile (reused by ProcessTab + KiInhalteTab) ─
+function buildTileRunner(
+  id: string,
+  appId: string,
+  ai: AiConfig,
+  queryClient: ReturnType<typeof useQueryClient>,
+  onRegister: (id: string, data: unknown) => void,
+): (() => Promise<void>) | undefined {
+  const endpoint = ACTION_ENDPOINTS[id];
+  if (!endpoint) return undefined;
+  return async () => {
+    if (ai.provider === "none") throw new Error("Kein KI-Modell konfiguriert");
+    const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+    const r = await api.post<Record<string, unknown>>(`/api/applications/${appId}${endpoint}`, aiBody);
+    onRegister(id, r.data);
+    queryClient.invalidateQueries({ queryKey: ["applications"] });
+    queryClient.invalidateQueries({ queryKey: ["application", appId] });
+  };
 }
 
 // ─── Large tile (2× scale) for expand right column ───────────
@@ -1661,6 +1781,140 @@ function AiResultTileLarge({ id, entry }: { id: string; entry: { data: unknown }
   );
 }
 
+// Endpoint map for Google Doc export (subset of AI types)
+const EXPORT_DOC_ENDPOINTS: Record<string, string> = {
+  "company-research":  "/ai/company-research/export-doc",
+  "ackermann-script":  "/ai/ackermann-script/export-doc",
+  "salary-check":      "/ai/salary-check/export-doc",
+  "salary-tips":       "/ai/salary-tips/export-doc",
+  "onboarding":        "/ai/onboarding/export-doc",
+  "interview-prep":    "/ai/interview-prep/export-doc",
+  "cv-highlights":     "/ai/cv-highlights/export-doc",
+  "letter-review":     "/ai/letter-review/export-doc",
+  "opening-sentences": "/ai/opening-sentences/export-doc",
+};
+
+// Flatten entry data to plain text for clipboard
+function tileTextContent(id: string, data: unknown): string {
+  const d = data as Record<string, unknown>;
+  const lines: string[] = [];
+  const sep = "─".repeat(40);
+  switch (id) {
+    case "company-research": {
+      const cr = d as CompanyResearch;
+      if (cr.unternehmensueberblick) lines.push("ÜBERBLICK\n" + cr.unternehmensueberblick);
+      if (cr.unternehmenskultur)    lines.push("KULTUR\n"    + cr.unternehmenskultur);
+      if (cr.marktposition)          lines.push("MARKTPOSITION\n" + cr.marktposition);
+      if (cr.wettbewerber?.length)   lines.push("WETTBEWERBER\n" + cr.wettbewerber.join(" · "));
+      if (cr.aktuelleThemen?.length) lines.push("AKTUELLE THEMEN\n" + cr.aktuelleThemen.map(t => "• " + t).join("\n"));
+      break;
+    }
+    case "salary-check": {
+      const sc = d as SalaryCheck;
+      const lb = sc.lohnband;
+      if (lb) lines.push(`LOHNBAND (${sc.waehrung ?? "CHF"})\nMin: ${lb.min?.toLocaleString("de-CH")} · Median: ${lb.median?.toLocaleString("de-CH")} · Max: ${lb.max?.toLocaleString("de-CH")}`);
+      if (sc.begruendung) lines.push("BEGRÜNDUNG\n" + sc.begruendung);
+      if (sc.faktoren?.length) lines.push("EINFLUSSFAKTOREN\n" + sc.faktoren.join(" · "));
+      break;
+    }
+    case "salary-tips": {
+      const st = d as SalaryTips;
+      if (st["markteinschätzung"]) lines.push("MARKTEINSCHÄTZUNG\n" + st["markteinschätzung"]);
+      if (st.taktiken?.length)     lines.push("TAKTIKEN\n" + st.taktiken.map(t => "• " + t).join("\n"));
+      if (st.formulierungen?.length) lines.push("FORMULIERUNGEN\n" + st.formulierungen.map(f => "• " + f).join("\n"));
+      if (st.vossAnker)            lines.push("VOSS-ANKER\n" + st.vossAnker);
+      break;
+    }
+    case "ats-keywords": {
+      const kw = d as AtsKeywords;
+      if (kw.mustHave?.length)   lines.push("MUST HAVE\n"   + kw.mustHave.join(", "));
+      if (kw.niceToHave?.length) lines.push("NICE TO HAVE\n"+ kw.niceToHave.join(", "));
+      if (kw.softSkills?.length) lines.push("SOFT SKILLS\n" + kw.softSkills.join(", "));
+      if (kw.tools?.length)      lines.push("TOOLS\n"       + kw.tools.join(", "));
+      break;
+    }
+    case "cv-highlights": {
+      const cv = d as CvHighlights;
+      if (cv.highlights?.length) lines.push("STÄRKEN\n" + cv.highlights.map(h => "• " + h).join("\n"));
+      if (cv.keywords?.length)   lines.push("KEYWORDS\n"  + cv.keywords.join(", "));
+      if (cv.gaps?.length)       lines.push("LÜCKEN\n"    + cv.gaps.map(g => "⚠ " + g).join("\n"));
+      break;
+    }
+    case "letter-review": {
+      const lr = d as LetterReview;
+      if (lr.gesamteindruck)         lines.push("GESAMTEINDRUCK\n" + lr.gesamteindruck);
+      if (lr.staerken?.length)       lines.push("STÄRKEN\n"        + lr.staerken.map(s => "✓ " + s).join("\n"));
+      if (lr.verbesserungen?.length) lines.push("VERBESSERUNGEN\n" + lr.verbesserungen.map(v => "→ " + v).join("\n"));
+      if (lr.cliches?.length)        lines.push("CLICHÉS\n"        + lr.cliches.join(", "));
+      break;
+    }
+    case "opening-sentences": {
+      const os = d as OpeningSentences;
+      if (os.saetze?.length) lines.push(os.saetze.map((s, i) => `${i+1}. ${s.satz}\n   [${s.ansatz}]`).join("\n\n"));
+      break;
+    }
+    case "onboarding": {
+      const oc = d as OnboardingChecklist;
+      if (oc.erste30Tage?.length) lines.push("ERSTE 30 TAGE\n" + oc.erste30Tage.map(t => "• " + t).join("\n"));
+      if (oc.erste60Tage?.length) lines.push("ERSTE 60 TAGE\n" + oc.erste60Tage.map(t => "• " + t).join("\n"));
+      if (oc.erste90Tage?.length) lines.push("ERSTE 90 TAGE\n" + oc.erste90Tage.map(t => "• " + t).join("\n"));
+      if (oc.allgemein?.length)   lines.push("ALLGEMEIN\n"      + oc.allgemein.map(t => "• " + t).join("\n"));
+      break;
+    }
+    case "match-score": {
+      const mr = d as MatchResult;
+      lines.push(`MATCH SCORE: ${mr.score}%`);
+      lines.push(`Fachkompetenz ${mr.breakdown.fachkompetenz}% · Erfahrung ${mr.breakdown.erfahrung}% · Soft Skills ${mr.breakdown.soft_skills}% · Kultur ${mr.breakdown.kulturelle_passung}%`);
+      if (mr.staerken?.length) lines.push("STÄRKEN\n" + mr.staerken.map(s => "✓ " + s).join("\n"));
+      if (mr.luecken?.length)  lines.push("LÜCKEN\n"  + mr.luecken.map(l => "✗ " + l).join("\n"));
+      if (mr.reasoning)        lines.push("BEGRÜNDUNG\n" + mr.reasoning);
+      break;
+    }
+    case "glassdoor-check": {
+      const gd = d as GlassdoorData;
+      lines.push(`GLASSDOOR: ${gd.rating != null ? `★ ${gd.rating}` : "—"} (${gd.reviewCount ?? "?"} Reviews)`);
+      if (gd.pros)  lines.push("PRO\n"    + gd.pros);
+      if (gd.cons)  lines.push("CONTRA\n" + gd.cons);
+      if (gd.summary) lines.push(gd.summary);
+      break;
+    }
+    case "kununu-check": {
+      const kn = d as KununuData;
+      lines.push(`KUNUNU: ${kn.rating != null ? `★ ${kn.rating}` : "—"} (${kn.reviewCount ?? "?"} Reviews)`);
+      if (kn.url) lines.push(kn.url);
+      break;
+    }
+    case "linkedin-profile": {
+      const li = d as LinkedinData;
+      if (li.url) lines.push(li.url);
+      if (li.employeeCount) lines.push(`Mitarbeitende: ${li.employeeCount}`);
+      if (li.description)   lines.push(li.description);
+      break;
+    }
+    case "ackermann-script": {
+      const as_ = d as AckermannScript;
+      lines.push(`ZIELGEHALT: CHF ${as_.zielgehalt?.toLocaleString("de-CH")}`);
+      lines.push(`ANKERGEBOT: CHF ${as_.ankergebot?.toLocaleString("de-CH")} (~125%)`);
+      if (as_.schritte?.length) {
+        lines.push(sep + "\nVERHANDLUNGSSCHRITTE");
+        as_.schritte.forEach(s => lines.push(`Runde ${s.runde} — CHF ${s.angebot?.toLocaleString("de-CH")}\n"${s.formulierung}"\nTaktik: ${s.taktik}`));
+      }
+      if (as_.vossAnker) lines.push(sep + "\nVOSS-ANKER\n" + as_.vossAnker);
+      if (as_.nichtmonetaer?.length) lines.push(sep + "\nNICHT-MONETÄR\n" + as_.nichtmonetaer.map(n => "• " + n).join("\n"));
+      break;
+    }
+    case "interview-prep": {
+      const iv = d as InterviewPrep;
+      if (iv.rollenFragen?.length)   lines.push("ROLLENSPEZIFISCHE FRAGEN\n" + iv.rollenFragen.map((q,i) => `${i+1}. ${q}`).join("\n"));
+      if (iv.vossFragenWhatHow?.length) lines.push("CHRIS VOSS FRAGEN\n" + iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"));
+      if (iv.starBeispiele?.length)  lines.push("STAR-BEISPIELE\n" + iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"));
+      if (iv.rueckfragen?.length)    lines.push("RÜCKFRAGEN\n"     + iv.rueckfragen.map(q => `? ${q}`).join("\n"));
+      break;
+    }
+  }
+  return lines.join(`\n\n${sep}\n\n`);
+}
+
 // Endpoint map for direct execution from expand view
 const ACTION_ENDPOINTS: Record<string, string> = {
   "match-score":       "/match-score",
@@ -1689,7 +1943,22 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+
+  // ── Local toast ──
+  const [toast, setToast] = useState<{ msg: string; type: "ok" | "err"; leaving: boolean } | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fireToast = (msg: string, type: "ok" | "err" = "ok") => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ msg, type, leaving: false });
+    // start leave animation 200ms before removal
+    toastTimer.current = setTimeout(() => {
+      setToast(t => t ? { ...t, leaving: true } : null);
+      setTimeout(() => setToast(null), 220);
+    }, 2600);
+  };
 
   const expandStyle: React.CSSProperties = {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
@@ -1718,6 +1987,29 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
   const hasData = !!entry;
   const ts = entry?.createdAt.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 
+  // Build export body based on tile type
+  const exportDoc = async () => {
+    const endpoint = EXPORT_DOC_ENDPOINTS[id];
+    if (!endpoint || !entry) return;
+    setExporting(true);
+    try {
+      const body: Record<string, unknown> = {};
+      if (id === "interview-prep")    body.interviewPrep    = entry.data;
+      else if (id === "ackermann-script") body.script       = entry.data;
+      else if (id === "onboarding")   body.checklist        = entry.data;
+      else if (id === "salary-check") body.salaryCheck      = entry.data;
+      else if (id === "cv-highlights") body.highlights      = entry.data;
+      else if (id === "company-research") body.research     = entry.data;
+      else if (id === "salary-tips")  body.tips             = entry.data;
+      else if (id === "letter-review") body.review          = entry.data;
+      else if (id === "opening-sentences") body.sentences   = entry.data;
+      const r = await api.post<{ docUrl: string }>(`/api/applications/${appId}${endpoint}`, body);
+      setExportUrl(r.data.docUrl);
+      fireToast("Google Doc erstellt ↗");
+    } catch { fireToast("Export fehlgeschlagen", "err"); }
+    finally { setExporting(false); }
+  };
+
   return (
     <div style={{ ...expandStyle, overflow: "hidden" }}>
       {/* Header */}
@@ -1727,6 +2019,51 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
         </span>
         {ts && <span style={{ fontSize: 10, color: "var(--fg-4)" }}>{ts}</span>}
         <div style={{ flex: 1 }} />
+
+        {/* ── Action buttons (only when data exists) ── */}
+        {hasData && (
+          <>
+            {/* Copy to clipboard */}
+            <button
+              className="btn btn-secondary"
+              style={{ fontSize: 11, gap: 5 }}
+              onClick={() =>
+                copyText(tileTextContent(id, entry.data))
+                  .then(() => fireToast("Text kopiert"))
+                  .catch(() => fireToast("Kopieren fehlgeschlagen", "err"))
+              }
+            >
+              <IcCopy width={11} height={11} />
+              Kopieren
+            </button>
+
+            {/* Google Doc export */}
+            {EXPORT_DOC_ENDPOINTS[id] && (
+              exportUrl ? (
+                <a href={exportUrl} target="_blank" rel="noopener noreferrer"
+                  className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
+                  <Page width={11} height={11} />
+                  Google Doc ↗
+                </a>
+              ) : (
+                <button
+                  className="btn btn-secondary"
+                  style={{ fontSize: 11, gap: 5 }}
+                  onClick={exportDoc}
+                  disabled={exporting}
+                >
+                  {exporting
+                    ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} />
+                    : <Page width={11} height={11} />
+                  }
+                  Als Google Doc
+                </button>
+              )
+            )}
+          </>
+        )}
+
+        {/* Aktualisieren / Jetzt ausführen */}
         {ACTION_ENDPOINTS[id] && (
           <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={running} onClick={run}>
             {running
@@ -1807,6 +2144,27 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
           <AiResultTileLarge id={id} entry={entry} />
         </div>
       </div>
+      )}
+
+      {/* ── Toast notification — bottom-center of expand overlay ── */}
+      {toast && (
+        <div
+          className={toast.leaving ? "toast-leave" : "toast-enter"}
+          style={{
+            position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
+            display: "flex", alignItems: "center", gap: 8,
+            padding: "9px 16px", borderRadius: 10, zIndex: 20,
+            background: toast.type === "ok" ? "rgba(52,211,153,0.12)" : "rgba(248,113,113,0.12)",
+            border: `1px solid ${toast.type === "ok" ? "rgba(52,211,153,0.35)" : "rgba(248,113,113,0.35)"}`,
+            backdropFilter: "blur(8px)",
+            fontSize: 12, fontWeight: 600, whiteSpace: "nowrap",
+            color: toast.type === "ok" ? "#34d399" : "#f87171",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+          }}
+        >
+          <span>{toast.type === "ok" ? "✓" : "✕"}</span>
+          {toast.msg}
+        </div>
       )}
     </div>
   );
@@ -3758,6 +4116,8 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
   onAiResult?: (id: string, data: unknown) => void;
   aiResults?: Record<string, { data: unknown; createdAt: Date }>;
 }) {
+  const { ai } = useUiStore();
+  const queryClient = useQueryClient();
   const { data: activities = [], refetch } = useQuery<ApplicationActivity[]>({
     queryKey: ["activities", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/activities`).then((r) => r.data)
@@ -3821,7 +4181,9 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
             <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-4)", letterSpacing: "0.07em", textTransform: "uppercase", marginTop: 20, marginBottom: 8 }}>KI-Auswertungen</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 6, marginBottom: 16 }}>
               {stageTileIds.map(id => (
-                <AiResultTile key={id} id={id} entry={aiResults?.[id] ?? null} onExpand={() => setExpandedResultId(id)} />
+                <AiResultTile key={id} id={id} entry={aiResults?.[id] ?? null}
+                  onExpand={() => setExpandedResultId(id)}
+                  onRun={buildTileRunner(id, app.id, ai, queryClient, (tid, data) => onAiResult?.(tid, data))} />
               ))}
             </div>
           </>
@@ -4048,11 +4410,20 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
 
       {/* Alle KI-Auswertungen — match-score tile is first */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 6 }}>
-        {ALL_TILE_IDS.map(id => (
-          <AiResultTile key={id} id={id}
-            entry={id === "match-score" && displayResult ? { data: displayResult, createdAt: aiResults?.["match-score"]?.createdAt ?? new Date() } : (aiResults?.[id] ?? null)}
-            onExpand={() => setExpandedResultId(id)} />
-        ))}
+        {ALL_TILE_IDS.map(id => {
+          // match-score uses the local runAnalysis (has AgentStep animation)
+          const runHandler = id === "match-score"
+            ? runAnalysis
+            : buildTileRunner(id, app.id, ai, queryClient, (tid, data) => {
+                onAiResultUpdate?.(tid, data);
+              });
+          return (
+            <AiResultTile key={id} id={id}
+              entry={id === "match-score" && displayResult ? { data: displayResult, createdAt: aiResults?.["match-score"]?.createdAt ?? new Date() } : (aiResults?.[id] ?? null)}
+              onExpand={() => setExpandedResultId(id)}
+              onRun={runHandler} />
+          );
+        })}
       </div>
       {expandedResultId && (
         <TileExpandView

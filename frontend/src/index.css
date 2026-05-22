@@ -65,6 +65,30 @@
   --green-10:         rgba(74,222,128,0.10);
   --red-10:           rgba(248,113,113,0.10);
   --yellow-10:        rgba(251,191,36,0.10);
+
+  /* ── Score badge — WCAG AA ──────────────────────────────────
+     Dark mode: bright colours on dark bg (9–11:1 contrast).
+     Light mode overrides below use darker shades (5–7:1 on #fff). */
+  --score-high:        #34d399;
+  --score-high-bg:     rgba(52,211,153,0.12);
+  --score-high-border: rgba(52,211,153,0.27);
+  --score-mid:         #fbbf24;
+  --score-mid-bg:      rgba(251,191,36,0.12);
+  --score-mid-border:  rgba(251,191,36,0.27);
+  --score-low:         #f87171;
+  --score-low-bg:      rgba(248,113,113,0.12);
+  --score-low-border:  rgba(248,113,113,0.27);
+
+  /* ── Stage badge text colours — dark mode ─────────────────── */
+  --stage-color-import_validating: #94a3b8;
+  --stage-color-preparing_cv:      #60a5fa;
+  --stage-color-preparing_letter:  #22d3ee;
+  --stage-color-application_sent:  #a78bfa;
+  --stage-color-pending:           #fbbf24;
+  --stage-color-interview_1:       #34d399;
+  --stage-color-interview_2:       #10b981;
+  --stage-color-rejected:          #f87171;
+  --stage-color-accepted:          #84cc16;
 }
 
 /* Light theme */
@@ -83,6 +107,31 @@
 
   --shadow-modal: 0 24px 64px rgba(15,17,22,0.16);
   --shadow-card:  0 1px 2px rgba(15,17,22,0.04), 0 4px 12px rgba(15,17,22,0.04);
+
+  /* ── Score badge — light mode overrides (WCAG AA ≥4.5:1 on #fff) ──
+     Contrast verified: high 5.5:1 · mid 5.0:1 · low 6.5:1           */
+  --score-high:        #047857;          /* emerald-700  5.5:1 */
+  --score-high-bg:     rgba(4,120,87,0.09);
+  --score-high-border: rgba(4,120,87,0.22);
+  --score-mid:         #b45309;          /* amber-700    5.0:1 */
+  --score-mid-bg:      rgba(180,83,9,0.09);
+  --score-mid-border:  rgba(180,83,9,0.22);
+  --score-low:         #b91c1c;          /* red-700      6.5:1 */
+  --score-low-bg:      rgba(185,28,28,0.09);
+  --score-low-border:  rgba(185,28,28,0.22);
+
+  /* ── Stage badge text colours — light mode (WCAG AA ≥4.5:1 on #fff) ─
+     Contrast verified: inbox 4.8 · cv 6.7 · letter 5.4 · sent 7.1 ·
+     pending 5.0 · itw1 5.5 · itw2 7.7 · rejected 6.5 · accepted 5.0  */
+  --stage-color-import_validating: #64748b;   /* slate-500    4.8:1 */
+  --stage-color-preparing_cv:      #1d4ed8;   /* blue-700     6.7:1 */
+  --stage-color-preparing_letter:  #0e7490;   /* cyan-700     5.4:1 */
+  --stage-color-application_sent:  #6d28d9;   /* violet-700   7.1:1 */
+  --stage-color-pending:           #b45309;   /* amber-700    5.0:1 */
+  --stage-color-interview_1:       #047857;   /* emerald-700  5.5:1 */
+  --stage-color-interview_2:       #065f46;   /* emerald-800  7.7:1 */
+  --stage-color-rejected:          #b91c1c;   /* red-700      6.5:1 */
+  --stage-color-accepted:          #4d7c0f;   /* lime-700     5.0:1 */
 }
 
 /* Accent presets */
@@ -827,6 +876,16 @@ body {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(12px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1); }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0)    scale(1); }
+  to   { opacity: 0; transform: translateY(8px)  scale(0.97); }
+}
+.toast-enter { animation: toast-in  0.22s cubic-bezier(0.34,1.56,0.64,1) forwards; }
+.toast-leave { animation: toast-out 0.18s ease-in forwards; }
 
 .drawer-head {
   display: flex;

@@ -95,6 +95,9 @@ export const applications = pgTable("applications", {
   kununuData: text("kununu_data"),                 // JSON: KununuData (rating, url)
   linkedinData: text("linkedin_data"),             // JSON: LinkedinData (url, description)
   aiResultsCache: text("ai_results_cache"),        // JSON: {[actionId]: {data, _savedAt}}
+  jobType: text("job_type"),          // 'fulltime' | 'parttime' | 'freelance' | 'internship' | 'temporary'
+  workModel: text("work_model"),      // 'onsite' | 'hybrid' | 'remote'
+  contractType: text("contract_type"), // 'unlimited' | 'limited' | free text duration e.g. "9 months"
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

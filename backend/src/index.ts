@@ -567,12 +567,12 @@ function pickWorkTags(text: string): string[] {
   const VALID_PCTS = new Set([40, 50, 60, 70, 80, 90, 100]);
 
   // Try range first: "80-100%"
-  const rangeMatch = text.match(/\b(\d{2,3})[–\-](\d{2,3})\s*%/);
+  const rangeMatch = text.match(/\b(\d{2,3})\s*[–\-]\s*(\d{2,3})\s*%/);
   if (rangeMatch) {
     const lo = parseInt(rangeMatch[1]);
     const hi = parseInt(rangeMatch[2]);
     if (VALID_PCTS.has(lo) || VALID_PCTS.has(hi)) {
-      tags.push(`${rangeMatch[1]}-${rangeMatch[2]}%`);
+      tags.push(`${rangeMatch[1]}–${rangeMatch[2]}%`); // en-dash for display
     }
   }
 
@@ -587,10 +587,69 @@ function pickWorkTags(text: string): string[] {
 
   // Vollzeit / Fulltime fallback if no % found
   if (!tags.some((t) => t.includes("%"))) {
-    if (/\b(vollzeit|full[- ]?time|fulltime)\b/i.test(text)) tags.push("Fulltime");
+    if (/\b(vollzeit|full[- ]?time|fulltime)\b/i.test(text)) tags.push("100%");
   }
 
   return tags;
+}
+
+/** Standard pensum values used in dropdowns */
+const PENSUM_OPTIONS = ["100%", "80–100%", "80%", "60–80%", "60%", "50%", "40%"];
+
+/** Normalise a raw percentage string to the nearest standard pensum option */
+function normalisePensum(raw: string): string {
+  const cleaned = raw.trim().replace(/\s+/g, "").replace(/[-]/, "–"); // normalise dash to en-dash
+  // exact match (case-insensitive)
+  const match = PENSUM_OPTIONS.find(o => o.replace(/–/g, "-").toLowerCase() === cleaned.replace(/–/g, "-").toLowerCase());
+  if (match) return match;
+  return raw.trim();
+}
+
+/** Detect work pensum (percentage) from raw job posting text */
+function detectJobType(text: string): string | null {
+  // Range first: "80-100%", "60–80%", "80 - 100%"
+  const rangeMatch = text.match(/\b(\d{2,3})\s*[–\-]\s*(\d{2,3})\s*%/);
+  if (rangeMatch) {
+    const lo = parseInt(rangeMatch[1]);
+    const hi = parseInt(rangeMatch[2]);
+    if (lo >= 40 && hi <= 100) return normalisePensum(`${lo}–${hi}%`);
+  }
+  // Single percentage: "80%", "100 %"
+  const singleMatches = [...text.matchAll(/\b(\d{2,3})\s*%/g)];
+  for (const m of singleMatches) {
+    const pct = parseInt(m[1]);
+    if (pct >= 40 && pct <= 100) return normalisePensum(`${pct}%`);
+  }
+  // Keyword fallback
+  if (/\b(vollzeit|full[- ]?time|fulltime)\b/i.test(text)) return "100%";
+  if (/\b(teilzeit|part[- ]?time)\b/i.test(text)) return null; // no specific % → leave empty
+  return null;
+}
+
+/** Detect work model from raw text */
+function detectWorkModel(text: string): string | null {
+  if (/\b(hybrid|hybrides?\s+arbeiten|teilweise\s+remote|remote.*flexibel|flexibel.*remote)\b/i.test(text)) return "hybrid";
+  if (/\b(remote|homeoffice|home[- ]office|work from home|wfh|dezentral)\b/i.test(text)) return "remote";
+  if (/\b(vor[- ]?ort|on[- ]?site|onsite|in[- ]?office|präsenz(?:arbeit)?|im\s+büro)\b/i.test(text)) return "onsite";
+  return null;
+}
+
+/** Detect contract type from raw text */
+function detectContractType(text: string): string | null {
+  if (/\b(unbefristet|permanent|unlimited|unbegrenzt|dauerhaft)\b/i.test(text)) return "Unbefristet";
+  // Duration patterns: "befristet auf X Monate/Jahre", "X-monatig", "X months"
+  const months = text.match(/befristet\s+(?:auf\s+)?(\d+)\s*Monate?/i)
+    ?? text.match(/(\d+)[- ]?monatig/i)
+    ?? text.match(/(\d+)\s*months?\s+contract/i);
+  if (months) {
+    const n = parseInt(months[1]);
+    if (n === 6)  return "6 Monate";
+    if (n === 9)  return "9 Monate";
+    if (n === 12) return "12 Monate";
+    return `${n} Monate`;
+  }
+  if (/\b(befristet|limited[- ]term|fixed[- ]term|temporär|temporary)\b/i.test(text)) return "Befristet";
+  return null;
 }
 
 const extractTextFromHtml = (html: string): string =>
@@ -621,16 +680,19 @@ const pickLocation = (text: string): string | null => text.match(locationPattern
 
 // ─── LLM extraction ───────────────────────────────────────────
 const EXTRACTION_PROMPT = `Extract job posting fields. Return ONLY this JSON object, nothing else:
-{"company":"<employer name>","role":"<exact job title>","location":"<city or region>","salary":"<range or null>","tags":["<skill1>","<skill2>"],"description":"<2 sentence English summary of responsibilities>"}
+{"company":"<employer name>","role":"<exact job title>","location":"<city or region>","salary":"<range or null>","tags":["<skill1>","<skill2>"],"description":"<2 sentence English summary of responsibilities>","jobType":"<fulltime|parttime|freelance|internship|temporary|null>","workModel":"<onsite|hybrid|remote|null>","contractType":"<Unbefristet|6 Monate|9 Monate|12 Monate|<duration>|null>"}
 
 Rules:
 - company: employer name only, e.g. "St. Galler Kantonalbank"
 - role: job title only, e.g. "Digital Experience Designer 80-100%"
 - location: city only, e.g. "Sankt Gallen"
 - salary: numeric range only or null
-- tags: 4-6 skills from the requirements, e.g. ["Figma","UX/UI","Wireframing","Agile"]. Also include one work-location tag if detectable ("Remote", "Hybrid", or "On-site") and the work-time if mentioned ("80-100%", "80%", "Fulltime", etc.)
+- tags: 4-6 skills from the requirements, e.g. ["Figma","UX/UI","Wireframing","Agile"]. Also include work-time if mentioned ("80-100%", "80%", "Fulltime", etc.)
 - description: 2 sentences summarizing what the person will do (not company overview, not ratings)
-- IGNORE: ratings, percentages, "bewerben" buttons, review scores, company size, revenue data`;
+- jobType: work percentage as string: "100%" if Vollzeit/full-time; "80–100%", "80%", "60–80%", "60%", "50%", "40%" if mentioned explicitly; use the exact range or single % from the posting (e.g. "80–100%" for "80-100%"); null if no pensum mentioned
+- workModel: "remote" if fully remote/homeoffice; "hybrid" if hybrid/teilweise remote; "onsite" if vor Ort/in-office only; null if not mentioned
+- contractType: "Unbefristet" if unbefristet/permanent; specific duration like "6 Monate","9 Monate","12 Monate" if mentioned; null if not mentioned
+- IGNORE: ratings, "bewerben" buttons, review scores, company size, revenue data`;
 
 const EXTRACTION_PROMPT_USER_PREFIX = `Extract fields from this job posting:\n\n`;
 
@@ -641,6 +703,9 @@ type LlmExtracted = {
   salary: string | null;
   tags: string[];
   description: string;
+  jobType: string | null;
+  workModel: string | null;
+  contractType: string | null;
 };
 
 /** In Docker, localhost points to the container itself. Rewrite to host.docker.internal so LM Studio on the host is reachable. */
@@ -731,13 +796,28 @@ function parseJsonResponse(raw: string): LlmExtracted | null {
   try {
     const parsed = extractJsonObject(raw);
     if (!parsed) return null;
+
+    // Normalise jobType: LLM returns percentage strings ("80-100%", "100%", etc.)
+    // Fall back to regex detection if LLM returns something odd
+    const rawJobType = typeof parsed.jobType === "string" ? parsed.jobType.trim() : null;
+    const jobType = rawJobType && /\d/.test(rawJobType) ? normalisePensum(rawJobType) : null;
+
+    // Normalise workModel
+    const rawWorkModel = typeof parsed.workModel === "string" ? parsed.workModel.toLowerCase().trim() : null;
+    const workModelMap: Record<string, string> = { remote: "remote", homeoffice: "remote", hybrid: "hybrid", onsite: "onsite", "on-site": "onsite", "vor ort": "onsite", "in-office": "onsite" };
+    const workModel = rawWorkModel ? (workModelMap[rawWorkModel] ?? (["remote","hybrid","onsite"].includes(rawWorkModel) ? rawWorkModel : null)) : null;
+
+    // contractType: keep as-is string (could be "Unbefristet", "9 Monate", etc.)
+    const contractType = typeof parsed.contractType === "string" && parsed.contractType.trim() ? parsed.contractType.trim() : null;
+
     return {
-      company:     typeof parsed.company === "string" ? parsed.company : null,
-      role:        typeof parsed.role === "string" ? parsed.role : null,
-      location:    typeof parsed.location === "string" ? parsed.location : null,
-      salary:      typeof parsed.salary === "string" ? parsed.salary : null,
-      tags:        Array.isArray(parsed.tags) ? parsed.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 6) : [],
-      description: typeof parsed.description === "string" ? parsed.description : ""
+      company:      typeof parsed.company === "string" ? parsed.company : null,
+      role:         typeof parsed.role === "string" ? parsed.role : null,
+      location:     typeof parsed.location === "string" ? parsed.location : null,
+      salary:       typeof parsed.salary === "string" ? parsed.salary : null,
+      tags:         Array.isArray(parsed.tags) ? parsed.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 6) : [],
+      description:  typeof parsed.description === "string" ? parsed.description : "",
+      jobType, workModel, contractType
     };
   } catch {
     return null;
@@ -1326,14 +1406,17 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
         const allTags = mergeTags(llm.tags);
         const logoUrl = await resolveCompanyLogo(llm.company);
         return c.json({
-          company:     llm.company,
-          role:        llm.role,
-          location:    llm.location,
-          description: llm.description || normalized.slice(0, 500),
-          salary:      llm.salary,
-          tags:        JSON.parse(allTags).length > 0 ? allTags : null,
-          source:      null,
+          company:      llm.company,
+          role:         llm.role,
+          location:     llm.location,
+          description:  llm.description || normalized.slice(0, 500),
+          salary:       llm.salary,
+          tags:         JSON.parse(allTags).length > 0 ? allTags : null,
+          source:       null,
           logoUrl,
+          jobType:      llm.jobType      ?? detectJobType(normalized),
+          workModel:    llm.workModel    ?? detectWorkModel(normalized),
+          contractType: llm.contractType ?? detectContractType(normalized),
         });
       }
     } catch (error) {
@@ -1346,13 +1429,16 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
   const logoUrl = await resolveCompanyLogo(company);
   return c.json({
     company,
-    role:        pickRole(normalized),
-    location:    pickLocation(normalized),
-    description: normalized.slice(0, 1000),
-    salary:      null,
-    tags:        workTags.length > 0 ? JSON.stringify(workTags) : null,
-    source:      null,
+    role:         pickRole(normalized),
+    location:     pickLocation(normalized),
+    description:  normalized.slice(0, 1000),
+    salary:       null,
+    tags:         workTags.length > 0 ? JSON.stringify(workTags) : null,
+    source:       null,
     logoUrl,
+    jobType:      detectJobType(normalized),
+    workModel:    detectWorkModel(normalized),
+    contractType: detectContractType(normalized),
   });
 });
 

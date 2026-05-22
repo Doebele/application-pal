@@ -11,7 +11,7 @@
       "name": "Backend (tsx watch)",
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "cd /Users/clausmedvesek/Developer/projects/application-pal && npm run dev --workspace backend"],
-      "port": 3300
+      "port": 3000
     },
     {
       "name": "Full Stack (Docker)",

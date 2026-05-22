@@ -80,11 +80,6 @@ function PriorityBar({ priority }: { priority: string | null | undefined }) {
   return <span className={`priority-bar ${priority === "high" ? "priority-high" : "priority-medium"}`} />;
 }
 
-const STAGE_COLORS: Record<string, string> = {
-  import_validating: "#94a3b8", preparing_cv: "#60a5fa", preparing_letter: "#22d3ee",
-  application_sent: "#a78bfa", pending: "#fbbf24", interview_1: "#34d399",
-  interview_2: "#10b981", rejected: "#f87171", accepted: "#84cc16"
-};
 const STAGE_LABELS: Record<string, string> = {
   import_validating: "Inbox", preparing_cv: "CV", preparing_letter: "Letter",
   application_sent: "Submitted", pending: "Pending", interview_1: "1st Itw",
@@ -94,34 +89,34 @@ const STAGE_LABELS: Record<string, string> = {
 export function CardRich({ app, onClick }: CardProps) {
   const tags = parseTags(app.tags);
   const days = daysInStage(app.updatedAt);
-  const stageColor = STAGE_COLORS[app.stage] ?? "#94a3b8";
+
+  // Score level → CSS variable names (accessible in both themes via index.css)
+  const scoreLevel = app.matchScore != null
+    ? app.matchScore >= 75 ? "high" : app.matchScore >= 50 ? "mid" : "low"
+    : null;
 
   return (
     <div className="job-card" onClick={onClick}>
       <PriorityBar priority={app.priority} />
-      {/* Row 1: Avatar + company/role + Stage chip */}
+      {/* Row 1: Avatar + company/role + Match Score (top-right, no stage badge) */}
       <div className="job-head">
         <Avatar company={app.company} logoUrl={app.logoUrl} size="sm" />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="job-title">{app.role}</div>
           <div className="job-company">{app.company}{app.location ? ` · ${app.location.split("·")[0].trim()}` : ""}</div>
         </div>
-        {/* Stage badge + optional match score */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-          <span style={{ padding: "2px 7px", borderRadius: 999, fontSize: 9.5, fontWeight: 700, background: `${stageColor}1a`, color: stageColor, border: `1px solid ${stageColor}44`, whiteSpace: "nowrap" }}>
-            {STAGE_LABELS[app.stage] ?? app.stage}
+        {/* Match Score badge only — stage is visible from the column header */}
+        {scoreLevel && (
+          <span style={{
+            padding: "2px 8px", borderRadius: 999, fontSize: 11, fontWeight: 600, whiteSpace: "nowrap",
+            flexShrink: 0,
+            color:      `var(--score-${scoreLevel})`,
+            background: `var(--score-${scoreLevel}-bg)`,
+            border:     `1px solid var(--score-${scoreLevel}-border)`,
+          }}>
+            {app.matchScore}%
           </span>
-          {app.matchScore != null && (
-            <span style={{
-              padding: "1px 6px", borderRadius: 999, fontSize: 11, fontWeight: 300, whiteSpace: "nowrap",
-              background: app.matchScore >= 75 ? "rgba(52,211,153,0.15)" : app.matchScore >= 50 ? "rgba(251,191,36,0.15)" : "rgba(248,113,113,0.15)",
-              color: app.matchScore >= 75 ? "#34d399" : app.matchScore >= 50 ? "#fbbf24" : "#f87171",
-              border: `1px solid ${app.matchScore >= 75 ? "#34d39944" : app.matchScore >= 50 ? "#fbbf2444" : "#f8717144"}`
-            }}>
-              {app.matchScore}%
-            </span>
-          )}
-        </div>
+        )}
       </div>
 
       {/* Archive reason label */}
