@@ -18,14 +18,21 @@ interface TemplateEntry {
   id: string;
   name: string;
   description?: string;
+  language?: "de" | "en"; // tag for language — unset = universal
+}
+
+interface DocTemplateTypeConfig {
+  activeId: string | null;    // legacy / universal fallback
+  activeIdDe?: string | null; // active template for DE applications
+  activeIdEn?: string | null; // active template for EN applications
+  templates: TemplateEntry[];
 }
 
 interface DocTemplateConfig {
-  [type: string]: {
-    activeId: string | null;
-    templates: TemplateEntry[];
-  };
+  [type: string]: DocTemplateTypeConfig;
 }
+
+type Lang = "de" | "en";
 
 // ─── Content type definitions ─────────────────────────────────
 const CONTENT_TYPES = [
@@ -101,20 +108,30 @@ function useDocTemplates() {
     queryClient.invalidateQueries({ queryKey: ["profile"] });
   }, [queryClient]);
 
-  const setActive = useCallback(async (type: string, id: string | null) => {
+  /** Set the active template for a given language (or universal if no lang) */
+  const setActive = useCallback(async (type: string, id: string | null, lang?: Lang) => {
     const next = { ...config };
     if (!next[type]) next[type] = { activeId: null, templates: [] };
-    next[type] = { ...next[type], activeId: id };
+    const upd = { ...next[type] };
+    if (!lang || lang === "de") { upd.activeIdDe = id; if (!lang) upd.activeId = id; }
+    if (!lang || lang === "en") { upd.activeIdEn = id; if (!lang) upd.activeId = id; }
+    next[type] = upd;
     await save(next);
   }, [config, save]);
 
+  /** Add a template entry (with optional language tag) */
   const addTemplate = useCallback(async (type: string, entry: TemplateEntry) => {
     const next = { ...config };
     if (!next[type]) next[type] = { activeId: null, templates: [] };
     if (!next[type].templates.find(t => t.id === entry.id)) {
       next[type] = { ...next[type], templates: [...next[type].templates, entry] };
     }
-    if (!next[type].activeId) next[type].activeId = entry.id;
+    // Auto-activate if no active for this language yet
+    const upd = { ...next[type] };
+    if (entry.language === "de" && !upd.activeIdDe)  upd.activeIdDe = entry.id;
+    if (entry.language === "en" && !upd.activeIdEn)  upd.activeIdEn = entry.id;
+    if (!entry.language && !upd.activeId)             upd.activeId   = entry.id;
+    next[type] = upd;
     await save(next);
   }, [config, save]);
 
@@ -122,10 +139,14 @@ function useDocTemplates() {
     const next = { ...config };
     if (!next[type]) return;
     const filtered = next[type].templates.filter(t => t.id !== id);
-    const activeId = next[type].activeId === id
-      ? (filtered[0]?.id ?? null)
-      : next[type].activeId;
-    next[type] = { activeId, templates: filtered };
+    const upd: DocTemplateTypeConfig = {
+      ...next[type],
+      templates: filtered,
+      activeId:   next[type].activeId   === id ? (filtered[0]?.id ?? null) : next[type].activeId,
+      activeIdDe: next[type].activeIdDe === id ? (filtered.find(t => t.language === "de")?.id ?? filtered[0]?.id ?? null) : next[type].activeIdDe,
+      activeIdEn: next[type].activeIdEn === id ? (filtered.find(t => t.language === "en")?.id ?? filtered[0]?.id ?? null) : next[type].activeIdEn,
+    };
+    next[type] = upd;
     await save(next);
   }, [config, save]);
 
@@ -134,9 +155,10 @@ function useDocTemplates() {
 
 // ─── Drive template picker modal ──────────────────────────────
 function DrivePickerModal({
-  type, onAdd, onClose,
+  type, lang, onAdd, onClose,
 }: {
   type: ContentTypeId;
+  lang: Lang;
   onAdd: (entry: TemplateEntry) => void;
   onClose: () => void;
 }) {
@@ -146,6 +168,8 @@ function DrivePickerModal({
   });
 
   const ct = CONTENT_TYPES.find(c => c.id === type);
+  const flag = lang === "de" ? "🇩🇪" : "🇬🇧";
+  const langLabel = lang === "de" ? "Deutsch" : "English";
 
   return (
     <div style={{
@@ -158,7 +182,7 @@ function DrivePickerModal({
         boxShadow: "var(--shadow-modal)",
       }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg-1)", marginBottom: 4 }}>
-          Vorlage aus Google Drive hinzufügen
+          {flag} {langLabel} — Vorlage aus Drive hinzufügen
         </div>
         <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 16 }}>
           {ct?.label} — Wähle ein Google Doc aus deinem Drive-Master-Ordner
@@ -176,7 +200,7 @@ function DrivePickerModal({
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {driveTemplates.map(t => (
               <button key={t.id}
-                onClick={() => { onAdd({ id: t.id, name: t.name }); onClose(); }}
+                onClick={() => { onAdd({ id: t.id, name: t.name, language: lang }); onClose(); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "8px 12px", borderRadius: 8,
@@ -213,103 +237,105 @@ function DrivePickerModal({
   );
 }
 
-// ─── Single content-type section ─────────────────────────────
-function ContentTypeSection({
-  contentType,
-  config,
+// ─── Language sub-section (DE or EN) within a content type ────
+function LangSection({
+  lang,
+  templates,
+  activeId,
   onSetActive,
-  onAddFromDrive,
   onRemove,
+  onAddFromDrive,
   onCreateNew,
 }: {
-  contentType: (typeof CONTENT_TYPES)[number];
-  config: DocTemplateConfig;
-  onSetActive: (type: string, id: string | null) => Promise<void>;
-  onAddFromDrive: (type: ContentTypeId) => void;
-  onRemove: (type: string, id: string) => Promise<void>;
-  onCreateNew: (type: ContentTypeId) => Promise<void>;
+  lang: Lang;
+  templates: TemplateEntry[];
+  activeId: string | null;
+  onSetActive: (id: string | null) => void;
+  onRemove: (id: string) => void;
+  onAddFromDrive: () => void;
+  onCreateNew: () => void;
 }) {
-  const [showPlaceholders, setShowPlaceholders] = useState(false);
   const [creating, setCreating] = useState(false);
-  const typeConfig = config[contentType.id];
-  const templates = typeConfig?.templates ?? [];
-  const activeId = typeConfig?.activeId ?? null;
+  const flag   = lang === "de" ? "🇩🇪" : "🇬🇧";
+  const label  = lang === "de" ? "Deutsch" : "English";
 
-  const handleCreateNew = async () => {
+  const handleCreate = async () => {
     setCreating(true);
-    try { await onCreateNew(contentType.id as ContentTypeId); }
+    try { await onCreateNew(); }
     finally { setCreating(false); }
   };
 
   return (
-    <div style={{ marginBottom: 32 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-        <span style={{ fontSize: 16 }}>{contentType.icon}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>{contentType.label}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{contentType.description}</div>
-        </div>
+    <div style={{
+      border: "1px solid var(--border)", borderRadius: 10,
+      marginBottom: 8, overflow: "hidden",
+    }}>
+      {/* Language header */}
+      <div style={{
+        display: "flex", alignItems: "center", gap: 8,
+        padding: "8px 12px",
+        background: "var(--surface-2)",
+        borderBottom: templates.length > 0 ? "1px solid var(--border)" : undefined,
+      }}>
+        <span style={{ fontSize: 14 }}>{flag}</span>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-2)", flex: 1 }}>{label}</span>
         <button
-          onClick={() => onAddFromDrive(contentType.id as ContentTypeId)}
+          onClick={onAddFromDrive}
           className="btn btn-ghost"
-          style={{ fontSize: 11, gap: 4 }}
+          style={{ fontSize: 10, gap: 3, padding: "3px 8px" }}
         >
-          <Plus width={11} height={11} /> Aus Drive
+          <Plus width={10} height={10} /> Aus Drive
         </button>
         <button
-          onClick={handleCreateNew}
+          onClick={handleCreate}
           className="btn btn-secondary"
-          style={{ fontSize: 11, gap: 4 }}
+          style={{ fontSize: 10, gap: 3, padding: "3px 8px" }}
           disabled={creating}
         >
           {creating
-            ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> Erstelle…</>
-            : <><Plus width={11} height={11} /> Neu erstellen</>
+            ? <><RefreshCircle width={10} height={10} style={{ animation: "spin 1s linear infinite" }} /> Erstelle…</>
+            : <><Plus width={10} height={10} /> Neu erstellen</>
           }
         </button>
       </div>
 
+      {/* Template list */}
       {templates.length === 0 ? (
         <div style={{
-          padding: "14px 16px", borderRadius: 8,
-          border: "1px dashed var(--border)", background: "var(--surface-2)",
-          fontSize: 12, color: "var(--fg-3)", textAlign: "center",
+          padding: "10px 14px", fontSize: 11, color: "var(--fg-4)", fontStyle: "italic",
         }}>
-          Noch keine Vorlage — „Neu erstellen" generiert eine formatierte Google Doc Vorlage mit Platzhaltern.
+          Noch keine {label} Vorlage — „Neu erstellen" legt eine formatierte Vorlage mit Platzhaltern an.
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-          {templates.map(tmpl => {
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {templates.map((tmpl, i) => {
             const isActive = tmpl.id === activeId;
             return (
               <div
                 key={tmpl.id}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
-                  padding: "9px 12px", borderRadius: 8, cursor: "pointer",
-                  border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
-                  background: isActive ? "var(--accent-08)" : "var(--surface-2)",
-                  transition: "all 0.12s ease",
+                  padding: "8px 12px", cursor: "pointer",
+                  borderTop: i > 0 ? "1px solid var(--border)" : undefined,
+                  background: isActive ? "var(--accent-08)" : "transparent",
+                  transition: "background 0.1s",
                 }}
-                onClick={() => onSetActive(contentType.id, isActive ? null : tmpl.id)}
+                onClick={() => onSetActive(isActive ? null : tmpl.id)}
               >
                 <div style={{
-                  width: 16, height: 16, borderRadius: "50%",
+                  width: 15, height: 15, borderRadius: "50%", flexShrink: 0,
                   border: `2px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
                   background: isActive ? "var(--accent)" : "transparent",
-                  flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
+                  display: "flex", alignItems: "center", justifyContent: "center",
                   transition: "all 0.12s",
                 }}>
-                  {isActive && <Check width={9} height={9} style={{ color: "#fff" }} />}
+                  {isActive && <Check width={8} height={8} style={{ color: "#fff" }} />}
                 </div>
 
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, color: "var(--fg-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {tmpl.name}
                   </div>
-                  {tmpl.description && (
-                    <div style={{ fontSize: 10, color: "var(--fg-3)" }}>{tmpl.description}</div>
-                  )}
                   {isActive && (
                     <div style={{ fontSize: 10, color: "var(--accent)", fontWeight: 600, marginTop: 1 }}>
                       Aktiv — wird beim Export verwendet
@@ -325,27 +351,90 @@ function ContentTypeSection({
                   style={{ color: "var(--fg-3)", display: "flex", flexShrink: 0, padding: 4 }}
                   title="In Google Docs öffnen"
                 >
-                  <OpenNewWindow width={13} height={13} />
+                  <OpenNewWindow width={12} height={12} />
                 </a>
 
                 <button
-                  onClick={e => { e.stopPropagation(); void onRemove(contentType.id, tmpl.id); }}
+                  onClick={e => { e.stopPropagation(); onRemove(tmpl.id); }}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 4, display: "flex", flexShrink: 0 }}
                   title="Aus Liste entfernen (bleibt in Drive)"
                 >
-                  <Trash width={13} height={13} />
+                  <Trash width={12} height={12} />
                 </button>
               </div>
             );
           })}
         </div>
       )}
+    </div>
+  );
+}
 
+// ─── Single content-type section ─────────────────────────────
+function ContentTypeSection({
+  contentType,
+  config,
+  onSetActive,
+  onAddFromDrive,
+  onRemove,
+  onCreateNew,
+}: {
+  contentType: (typeof CONTENT_TYPES)[number];
+  config: DocTemplateConfig;
+  onSetActive: (type: string, id: string | null, lang: Lang) => Promise<void>;
+  onAddFromDrive: (type: ContentTypeId, lang: Lang) => void;
+  onRemove: (type: string, id: string) => Promise<void>;
+  onCreateNew: (type: ContentTypeId, lang: Lang) => Promise<void>;
+}) {
+  const [showPlaceholders, setShowPlaceholders] = useState(false);
+  const typeConfig = config[contentType.id];
+  const allTemplates = typeConfig?.templates ?? [];
+
+  const deTemplates = allTemplates.filter(t => !t.language || t.language === "de");
+  const enTemplates = allTemplates.filter(t => !t.language || t.language === "en");
+
+  const activeIdDe = typeConfig?.activeIdDe ?? typeConfig?.activeId ?? null;
+  const activeIdEn = typeConfig?.activeIdEn ?? typeConfig?.activeId ?? null;
+
+  return (
+    <div style={{ marginBottom: 32 }}>
+      {/* Type header */}
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+        <span style={{ fontSize: 16 }}>{contentType.icon}</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>{contentType.label}</div>
+          <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{contentType.description}</div>
+        </div>
+      </div>
+
+      {/* DE section */}
+      <LangSection
+        lang="de"
+        templates={deTemplates}
+        activeId={activeIdDe}
+        onSetActive={id => void onSetActive(contentType.id, id, "de")}
+        onRemove={id => void onRemove(contentType.id, id)}
+        onAddFromDrive={() => onAddFromDrive(contentType.id as ContentTypeId, "de")}
+        onCreateNew={() => onCreateNew(contentType.id as ContentTypeId, "de")}
+      />
+
+      {/* EN section */}
+      <LangSection
+        lang="en"
+        templates={enTemplates}
+        activeId={activeIdEn}
+        onSetActive={id => void onSetActive(contentType.id, id, "en")}
+        onRemove={id => void onRemove(contentType.id, id)}
+        onAddFromDrive={() => onAddFromDrive(contentType.id as ContentTypeId, "en")}
+        onCreateNew={() => onCreateNew(contentType.id as ContentTypeId, "en")}
+      />
+
+      {/* Placeholders */}
       <button
         onClick={() => setShowPlaceholders(v => !v)}
         style={{
           background: "none", border: "none", cursor: "pointer",
-          fontSize: 10, color: "var(--fg-3)", marginTop: 8, padding: 0,
+          fontSize: 10, color: "var(--fg-3)", marginTop: 2, padding: 0,
           fontFamily: "var(--font-sans)",
         }}
       >
@@ -376,7 +465,7 @@ function ContentTypeSection({
 export function TemplatesPage() {
   const { config, isLoading, setActive, addTemplate, removeTemplate } = useDocTemplates();
   const queryClient = useQueryClient();
-  const [pickerOpen, setPickerOpen] = useState<ContentTypeId | null>(null);
+  const [pickerOpen, setPickerOpen] = useState<{ type: ContentTypeId; lang: Lang } | null>(null);
   const [googleConnected, setGoogleConnected] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -391,14 +480,14 @@ export function TemplatesPage() {
     setTimeout(() => setToast(null), 2500);
   };
 
-  const handleCreateNew = async (type: ContentTypeId) => {
+  const handleCreateNew = async (type: ContentTypeId, lang: Lang) => {
     try {
       const r = await api.post<{ fileId: string; fileName: string; fileUrl: string }>(
-        "/api/drive/templates/create", { type }
+        "/api/drive/templates/create", { type, language: lang }
       );
-      await addTemplate(type, { id: r.data.fileId, name: r.data.fileName });
+      await addTemplate(type, { id: r.data.fileId, name: r.data.fileName, language: lang });
       queryClient.invalidateQueries({ queryKey: ["drive-templates"] });
-      showToast(`Vorlage „${r.data.fileName}" erstellt und aktiviert`);
+      showToast(`Vorlage „${r.data.fileName}" erstellt`);
     } catch {
       showToast("Fehler beim Erstellen — Google Drive verbunden?");
     }
@@ -408,7 +497,7 @@ export function TemplatesPage() {
     <>
       <Topbar
         title="Vorlagen"
-        sub="Google Doc Vorlagen für KI-Exporte — Stil aus Drive, Inhalt aus KI"
+        sub="Google Doc Vorlagen für KI-Exporte — je Sprache getrennt auswählbar"
       />
 
       <div className="page-content" style={{ maxWidth: 720 }}>
@@ -431,10 +520,10 @@ export function TemplatesPage() {
           fontSize: 12, color: "var(--fg-2)", lineHeight: 1.7,
         }}>
           <strong style={{ color: "var(--fg-1)" }}>So funktioniert es:</strong>{" "}
-          Klicke „Neu erstellen" — die App legt ein Google Doc mit Überschriften und Platzhaltern wie{" "}
+          Für jede Vorlage gibt es eine <strong style={{ color: "var(--fg-1)" }}>🇩🇪 Deutsch</strong> und eine <strong style={{ color: "var(--fg-1)" }}>🇬🇧 English</strong> Version.
+          „Neu erstellen" legt ein formatiertes Google Doc mit Platzhaltern wie{" "}
           <code style={{ fontFamily: "var(--font-mono)", fontSize: 10, background: "var(--surface)", borderRadius: 3, padding: "1px 4px", color: "var(--accent)" }}>{"{{FIRMA}}"}</code>{" "}
-          an. Passe das Doc in Google Docs nach Belieben an (Schriften, Farben, Logo). Beim nächsten „Als Google Doc" Export
-          wird die Vorlage kopiert und die Platzhalter durch den KI-Inhalt ersetzt — dein Styling bleibt erhalten.
+          an. Beim Export wählt die App automatisch die Vorlage passend zur Bewerbungssprache.
         </div>
 
         {isLoading ? (
@@ -449,7 +538,7 @@ export function TemplatesPage() {
               contentType={ct}
               config={config}
               onSetActive={setActive}
-              onAddFromDrive={(type) => setPickerOpen(type)}
+              onAddFromDrive={(type, lang) => setPickerOpen({ type, lang })}
               onRemove={removeTemplate}
               onCreateNew={handleCreateNew}
             />
@@ -459,8 +548,9 @@ export function TemplatesPage() {
 
       {pickerOpen && (
         <DrivePickerModal
-          type={pickerOpen}
-          onAdd={(entry) => void addTemplate(pickerOpen, entry)}
+          type={pickerOpen.type}
+          lang={pickerOpen.lang}
+          onAdd={(entry) => void addTemplate(pickerOpen.type, entry)}
           onClose={() => setPickerOpen(null)}
         />
       )}

@@ -51,11 +51,15 @@ docker exec application-pal-frontend grep -r "SomeNewString" /usr/share/nginx/ht
 
 **nginx proxy timeout**: `frontend/nginx.conf` sets `proxy_read_timeout 600s`. AI endpoints can take up to 240s. Never reduce.
 
-**Dropdown fields in OverviewTab**: All three select fields (Pensum, Arbeitsmodell, Vertrag) in `OverviewTab` MUST have local `useState` — do NOT read `value` directly from `app` prop. The mutation is async; without local state the dropdown reverts on every render before React Query refetches.
+**Dropdown fields in OverviewTab**: `company`, `role`, `location`, `salary`, `jobType`, `workModel`, `contractType`, `language` all use local `useState` — do NOT read `value` directly from `app` prop. The mutation is async; without local state the dropdown reverts on every render before React Query refetches.
 
 **Table sticky columns**: The table in `TablePage.tsx` uses a single `<table>` with `border-collapse: separate; border-spacing: 0`. The `<thead>` has `position: sticky; top: 0` for vertical sticking; individual `<th>`/`<td>` have `position: sticky; left/right` for horizontal pinning. Do NOT put `top: 0` on `<th>` — two-axis sticky on the same element fails in browsers. Do NOT use `@hello-pangea/dnd` in `<thead>` — it conflicts with sticky. Column reordering uses native HTML5 drag (`draggable` on handle span only).
 
 **OverviewTab local state pattern**: `company`, `role`, `location`, `salary`, `jobType`, `workModel`, `contractType` all use `useState(app.fieldName)`. Changes call `save(patch)` immediately (no `onBlur` for selects) and update local state simultaneously.
+
+**`langPrompt()` in every AI system prompt**: All 13 AI endpoints prepend `langPrompt(app_.language)` to the system prompt. This sets the language for all generated content. Default is `"de"` (German). Never hardcode a language in a system prompt — always use `langPrompt()`.
+
+**Letter-review auto-sources cover letter from cache**: `POST /api/applications/:id/ai/letter-review` reads `aiResultsCache["cover-letter"]` automatically if no `coverLetterContent` is passed. Ensure the user generates the cover letter (Anschreiben) first before reviewing it.
 
 ## Architecture
 
@@ -63,7 +67,7 @@ npm workspaces monorepo: `shared`, `backend`, `frontend`.
 
 ```
 shared/src/schema.ts   ← single source of truth: Drizzle tables + Zod schemas + TS types
-backend/src/index.ts   ← entire Hono API (~4000 lines, all routes in one file, no sub-routers)
+backend/src/index.ts   ← entire Hono API (~4500 lines, all routes in one file, no sub-routers)
 frontend/src/          ← React 19 + Vite SPA
 ```
 
@@ -88,16 +92,18 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | `buildExportPayload(userId)` | Assembles all user-data tables for a specific user |
 | `applyNameRule(rule, vars)` | Replaces `{firma}`, `{rolle}`, `{datum}` etc. in Drive naming rules |
 | `initTasksForStage(appId, stage)` | Inserts `STAGE_TASK_TEMPLATES` entries idempotently |
+| `langPrompt(lang)` | Returns language instruction for AI prompts: `"de"` → Deutsch, `"en"` → English |
 | `detectJobType(text)` | Regex: extracts pensum % (`"80–100%"`, `"100%"`, etc.) from job text |
 | `detectWorkModel(text)` | Regex: extracts `"onsite"` / `"hybrid"` / `"remote"` from job text |
 | `detectContractType(text)` | Regex: extracts `"Unbefristet"`, `"9 Monate"`, etc. from job text |
 | `normalisePensum(raw)` | Normalises raw % string to nearest standard option (en-dash format) |
+| `getActiveTemplateId(docTemplates, type, lang?)` | Returns active template ID for type+language; prefers `activeIdDe`/`activeIdEn`, falls back to `activeId` |
 
 **Auth middleware** (`/api/*` except `/api/auth/*`, `/api/google/callback`, `/health`): verifies `access_token` cookie; silently refreshes via `refresh_token` if expired; sets `userId` in context.
 
 **Stage-change hook**: `PATCH /api/applications/:id` detects stage changes → calls `initTasksForStage()` and logs a `stage_change` activity automatically.
 
-**Import extraction** (`POST /api/applications/import`): calls LLM via `extractWithAi()` for structured fields. LLM returns `jobType` (pensum %), `workModel`, `contractType` alongside standard fields. If LLM fails or omits a field, regex detectors (`detectJobType`, `detectWorkModel`, `detectContractType`) provide fallback values. `normalisePensum()` standardises all percentage strings to the en-dash format matching the UI dropdown.
+**Import extraction** (`POST /api/applications/import`): calls LLM via `extractWithAi()` for structured fields. LLM returns `jobType` (pensum %), `workModel`, `contractType`, `language` alongside standard fields. If LLM fails or omits a field, regex detectors (`detectJobType`, `detectWorkModel`, `detectContractType`) provide fallback values. `normalisePensum()` standardises all percentage strings to the en-dash format matching the UI dropdown.
 
 **Validation**: `zValidator("json", schema)` from `@hono/zod-validator`; schemas from `@application-pal/shared` only.
 
@@ -121,7 +127,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 
 | Table | Purpose | User-isolated | Exported |
 |---|---|---|---|
-| `applications` | Jobs: stage, tags, salary, archived, archiveReason, matchScore, interview1/2Details, interview1/2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache, googleFolderId, **jobType** (pensum %), **workModel**, **contractType** | ✅ `user_id` FK | ✅ |
+| `applications` | Jobs: stage, tags, salary, archived, archiveReason, matchScore, interview1/2Details, interview1/2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache, googleFolderId, **jobType** (pensum %), **workModel**, **contractType**, **language** | ✅ `user_id` FK | ✅ |
 | `user_profile` | Per-user profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, driveApplicationsFolderId, sessionTimeout, desiredSalary | ✅ `user_id` FK | ✅ |
 | `user_documents` | Document library (CV, Zeugnisse, Figma, etc.) | ✅ `user_id` FK | ✅ |
 | `application_documents` | Per-job docs; `googleDocId`/`googleDocUrl` for Drive | via `application_id` | ✅ |
@@ -140,6 +146,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 - `job_type` — work pensum as percentage string: `"100%"`, `"80–100%"`, `"80%"`, `"60–80%"`, `"60%"`, `"50%"`, `"40%"`, or custom. Auto-detected on import.
 - `work_model` — `"onsite"` | `"hybrid"` | `"remote"`. Auto-detected on import.
 - `contract_type` — `"Unbefristet"` | `"6 Monate"` | `"9 Monate"` | `"12 Monate"` | custom string. Auto-detected on import.
+- `language` — `"de"` | `"en"`. Set manually in CV phase. All AI prompts use this. Default `"de"`.
 
 ### Export/Import
 
@@ -157,14 +164,15 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 
 ### AI Endpoints (all require `{ ai: AiConfig }` body)
 
-All use `callAi()` + `extractJson()` + `resolveHostUrl()` + `max_tokens: 32768`.
+All use `callAi()` + `extractJson()` + `resolveHostUrl()` + `max_tokens: 32768` + `langPrompt(app_.language)` prepended to system prompt.
 
 | Endpoint | Returns |
 |---|---|
 | `POST /api/applications/:id/match-score` | `{ score, breakdown, staerken, luecken, reasoning }` |
 | `POST /api/applications/:id/ai/cv-highlights` | `{ highlights, keywords, gaps }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/cv-doc` | Creates Google Doc from Master-CV; returns `{ docUrl }` |
-| `POST /api/applications/:id/ai/cover-letter` | `{ subject, body, docUrl? }` — `createDoc: true` also creates Google Doc |
+| `POST /api/applications/:id/ai/cover-letter` | `{ subject, body }` — persisted to `aiResultsCache["cover-letter"]` |
+| `POST /api/applications/:id/ai/cover-letter/export-doc` | Creates Google Doc; picks template by `app_.language` via `activeIdDe`/`activeIdEn` |
 | `POST /api/applications/:id/ai/email-draft` | `{ subject, body }` — body: `{ type: "application"|"followup"|"decline"|"feedback"|"linkedin" }` |
 | `POST /api/applications/:id/ai/interview-prep` | `{ rollenFragen, starBeispiele, vossFragenWhatHow, rueckfragen }` — persisted to `interview1/2Prep` |
 | `POST /api/applications/:id/ai/salary-tips` | `{ markteinschätzung, taktiken, formulierungen, vossAnker }` — persisted to `aiResultsCache` |
@@ -172,14 +180,14 @@ All use `callAi()` + `extractJson()` + `resolveHostUrl()` + `max_tokens: 32768`.
 | `POST /api/applications/:id/ai/ats-keywords` | `{ mustHave, niceToHave, softSkills, tools }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/company-research` | `{ unternehmensueberblick, … }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/ackermann-script` | `{ zielgehalt, ankergebot, schritte[], … }` — persisted to `aiResultsCache` |
-| `POST /api/applications/:id/ai/letter-review` | `{ gesamteindruck, staerken, … }` — persisted to `aiResultsCache` |
+| `POST /api/applications/:id/ai/letter-review` | Auto-reads `aiResultsCache["cover-letter"]` if no `coverLetterContent` provided — persisted |
 | `POST /api/applications/:id/ai/opening-sentences` | `{ saetze: [{satz, ansatz, erklaerung}] }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/onboarding` | `{ erste30Tage, erste60Tage, erste90Tage, allgemein }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/glassdoor-check` | `{ rating, reviewCount, ceoApproval, … }` — persisted to `glassdoor_data` |
 | `POST /api/applications/:id/ai/kununu-check` | `{ rating, reviewCount, confidence, … }` — persisted to `kununu_data` |
 | `POST /api/applications/:id/ai/linkedin-profile` | `{ url, employeeCount, description, … }` — persisted to `linkedin_data` |
 
-**AI Result Cache**: `persistAiResult(appId, key, data)` → stored in `applications.aiResultsCache` as `{ [actionId]: { ...data, _savedAt: ISO } }`. On drawer open, `aiResultsRegistry` is initialized from `app.aiResultsCache` AND a live `useQuery(["application", app.id])` syncs fresh DB data (so results generated in background are loaded). After every AI call, both `["applications"]` and `["application", appId]` queries are invalidated.
+**AI Result Cache**: `persistAiResult(appId, key, data)` → stored in `applications.aiResultsCache` as `{ [actionId]: { ...data, _savedAt: ISO } }`. On drawer open, `aiResultsRegistry` is initialized from `app.aiResultsCache` AND a live `useQuery(["application", app.id])` syncs fresh DB data. After every AI call, both `["applications"]` and `["application", appId]` queries are invalidated.
 
 ### Google Drive Endpoints
 
@@ -188,7 +196,8 @@ Require `drive` scope (NOT `drive.file`).
 | Endpoint | Function |
 |---|---|
 | `POST /api/applications/:id/drive/init-folder` | Creates Drive folder; body `{ folderRule?, parentFolderId? }` |
-| `GET /api/drive/templates` | Lists files from `GOOGLE_MASTER_FOLDER_ID` |
+| `GET /api/drive/templates` | Lists files from `GOOGLE_MASTER_FOLDER_ID` (Pal-Templates subfolder) |
+| `POST /api/drive/templates/create` | Creates new template doc; body `{ type, language: "de"|"en" }` — title gets suffix " DE" or " EN" |
 | `POST /api/applications/:id/drive/copy-template` | Copies master-folder file to app folder |
 | `POST /api/applications/:id/drive/copy-doc` | Copies a user-library Google Doc to app folder |
 | `GET /api/drive/folder-info?folderId=` | Validates folder ID and returns name |
@@ -211,29 +220,38 @@ Require `calendar.readonly` scope (in `GOOGLE_SCOPES`). Users must re-connect Go
 
 ### Key Frontend Patterns
 
-**DetailDrawer**: Main job detail view. `stage` and `url` are lifted to component state for immediate header updates. Tab type: `"process" | "details" | "documents" | "ki" | "contacts" | "notes"`. Default tab: `"process"`. Uses `useQuery(["application", app.id], { staleTime: 0, refetchOnMount: true })` to always load fresh AI data from DB on open.
+**DetailDrawer**: Main job detail view. `stage` and `url` are lifted to component state for immediate header updates. Tab type: `"process" | "details" | "documents" | "ki"`. Default tab: `"process"`. Uses `useQuery(["application", app.id], { staleTime: 0, refetchOnMount: true })` to always load fresh AI data from DB on open.
 
 **ProcessTab** (top → bottom): `InterviewDetailsPanel` (interview stages only) → `TaskChecklist` → `StageAiActions` → `GlassdoorPanel` (inbox only) → AI content blocks → activity timeline. `onSave` passed to both `InterviewDetailsPanel` and `StageAiActions`.
 
 **DetailsTab**: `OverviewTab` (all editable fields incl. Pensum/Arbeitsmodell/Vertrag) + `react-markdown`/`remark-gfm` Stellenbeschreibung with Vorschau/Bearbeiten toggle (`descMode` state). Autosave on `onBlur`. Styled via `.md-body`.
 
-**KI-Erkenntnisse (DetailsTab)**: `STAGE_TILES` mapping determines which tile IDs show per stage. Click → `TileExpandView` (two-column overlay). After AI generation, invalidates `["applications"]` + `["application", appId]` queries.
+**KI-Erkenntnisse (DetailsTab)**: `STAGE_TILES` mapping determines which tile IDs show per stage. `cover-letter` is in `preparing_letter` tiles. Click → `TileExpandView`. After AI generation, invalidates `["applications"]` + `["application", appId]` queries.
 
 **AI Tiles — direct generation**: `AiResultTile` with `onRun` prop. Empty tile click = triggers generation immediately (no expand). Filled tile click = opens `TileExpandView`. `buildTileRunner(id, appId, ai, queryClient, onRegister)` factory creates the async run callback used by both `ProcessTab` and `KiInhalteTab`. During generation: button shows spinner + "Wird generiert…", is disabled to prevent double-trigger. In-tile toast shows status.
 
-**TileExpandView**: Overlay for a single AI result. Header actions: „Kopieren" (`copyText()`) and „Als Google Doc" (via `EXPORT_DOC_ENDPOINTS` map). Local toast for copy/export feedback. `onRegister` callback updates parent `aiResultsRegistry` after in-place regeneration.
+**TileExpandView**: Overlay for a single AI result. Header actions: „Kopieren" (`copyText()`) and „Als Google Doc" (via `EXPORT_DOC_ENDPOINTS` map). `cover-letter` has its own export endpoint that uses language-matched template. Local toast for copy/export feedback. `onRegister` callback updates parent `aiResultsRegistry` after in-place regeneration.
 
-**StageAiActions**: `resultTimes` from `aiResultsCache._savedAt`. After generation, invalidates both queries. Uses `queryClient` via `useQueryClient()`.
+**StageAiActions**: Contains `DriveFolderBtn` (CV phase), language selector `de`/`en` toggle (CV phase), `match-score` button (Inbox phase). `resultTimes` from `aiResultsCache._savedAt`. Uses `queryClient` via `useQueryClient()`.
 
-**ProfilePage**: Master-CV and Persönliche Stichpunkte fields have Vorschau/Bearbeiten toggle (same pattern as Stellenbeschreibung). Preview is a scrollable `.md-body` box (`maxHeight: 480px`). Edit uses `AutoResizeTextarea` (normal) or full `<textarea>` (expanded mode).
+**Language flow**:
+1. Set in CV phase via `de`/`en` toggle in `StageAiActions` → saves to `app_.language`
+2. All AI endpoints read `app_.language` and call `langPrompt(lang)` at start of system prompt
+3. Export endpoints pick template by `activeIdDe`/`activeIdEn` from `docTemplates` config
+4. Templates page shows separate 🇩🇪/🇬🇧 sections per content type; `Neu erstellen` creates titled "XYZ Vorlage DE" or "XYZ Template EN"
 
-**Calendar Page** (`CalendarPage.tsx`): Events merged from 3 sources (deduplicated by ID): `applicationsToCalendarEvents()`, `activityRowsToCalendarEvents()` (DB), `googleCalendarEventsToCalendarEvents()` (GCal). Event pills: tinted bg (`${color}1e`) + left border for WCAG. `FloatingPopup` via `createPortal(…, document.body)` escapes `overflow:hidden`. Match score badge on pills (colored text, no bg/border). Month view: 6 pills max, `minmax(0,1fr)` columns for equal width.
+**ProfilePage**: Master-CV and Persönliche Stichpunkte fields have Vorschau/Bearbeiten toggle (same pattern as Stellenbeschreibung). Preview is a scrollable `.md-body` box (`maxHeight: 480px`). Edit uses `AutoResizeTextarea`.
 
-**Table Page** (`/table`, `TablePage.tsx`): TanStack Table v8 with column pinning (left only — right pinning disabled), resizing, ordering (native HTML5 drag on handle span), sorting, visibility. Column config persisted in Zustand (`tableColumnOrder`, `tableColumnVisibility`, `tableColumnPinning`, `tableColumnSizing`). Default sort: `createdAt` descending. `RunAiButton` component triggers AI endpoints per-row. Sticky layout: `thead { position: sticky; top: 0 }` + pinned `th`/`td` horizontal-only sticky. No shadow on pinned `th`, shadow preserved on `td`.
+**Calendar Page** (`CalendarPage.tsx`): Events merged from 3 sources (deduplicated by ID): `applicationsToCalendarEvents()`, `activityRowsToCalendarEvents()` (DB), `googleCalendarEventsToCalendarEvents()` (GCal). Event pills: tinted bg (`${color}1e`) + left border for WCAG. `FloatingPopup` via `createPortal(…, document.body)` escapes `overflow:hidden`. Month view: 6 pills max, `minmax(0,1fr)` columns for equal width.
+
+**Table Page** (`/table`, `TablePage.tsx`): TanStack Table v8 with column pinning (left only — right pinning disabled), resizing, ordering (native HTML5 drag on handle span), sorting, visibility. Column config persisted in Zustand (`tableColumnOrder`, `tableColumnVisibility`, `tableColumnPinning`, `tableColumnSizing`). Default sort: `createdAt` descending. `RunAiButton` component triggers AI endpoints per-row. Sticky layout: `thead { position: sticky; top: 0 }` + pinned `th`/`td` horizontal-only sticky. No shadow on pinned `th`, shadow preserved on `td`. Columns include: company, role, stage, location, **jobType (Pensum)**, **workModel**, **contractType**, matchScore, salaryMedian, glassdoor, kununu, salary, source, tags, appliedAt, interview1, createdAt, updatedAt.
 
 **Shared field components** (exported from `ImportDrawer.tsx`):
 - `PensumField` — dropdown (100%, 80–100%, 80%, 60–80%, 60%, 50%, 40%, Auf Anfrage) + "Individuell…" with free-text input. Used in ImportDrawer review and OverviewTab.
 - `ContractField` — dropdown (Unbefristet, 6/9/12 Monate) + "Individuell…" with free-text input. Used in ImportDrawer review and OverviewTab.
+- `PENSUM_OPTIONS` — exported constant array of standard pensum values.
+
+**`DriveFolderBtn`** (in `DetailDrawer.tsx`): Button shown in CV phase `StageAiActions`. Calls `POST /api/applications/:id/drive/init-folder`. Shows "Drive-Ordner anlegen" when no folder exists, "Drive-Ordner öffnen ↗" (green) when folder exists. Uses same `btn btn-secondary` style as `AiBtn`.
 
 **Navigation Rail** (`Rail.tsx`): Board → Liste → Kalender → Timeline → Archiv → Profil → Dokumente → Knowledge → Templates → Einstellungen. User section at bottom is clickable → opens `UserModal` (portal, anchored above trigger). Modal has: email + app count, „Nutzer wechseln" → `/setup`, „Abmelden" with two-step confirmation.
 
@@ -245,11 +263,29 @@ Require `calendar.readonly` scope (in `GOOGLE_SCOPES`). Users must re-connect Go
 
 **Topbar component** (`Topbar.tsx`): Accepts `searchValue` + `onSearchChange` for controlled search. `actions` slot for right-side buttons. Used by both Board and Table pages.
 
+### Templates Page (`TemplatesPage.tsx`)
+
+Per content type (interview-prep, cv, cover-letter, salary-check, company-research, ackermann-script, onboarding), two language sub-sections are shown:
+- 🇩🇪 Deutsch — manages `activeIdDe` in `DocTemplateTypeConfig`
+- 🇬🇧 English — manages `activeIdEn` in `DocTemplateTypeConfig`
+
+`DocTemplateTypeConfig` structure:
+```typescript
+{
+  activeId: string | null;    // legacy / universal fallback
+  activeIdDe?: string | null; // active for DE applications
+  activeIdEn?: string | null; // active for EN applications
+  templates: Array<{ id: string; name: string; language?: "de" | "en" }>;
+}
+```
+
+Export endpoints use `getActiveTemplateId(docTemplates, type, lang?)` which checks `activeIdDe`/`activeIdEn` first, falls back to `activeId`. Templates are stored in the "Pal-Templates" Drive subfolder.
+
 ### Multi-User Architecture
 
 **Isolation**: `getUserId(c)` in every protected route; all queries filtered by `userId`. Direct `user_id` FK: `applications`, `user_profile`, `user_documents`, `application_tasks`. Child tables isolated transitively via `application_id`.
 
-**Registration**: First user registers freely. Subsequent users need an invite token (`inviteToken` in POST body, or `?invite=TOKEN` URL param). SetupPage always shows Anmelden/Registrieren tabs. Any logged-in user creates invites via `POST /api/invites`; Settings → "Nutzer einladen" manages them.
+**Registration**: First user registers freely. Subsequent users need an invite token. SetupPage always shows Anmelden/Registrieren tabs. Any logged-in user creates invites via `POST /api/invites`; Settings → "Nutzer einladen" manages them.
 
 **Google OAuth**: `getDriveAccessToken(userId?)` checks user-specific token first, falls back to `user_id IS NULL` (shared admin token). Per-user Drive folder and Google Calendar configured independently.
 
@@ -259,7 +295,7 @@ Require `calendar.readonly` scope (in `GOOGLE_SCOPES`). Users must re-connect Go
 
 JWT in httpOnly cookies. `GET /api/auth/status` returns `{ setup: bool }`. `GET /api/auth/me` does silent refresh (tries refresh_token if access_token expired). Google Sign-In covers Drive + Calendar in one consent. WebAuthn passkeys via `@simplewebauthn/server` (`requireUserVerification: false`).
 
-**Session timeout**: configurable per user in `user_profile.session_timeout` (15m/1h/6h/24h/7d/30d). All auth routes call `getSessionTimeout(userId)` before `issueTokens()`. **Remember-me**: unchecked = session cookie + 1-day JWT; checked = 90-day persistent cookie; `rememberMe` encoded in refresh token payload and preserved through rotation.
+**Session timeout**: configurable per user in `user_profile.session_timeout` (15m/1h/6h/24h/7d/30d). **Remember-me**: unchecked = session cookie + 1-day JWT; checked = 90-day persistent cookie.
 
 ### Google OAuth Scopes
 

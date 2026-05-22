@@ -454,6 +454,10 @@ app.delete("/api/auth/webauthn/credentials/:credId", async (c) => {
 // ─── Stage Task Templates ─────────────────────────────────────
 const STAGE_TASK_TEMPLATES: Record<string, string[]> = {
   import_validating: [
+    "Relevanz abklären",
+    "Checks durchführen",
+    "LinkedIn Profil überprüfen",
+    "Beschreibung formatieren",
     "Stellenbeschreibung vollständig erfasst",
     "KI Match Score ausgeführt",
     "Relevanz entschieden"
@@ -597,6 +601,11 @@ function pickWorkTags(text: string): string[] {
 const PENSUM_OPTIONS = ["100%", "80–100%", "80%", "60–80%", "60%", "50%", "40%"];
 
 /** Normalise a raw percentage string to the nearest standard pensum option */
+/** Returns a language instruction to prepend/append to AI system prompts. */
+function langPrompt(lang: string | null | undefined): string {
+  return lang === "en" ? "Always respond in English." : "Antworte immer auf Deutsch.";
+}
+
 function normalisePensum(raw: string): string {
   const cleaned = raw.trim().replace(/\s+/g, "").replace(/[-]/, "–"); // normalise dash to en-dash
   // exact match (case-insensitive)
@@ -2107,7 +2116,8 @@ app.post("/api/applications/:id/ai/cv-highlights", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   if (!profile?.masterCv?.trim()) return c.json({ error: "Kein Master-CV im Profil hinterlegt" }, 400);
-  const system = `Du bist ein Karriere-Coach. Analysiere den Lebenslauf des Kandidaten und die Stellenbeschreibung.
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Du bist ein Karriere-Coach. Analysiere den Lebenslauf des Kandidaten und die Stellenbeschreibung.
 Antworte NUR mit diesem JSON:
 {
   "highlights": ["<Erfahrung/Skill besonders relevant>", ...],  // 5-8 Punkte
@@ -2141,7 +2151,8 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
   // Generate highlights to prepend
   let highlightText = "";
   try {
-    const system = `Analysiere den Lebenslauf und die Stellenbeschreibung. Antworte NUR mit JSON:
+    const lang_ = (app_ as typeof app_ & { language?: string }).language;
+    const system = `${langPrompt(lang_)} Analysiere den Lebenslauf und die Stellenbeschreibung. Antworte NUR mit JSON:
 {"highlights":["<Erfahrung besonders relevant>"],"keywords":["<Keyword>"]}`;
     const user = `Lebenslauf:\n${profile.masterCv.slice(0, 3000)}\n\nStelle: ${app_.role} bei ${app_.company}\n${app_.description?.slice(0, 1500) ?? ""}`;
     const raw = await callAi(system, user, ai);
@@ -2158,7 +2169,8 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
 
   const docTitle = `CV – ${app_.role} @ ${app_.company}`;
   const docContent = highlightText + profile.masterCv;
-  const templateFileId = getActiveTemplateId(profile?.docTemplates, "cv");
+  const cvLang = (app_ as typeof app_ & { language?: string }).language;
+  const templateFileId = getActiveTemplateId(profile?.docTemplates, "cv", cvLang);
 
   try {
     if (templateFileId) {
@@ -2204,12 +2216,13 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
 app.post("/api/applications/:id/ai/cover-letter", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, createDoc } = await c.req.json<{ ai: AiConfig; createDoc?: boolean }>();
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const system = `Du bist ein erfahrener HR-Berater. Schreibe ein professionelles, prägnantes Bewerbungsanschreiben (max. 350 Wörter).
-Erkenne automatisch die Sprache der Stellenbeschreibung und verwende dieselbe Sprache.
+
+  const lang = (app_ as typeof app_ & { language?: string }).language ?? "de";
+  const system = `${langPrompt(lang)} Du bist ein erfahrener HR-Berater. Schreibe ein professionelles, prägnantes Bewerbungsanschreiben (max. 350 Wörter).
 Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Text mit Absätzen durch \\n\\n getrennt>" }`;
   const candidateParts = [];
   if (profile?.headline) candidateParts.push(`Expertise: ${profile.headline}`);
@@ -2219,47 +2232,73 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
   try {
     const raw = await callAi(system, user, ai);
     const parsed = extractJson(raw) as { subject: string; body: string };
-    let docUrl: string | null = null;
-    if (createDoc) {
-      const coverLetterToken = await getDriveAccessToken(userId);
-      if (coverLetterToken) {
-        const coverDocTitle = `Anschreiben – ${app_.role} @ ${app_.company}`;
-        const templateFileId = getActiveTemplateId(profile?.docTemplates, "cover-letter");
-        if (templateFileId) {
-          const placeholders: Record<string, string> = {
-            FIRMA: app_.company,
-            ROLLE: app_.role ?? "",
-            DATUM: new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" }),
-            NAME: profile?.name ?? "",
-            ORT: profile?.location ?? "",
-            BETREFF: parsed.subject ?? "",
-            ANSCHREIBEN: parsed.body ?? "",
-          };
-          const result = await createDocFromTemplate(coverLetterToken, templateFileId, coverDocTitle, placeholders, app_.googleFolderId ?? null);
-          docUrl = result.docUrl;
-        } else {
-          const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
-            method: "POST",
-            headers: { "Authorization": `Bearer ${coverLetterToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ title: coverDocTitle })
-          });
-          if (docRes.ok) {
-            const doc = await docRes.json() as { documentId: string };
-            docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
-            // Insert text into the doc
-            await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
-              method: "POST",
-              headers: { "Authorization": `Bearer ${coverLetterToken}`, "Content-Type": "application/json" },
-              body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: `${parsed.subject}\n\n${parsed.body}` } }] })
-            });
-          }
-        }
-      }
-    }
-    return c.json({ ...parsed, docUrl });
+    // Persist to aiResultsCache so the tile system can display it
+    await persistAiResult(id, "cover-letter", parsed);
+    return c.json(parsed);
   } catch (err) {
     console.error("cover-letter error:", err);
     return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+// Cover-letter export to Google Doc
+app.post("/api/applications/:id/ai/cover-letter/export-doc", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const { subject, body } = await c.req.json<{ subject: string; body: string }>();
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const coverLetterToken = await getDriveAccessToken(userId);
+  if (!coverLetterToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const lang = (app_ as typeof app_ & { language?: string }).language ?? "de";
+  const coverDocTitle = lang === "en"
+    ? `Cover Letter – ${app_.role} @ ${app_.company}`
+    : `Anschreiben – ${app_.role} @ ${app_.company}`;
+
+  // Try template matching language preference
+  const templateConfig = profile?.docTemplates ? JSON.parse(profile.docTemplates) as Record<string, { activeId: string | null; templates: Array<{ id: string; name: string; language?: string }> }> : {};
+  const typeConfig = templateConfig["cover-letter"];
+  let templateFileId: string | null = null;
+  if (typeConfig?.templates?.length) {
+    // Prefer template matching application language, else use active
+    const langMatch = typeConfig.templates.find(t => t.language === lang && t.id === typeConfig.activeId)
+      ?? typeConfig.templates.find(t => t.language === lang)
+      ?? null;
+    templateFileId = langMatch?.id ?? typeConfig.activeId ?? null;
+  }
+
+  try {
+    let docUrl: string;
+    if (templateFileId) {
+      const placeholders: Record<string, string> = {
+        FIRMA: app_.company, ROLLE: app_.role ?? "",
+        DATUM: new Date().toLocaleDateString(lang === "en" ? "en-GB" : "de-CH", { day: "2-digit", month: "2-digit", year: "numeric" }),
+        NAME: profile?.name ?? "", ORT: profile?.location ?? "",
+        BETREFF: subject ?? "", ANSCHREIBEN: body ?? "",
+      };
+      const result = await createDocFromTemplate(coverLetterToken, templateFileId, coverDocTitle, placeholders, app_.googleFolderId ?? null);
+      docUrl = result.docUrl;
+    } else {
+      const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${coverLetterToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ title: coverDocTitle })
+      });
+      if (!docRes.ok) return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
+      const doc = await docRes.json() as { documentId: string };
+      docUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
+      await fetch(`https://docs.googleapis.com/v1/documents/${doc.documentId}:batchUpdate`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${coverLetterToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: `${subject}\n\n${body}` } }] })
+      });
+    }
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("cover-letter export-doc error:", err);
+    return c.json({ error: "Export fehlgeschlagen" }, 502);
   }
 });
 
@@ -2278,7 +2317,8 @@ app.post("/api/applications/:id/ai/email-draft", async (c) => {
     feedback: "eine höfliche Email um konstruktives Feedback zur Absage zu bitten (kurz und professionell, max. 100 Wörter im Body)",
     linkedin: "eine kurze LinkedIn-Vernetzungsnachricht an HR/Hiring Manager (max. 300 Zeichen, freundlich und professionell)"
   };
-  const system = `Schreibe ${typeDescriptions[type]}. Professionell, klar, nicht zu lang (max. 150 Wörter im Body, ausser bei linkedin: max. 300 Zeichen).
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Schreibe ${typeDescriptions[type]}. Professionell, klar, nicht zu lang (max. 150 Wörter im Body, ausser bei linkedin: max. 300 Zeichen).
 Erkenne die Sprache der Stellenbeschreibung und schreibe in dieser Sprache.
 Antworte NUR mit JSON: { "subject": "<Betreff>", "body": "<Email-Text>" }`;
   const contacts = await db.select().from(applicationContacts).where(eq(applicationContacts.applicationId, id)).limit(1);
@@ -2302,7 +2342,8 @@ app.post("/api/applications/:id/ai/interview-prep", async (c) => {
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const system = `Du bist ein erfahrener Interview-Coach und kennst die Methoden von Chris Voss ("Never Split the Difference").
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Du bist ein erfahrener Interview-Coach und kennst die Methoden von Chris Voss ("Never Split the Difference").
 Erstelle eine umfassende Interviewvorbereitung basierend auf der Rolle und dem Kandidatenprofil.
 Antworte NUR mit diesem JSON:
 {
@@ -2351,7 +2392,8 @@ app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
   const token = await getDriveAccessToken(userId);
   if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const [interviewPrepProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const interviewTemplateId = getActiveTemplateId(interviewPrepProfile?.docTemplates, "interview-prep");
+  const ivLang = (app_ as typeof app_ & { language?: string }).language;
+  const interviewTemplateId = getActiveTemplateId(interviewPrepProfile?.docTemplates, "interview-prep", ivLang);
 
   const sep = "═".repeat(48);
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -2434,7 +2476,8 @@ app.post("/api/applications/:id/ai/salary-tips", async (c) => {
   const { ai } = await c.req.json<{ ai: AiConfig }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const system = `Du bist ein Gehaltsverhandlungs-Coach mit Chris Voss Methodik. Gib konkrete, taktische Tipps.
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Du bist ein Gehaltsverhandlungs-Coach mit Chris Voss Methodik. Gib konkrete, taktische Tipps.
 Antworte NUR mit JSON:
 {
   "markteinschätzung": "<1-2 Sätze zum Marktgehalt für diese Rolle>",
@@ -2612,7 +2655,8 @@ app.post("/api/applications/:id/ai/salary-check", async (c) => {
   const { ai } = await c.req.json<{ ai: AiConfig }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const system = `Du bist ein Schweizer Lohnexperte. Analysiere die Stellenausschreibung und ermittle ein realistisches Lohnband für die Schweiz. Berücksichtige: Titel/Level, Branche, Region (falls angegeben), Unternehmensgrösse. Antworte NUR mit JSON:
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Du bist ein Schweizer Lohnexperte. Analysiere die Stellenausschreibung und ermittle ein realistisches Lohnband für die Schweiz. Berücksichtige: Titel/Level, Branche, Region (falls angegeben), Unternehmensgrösse. Antworte NUR mit JSON:
 { "lohnband": { "min": number, "max": number, "median": number }, "waehrung": "CHF", "basis": "Jahresbrutto", "begruendung": "<string 2-3 Sätze>", "faktoren": ["<string>"] }`;
   const user = `Stelle: ${app_.role}\nUnternehmen: ${app_.company}\nBranche (falls erkennbar): aus Stellenbeschreibung ableiten\nStellenbeschreibung:\n${app_.description?.slice(0, 2000) ?? ""}`;
   try {
@@ -2636,7 +2680,8 @@ app.post("/api/applications/:id/ai/salary-check/export-doc", async (c) => {
   const salaryDocToken = await getDriveAccessToken(userId);
   if (!salaryDocToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const [salaryProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const salaryTemplateId = getActiveTemplateId(salaryProfile?.docTemplates, "salary-check");
+  const salaryLang = (app_ as typeof app_ & { language?: string }).language;
+  const salaryTemplateId = getActiveTemplateId(salaryProfile?.docTemplates, "salary-check", salaryLang);
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "─".repeat(40);
   let content = `Gehalts-Check Schweiz: ${app_.role} @ ${app_.company}\n${date}\n\n`;
@@ -2699,7 +2744,8 @@ app.post("/api/applications/:id/ai/ats-keywords", async (c) => {
   const { ai } = await c.req.json<{ ai: AiConfig }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const system = `Du bist ein Recruiting-Experte. Extrahiere die wichtigsten Keywords für ATS-Systeme aus der Stellenbeschreibung. Antworte NUR mit JSON:
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Du bist ein Recruiting-Experte. Extrahiere die wichtigsten Keywords für ATS-Systeme aus der Stellenbeschreibung. Antworte NUR mit JSON:
 { "mustHave": ["<string>"], "niceToHave": ["<string>"], "softSkills": ["<string>"], "tools": ["<string>"] }`;
   const user = `Stellenbeschreibung:\n${app_.description?.slice(0, 2500) ?? ""}`;
   try {
@@ -2720,7 +2766,8 @@ app.post("/api/applications/:id/ai/company-research", async (c) => {
   const { ai } = await c.req.json<{ ai: AiConfig }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const system = `Du bist ein Business-Analyst. Erstelle eine strukturierte Unternehmens- und Branchenrecherche basierend auf den verfügbaren Informationen. Antworte NUR mit JSON:
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Du bist ein Business-Analyst. Erstelle eine strukturierte Unternehmens- und Branchenrecherche basierend auf den verfügbaren Informationen. Antworte NUR mit JSON:
 { "unternehmensueberblick": "<string>", "branche": "<string>", "marktposition": "<string>", "unternehmenskultur": "<string>", "wettbewerber": ["<string>"], "aktuelleThemen": ["<string>"], "gespraechsthemen": ["<string>"] }`;
   const user = `Unternehmen: ${app_.company}\nRolle: ${app_.role}\nStellenbeschreibung:\n${app_.description?.slice(0, 2000) ?? ""}`;
   try {
@@ -2744,7 +2791,8 @@ app.post("/api/applications/:id/ai/company-research/export-doc", async (c) => {
   const compResToken = await getDriveAccessToken(userId);
   if (!compResToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const [compResProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const compResTemplateId = getActiveTemplateId(compResProfile?.docTemplates, "company-research");
+  const compResLang = (app_ as typeof app_ & { language?: string }).language;
+  const compResTemplateId = getActiveTemplateId(compResProfile?.docTemplates, "company-research", compResLang);
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "─".repeat(40);
   let content = `Unternehmensrecherche: ${app_.company} – ${app_.role}\n${date}\n\n`;
@@ -2813,7 +2861,8 @@ app.post("/api/applications/:id/ai/ackermann-script", async (c) => {
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const system = `Du bist ein Experte für Gehaltsverhandlung aus BEWERBER-Perspektive nach dem Ackermann-Modell (Chris Voss, "Never Split the Difference"). Der Bewerber ist der VERKÄUFER seiner Arbeitskraft — er verhandelt von OBEN nach UNTEN zum Zielgehalt hin, nicht umgekehrt.
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Du bist ein Experte für Gehaltsverhandlung aus BEWERBER-Perspektive nach dem Ackermann-Modell (Chris Voss, "Never Split the Difference"). Der Bewerber ist der VERKÄUFER seiner Arbeitskraft — er verhandelt von OBEN nach UNTEN zum Zielgehalt hin, nicht umgekehrt.
 
 Ackermann-Modell für Bewerber (Verkäufer-Perspektive):
 1. Zielgehalt = was der Bewerber wirklich erhalten möchte (aus Lohnband / Profil ableiten)
@@ -2850,7 +2899,8 @@ app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
   const ackerToken = await getDriveAccessToken(userId);
   if (!ackerToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const [ackerProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const ackerTemplateId = getActiveTemplateId(ackerProfile?.docTemplates, "ackermann-script");
+  const ackerLang = (app_ as typeof app_ & { language?: string }).language;
+  const ackerTemplateId = getActiveTemplateId(ackerProfile?.docTemplates, "ackermann-script", ackerLang);
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "═".repeat(48);
   let content = `Ackermann-Verhandlungs-Script: ${app_.role} @ ${app_.company}\n${date}\n\n`;
@@ -2915,9 +2965,20 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
   const { ai, coverLetterContent } = await c.req.json<{ ai: AiConfig; coverLetterContent?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const system = `Du bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch. Antworte NUR mit JSON:
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Du bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch. Antworte NUR mit JSON:
 { "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "zu lang | angemessen | zu kurz", "personalisierung": "schwach | mittel | stark" }`;
-  const letterText = coverLetterContent?.trim() || "Kein Anschreiben vorhanden. Bitte zuerst ein Anschreiben generieren oder einfügen.";
+  // Auto-source cover letter: explicit content > cached generated letter > error hint
+  let letterText = coverLetterContent?.trim() ?? "";
+  if (!letterText) {
+    try {
+      const [cacheRow] = await db.select({ c: applications.aiResultsCache }).from(applications).where(eq(applications.id, id)).limit(1);
+      const cache = JSON.parse(cacheRow?.c ?? "{}") as Record<string, { body?: string; subject?: string }>;
+      const cached = cache["cover-letter"];
+      if (cached?.body) letterText = cached.subject ? `${cached.subject}\n\n${cached.body}` : cached.body;
+    } catch { /* ignore */ }
+  }
+  if (!letterText) letterText = "Kein Anschreiben vorhanden. Bitte zuerst im Tab 'Aktionen' → Phase Anschreiben ein Anschreiben generieren.";
   const user = `Stelle: ${app_.role} bei ${app_.company}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}\n\nAnschreiben:\n${letterText}`;
   try {
     const raw = await callAi(system, user, ai);
@@ -2938,7 +2999,8 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const system = `Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend). Antworte NUR mit JSON:
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend). Antworte NUR mit JSON:
 { "saetze": [{ "satz": "<string>", "ansatz": "<string>", "erklaerung": "<string>" }] }`;
   const user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
   try {
@@ -2959,7 +3021,8 @@ app.post("/api/applications/:id/ai/onboarding", async (c) => {
   const { ai } = await c.req.json<{ ai: AiConfig }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
-  const system = `Du bist ein Karriere-Coach. Erstelle eine strukturierte Onboarding-Checkliste für die ersten 90 Tage in der neuen Stelle. Antworte NUR mit JSON:
+  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const system = `${langPrompt(lang_)} Du bist ein Karriere-Coach. Erstelle eine strukturierte Onboarding-Checkliste für die ersten 90 Tage in der neuen Stelle. Antworte NUR mit JSON:
 { "erste30Tage": ["<string>"], "erste60Tage": ["<string>"], "erste90Tage": ["<string>"], "allgemein": ["<string>"] }`;
   const user = `Stelle: ${app_.role}\nUnternehmen: ${app_.company}\nBranche: aus Stellenbeschreibung ableiten\nStellenbeschreibung:\n${app_.description?.slice(0, 1500) ?? ""}`;
   try {
@@ -2983,7 +3046,8 @@ app.post("/api/applications/:id/ai/onboarding/export-doc", async (c) => {
   const onboardToken = await getDriveAccessToken(userId);
   if (!onboardToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const [onboardProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const onboardTemplateId = getActiveTemplateId(onboardProfile?.docTemplates, "onboarding");
+  const onboardLang = (app_ as typeof app_ & { language?: string }).language;
+  const onboardTemplateId = getActiveTemplateId(onboardProfile?.docTemplates, "onboarding", onboardLang);
   const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
   const sep = "─".repeat(40);
   let content = `Onboarding-Checkliste: ${app_.role} @ ${app_.company}\n${date}\n\n`;
@@ -3221,11 +3285,25 @@ async function getDriveAccessToken(userId?: string): Promise<string | null> {
   return token.accessToken;
 }
 
-function getActiveTemplateId(docTemplates: string | null | undefined, type: string): string | null {
+/** Returns the active template ID for a given type and optional language.
+ *  Prefers language-specific (activeIdDe/activeIdEn), falls back to universal activeId. */
+function getActiveTemplateId(
+  docTemplates: string | null | undefined,
+  type: string,
+  lang?: string | null
+): string | null {
   if (!docTemplates) return null;
   try {
-    const config = JSON.parse(docTemplates) as Record<string, { activeId?: string | null }>;
-    return config[type]?.activeId ?? null;
+    const config = JSON.parse(docTemplates) as Record<string, {
+      activeId?: string | null;
+      activeIdDe?: string | null;
+      activeIdEn?: string | null;
+    }>;
+    const tc = config[type];
+    if (!tc) return null;
+    if (lang === "en") return tc.activeIdEn ?? tc.activeId ?? null;
+    if (lang === "de") return tc.activeIdDe ?? tc.activeId ?? null;
+    return tc.activeId ?? null;
   } catch { return null; }
 }
 
@@ -3461,11 +3539,12 @@ async function listDriveFiles(accessToken: string, folderId: string): Promise<Dr
 
 app.post("/api/drive/templates/create", async (c) => {
   const userId = getUserId(c);
-  const { type } = await c.req.json<{ type: string }>();
+  const { type, language } = await c.req.json<{ type: string; language?: "de" | "en" }>();
+  const lang: "de" | "en" = language === "en" ? "en" : "de";
   const accessToken = await getDriveAccessToken(userId);
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
-  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const date = new Date().toLocaleDateString(lang === "en" ? "en-GB" : "de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
 
   // Template definitions per content type
   type Section = { text: string; heading?: 'HEADING_1' | 'HEADING_2'; bold?: boolean; italic?: boolean; gray?: boolean };
@@ -3606,6 +3685,10 @@ app.post("/api/drive/templates/create", async (c) => {
   const tmpl = templates[type];
   if (!tmpl) return c.json({ error: `Unbekannter Template-Typ: ${type}` }, 400);
 
+  // Language-specific title suffix
+  const langSuffix = lang === "en" ? " EN" : " DE";
+  const docTitle = tmpl.title + langSuffix;
+
   // Build batchUpdate requests
   const requests: unknown[] = [];
   let idx = 1;
@@ -3632,7 +3715,7 @@ app.post("/api/drive/templates/create", async (c) => {
     const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
       method: "POST",
       headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ title: tmpl.title })
+      body: JSON.stringify({ title: docTitle })
     });
     if (!docRes.ok) return c.json({ error: "Google Doc konnte nicht erstellt werden" }, 502);
     const doc = await docRes.json() as { documentId: string };
@@ -3655,7 +3738,7 @@ app.post("/api/drive/templates/create", async (c) => {
     });
 
     const fileUrl = `https://docs.google.com/document/d/${doc.documentId}/edit`;
-    return c.json({ fileId: doc.documentId, fileName: tmpl.title, fileUrl });
+    return c.json({ fileId: doc.documentId, fileName: docTitle, fileUrl });
   } catch (err) {
     console.error("template create error:", err);
     return c.json({ error: "Template-Erstellung fehlgeschlagen" }, 502);

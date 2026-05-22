@@ -9,6 +9,7 @@ import {
   Copy as IcCopy, MailOut, Brain,
   MapPin, VideoCamera, Expand, Collapse,
   Search, Spark, Building, CheckCircle, Linkedin, ChatBubbleCheck, Star,
+  FolderPlus,
 } from "iconoir-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
@@ -73,7 +74,7 @@ const STAGE_COLORS: Record<string, string> = {
 const STAGE_TILES: Record<string, string[]> = {
   import_validating: ["glassdoor-check","kununu-check","linkedin-profile","salary-check","ats-keywords"],
   preparing_cv:      ["cv-highlights"],
-  preparing_letter:  ["letter-review","opening-sentences"],
+  preparing_letter:  ["cover-letter","letter-review","opening-sentences"],
   application_sent:  ["company-research","salary-tips"],
   pending:           ["company-research","ackermann-script","salary-tips"],
   interview_1:       ["interview-prep","salary-tips"],
@@ -85,7 +86,7 @@ const STAGE_TILES: Record<string, string[]> = {
 const ALL_TILE_IDS = [
   "match-score",
   "glassdoor-check","kununu-check","linkedin-profile","salary-check","ats-keywords",
-  "cv-highlights","letter-review","opening-sentences",
+  "cv-highlights","cover-letter","letter-review","opening-sentences",
   "company-research","salary-tips","ackermann-script","interview-prep","onboarding",
 ];
 
@@ -325,8 +326,8 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
   const [role, setRole]             = useState(app.role);
   const [location, setLocation]     = useState(app.location ?? "");
   const [salary, setSalary]         = useState(app.salary ?? "");
-  const [jobType, setJobType]       = useState((app as Application & { jobType?: string }).jobType ?? "");
-  const [workModel, setWorkModel]   = useState((app as Application & { workModel?: string }).workModel ?? "");
+  const [jobType, setJobType]           = useState((app as Application & { jobType?: string }).jobType ?? "");
+  const [workModel, setWorkModel]       = useState((app as Application & { workModel?: string }).workModel ?? "");
   const [contractType, setContractType] = useState((app as Application & { contractType?: string }).contractType ?? "");
   const [tags, setTags]             = useState<string[]>(parseTags(app.tags));
   const [newTag, setNewTag]         = useState("");
@@ -401,7 +402,7 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
         </div>
       </div>
 
-      {/* Row 5: Job Type + Work Model + Contract */}
+      {/* Row 5: Pensum + Work Model + Contract */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
         <div className="field">
           <label>Pensum</label>
@@ -495,6 +496,7 @@ const AI_RESULT_LABELS: Record<string, string> = {
   "salary-tips":       "Gehaltsverhandlung",
   "company-research":  "Unternehmensrecherche",
   "ackermann-script":  "Ackermann-Script",
+  "cover-letter":      "Anschreiben",
   "letter-review":     "Anschreiben-Review",
   "opening-sentences": "Eröffnungssätze",
   "onboarding":        "Onboarding-Checkliste",
@@ -548,6 +550,8 @@ function aiResultSummary(id: string, data: unknown): string {
       const steps = (d.schritte as unknown[] | undefined ?? []).length;
       return `${steps} Verhandlungsschritte`;
     }
+    case "cover-letter":
+      return ((d.subject as string | undefined) ?? "").slice(0, 80);
     case "letter-review":
       return ((d.gesamteindruck as string | undefined) ?? "").slice(0, 80);
     case "opening-sentences":
@@ -1088,6 +1092,17 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
       </>
     );
   }
+  if (id === "cover-letter") {
+    const cl = data as { subject: string; body: string };
+    return (
+      <>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Betreff</div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)", marginBottom: 16, padding: "8px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>{cl.subject}</div>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Anschreiben</div>
+        <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.75, whiteSpace: "pre-wrap", padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>{cl.body}</div>
+      </>
+    );
+  }
   if (id === "glassdoor-check") {
     return <GlassdoorCardDetail data={data as GlassdoorData} appId={appId} onUpdate={v => onUpdate?.(id, v)} />;
   }
@@ -1207,7 +1222,7 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
 const DOUBLE_WIDTH_IDS = new Set([
   "match-score",
   "salary-check", "company-research",
-  "salary-tips", "letter-review", "opening-sentences",
+  "salary-tips", "cover-letter", "letter-review", "opening-sentences",
 ]);
 
 // IDs die drei Spalten breit sind
@@ -1418,6 +1433,16 @@ function renderTileContent(id: string, data: unknown): React.ReactNode {
     );
   }
   // Doppelbreite Text-Kacheln — kurz abgeschnitten
+  if (id === "cover-letter") {
+    const subj = (d.subject as string | undefined) ?? "";
+    const body = (d.body as string | undefined) ?? "";
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 3, width: "100%" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{subj}</span>
+        <span style={{ fontSize: 10, color: "var(--fg-3)", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{body}</span>
+      </div>
+    );
+  }
   const textMap: Record<string, string> = {
     "salary-tips":      (d["markteinschätzung"] as string | undefined) ?? "",
     "company-research": (d.unternehmensueberblick as string | undefined) ?? "",
@@ -1445,7 +1470,8 @@ const TILE_PHASE_COLORS: Record<string, string> = {
   "salary-check":      "#94a3b8",
   "ats-keywords":      "#94a3b8",
   "cv-highlights":     "#60a5fa",  // blue  (CV)
-  "letter-review":     "#22d3ee",  // cyan  (Letter)
+  "cover-letter":      "#22d3ee",  // cyan  (Letter)
+  "letter-review":     "#22d3ee",
   "opening-sentences": "#22d3ee",
   "company-research":  "#a78bfa",  // purple (Sent/Pending)
   "salary-tips":       "#a78bfa",
@@ -1465,6 +1491,7 @@ const TILE_EMPTY_LABELS: Record<string, string> = {
   "interview-prep":    "Vorbereitung generieren",
   "company-research":  "Recherche starten",
   "ackermann-script":  "Script generieren",
+  "cover-letter":      "Anschreiben erstellen",
   "letter-review":     "Review starten",
   "opening-sentences": "Sätze generieren",
   "onboarding":        "Checkliste erstellen",
@@ -1783,6 +1810,7 @@ function AiResultTileLarge({ id, entry }: { id: string; entry: { data: unknown }
 
 // Endpoint map for Google Doc export (subset of AI types)
 const EXPORT_DOC_ENDPOINTS: Record<string, string> = {
+  "cover-letter":      "/ai/cover-letter/export-doc",
   "company-research":  "/ai/company-research/export-doc",
   "ackermann-script":  "/ai/ackermann-script/export-doc",
   "salary-check":      "/ai/salary-check/export-doc",
@@ -1800,6 +1828,11 @@ function tileTextContent(id: string, data: unknown): string {
   const lines: string[] = [];
   const sep = "─".repeat(40);
   switch (id) {
+    case "cover-letter": {
+      if (d.subject) lines.push(String(d.subject));
+      if (d.body) lines.push(String(d.body));
+      break;
+    }
     case "company-research": {
       const cr = d as CompanyResearch;
       if (cr.unternehmensueberblick) lines.push("ÜBERBLICK\n" + cr.unternehmensueberblick);
@@ -1838,6 +1871,11 @@ function tileTextContent(id: string, data: unknown): string {
       if (cv.highlights?.length) lines.push("STÄRKEN\n" + cv.highlights.map(h => "• " + h).join("\n"));
       if (cv.keywords?.length)   lines.push("KEYWORDS\n"  + cv.keywords.join(", "));
       if (cv.gaps?.length)       lines.push("LÜCKEN\n"    + cv.gaps.map(g => "⚠ " + g).join("\n"));
+      break;
+    }
+    case "cover-letter": {
+      if (d.subject) lines.push("BETREFF\n" + String(d.subject));
+      if (d.body) lines.push("ANSCHREIBEN\n" + String(d.body));
       break;
     }
     case "letter-review": {
@@ -1924,6 +1962,7 @@ const ACTION_ENDPOINTS: Record<string, string> = {
   "salary-check":      "/ai/salary-check",
   "ats-keywords":      "/ai/ats-keywords",
   "cv-highlights":     "/ai/cv-highlights",
+  "cover-letter":      "/ai/cover-letter",
   "interview-prep":    "/ai/interview-prep",
   "company-research":  "/ai/company-research",
   "ackermann-script":  "/ai/ackermann-script",
@@ -1994,7 +2033,8 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
     setExporting(true);
     try {
       const body: Record<string, unknown> = {};
-      if (id === "interview-prep")    body.interviewPrep    = entry.data;
+      if (id === "cover-letter")       { const cl = entry.data as { subject: string; body: string }; body.subject = cl.subject; body.body = cl.body; }
+      else if (id === "interview-prep")    body.interviewPrep    = entry.data;
       else if (id === "ackermann-script") body.script       = entry.data;
       else if (id === "onboarding")   body.checklist        = entry.data;
       else if (id === "salary-check") body.salaryCheck      = entry.data;
@@ -3301,6 +3341,68 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
 }
 
 // ── Stage AI Actions ──
+// ─── Drive Folder Button (CV Phase) ──────────────────────────────────────────
+function DriveFolderBtn({ app, onSave }: { app: Application; onSave: (patch: Partial<Application>) => void }) {
+  const { driveNameFolder } = useUiStore();
+  const queryClient = useQueryClient();
+  const [creating, setCreating] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const hasFolderAlready = !!(app as Application & { googleFolderId?: string }).googleFolderId;
+
+  const createFolder = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (creating || hasFolderAlready) return;
+    setCreating(true);
+    try {
+      const r = await api.post<{ folderId: string; folderUrl: string }>(`/api/applications/${app.id}/drive/init-folder`, {
+        folderRule: driveNameFolder || undefined,
+      });
+      onSave({ googleFolderId: r.data.folderId, googleFolderUrl: r.data.folderUrl } as Partial<Application>);
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["application", app.id] });
+      setToast("Ordner erstellt ✓");
+      setTimeout(() => setToast(null), 2500);
+    } catch {
+      setToast("Ordner-Erstellung fehlgeschlagen");
+      setTimeout(() => setToast(null), 2500);
+    } finally { setCreating(false); }
+  };
+
+  const folderUrl = (app as Application & { googleFolderUrl?: string }).googleFolderUrl ?? "";
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        className="btn btn-secondary"
+        onClick={hasFolderAlready ? () => window.open(folderUrl, "_blank") : createFolder}
+        disabled={creating}
+        title={hasFolderAlready ? "Google Drive Ordner öffnen" : "Google Drive Ordner erstellen"}
+        style={{
+          fontSize: 10, padding: "10px 8px", minHeight: 58,
+          flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 0, whiteSpace: "normal",
+          ...(hasFolderAlready ? { borderColor: "var(--score-high)", color: "var(--score-high)" } : {}),
+        }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, width: "100%" }}>
+          <FolderPlus width={12} height={12} />
+          <span style={{ textAlign: "center", lineHeight: 1.3 }}>
+            {creating ? "Erstelle…" : hasFolderAlready ? "Drive-Ordner öffnen ↗" : "Drive-Ordner anlegen"}
+          </span>
+        </div>
+      </button>
+      {toast && (
+        <div className="toast-enter" style={{
+          position: "absolute", bottom: "calc(100% + 4px)", left: "50%", transform: "translateX(-50%)",
+          background: "var(--surface)", border: "1px solid var(--border)", borderRadius: 6,
+          padding: "4px 10px", fontSize: 11, color: "var(--fg-1)", whiteSpace: "nowrap", zIndex: 10,
+        }}>{toast}</div>
+      )}
+    </div>
+  );
+}
+
 function StageAiActions({ app, onSave, onAiResult }: {
   app: Application;
   onSave?: (patch: Partial<Application>) => void;
@@ -3385,6 +3487,13 @@ function StageAiActions({ app, onSave, onAiResult }: {
 
   void salaryCheck; void atsKeywords; void companyResearch; void ackermannScript;
   void letterReview; void openingSentences; void onboarding; void glassdoor; void kununu; void linkedin;
+
+  // Application language — settable from the CV phase
+  const [lang, setLang] = useState<"de" | "en">((app as Application & { language?: string }).language === "en" ? "en" : "de");
+  const saveLang = (l: "de" | "en") => {
+    setLang(l);
+    onSave?.({ language: l } as Partial<Application>);
+  };
 
   // Toast
   const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
@@ -3506,12 +3615,6 @@ function StageAiActions({ app, onSave, onAiResult }: {
         } else if (id === "cv-highlights") {
           const r = await api.post<CvHighlights>(`/api/applications/${app.id}/ai/cv-highlights`, aiBody);
           updateCvHighlights(r.data);
-        } else if (id === "cover-letter") {
-          const r = await api.post<EmailDraft & { docUrl?: string }>(`/api/applications/${app.id}/ai/cover-letter`, aiBody);
-          setEmailModal({ subject: r.data.subject, body: r.data.body });
-        } else if (id === "cover-letter-doc") {
-          const r = await api.post<EmailDraft & { docUrl?: string }>(`/api/applications/${app.id}/ai/cover-letter`, { ...aiBody, createDoc: true });
-          if (r.data.docUrl) window.open(r.data.docUrl, "_blank");
         } else if (id === "email-app") {
           const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "application" });
           setEmailModal(r.data);
@@ -3530,6 +3633,12 @@ function StageAiActions({ app, onSave, onAiResult }: {
         } else if (id === "salary-tips") {
           const r = await api.post<SalaryTips>(`/api/applications/${app.id}/ai/salary-tips`, aiBody);
           updateSalaryTips(r.data);
+        } else if (id === "match-score") {
+          const r = await api.post<MatchResult>(`/api/applications/${app.id}/match-score`, aiBody);
+          onAiResult?.("match-score", r.data);
+          onSave?.({ matchScore: r.data.score } as Partial<Application>);
+          queryClient.invalidateQueries({ queryKey: ["applications"] });
+          queryClient.invalidateQueries({ queryKey: ["application", app.id] });
         } else if (id === "glassdoor-check") {
           const r = await api.post<GlassdoorData>(`/api/applications/${app.id}/ai/glassdoor-check`, aiBody);
           updateGlassdoor(r.data);
@@ -3607,6 +3716,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
       {/* Inbox Phase */}
       {showInbox && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+          <AiBtn id="match-score"     icon={<Sparks width={12} height={12} />}   label="Match Score" />
           <AiBtn id="glassdoor-check" icon={<Building width={12} height={12} />} label="Glassdoor Rating" />
           <AiBtn id="kununu-check"    icon={<Star width={12} height={12} />}     label="Kununu Rating" />
           <AiBtn id="linkedin-profile" icon={<Linkedin width={12} height={12} />} label="LinkedIn Profil" />
@@ -3617,19 +3727,40 @@ function StageAiActions({ app, onSave, onAiResult }: {
 
       {/* CV Phase */}
       {showCv && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="cv-highlights" icon={<BrainElectricity width={12} height={12} />} label="CV-Highlights" />
-          <AiBtn id="cv-doc"        icon={<PageEdit width={12} height={12} />}          label="Google Doc aus Master-CV" />
-        </div>
+        <>
+          {/* Language selector — required first step in CV phase */}
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
+              Bewerbungssprache — gilt für alle KI-Inhalte
+            </div>
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["de", "en"] as const).map(l => (
+                <button key={l} onClick={() => saveLang(l)} style={{
+                  flex: 1, padding: "7px 8px", borderRadius: 6,
+                  border: `1px solid ${lang === l ? "var(--accent)" : "var(--border)"}`,
+                  background: lang === l ? "var(--accent-08)" : "var(--surface-2)",
+                  color: lang === l ? "var(--accent)" : "var(--fg-2)",
+                  fontSize: 12, fontWeight: lang === l ? 700 : 400,
+                  cursor: "pointer", fontFamily: "var(--font-sans)",
+                }}>
+                  {l === "de" ? "🇩🇪 Deutsch" : "🇬🇧 English"}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+            <AiBtn id="cv-highlights" icon={<BrainElectricity width={12} height={12} />} label="CV-Highlights" />
+            <AiBtn id="cv-doc"        icon={<PageEdit width={12} height={12} />}          label="Google Doc aus Master-CV" />
+            {onSave && <DriveFolderBtn app={app} onSave={onSave} />}
+          </div>
+        </>
       )}
 
-      {/* Letter Phase */}
+      {/* Letter Phase — cover-letter is now a tile; only supplementary actions remain */}
       {showLetter && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="cover-letter"     icon={<PageEdit width={12} height={12} />}      label="Anschreiben generieren" />
-          <AiBtn id="cover-letter-doc" icon={<Page width={12} height={12} />}          label="Als Google Doc" />
           <AiBtn id="letter-review"    icon={<ChatBubbleCheck width={12} height={12} />} label="Anschreiben reviewen" />
-          <AiBtn id="opening-sentences" icon={<Spark width={12} height={12} />}        label="3 Eröffnungssätze" />
+          <AiBtn id="opening-sentences" icon={<Spark width={12} height={12} />}          label="3 Eröffnungssätze" />
         </div>
       )}
 
