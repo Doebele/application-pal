@@ -45,7 +45,7 @@ docker exec application-pal-frontend grep -r "SomeNewString" /usr/share/nginx/ht
 
 **Clipboard in overlays**: Use `copyText()` helper (defined in `DetailDrawer.tsx`) instead of `navigator.clipboard.writeText()`. Drawer/overlay UIs lose focus, causing `writeText()` to silently fail.
 
-**LM Studio in Docker**: `resolveHostUrl()` rewrites `localhost` → `host.docker.internal`. Never hardcode `localhost` for LM Studio URLs.
+**Local AI providers in Docker**: `resolveHostUrl()` rewrites `localhost` → `host.docker.internal`. Applies to both LM Studio and Ollama URLs. Never hardcode `localhost` for either.
 
 **Qwen3 max_tokens**: Always set `max_tokens: 32768`. Qwen3 emits a long `<think>…</think>` block first. `extractJson()` strips it before parsing.
 
@@ -85,7 +85,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | `issueTokens(c, userId, rememberMe, accessTimeout)` | Sets `access_token` + `refresh_token` as httpOnly cookies; encodes `rememberMe` in refresh JWT |
 | `getSessionTimeout(userId?)` | Reads `user_profile.session_timeout`; call before `issueTokens()` |
 | `getDriveAccessToken(userId?)` | User-specific token first, falls back to shared token (`user_id IS NULL`) |
-| `callAi(system, user, ai)` | Generic AI caller (LM Studio or Anthropic) |
+| `callAi(system, user, ai)` | Generic AI caller — dispatches to all 6 providers: `lm-studio`, `anthropic`, `openai`, `gemini`, `openrouter`, `ollama` |
 | `extractJson(raw)` | Strips `<think>` blocks + markdown fences, returns parsed JSON |
 | `resolveHostUrl(url)` | Rewrites `localhost` → `host.docker.internal` for Docker networking |
 | `persistAiResult(appId, key, data)` | Upserts into `applications.aiResultsCache` JSON with `_savedAt` timestamp |
@@ -103,13 +103,15 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 
 **Stage-change hook**: `PATCH /api/applications/:id` detects stage changes → calls `initTasksForStage()` and logs a `stage_change` activity automatically.
 
+**AI provider model-listing endpoints**: `GET /api/lm-studio/models?url=` and `GET /api/ollama/models?url=` — both query `/v1/models`; Ollama additionally falls back to its native `/api/tags` endpoint if `/v1/models` returns empty. Both are public (no auth) so Settings can call them before login.
+
 **Import extraction** (`POST /api/applications/import`): calls LLM via `extractWithAi()` for structured fields. LLM returns `jobType` (pensum %), `workModel`, `contractType`, `language` alongside standard fields. If LLM fails or omits a field, regex detectors (`detectJobType`, `detectWorkModel`, `detectContractType`) provide fallback values. `normalisePensum()` standardises all percentage strings to the en-dash format matching the UI dropdown.
 
 **Validation**: `zValidator("json", schema)` from `@hono/zod-validator`; schemas from `@application-pal/shared` only.
 
 ### Frontend (`frontend/src/`)
 
-- **State**: Zustand `useUiStore` (persisted localStorage, key `app-pal-ui-v2`) — theme, accent, density, cardVariant, AI config, Drive naming rules (`driveNameFolder`, `driveNameDoc`), table column config (`tableColumnOrder`, `tableColumnVisibility`, `tableColumnPinning`, `tableColumnSizing`). `driveApplicationsFolderId` is per-user in `user_profile.drive_applications_folder_id` — load via `GET /api/profile`, NOT from Zustand.
+- **State**: Zustand `useUiStore` (persisted localStorage, key `app-pal-ui-v2`) — theme, accent, density, cardVariant, AI config (`AiConfig` with all 6 providers: lm-studio/ollama/anthropic/openai/gemini/openrouter), Drive naming rules (`driveNameFolder`, `driveNameDoc`), table column config (`tableColumnOrder`, `tableColumnVisibility`, `tableColumnPinning`, `tableColumnSizing`), `uiLanguage` ("de"|"en"). `driveApplicationsFolderId` is per-user in `user_profile.drive_applications_folder_id` — load via `GET /api/profile`, NOT from Zustand.
 - **Auth**: `AuthProvider` + `useAuth()` in `lib/auth.tsx`. Calls `GET /api/auth/me` on mount (with silent refresh). All routes wrapped in `ProtectedRoute` in `App.tsx`.
 - **API**: `api` from `lib/api.ts` — Axios, `withCredentials: true`, empty `baseURL`, global 401 interceptor → redirects to `/setup`.
 - **Styling**: single `index.css`, CSS custom properties. No Tailwind. `.input-line` = underline input. `.field` = labelled form field. `.md-body` = rendered Markdown.
@@ -302,6 +304,38 @@ JWT in httpOnly cookies. `GET /api/auth/status` returns `{ setup: bool }`. `GET 
 `openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly`
 
 `drive` scope (not `drive.file`) is required to copy user-owned template files.
+
+### i18n (react-i18next)
+
+**Setup**: `frontend/src/i18n/index.ts` — initialises i18next with `i18next-browser-languagedetector`. Language preference stored in `useUiStore.uiLanguage` ("de"|"en") and synced with `i18n.changeLanguage()`.
+
+**Namespaces** (files in `frontend/src/i18n/{de,en}/`):
+
+| Namespace | File | Contents |
+|---|---|---|
+| `common` | `common.json` | All UI strings (buttons, labels, settings, drawer, calendar, table, …) |
+| `stages` | `stages.json` | Stage display names (9 stages) |
+| `actions` | `actions.json` | AI action labels and tooltips |
+| `ki` | `ki.json` | KI tile labels and status strings |
+
+**Usage in components**:
+```tsx
+const { t } = useTranslation();               // common namespace (default)
+const { t: tStages } = useTranslation("stages");  // explicit namespace
+```
+
+**Critical — TanStack Table + i18n**: Column headers that call `t()` must be plain strings (not render functions) so the column panel's `typeof col.columnDef.header === "string"` check works. Define columns inside `useMemo` and add `[t, tStages]` to the dependency array.
+
+**Adding new strings**: Add keys to both `de/` and `en/` JSON files. Use Python for safe JSON manipulation to avoid encoding issues:
+```bash
+python3 -c "
+import json
+with open('frontend/src/i18n/de/common.json') as f: d = json.load(f)
+d['section']['newKey'] = 'Neuer Wert'
+with open('frontend/src/i18n/de/common.json', 'w', encoding='utf-8') as f:
+    json.dump(d, f, ensure_ascii=False, indent=2); f.write('\n')
+"
+```
 
 ### Design System
 
