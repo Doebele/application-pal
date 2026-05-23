@@ -1,0 +1,69 @@
+{
+  "nav": {
+    "board": "Board",
+    "list": "List",
+    "calendar": "Calendar",
+    "archive": "Archive",
+    "timeline": "Timeline",
+    "profile": "Profile",
+    "documents": "Documents",
+    "knowledge": "Knowledge",
+    "templates": "Templates",
+    "settings": "Settings"
+  },
+  "tabs": {
+    "actions": "Actions",
+    "details": "Details",
+    "documents": "Documents",
+    "ki": "AI Content"
+  },
+  "buttons": {
+    "save": "Save",
+    "cancel": "Cancel",
+    "create": "Create",
+    "delete": "Delete",
+    "edit": "Edit",
+    "copy": "Copy",
+    "open": "Open",
+    "close": "Close",
+    "add": "Add",
+    "remove": "Remove",
+    "refresh": "Refresh",
+    "import": "Import Job",
+    "exportDoc": "As Google Doc",
+    "generating": "Generating…"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "language": {
+    "label": "Language",
+    "de": "Deutsch",
+    "en": "English"
+  },
+  "search": "Search…",
+  "noResults": "No results",
+  "loading": "Loading…",
+  "saved": "Saved.",
+  "autosave": "Changes are saved automatically.",
+  "filter": "Filter",
+  "phase": "Phase",
+  "allPhases": "All phases",
+  "applications": "Applications",
+  "tasks": {
+    "label": "Tasks",
+    "addTask": "+ Add task",
+    "none": "No tasks for this phase"
+  },
+  "activities": {
+    "label": "Activities",
+    "addActivity": "+ Activity"
+  },
+  "kiResults": "AI Analysis",
+  "driveFolder": {
+    "create": "Create Drive Folder",
+    "open": "Open Drive Folder ↗",
+    "creating": "Creating…"
+  }
+}

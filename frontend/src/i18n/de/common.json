@@ -1,0 +1,69 @@
+{
+  "nav": {
+    "board": "Board",
+    "list": "Liste",
+    "calendar": "Kalender",
+    "archive": "Archiv",
+    "timeline": "Timeline",
+    "profile": "Profil",
+    "documents": "Dokumente",
+    "knowledge": "Knowledge",
+    "templates": "Vorlagen",
+    "settings": "Einstellungen"
+  },
+  "tabs": {
+    "actions": "Aktionen",
+    "details": "Details",
+    "documents": "Dokumente",
+    "ki": "KI-Inhalte"
+  },
+  "buttons": {
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "create": "Erstellen",
+    "delete": "Löschen",
+    "edit": "Bearbeiten",
+    "copy": "Kopieren",
+    "open": "Öffnen",
+    "close": "Schliessen",
+    "add": "Hinzufügen",
+    "remove": "Entfernen",
+    "refresh": "Aktualisieren",
+    "import": "Import Job",
+    "exportDoc": "Als Google Doc",
+    "generating": "Wird generiert…"
+  },
+  "theme": {
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "language": {
+    "label": "Sprache",
+    "de": "Deutsch",
+    "en": "English"
+  },
+  "search": "Suchen…",
+  "noResults": "Keine Ergebnisse",
+  "loading": "Lädt…",
+  "saved": "Gespeichert.",
+  "autosave": "Änderungen werden automatisch gespeichert.",
+  "filter": "Filter",
+  "phase": "Phase",
+  "allPhases": "Alle Phasen",
+  "applications": "Bewerbungen",
+  "tasks": {
+    "label": "Aufgaben",
+    "addTask": "+ Aufgabe hinzufügen",
+    "none": "Keine Aufgaben für diese Phase"
+  },
+  "activities": {
+    "label": "Aktivitäten",
+    "addActivity": "+ Aktivität"
+  },
+  "kiResults": "KI-Auswertungen",
+  "driveFolder": {
+    "create": "Drive-Ordner anlegen",
+    "open": "Drive-Ordner öffnen ↗",
+    "creating": "Erstelle…"
+  }
+}

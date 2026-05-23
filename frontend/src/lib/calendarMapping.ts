@@ -1,38 +1,16 @@
 import { addMinutes, format, parseISO } from "date-fns";
 import type { Application } from "@application-pal/shared";
 import { type CalendarEvent, EVENT_COLORS } from "../types/calendar";
+import { STAGE_COLORS as STAGE_COLORS_MAP, STAGE_LABELS_DE, ALL_STAGES } from "./stages";
 
-// ─── Stage color lookup (matches CSS vars) ────────────────────
-const STAGE_COLORS: Record<string, string> = {
-  import_validating: "#94a3b8",
-  preparing_cv:      "#60a5fa",
-  preparing_letter:  "#22d3ee",
-  application_sent:  "#a78bfa",
-  pending:           "#fbbf24",
-  interview_1:       "#34d399",
-  interview_2:       "#10b981",
-  rejected:          "#f87171",
-  accepted:          "#84cc16",
-};
-
+// ─── Stage color lookup ───────────────────────────────────────
 export function stageColor(stage: string): string {
-  return STAGE_COLORS[stage] ?? EVENT_COLORS.other;
+  return STAGE_COLORS_MAP[stage] ?? EVENT_COLORS.other;
 }
 
-// ─── Stage labels ─────────────────────────────────────────────
-export const STAGE_LABELS: Record<string, string> = {
-  import_validating: "Inbox",
-  preparing_cv:      "CV vorbereiten",
-  preparing_letter:  "Anschreiben",
-  application_sent:  "Beworben",
-  pending:           "Wartend",
-  interview_1:       "1. Interview",
-  interview_2:       "2. Interview",
-  rejected:          "Abgelehnt",
-  accepted:          "Zugesagt",
-};
-
-export const ALL_STAGES = Object.keys(STAGE_LABELS);
+// ─── Stage labels (DE fallback — CalendarPage uses t() directly) ─
+export const STAGE_LABELS: Record<string, string> = STAGE_LABELS_DE;
+export { ALL_STAGES };
 
 // ─── InterviewDetails JSON shape ─────────────────────────────
 interface InterviewDetails {

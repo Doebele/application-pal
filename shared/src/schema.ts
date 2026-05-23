@@ -124,6 +124,7 @@ export const userProfile = pgTable("user_profile", {
   docTemplates: text("doc_templates"),                             // JSON: DocTemplateConfig per content type
   persona: text("persona"),                                        // 'schulabgaenger' | 'berufseinsteiger' | 'berufsumsteiger'
   sessionTimeout: text("session_timeout").default("15m"),
+  uiLanguage: text("ui_language").default("de"),    // "de" | "en" — UI display language
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()

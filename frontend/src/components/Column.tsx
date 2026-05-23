@@ -1,20 +1,9 @@
 import { Plus } from "iconoir-react";
 import { Droppable, Draggable } from "@hello-pangea/dnd";
 import type { Application } from "@application-pal/shared";
+import { useTranslation } from "react-i18next";
 import { ApplicationCard } from "./Card";
 import type { CardVariant } from "../lib/store";
-
-const STAGE_LABELS: Record<string, string> = {
-  import_validating: "Inbox",
-  preparing_cv:      "Preparing CV",
-  preparing_letter:  "Preparing Letter",
-  application_sent:  "Submitted",
-  pending:           "Pending",
-  interview_1:       "1st Interview",
-  interview_2:       "2nd Interview",
-  rejected:          "Rejected",
-  accepted:          "Accepted"
-};
 
 type Props = {
   stageId: string;
@@ -24,7 +13,8 @@ type Props = {
 };
 
 export function Column({ stageId, applications, cardVariant, onCardClick }: Props) {
-  const label = STAGE_LABELS[stageId] ?? stageId;
+  const { t } = useTranslation("stages");
+  const label = t(stageId, { defaultValue: stageId });
 
   return (
     <div className={`column stage-${stageId}`}>

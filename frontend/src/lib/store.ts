@@ -6,6 +6,7 @@ export type Accent = "indigo" | "violet" | "emerald" | "amber" | "rose";
 export type Density = "low" | "high";
 export type CardVariant = "rich" | "compact" | "minimal" | "editorial";
 export type AiProvider = "none" | "lm-studio" | "anthropic";
+export type UiLanguage = "de" | "en";
 
 export type AiConfig = {
   provider: AiProvider;
@@ -30,6 +31,9 @@ type UiState = {
   driveNameFolder: string;
   driveNameDoc: string;
   // NOTE: driveApplicationsFolderId moved to user_profile (per-user, server-side)
+  // UI language preference (separate from applications.language which is the document language)
+  uiLanguage: UiLanguage;
+  setUiLanguage: (lang: UiLanguage) => void;
   // Table view column config
   tableColumnOrder: string[];
   tableColumnVisibility: Record<string, boolean>;
@@ -72,6 +76,8 @@ export const useUiStore = create<UiState>()(
       },
       driveNameFolder: DEFAULT_FOLDER_RULE,
       driveNameDoc:    DEFAULT_DOC_RULE,
+      uiLanguage: "de",
+      setUiLanguage: (uiLanguage) => set({ uiLanguage }),
       tableColumnOrder: [],
       tableColumnVisibility: {},
       tableColumnPinning: { left: ["company"], right: [] },

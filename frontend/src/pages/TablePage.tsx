@@ -27,30 +27,18 @@ import {
   NavArrowUp, NavArrowDown, Settings, Plus, Check,
   Drag, Sparks, Refresh, RefreshCircle, Pin, PinSlash,
 } from "iconoir-react";
+import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
 import { DetailDrawer } from "../components/DetailDrawer";
 import { ImportDrawer } from "../components/ImportDrawer";
+import { STAGE_COLORS, ALL_STAGES } from "../lib/stages";
 
 // ── Constants ────────────────────────────────────────────────────────────────
-
-const STAGE_COLORS: Record<string, string> = {
-  import_validating: "#94a3b8", preparing_cv: "#60a5fa", preparing_letter: "#22d3ee",
-  application_sent: "#a78bfa", pending: "#fbbf24", interview_1: "#34d399",
-  interview_2: "#10b981", rejected: "#f87171", accepted: "#84cc16"
-};
-
-const STAGE_LABELS: Record<string, string> = {
-  import_validating: "Inbox",    preparing_cv: "CV",         preparing_letter: "Letter",
-  application_sent:  "Sent",     pending:       "Pending",    interview_1: "1st Itw",
-  interview_2:       "2nd Itw",  rejected:      "Rejected",   accepted: "Contract offer",
-};
 
 const SOURCE_LABELS: Record<string, string> = {
   linkedin: "LinkedIn", indeed: "Indeed", direct: "Direct",
   xing: "XING", stepstone: "StepStone",
 };
-
-const ALL_STAGES = Object.keys(STAGE_LABELS);
 
 // Pensum values are stored as-is ("100%", "80-100%", etc.) — no mapping needed
 
@@ -171,6 +159,7 @@ const ch = createColumnHelper<Application>();
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function TablePage() {
+  const { t } = useTranslation("stages");
   const {
     tableColumnOrder, tableColumnVisibility, tableColumnPinning, tableColumnSizing,
     setTableColumnOrder, setTableColumnVisibility, setTableColumnPinning, setTableColumnSizing,
@@ -250,7 +239,7 @@ export function TablePage() {
     }),
     ch.accessor("stage", {
       header: "Phase",
-      meta: { tooltip: (app) => STAGE_LABELS[app.stage ?? ""] ?? app.stage ?? undefined },
+      meta: { tooltip: (app) => t(app.stage ?? "", { defaultValue: app.stage ?? undefined }) },
       cell: ({ getValue }) => {
         const s = getValue() ?? "";
         // Use CSS variables for WCAG-accessible colours in both light/dark modes
@@ -262,7 +251,7 @@ export function TablePage() {
             background: `color-mix(in srgb, ${colorVar} 12%, transparent)`,
             border: `1px solid color-mix(in srgb, ${colorVar} 27%, transparent)`,
           }}>
-            {STAGE_LABELS[s] ?? s}
+            {t(s, { defaultValue: s })}
           </span>
         );
       },
@@ -585,7 +574,7 @@ export function TablePage() {
                   cursor: "pointer", fontFamily: "var(--font-sans)", transition: "background 0.1s",
                 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0, background: checked ? colorVar : "var(--border)", transition: "background 0.1s" }} />
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: checked ? 600 : 400, color: checked ? "var(--fg-1)" : "var(--fg-3)", textAlign: "left" }}>{STAGE_LABELS[s]}</span>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: checked ? 600 : 400, color: checked ? "var(--fg-1)" : "var(--fg-3)", textAlign: "left" }}>{t(s, { defaultValue: s })}</span>
                   {checked && <Check width={12} height={12} style={{ color: colorVar, flexShrink: 0 }} />}
                 </button>
               );

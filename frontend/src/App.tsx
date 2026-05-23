@@ -1,6 +1,7 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import type { Application } from "@application-pal/shared";
 import { useUiStore } from "./lib/store";
 import { api } from "./lib/api";
@@ -21,10 +22,25 @@ import { SetupPage } from "./pages/SetupPage";
 import { RecoveryPage } from "./pages/RecoveryPage";
 
 function MainApp() {
-  const { theme, accent, density } = useUiStore();
+  const { theme, accent, density, uiLanguage, setUiLanguage } = useUiStore();
+  const { i18n } = useTranslation();
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: ["applications"],
     queryFn: () => api.get("/api/applications").then((r) => r.data)
+  });
+
+  // Sync language from server profile on first load
+  useQuery({
+    queryKey: ["profile-lang"],
+    queryFn: async () => {
+      const r = await api.get<{ uiLanguage?: string }>("/api/profile");
+      const lang = (r.data.uiLanguage as "de" | "en") ?? uiLanguage;
+      if (lang !== uiLanguage) setUiLanguage(lang);
+      if (lang !== i18n.language) await i18n.changeLanguage(lang);
+      return lang;
+    },
+    staleTime: Infinity,
+    retry: false,
   });
 
   useEffect(() => {

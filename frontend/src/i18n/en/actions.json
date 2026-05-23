@@ -1,0 +1,23 @@
+{
+  "match-score":       { "label": "Match Score",            "tooltip": "Calculate AI match score" },
+  "glassdoor-check":   { "label": "Glassdoor Rating",       "tooltip": "Look up Glassdoor rating" },
+  "kununu-check":      { "label": "Kununu Rating",          "tooltip": "Look up Kununu rating" },
+  "linkedin-profile":  { "label": "LinkedIn Company",       "tooltip": "Fetch LinkedIn company profile" },
+  "salary-check":      { "label": "Salary Check",           "tooltip": "Calculate salary range for Switzerland" },
+  "ats-keywords":      { "label": "ATS Keywords",           "tooltip": "Extract ATS keywords from job description" },
+  "cv-highlights":     { "label": "CV Highlights",          "tooltip": "Analyse relevant CV highlights" },
+  "cv-doc":            { "label": "CV Google Doc",          "tooltip": "Create CV as Google Doc" },
+  "cover-letter":      { "label": "Cover Letter",           "tooltip": "Generate cover letter" },
+  "letter-review":     { "label": "Review Letter",          "tooltip": "Critically analyse cover letter" },
+  "opening-sentences": { "label": "3 Opening Lines",        "tooltip": "Generate opening sentences for cover letter" },
+  "email-app":         { "label": "Application Email",      "tooltip": "Draft application email" },
+  "email-follow":      { "label": "Follow-up Email",        "tooltip": "Draft follow-up email" },
+  "email-decline":     { "label": "Decline Email",          "tooltip": "Draft decline email" },
+  "email-linkedin":    { "label": "LinkedIn Message",       "tooltip": "Draft LinkedIn connection message" },
+  "interview-prep":    { "label": "Interview Prep",         "tooltip": "Generate questions, STAR examples and follow-up questions" },
+  "salary-tips":       { "label": "Salary Negotiation",     "tooltip": "Create negotiation tips and Ackermann script" },
+  "company-research":  { "label": "Company Research",       "tooltip": "Create company research" },
+  "ackermann-script":  { "label": "Ackermann Script",       "tooltip": "Generate salary negotiation script" },
+  "onboarding":        { "label": "Onboarding Checklist",   "tooltip": "Create 30/60/90-day onboarding plan" },
+  "cv-doc-folder":     { "label": "Create Drive Folder",    "tooltip": "Create Google Drive application folder" }
+}

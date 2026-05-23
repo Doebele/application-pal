@@ -3,12 +3,30 @@ import { createPortal } from "react-dom";
 import {
   DashboardDots, Calendar, List, MultiplePages, Settings, Table2Columns,
   SidebarCollapse, SunLight, HalfMoon, DashboardSpeed, Sofa, ProfileCircle, Folder, Database, Archive,
-  LogOut, SwitchOff, WarningCircle,
+  LogOut, SwitchOff, WarningCircle, Globe,
 } from "iconoir-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import type { Application } from "@application-pal/shared";
 import { useUiStore } from "../lib/store";
 import { useAuth } from "../lib/auth";
+import { api } from "../lib/api";
+// @ts-ignore
+import deFlagUrl from "round-flag-icons/flags/de.svg?url";
+// @ts-ignore
+import gbFlagUrl from "round-flag-icons/flags/gb.svg?url";
+
+function FlagIcon({ lang, size = 15 }: { lang: string; size?: number }) {
+  return (
+    <img
+      src={lang === "de" ? deFlagUrl : gbFlagUrl}
+      width={size}
+      height={size}
+      style={{ borderRadius: "50%", display: "block", flexShrink: 0, objectFit: "cover" }}
+      alt={lang}
+    />
+  );
+}
 
 const RAIL_EXPANDED  = 220;
 const RAIL_COLLAPSED = 52;
@@ -285,8 +303,15 @@ function UserModal({
 type Props = { applications: Application[] };
 
 export function Rail({ applications }: Props) {
-  const { railOpen, toggleRail, theme, toggleTheme, density, toggleDensity } = useUiStore();
+  const { railOpen, toggleRail, theme, toggleTheme, density, toggleDensity, uiLanguage, setUiLanguage } = useUiStore();
+  const { i18n } = useTranslation();
   const { user, logout } = useAuth();
+
+  const changeLanguage = async (lang: "de" | "en") => {
+    setUiLanguage(lang);
+    await i18n.changeLanguage(lang);
+    try { await api.patch("/api/profile", { uiLanguage: lang }); } catch { /* silent */ }
+  };
   const location  = useLocation();
   const navigate  = useNavigate();
 
@@ -421,6 +446,35 @@ export function Rail({ applications }: Props) {
               icon={density === "high" ? <DashboardSpeed width={15} height={15} /> : <Sofa width={15} height={15} />}
               label={density === "high" ? "High density" : "Low density"}
               onClick={toggleDensity}
+              open={false}
+            />
+          )}
+
+          {/* Language toggle */}
+          {railOpen ? (
+            <div className="rail-theme-row">
+              <button
+                className={"rail-density-btn" + (uiLanguage === "de" ? " active" : "")}
+                onClick={() => changeLanguage("de")}
+                title="Deutsch"
+              >
+                <FlagIcon lang="de" size={13} />
+                <span>DE</span>
+              </button>
+              <button
+                className={"rail-density-btn" + (uiLanguage === "en" ? " active" : "")}
+                onClick={() => changeLanguage("en")}
+                title="English"
+              >
+                <FlagIcon lang="en" size={13} />
+                <span>EN</span>
+              </button>
+            </div>
+          ) : (
+            <RailBtn
+              icon={<Globe width={15} height={15} />}
+              label={uiLanguage.toUpperCase()}
+              onClick={() => changeLanguage(uiLanguage === "de" ? "en" : "de")}
               open={false}
             />
           )}

@@ -19,6 +19,7 @@ import type {
 } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { useUiStore, type AiConfig } from "../lib/store";
+import { useTranslation } from "react-i18next";
 import { ContractField, PensumField } from "./ImportDrawer";
 
 // ─── Round flag icon (round-flag-icons library) ───────────────
@@ -60,31 +61,19 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "ki",        label: "KI-Inhalte" },
 ];
 
-const STAGES = [
-  { id: "import_validating", label: "Inbox",            short: "Inbox" },
-  { id: "preparing_cv",      label: "Preparing CV",     short: "CV" },
-  { id: "preparing_letter",  label: "Preparing Letter", short: "Letter" },
-  { id: "application_sent",  label: "Submitted",        short: "Sent" },
-  { id: "pending",           label: "Pending",          short: "Pending" },
-  { id: "interview_1",       label: "1st Interview",    short: "1st Itw" },
-  { id: "interview_2",       label: "2nd Interview",    short: "2nd Itw" },
-  { id: "rejected",          label: "Rejected",         short: "Rejected" },
-  { id: "accepted",          label: "Accepted",         short: "Accepted" },
-];
+import { STAGE_COLORS, STAGE_LABELS_DE as STAGE_LABELS, STAGE_ORDER } from "../lib/stages";
 
-const STAGE_LABELS: Record<string, string> = Object.fromEntries(STAGES.map((s) => [s.id, s.label]));
+const STAGES = STAGE_ORDER.map((id) => ({
+  id,
+  label: STAGE_LABELS[id] ?? id,
+  short: STAGE_LABELS[id] ?? id,
+}));
 
 export const ARCHIVE_REASON_LABELS: Record<string, string> = {
   unavailable: "Stelle nicht mehr verfügbar",
   irrelevant:  "Nicht relevant",
   taken:       "Bereits vergeben",
   other:       "Sonstiger Grund",
-};
-
-const STAGE_COLORS: Record<string, string> = {
-  import_validating: "#94a3b8", preparing_cv: "#60a5fa", preparing_letter: "#22d3ee",
-  application_sent: "#a78bfa", pending: "#fbbf24", interview_1: "#34d399",
-  interview_2: "#10b981", rejected: "#f87171", accepted: "#84cc16"
 };
 
 const STAGE_TILES: Record<string, string[]> = {
@@ -3425,6 +3414,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
   onAiResult?: (id: string, data: unknown) => void;
 }) {
   const { ai } = useUiStore();
+  const { t } = useTranslation("actions");
   const stage = app.stage;
   const [loading, setLoading] = useState<string | null>(null);
   const [resultTimes, setResultTimes] = useState<Record<string, Date>>(() => {
@@ -3616,12 +3606,14 @@ function StageAiActions({ app, onSave, onAiResult }: {
   const AiBtn = ({ id, label, icon }: { id: string; label: string; icon: React.ReactNode }) => {
     const ts = resultTimes[id];
     const tsLabel = ts ? ts.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : undefined;
+    const tooltip = t(`${id}.tooltip`, { defaultValue: label });
     return (
     <button className="btn btn-secondary" style={{
       fontSize: 10, padding: "10px 8px", minHeight: 58,
       flexDirection: "column", alignItems: "center", justifyContent: "center",
       gap: 0, position: "relative", whiteSpace: "normal",
     }} disabled={!!loading}
+      data-tooltip={tooltip}
       title={ts && tsLabel ? `Erstellt: ${tsLabel}` : undefined}
       onClick={() => run(id, async () => {
         if (id === "cv-doc") {

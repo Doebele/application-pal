@@ -1,0 +1,11 @@
+{
+  "import_validating": "Inbox",
+  "preparing_cv": "Preparing CV",
+  "preparing_letter": "Cover Letter",
+  "application_sent": "Applied",
+  "pending": "Pending",
+  "interview_1": "1st Interview",
+  "interview_2": "2nd Interview",
+  "rejected": "Rejected",
+  "accepted": "Accepted"
+}

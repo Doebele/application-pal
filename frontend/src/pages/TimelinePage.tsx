@@ -1,15 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import type { Application } from "@application-pal/shared";
+import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import { Topbar } from "../components/Topbar";
 import { Settings } from "iconoir-react";
-
-const STAGE_LABELS: Record<string, string> = {
-  import_validating: "Inbox", preparing_cv: "Preparing CV",
-  preparing_letter: "Preparing Letter", application_sent: "Submitted",
-  pending: "Pending", interview_1: "1st Interview",
-  interview_2: "2nd Interview", rejected: "Rejected", accepted: "Accepted"
-};
 
 function getCompanyColor(company: string): string {
   const colors = ["#3b82f6","#8b5cf6","#10b981","#f59e0b","#f43f5e","#06b6d4","#84cc16","#f97316"];
@@ -25,6 +19,7 @@ type ActivityEvent = {
 };
 
 export function TimelinePage() {
+  const { t } = useTranslation("stages");
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: ["applications"],
     queryFn: () => api.get("/api/applications").then((r) => r.data)
@@ -41,7 +36,7 @@ export function TimelinePage() {
       if (new Date(app.updatedAt).getTime() !== new Date(app.createdAt).getTime()) {
         evs.push({
           app,
-          text: `Updated — now in "${STAGE_LABELS[app.stage] ?? app.stage}"`,
+          text: `Updated — now in "${t(app.stage, { defaultValue: app.stage })}"`,
           time: new Date(app.updatedAt)
         });
       }
@@ -88,7 +83,7 @@ export function TimelinePage() {
                       {ev.time.toLocaleString()}
                     </span>
                     <span className={`chip chip-stage stage-${ev.app.stage}`} style={{ fontSize: 9.5, padding: "1px 6px" }}>
-                      {STAGE_LABELS[ev.app.stage]}
+                      {t(ev.app.stage, { defaultValue: ev.app.stage })}
                     </span>
                   </div>
                 </div>

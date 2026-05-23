@@ -80,11 +80,6 @@ function PriorityBar({ priority }: { priority: string | null | undefined }) {
   return <span className={`priority-bar ${priority === "high" ? "priority-high" : "priority-medium"}`} />;
 }
 
-const STAGE_LABELS: Record<string, string> = {
-  import_validating: "Inbox", preparing_cv: "CV", preparing_letter: "Letter",
-  application_sent: "Submitted", pending: "Pending", interview_1: "1st Itw",
-  interview_2: "2nd Itw", rejected: "Rejected", accepted: "Accepted"
-};
 
 export function CardRich({ app, onClick }: CardProps) {
   const tags = parseTags(app.tags);

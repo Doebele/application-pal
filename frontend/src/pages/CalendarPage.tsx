@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   addDays, addMonths, addWeeks, format, getDay, getDaysInMonth,
   isSameDay, startOfWeek, subMonths, subWeeks,
@@ -19,7 +20,6 @@ import {
   activityRowsToCalendarEvents,
   googleCalendarEventsToCalendarEvents,
   stageColor,
-  STAGE_LABELS,
   ALL_STAGES,
   type ActivityRow,
   type GoogleCalendarItem,
@@ -408,6 +408,7 @@ function FilterSection({
   onClear: () => void;
   hasActive: boolean;
 }) {
+  const { t } = useTranslation("stages");
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
       {/* Type chips */}
@@ -448,7 +449,7 @@ function FilterSection({
               cursor: "pointer", fontFamily: "var(--font-sans)",
               transition: "all 0.12s ease",
             }}>
-              {STAGE_LABELS[stage]}
+              {t(stage, { defaultValue: stage })}
             </button>
           );
         })}
