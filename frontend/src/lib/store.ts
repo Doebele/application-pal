@@ -5,14 +5,28 @@ export type Theme = "dark" | "light";
 export type Accent = "indigo" | "violet" | "emerald" | "amber" | "rose";
 export type Density = "low" | "high";
 export type CardVariant = "rich" | "compact" | "minimal" | "editorial";
-export type AiProvider = "none" | "lm-studio" | "anthropic";
+export type AiProvider = "none" | "lm-studio" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama";
 export type UiLanguage = "de" | "en";
 
 export type AiConfig = {
   provider: AiProvider;
-  anthropicApiKey: string;
+  // LM Studio
   lmStudioUrl: string;
   lmStudioModel: string;
+  // Anthropic
+  anthropicApiKey: string;
+  // OpenAI
+  openaiApiKey: string;
+  openaiModel: string;
+  // Google Gemini
+  geminiApiKey: string;
+  geminiModel: string;
+  // OpenRouter
+  openrouterApiKey: string;
+  openrouterModel: string;
+  // Ollama
+  ollamaUrl: string;
+  ollamaModel: string;
 };
 
 export const DEFAULT_FOLDER_RULE = "{firma} – {rolle} – {datum}";
@@ -70,9 +84,17 @@ export const useUiStore = create<UiState>()(
       isImportModalOpen: false,
       ai: {
         provider: "none",
-        anthropicApiKey: "",
         lmStudioUrl: "http://localhost:1234",
-        lmStudioModel: ""
+        lmStudioModel: "",
+        anthropicApiKey: "",
+        openaiApiKey: "",
+        openaiModel: "gpt-4o-mini",
+        geminiApiKey: "",
+        geminiModel: "gemini-2.0-flash",
+        openrouterApiKey: "",
+        openrouterModel: "",
+        ollamaUrl: "http://localhost:11434",
+        ollamaModel: "",
       },
       driveNameFolder: DEFAULT_FOLDER_RULE,
       driveNameDoc:    DEFAULT_DOC_RULE,

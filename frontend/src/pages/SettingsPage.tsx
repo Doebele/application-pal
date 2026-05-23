@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Download, Upload, Database, Shield, Key, LogOut, Trash, Folder, OpenNewWindow, Calendar, InfoCircle } from "iconoir-react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
 import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
 import { api } from "../lib/api";
@@ -30,6 +31,7 @@ const INPUT_STYLE: React.CSSProperties = {
 
 // ─── LM Studio model picker ───────────────────────────────────
 function LmStudioSection() {
+  const { t } = useTranslation();
   const { ai, setAi } = useUiStore();
   const [models, setModels] = useState<string[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
@@ -61,8 +63,8 @@ function LmStudioSection() {
     <>
       <div className="settings-row">
         <div>
-          <div className="settings-row-label">LM Studio URL</div>
-          <div className="settings-row-sub">Default: http://localhost:1234</div>
+          <div className="settings-row-label">{t("settings.lmStudioUrl")}</div>
+          <div className="settings-row-sub">{t("settings.lmStudioUrlSub")}</div>
         </div>
         <div className="settings-row-right" style={{ display: "flex", gap: 6, alignItems: "center" }}>
           <input
@@ -87,15 +89,15 @@ function LmStudioSection() {
 
       <div className="settings-row">
         <div>
-          <div className="settings-row-label">Model</div>
+          <div className="settings-row-label">{t("settings.model")}</div>
           <div className="settings-row-sub">
             {status === "error"
-              ? "LM Studio not reachable — start it and click ↻"
+              ? t("settings.modelNotReachable")
               : status === "idle"
-                ? "Click ↻ to load available models"
+                ? t("settings.modelClickToLoad")
                 : models.length === 0
-                  ? "No models loaded in LM Studio"
-                  : `${models.length} model${models.length !== 1 ? "s" : ""} available`}
+                  ? t("settings.modelNoneLoaded")
+                  : t("settings.modelAvailable", { count: models.length })}
           </div>
         </div>
         <div className="settings-row-right">
@@ -125,14 +127,15 @@ function LmStudioSection() {
 
 // ─── Anthropic section ────────────────────────────────────────
 function AnthropicSection() {
+  const { t } = useTranslation();
   const { ai, setAi } = useUiStore();
   const [show, setShow] = useState(false);
 
   return (
     <div className="settings-row">
       <div>
-        <div className="settings-row-label">Anthropic API Key</div>
-        <div className="settings-row-sub">Used for job extraction and AI agent features</div>
+        <div className="settings-row-label">{t("settings.anthropicKey")}</div>
+        <div className="settings-row-sub">{t("settings.anthropicKeySub")}</div>
       </div>
       <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
         <input
@@ -147,16 +150,248 @@ function AnthropicSection() {
           style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }}
           onClick={() => setShow((s) => !s)}
         >
-          {show ? "Hide" : "Show"}
+          {show ? t("settings.hide") : t("settings.show")}
         </button>
       </div>
     </div>
   );
 }
 
+// ─── OpenAI section ───────────────────────────────────────────
+function OpenAiSection() {
+  const { t } = useTranslation();
+  const { ai, setAi } = useUiStore();
+  const [show, setShow] = useState(false);
+  const OPENAI_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"];
+
+  return (
+    <>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.openaiKey")}</div>
+          <div className="settings-row-sub">{t("settings.openaiKeySub")}</div>
+        </div>
+        <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
+          <input
+            type={show ? "text" : "password"}
+            value={ai.openaiApiKey}
+            onChange={(e) => setAi({ openaiApiKey: e.target.value })}
+            placeholder="sk-…"
+            style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
+          />
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
+            {show ? t("settings.hide") : t("settings.show")}
+          </button>
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.model")}</div>
+          <div className="settings-row-sub">{t("settings.openaiModelSub")}</div>
+        </div>
+        <div className="settings-row-right">
+          <select
+            value={ai.openaiModel}
+            onChange={(e) => setAi({ openaiModel: e.target.value })}
+            style={{ ...INPUT_STYLE, width: 220, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11 }}
+          >
+            {OPENAI_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Gemini section ───────────────────────────────────────────
+function GeminiSection() {
+  const { t } = useTranslation();
+  const { ai, setAi } = useUiStore();
+  const [show, setShow] = useState(false);
+  const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"];
+
+  return (
+    <>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.geminiKey")}</div>
+          <div className="settings-row-sub">{t("settings.geminiKeySub")}</div>
+        </div>
+        <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
+          <input
+            type={show ? "text" : "password"}
+            value={ai.geminiApiKey}
+            onChange={(e) => setAi({ geminiApiKey: e.target.value })}
+            placeholder="AIza…"
+            style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
+          />
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
+            {show ? t("settings.hide") : t("settings.show")}
+          </button>
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.model")}</div>
+          <div className="settings-row-sub">{t("settings.geminiModelSub")}</div>
+        </div>
+        <div className="settings-row-right">
+          <select
+            value={ai.geminiModel}
+            onChange={(e) => setAi({ geminiModel: e.target.value })}
+            style={{ ...INPUT_STYLE, width: 220, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11 }}
+          >
+            {GEMINI_MODELS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── OpenRouter section ───────────────────────────────────────
+function OpenRouterSection() {
+  const { t } = useTranslation();
+  const { ai, setAi } = useUiStore();
+  const [show, setShow] = useState(false);
+
+  return (
+    <>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.openrouterKey")}</div>
+          <div className="settings-row-sub">{t("settings.openrouterKeySub")}</div>
+        </div>
+        <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
+          <input
+            type={show ? "text" : "password"}
+            value={ai.openrouterApiKey}
+            onChange={(e) => setAi({ openrouterApiKey: e.target.value })}
+            placeholder="sk-or-…"
+            style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
+          />
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
+            {show ? t("settings.hide") : t("settings.show")}
+          </button>
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.model")}</div>
+          <div className="settings-row-sub">{t("settings.openrouterModelSub")}</div>
+        </div>
+        <div className="settings-row-right">
+          <input
+            value={ai.openrouterModel}
+            onChange={(e) => setAi({ openrouterModel: e.target.value })}
+            placeholder={t("settings.openrouterModelPlaceholder")}
+            style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── Ollama section ───────────────────────────────────────────
+function OllamaSection() {
+  const { t } = useTranslation();
+  const { ai, setAi } = useUiStore();
+  const [models, setModels] = useState<string[]>([]);
+  const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+
+  const fetchModels = async (url: string) => {
+    setStatus("loading");
+    try {
+      const res = await api.get<{ models: string[] }>(`/api/ollama/models?url=${encodeURIComponent(url)}`);
+      const list = res.data.models;
+      setModels(list);
+      setStatus(list.length > 0 ? "ok" : "error");
+      if (list.length > 0 && !ai.ollamaModel) {
+        setAi({ ollamaModel: list[0] });
+      }
+    } catch {
+      setStatus("error");
+      setModels([]);
+    }
+  };
+
+  useEffect(() => {
+    if (ai.provider === "ollama") {
+      fetchModels(ai.ollamaUrl || "http://localhost:11434");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ai.provider]);
+
+  return (
+    <>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.ollamaUrl")}</div>
+          <div className="settings-row-sub">{t("settings.ollamaUrlSub")}</div>
+        </div>
+        <div className="settings-row-right" style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          <input
+            value={ai.ollamaUrl}
+            onChange={(e) => setAi({ ollamaUrl: e.target.value })}
+            placeholder="http://localhost:11434"
+            style={{ ...INPUT_STYLE, width: 200, fontFamily: "var(--font-mono)", fontSize: 11 }}
+          />
+          <button
+            className="btn btn-secondary btn-icon"
+            onClick={() => fetchModels(ai.ollamaUrl || "http://localhost:11434")}
+            title="Test connection"
+          >
+            {status === "loading"
+              ? <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} />
+              : <Refresh width={13} height={13} />}
+          </button>
+          {status === "ok"    && <CheckCircle width={14} height={14} style={{ color: "var(--green)", flexShrink: 0 }} />}
+          {status === "error" && <WarningCircle width={14} height={14} style={{ color: "var(--red)", flexShrink: 0 }} />}
+        </div>
+      </div>
+
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.model")}</div>
+          <div className="settings-row-sub">
+            {status === "error"
+              ? t("settings.modelNotReachable")
+              : status === "idle"
+                ? t("settings.modelClickToLoad")
+                : models.length === 0
+                  ? t("settings.modelNoneLoaded")
+                  : t("settings.modelAvailable", { count: models.length })}
+          </div>
+        </div>
+        <div className="settings-row-right">
+          {models.length > 0 ? (
+            <select
+              value={ai.ollamaModel}
+              onChange={(e) => setAi({ ollamaModel: e.target.value })}
+              style={{ ...INPUT_STYLE, width: 260, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11 }}
+            >
+              {models.map((m) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          ) : (
+            <input
+              value={ai.ollamaModel}
+              onChange={(e) => setAi({ ollamaModel: e.target.value })}
+              placeholder="e.g. llama3.2"
+              style={{ ...INPUT_STYLE, width: 260, fontFamily: "var(--font-mono)", fontSize: 11 }}
+            />
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 // ─── Provider selector pill ───────────────────────────────────
-function ProviderPill({ value, label, active, onClick, color }: {
-  value: AiProvider; label: string; active: boolean; onClick: () => void; color?: string;
+function ProviderPill({ value, label, active, onClick, color, recommended }: {
+  value: AiProvider; label: string; active: boolean; onClick: () => void; color?: string; recommended?: string;
 }) {
   return (
     <button
@@ -174,13 +409,29 @@ function ProviderPill({ value, label, active, onClick, color }: {
         display: "flex",
         alignItems: "center",
         gap: 6,
-        transition: "all 0.12s ease"
+        transition: "all 0.12s ease",
+        position: "relative",
       }}
     >
       {color && (
         <span style={{ width: 8, height: 8, borderRadius: 999, background: color, flexShrink: 0 }} />
       )}
       {label}
+      {recommended && (
+        <span style={{
+          fontSize: 9,
+          fontWeight: 700,
+          color: "#10b981",
+          background: "rgba(16,185,129,0.12)",
+          border: "1px solid rgba(16,185,129,0.3)",
+          borderRadius: 4,
+          padding: "1px 5px",
+          letterSpacing: "0.02em",
+          lineHeight: 1.4,
+        }}>
+          {recommended}
+        </span>
+      )}
     </button>
   );
 }
@@ -189,6 +440,7 @@ function ProviderPill({ value, label, active, onClick, color }: {
 interface GCalItem { id: string; summary: string; backgroundColor?: string; primary?: boolean }
 
 function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
+  const { t } = useTranslation();
   const [scopeStatus, setScopeStatus] = useState<"loading" | "ok" | "missing">("loading");
   const [calendars, setCalendars]     = useState<GCalItem[]>([]);
   const [calId, setCalId]             = useState("");
@@ -229,18 +481,18 @@ function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
       <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
         <Calendar width={12} height={12} style={{ color: "#a855f7", flexShrink: 0 }} />
         <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-          Google Kalender
+          {t("settings.calendarTitle")}
         </div>
         {saved && (
           <span style={{ fontSize: 10, color: "#4ade80", marginLeft: "auto" }}>
-            <CheckCircle width={10} height={10} /> gespeichert
+            <CheckCircle width={10} height={10} /> {t("settings.calendarSaved")}
           </span>
         )}
       </div>
 
       {scopeStatus === "loading" && (
         <div style={{ fontSize: 12, color: "var(--fg-3)" }}>
-          <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> Prüfe Berechtigungen…
+          <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("settings.calendarChecking")}
         </div>
       )}
 
@@ -255,7 +507,7 @@ function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
             <InfoCircle width={14} height={14} style={{ color: "#fbbf24", flexShrink: 0, marginTop: 1 }} />
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)", marginBottom: 4 }}>
-                Kalender-Zugriff nicht verfügbar
+                {t("settings.calendarNoScope")}
               </div>
               <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>
                 Dein aktueller Google-Token hat keinen <code style={{ fontSize: 10, background: "var(--surface-2)", borderRadius: 3, padding: "1px 4px" }}>calendar.readonly</code>-Scope.
@@ -300,7 +552,7 @@ function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
 
           <div style={{ display: "flex", gap: 8 }}>
             <button className="btn btn-secondary" style={{ fontSize: 12, gap: 5 }} onClick={onReconnect}>
-              <Link width={11} height={11} /> Google neu verbinden
+              <Link width={11} height={11} /> {t("settings.reconnectGoogle")}
             </button>
             <a
               href="https://console.cloud.google.com"
@@ -318,12 +570,12 @@ function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
       {scopeStatus === "ok" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>
-            Wähle den Kalender, in dem Interviewtermine und Deadlines angezeigt werden.
+            {t("settings.calendarSelectHint")}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {loadingCals ? (
               <div style={{ fontSize: 12, color: "var(--fg-3)", display: "flex", alignItems: "center", gap: 6 }}>
-                <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> Kalender werden geladen…
+                <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("settings.calendarLoading")}
               </div>
             ) : (
               <select
@@ -336,10 +588,10 @@ function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
                   cursor: "pointer", fontFamily: "var(--font-sans)",
                 }}
               >
-                <option value="">— Primärer Kalender (Standard) —</option>
+                <option value="">{t("settings.calendarPrimary")}</option>
                 {calendars.map(cal => (
                   <option key={cal.id} value={cal.id}>
-                    {cal.primary ? `✦ ${cal.summary} (Primär)` : cal.summary}
+                    {cal.primary ? `✦ ${cal.summary} (${t("settings.calendarPrimaryLabel")})` : cal.summary}
                   </option>
                 ))}
               </select>
@@ -350,7 +602,7 @@ function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
                 style={{ fontSize: 11, padding: "4px 8px", whiteSpace: "nowrap" }}
                 onClick={() => saveCalId("")}
               >
-                Zurücksetzen
+                {t("settings.calendarReset")}
               </button>
             )}
           </div>
@@ -367,6 +619,7 @@ function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
 
 // ─── Google OAuth section ─────────────────────────────────────
 function GoogleSection() {
+  const { t } = useTranslation();
   // driveApplicationsFolderId now lives in user_profile (per-user), not Zustand
   const [driveApplicationsFolderId, setDriveApplicationsFolderIdState] = useState("");
   const [status, setStatus] = useState<"loading" | "connected" | "disconnected">("loading");
@@ -449,10 +702,10 @@ function GoogleSection() {
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
         <div style={{ flex: 1 }}>
           <div className="settings-row-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span style={{ fontSize: 14 }}>G</span> Google Drive & Docs
+            <span style={{ fontSize: 14 }}>G</span> {t("settings.googleDrive")}
           </div>
           <div className="settings-row-sub">
-            {status === "connected" ? "Verbunden — Dokumente werden automatisch in Drive erstellt" : "Dokumente manuell verknüpfen oder Drive verbinden"}
+            {status === "connected" ? t("settings.googleConnected") : t("settings.googleDisconnected")}
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -460,16 +713,16 @@ function GoogleSection() {
           {status === "connected" && (
             <>
               <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "var(--green)", fontWeight: 600 }}>
-                <CheckCircle width={13} height={13} /> Verbunden
+                <CheckCircle width={13} height={13} /> {t("settings.connected")}
               </span>
               <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} onClick={disconnect}>
-                <LinkSlash width={11} height={11} /> Trennen
+                <LinkSlash width={11} height={11} /> {t("settings.disconnect")}
               </button>
             </>
           )}
           {status === "disconnected" && (
             <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} onClick={connect}>
-              <Link width={12} height={12} /> Google verbinden
+              <Link width={12} height={12} /> {t("settings.connectGoogle")}
             </button>
           )}
         </div>
@@ -479,10 +732,10 @@ function GoogleSection() {
       {status === "connected" && (
         <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
-            Ablageordner für Bewerbungsordner
+            {t("settings.folderSection")}
           </div>
           <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 10, lineHeight: 1.5 }}>
-            Neuer Bewerbungsordner wird in diesem Google Drive Verzeichnis erstellt. Leer lassen = direkt in „Meine Ablage".
+            {t("settings.folderHint")}
           </div>
 
           {/* Current folder display */}
@@ -498,7 +751,7 @@ function GoogleSection() {
                 <OpenNewWindow width={12} height={12} />
               </a>
               <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={clearFolder}>
-                Ändern
+                {t("settings.changeFolder")}
               </button>
             </div>
           ) : (
@@ -508,20 +761,20 @@ function GoogleSection() {
                   value={folderInput}
                   onChange={e => setFolderInput(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && validateFolder()}
-                  placeholder="Drive-Ordner URL einfügen: https://drive.google.com/drive/folders/…"
+                  placeholder={t("settings.folderUrlPlaceholder")}
                   style={{ fontSize: 12 }}
                 />
               </div>
               <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
                 disabled={checkingFolder || !folderInput.trim()} onClick={validateFolder}>
-                {checkingFolder ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : "Bestätigen"}
+                {checkingFolder ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : t("settings.confirmFolder")}
               </button>
             </div>
           )}
           {folderErr && <div style={{ fontSize: 11, color: "#f87171", marginTop: 6 }}>{folderErr}</div>}
           {!folderInfo && !folderInput && (
             <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 6 }}>
-              Aktuell: Neue Ordner werden direkt in „Meine Ablage" erstellt.
+              {t("settings.folderDefault")}
             </div>
           )}
         </div>
@@ -548,6 +801,7 @@ function previewRule(rule: string): string {
 }
 
 function DriveNamingSection() {
+  const { t } = useTranslation();
   const { driveNameFolder, setDriveNameFolder, driveNameDoc, setDriveNameDoc } = useUiStore();
   const [folder, setFolder] = useState(driveNameFolder);
   const [doc, setDoc]       = useState(driveNameDoc);
@@ -556,14 +810,14 @@ function DriveNamingSection() {
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Folder width={13} height={13} style={{ color: "var(--fg-3)" }} />
-        <div className="eyebrow">Google Drive Benennung</div>
+        <div className="eyebrow">{t("settings.driveNaming")}</div>
       </div>
       <div className="settings-group">
         <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
           <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.6 }}>
-            Regeln für die automatische Benennung von Drive-Ordnern und kopierten Dokumenten.{" "}
+            {t("settings.driveNamingHint")}{" "}
             <span style={{ color: "var(--fg-2)" }}>
-              Platzhalter: {PLACEHOLDERS.map(p => (
+              {t("settings.driveNamingPlaceholders")} {PLACEHOLDERS.map(p => (
                 <code key={p} style={{ fontSize: 10, background: "var(--surface-2)", borderRadius: 3, padding: "1px 4px", margin: "0 2px" }}>{p}</code>
               ))}
             </span>
@@ -571,33 +825,33 @@ function DriveNamingSection() {
 
           {/* Folder rule */}
           <div className="field" style={{ margin: 0 }}>
-            <label>Ordnername-Regel</label>
+            <label>{t("settings.folderRule")}</label>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input value={folder} onChange={e => setFolder(e.target.value)} onBlur={() => setDriveNameFolder(folder)}
                 placeholder={DEFAULT_FOLDER_RULE} style={{ flex: 1 }} />
               <button className="btn btn-ghost" style={{ fontSize: 11, whiteSpace: "nowrap" }}
                 onClick={() => { setFolder(DEFAULT_FOLDER_RULE); setDriveNameFolder(DEFAULT_FOLDER_RULE); }}>
-                Zurücksetzen
+                {t("settings.reset")}
               </button>
             </div>
             <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 4 }}>
-              Vorschau: <em style={{ color: "var(--fg-2)" }}>{previewRule(folder || DEFAULT_FOLDER_RULE)}</em>
+              {t("settings.previewLabel")} <em style={{ color: "var(--fg-2)" }}>{previewRule(folder || DEFAULT_FOLDER_RULE)}</em>
             </div>
           </div>
 
           {/* Doc rule */}
           <div className="field" style={{ margin: 0 }}>
-            <label>Dokumentname-Regel</label>
+            <label>{t("settings.docRule")}</label>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input value={doc} onChange={e => setDoc(e.target.value)} onBlur={() => setDriveNameDoc(doc)}
                 placeholder={DEFAULT_DOC_RULE} style={{ flex: 1 }} />
               <button className="btn btn-ghost" style={{ fontSize: 11, whiteSpace: "nowrap" }}
                 onClick={() => { setDoc(DEFAULT_DOC_RULE); setDriveNameDoc(DEFAULT_DOC_RULE); }}>
-                Zurücksetzen
+                {t("settings.reset")}
               </button>
             </div>
             <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 4 }}>
-              Vorschau: <em style={{ color: "var(--fg-2)" }}>{previewRule(doc || DEFAULT_DOC_RULE)}</em>
+              {t("settings.previewLabel")} <em style={{ color: "var(--fg-2)" }}>{previewRule(doc || DEFAULT_DOC_RULE)}</em>
             </div>
           </div>
         </div>
@@ -608,6 +862,7 @@ function DriveNamingSection() {
 
 // ─── Google Calendar Section ──────────────────────────────────
 function CalendarSection() {
+  const { t } = useTranslation();
   const [calId, setCalId] = useState("");
   const [saved, setSaved] = useState(false);
 
@@ -627,24 +882,24 @@ function CalendarSection() {
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Calendar width={13} height={13} />
-        <div className="eyebrow">Google Kalender</div>
+        <div className="eyebrow">{t("settings.calendarTitle")}</div>
       </div>
       <div className="settings-group">
         <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
           <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.6 }}>
-            Standard-Kalender für Interviewtermine. Interview-Einträge werden direkt in diesem Kalender erstellt.
+            {t("settings.calendarIdSub")}
           </div>
           <div className="field" style={{ margin: 0 }}>
-            <label>Kalender-ID</label>
+            <label>{t("settings.calendarId")}</label>
             <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
               <input value={calId} onChange={e => setCalId(e.target.value)} onBlur={save}
-                placeholder="deine@gmail.com (leer = Primär-Kalender)"
+                placeholder={t("settings.calendarIdPlaceholder")}
                 style={{ flex: 1 }} />
-              {saved && <span style={{ fontSize: 11, color: "#4ade80", whiteSpace: "nowrap" }}>✓ Gespeichert</span>}
+              {saved && <span style={{ fontSize: 11, color: "#4ade80", whiteSpace: "nowrap" }}>✓ {t("settings.calendarSavedLabel")}</span>}
             </div>
           </div>
           <div style={{ fontSize: 11, color: "var(--fg-3)", lineHeight: 1.6 }}>
-            Die Kalender-ID findest du in Google Kalender → Einstellungen → Kalender auswählen → „Kalender-ID" (meist deine Gmail-Adresse für den Primär-Kalender).
+            {t("settings.calendarIdHint")}
           </div>
         </div>
       </div>
@@ -663,6 +918,7 @@ interface InviteRow {
 }
 
 function InviteSection() {
+  const { t } = useTranslation();
   const [invites, setInvites]       = useState<InviteRow[]>([]);
   const [email, setEmail]           = useState("");
   const [days, setDays]             = useState(7);
@@ -704,12 +960,12 @@ function InviteSection() {
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Key width={13} height={13} style={{ color: "var(--fg-3)" }} />
-        <div className="eyebrow">Nutzer einladen</div>
+        <div className="eyebrow">{t("settings.invites")}</div>
       </div>
       <div className="settings-group">
         <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
           <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.6 }}>
-            Erstelle Einladungslinks für weitere Personen. Jede Person erhält ein eigenes Konto mit isolierten Daten, eigenem Profil und eigener Google Drive Verbindung.
+            {t("settings.invitesHint")}
           </div>
 
           {/* Create form */}
@@ -717,7 +973,7 @@ function InviteSection() {
             <input
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="E-Mail (optional, schränkt auf diese Adresse ein)"
+              placeholder={t("settings.inviteEmailPlaceholder")}
               style={{ flex: 1, fontSize: 12, minWidth: 200 }}
               className="field"
             />
@@ -727,28 +983,28 @@ function InviteSection() {
               style={{ fontSize: 12, padding: "6px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", color: "var(--fg-1)", fontFamily: "var(--font-sans)" }}
             >
               {[1, 3, 7, 14, 30].map(d => (
-                <option key={d} value={d}>{d} Tag{d !== 1 ? "e" : ""} gültig</option>
+                <option key={d} value={d}>{t("settings.inviteValidDays", { count: d })}</option>
               ))}
             </select>
             <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={create} disabled={creating}>
               {creating ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> : <Link width={12} height={12} />}
-              {" "}Einladung erstellen
+              {" "}{t("settings.inviteCreate")}
             </button>
           </div>
 
           {/* New invite link */}
           {inviteUrl && (
             <div style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.25)", display: "flex", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--green)" }}>✓ Einladungslink erstellt</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: "var(--green)" }}>{t("settings.inviteCreated")}</div>
               <div style={{ fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--fg-2)", wordBreak: "break-all" }}>
                 {inviteUrl}
               </div>
               <div style={{ display: "flex", gap: 6 }}>
                 <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={copyLink}>
-                  {copied ? "✓ Kopiert" : "Link kopieren"}
+                  {copied ? t("settings.inviteCopied") : t("settings.inviteCopy")}
                 </button>
                 <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setNewToken(null)}>
-                  Schliessen
+                  {t("buttons.close")}
                 </button>
               </div>
             </div>
@@ -758,7 +1014,7 @@ function InviteSection() {
           {invites.length > 0 && (
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 4 }}>
-                Ausstehende Einladungen
+                {t("settings.invitePending")}
               </div>
               {invites.map(inv => (
                 <div key={inv.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 6, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
@@ -767,12 +1023,12 @@ function InviteSection() {
                       {inv.token.slice(0, 12)}…
                     </div>
                     <div style={{ fontSize: 10, color: "var(--fg-3)" }}>
-                      {inv.email ? inv.email : "Jede E-Mail"}
+                      {inv.email ? inv.email : t("settings.inviteAnyEmail")}
                       {" · "}
-                      {inv.used ? "Verwendet" : inv.expiresAt ? `Läuft ab ${new Date(inv.expiresAt).toLocaleDateString("de")}` : "Kein Ablauf"}
+                      {inv.used ? t("settings.inviteUsed") : inv.expiresAt ? t("settings.inviteExpires", { date: new Date(inv.expiresAt).toLocaleDateString() }) : t("settings.inviteNoExpiry")}
                     </div>
                   </div>
-                  {inv.used && <span style={{ fontSize: 10, color: "var(--fg-3)" }}>✓ Eingelöst</span>}
+                  {inv.used && <span style={{ fontSize: 10, color: "var(--fg-3)" }}>{t("settings.inviteRedeemed")}</span>}
                   {!inv.used && (
                     <button className="btn btn-ghost" style={{ fontSize: 10, padding: "2px 6px" }} onClick={() => remove(inv.id)}>
                       <Trash width={10} height={10} />
@@ -791,16 +1047,10 @@ function InviteSection() {
 // ─── Security Section ─────────────────────────────────────────
 type PasskeyInfo = { id: string; deviceName: string | null; createdAt: string };
 
-const SESSION_TIMEOUT_OPTIONS = [
-  { value: "15m",  label: "15 Minuten (Standard)" },
-  { value: "1h",   label: "1 Stunde" },
-  { value: "6h",   label: "6 Stunden" },
-  { value: "24h",  label: "24 Stunden" },
-  { value: "7d",   label: "1 Woche" },
-  { value: "30d",  label: "30 Tage" },
-];
+const SESSION_TIMEOUT_VALUES = ["15m", "1h", "6h", "24h", "7d", "30d"] as const;
 
 function SecuritySection() {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [creds, setCreds]         = useState<PasskeyInfo[]>([]);
@@ -840,11 +1090,11 @@ function SecuritySection() {
       const optRes = await api.get<PublicKeyCredentialCreationOptionsJSON>("/api/auth/webauthn/register-options");
       const reg = await startRegistration({ optionsJSON: optRes.data });
       await api.post("/api/auth/webauthn/register", { response: reg, deviceName: deviceName || undefined });
-      setPasskeyMsg("Passkey hinzugefügt ✓"); setDeviceName("");
+      setPasskeyMsg(t("settings.passkeyAdded")); setDeviceName("");
       await loadCreds();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setPasskeyMsg(msg ?? "Fehler bei der Passkey-Registrierung");
+      setPasskeyMsg(msg ?? t("settings.passkeyError"));
     } finally { setAddingPasskey(false); }
   };
 
@@ -857,10 +1107,10 @@ function SecuritySection() {
     setPwMsg("");
     try {
       await api.post("/api/auth/change-password", { currentPassword: currPw, newPassword: newPw });
-      setPwMsg("Passwort geändert ✓"); setCurrPw(""); setNewPw(""); setChangePw(false);
+      setPwMsg(t("settings.passwordChanged")); setCurrPw(""); setNewPw(""); setChangePw(false);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      setPwMsg(msg ?? "Fehler");
+      setPwMsg(msg ?? t("settings.passwordError"));
     }
   };
 
@@ -875,20 +1125,20 @@ function SecuritySection() {
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Shield width={13} height={13} style={{ color: "var(--fg-3)" }} />
-        <div className="eyebrow">Sicherheit</div>
+        <div className="eyebrow">{t("settings.security")}</div>
       </div>
       <div className="settings-group">
 
         {/* Session timeout */}
         <div className="settings-row">
           <div style={{ flex: 1 }}>
-            <div className="settings-row-label">Session-Dauer</div>
-            <div className="settings-row-sub">Wie lange bleibt die Anmeldung aktiv — wirksam ab nächster Anmeldung</div>
+            <div className="settings-row-label">{t("settings.sessionDuration")}</div>
+            <div className="settings-row-sub">{t("settings.sessionDurationSub")}</div>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <select value={sessionTimeout} onChange={e => saveTimeout(e.target.value)}
               style={{ fontSize: 12, padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", cursor: "pointer" }}>
-              {SESSION_TIMEOUT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              {SESSION_TIMEOUT_VALUES.map(v => <option key={v} value={v}>{t(`settings.sessionTimeout${v}`)}</option>)}
             </select>
             {timeoutSaved && <span style={{ fontSize: 11, color: "#4ade80" }}>✓</span>}
           </div>
@@ -897,11 +1147,11 @@ function SecuritySection() {
         {/* Current user */}
         <div className="settings-row">
           <div>
-            <div className="settings-row-label">Account</div>
+            <div className="settings-row-label">{t("settings.account")}</div>
             <div className="settings-row-sub">{user?.email}</div>
           </div>
           <button className="btn btn-secondary" style={{ gap: 6, fontSize: 12 }} onClick={handleLogout}>
-            <LogOut width={12} height={12} /> Abmelden
+            <LogOut width={12} height={12} /> {t("user.logout")}
           </button>
         </div>
 
@@ -909,24 +1159,24 @@ function SecuritySection() {
         <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 10 }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div>
-              <div className="settings-row-label">Passwort</div>
-              <div className="settings-row-sub">Passwort ändern</div>
+              <div className="settings-row-label">{t("settings.password")}</div>
+              <div className="settings-row-sub">{t("settings.passwordSub")}</div>
             </div>
             <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => setChangePw(v => !v)}>
-              {changePw ? "Abbrechen" : "Ändern"}
+              {changePw ? t("settings.passwordCancel") : t("settings.passwordChange")}
             </button>
           </div>
           {changePw && (
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div className="field" style={{ margin: 0 }}>
-                <label>Aktuelles Passwort</label>
+                <label>{t("settings.currentPassword")}</label>
                 <input type="password" value={currPw} onChange={e => setCurrPw(e.target.value)} placeholder="••••••••" />
               </div>
               <div className="field" style={{ margin: 0 }}>
-                <label>Neues Passwort</label>
-                <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Mindestens 8 Zeichen" />
+                <label>{t("settings.newPassword")}</label>
+                <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder={t("settings.newPasswordPlaceholder")} />
               </div>
-              <button className="btn btn-primary" style={{ fontSize: 12, alignSelf: "flex-end" }} onClick={changePassword}>Speichern</button>
+              <button className="btn btn-primary" style={{ fontSize: 12, alignSelf: "flex-end" }} onClick={changePassword}>{t("buttons.save")}</button>
               {pwMsg && <div style={{ fontSize: 12, color: pwMsg.includes("✓") ? "#34d399" : "#f87171" }}>{pwMsg}</div>}
             </div>
           )}
@@ -938,23 +1188,23 @@ function SecuritySection() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div>
                 <div className="settings-row-label" style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <Key width={12} height={12} /> Passkeys
+                  <Key width={12} height={12} /> {t("settings.passkeys")}
                 </div>
-                <div className="settings-row-sub">Face ID, Touch ID, Windows Hello</div>
+                <div className="settings-row-sub">{t("settings.passkeysSub")}</div>
               </div>
               <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => setPasskeyMsg("")}>
-                + Hinzufügen
+                {t("settings.passkeyAdd")}
               </button>
             </div>
 
             {/* Add passkey inline */}
             <div style={{ display: "flex", gap: 8 }}>
               <div className="field" style={{ flex: 1, margin: 0 }}>
-                <label>Gerätename (optional)</label>
-                <input value={deviceName} onChange={e => setDeviceName(e.target.value)} placeholder="z.B. MacBook Pro, iPhone 15" />
+                <label>{t("settings.passkeyDeviceName")}</label>
+                <input value={deviceName} onChange={e => setDeviceName(e.target.value)} placeholder={t("settings.passkeyDevicePlaceholder")} />
               </div>
               <button className="btn btn-primary" style={{ fontSize: 12, alignSelf: "flex-end" }} disabled={addingPasskey} onClick={addPasskey}>
-                {addingPasskey ? "…" : "Registrieren"}
+                {addingPasskey ? t("settings.passkeyRegistering") : t("settings.passkeyRegister")}
               </button>
             </div>
             {passkeyMsg && <div style={{ fontSize: 12, color: passkeyMsg.includes("✓") ? "#34d399" : "#f87171" }}>{passkeyMsg}</div>}
@@ -965,8 +1215,8 @@ function SecuritySection() {
                 {creds.map(cr => (
                   <div key={cr.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)" }}>{cr.deviceName ?? "Unbekanntes Gerät"}</div>
-                      <div style={{ fontSize: 11, color: "var(--fg-3)" }}>Hinzugefügt: {new Date(cr.createdAt).toLocaleDateString("de-CH")}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)" }}>{cr.deviceName ?? t("settings.passkeyUnknown")}</div>
+                      <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{t("settings.passkeyAddedOn")} {new Date(cr.createdAt).toLocaleDateString()}</div>
                     </div>
                     <button className="btn btn-ghost btn-icon" onClick={() => deleteCred(cr.id)} title="Entfernen"><Trash width={12} height={12} /></button>
                   </div>
@@ -982,21 +1232,22 @@ function SecuritySection() {
 }
 
 export function SettingsPage() {
+  const { t } = useTranslation();
   const { theme, setTheme, accent, setAccent, density, setDensity, cardVariant, setCardVariant, ai, setAi } = useUiStore();
 
   return (
     <>
-      <Topbar title="Settings" />
+      <Topbar title={t("settings.title")} />
       <div className="page-content" style={{ maxWidth: 680 }}>
 
         {/* Appearance */}
         <div style={{ marginBottom: 32 }}>
-          <div className="eyebrow" style={{ marginBottom: 12 }}>Appearance</div>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>{t("settings.appearance")}</div>
           <div className="settings-group">
             <div className="settings-row">
               <div>
-                <div className="settings-row-label">Theme</div>
-                <div className="settings-row-sub">Switch between dark and light mode</div>
+                <div className="settings-row-label">{t("settings.theme")}</div>
+                <div className="settings-row-sub">{t("settings.themeSub")}</div>
               </div>
               <div className="settings-row-right">
                 <div className="theme-toggle">
@@ -1007,8 +1258,8 @@ export function SettingsPage() {
             </div>
             <div className="settings-row">
               <div>
-                <div className="settings-row-label">Accent color</div>
-                <div className="settings-row-sub">Primary interactive color</div>
+                <div className="settings-row-label">{t("settings.accentColor")}</div>
+                <div className="settings-row-sub">{t("settings.accentColorSub")}</div>
               </div>
               <div className="settings-row-right">
                 <div className="swatch-row">
@@ -1026,20 +1277,20 @@ export function SettingsPage() {
             </div>
             <div className="settings-row">
               <div>
-                <div className="settings-row-label">Density</div>
-                <div className="settings-row-sub">High = more info, Low = more whitespace</div>
+                <div className="settings-row-label">{t("settings.density")}</div>
+                <div className="settings-row-sub">{t("settings.densitySub")}</div>
               </div>
               <div className="settings-row-right">
                 <div className="theme-toggle">
-                  <button className={density === "high" ? "active" : ""} onClick={() => setDensity("high")}>High</button>
-                  <button className={density === "low"  ? "active" : ""} onClick={() => setDensity("low")}>Low</button>
+                  <button className={density === "high" ? "active" : ""} onClick={() => setDensity("high")}>{t("settings.densityHigh")}</button>
+                  <button className={density === "low"  ? "active" : ""} onClick={() => setDensity("low")}>{t("settings.densityLow")}</button>
                 </div>
               </div>
             </div>
             <div className="settings-row">
               <div>
-                <div className="settings-row-label">Card style</div>
-                <div className="settings-row-sub">Layout variant for Kanban cards</div>
+                <div className="settings-row-label">{t("settings.cardStyle")}</div>
+                <div className="settings-row-sub">{t("settings.cardStyleSub")}</div>
               </div>
               <div className="settings-row-right">
                 <select
@@ -1047,34 +1298,11 @@ export function SettingsPage() {
                   onChange={(e) => setCardVariant(e.target.value as CardVariant)}
                   style={{ ...INPUT_STYLE, width: 160, cursor: "pointer" }}
                 >
-                  <option value="rich">Rich (default)</option>
-                  <option value="compact">Compact</option>
-                  <option value="minimal">Minimal</option>
-                  <option value="editorial">Editorial</option>
+                  <option value="rich">{t("settings.cardRich")}</option>
+                  <option value="compact">{t("settings.cardCompact")}</option>
+                  <option value="minimal">{t("settings.cardMinimal")}</option>
+                  <option value="editorial">{t("settings.cardEditorial")}</option>
                 </select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Profile */}
-        <div style={{ marginBottom: 32 }}>
-          <div className="eyebrow" style={{ marginBottom: 12 }}>Profile</div>
-          <div className="settings-group">
-            <div className="settings-row">
-              <div style={{ width: 80, flexShrink: 0 }}>
-                <div className="settings-row-label">Name</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <input className="input-line" defaultValue="User" placeholder="Dein Name" />
-              </div>
-            </div>
-            <div className="settings-row">
-              <div style={{ width: 80, flexShrink: 0 }}>
-                <div className="settings-row-label">Email</div>
-              </div>
-              <div style={{ flex: 1 }}>
-                <input className="input-line" defaultValue="" placeholder="you@example.com" type="email" />
               </div>
             </div>
           </div>
@@ -1082,39 +1310,30 @@ export function SettingsPage() {
 
         {/* AI Integration */}
         <div style={{ marginBottom: 32 }}>
-          <div className="eyebrow" style={{ marginBottom: 4 }}>AI Integration</div>
+          <div className="eyebrow" style={{ marginBottom: 4 }}>{t("settings.ai")}</div>
           <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 14 }}>
-            Used for intelligent job extraction, CV tailoring, and cover letter generation.
+            {t("settings.aiSub")}
           </div>
 
-          {/* Provider selector */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-            <ProviderPill
-              value="none"
-              label="None (regex only)"
-              active={ai.provider === "none"}
-              onClick={() => setAi({ provider: "none" })}
-            />
-            <ProviderPill
-              value="lm-studio"
-              label="LM Studio (local)"
-              color="#10b981"
-              active={ai.provider === "lm-studio"}
-              onClick={() => setAi({ provider: "lm-studio" })}
-            />
-            <ProviderPill
-              value="anthropic"
-              label="Anthropic API"
-              color="#f59e0b"
-              active={ai.provider === "anthropic"}
-              onClick={() => setAi({ provider: "anthropic" })}
-            />
+          {/* Provider selector — two rows */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+            <ProviderPill value="none"        label={t("settings.aiNone")}        active={ai.provider === "none"}        onClick={() => setAi({ provider: "none" })} />
+            <ProviderPill value="lm-studio"   label={t("settings.aiLmStudio")}    color="#10b981" active={ai.provider === "lm-studio"}   onClick={() => setAi({ provider: "lm-studio" })}  recommended={t("settings.recommended")} />
+            <ProviderPill value="ollama"      label={t("settings.aiOllama")}      color="#e05d44" active={ai.provider === "ollama"}      onClick={() => setAi({ provider: "ollama" })} />
+            <ProviderPill value="anthropic"   label={t("settings.aiAnthropic")}   color="#f59e0b" active={ai.provider === "anthropic"}   onClick={() => setAi({ provider: "anthropic" })} />
+            <ProviderPill value="openai"      label={t("settings.aiOpenAI")}      color="#74aa9c" active={ai.provider === "openai"}      onClick={() => setAi({ provider: "openai" })} />
+            <ProviderPill value="gemini"      label={t("settings.aiGemini")}      color="#4285f4" active={ai.provider === "gemini"}      onClick={() => setAi({ provider: "gemini" })} />
+            <ProviderPill value="openrouter"  label={t("settings.aiOpenRouter")}  color="#a855f7" active={ai.provider === "openrouter"}  onClick={() => setAi({ provider: "openrouter" })} />
           </div>
 
           {ai.provider !== "none" && (
             <div className="settings-group">
               {ai.provider === "lm-studio"  && <LmStudioSection />}
+              {ai.provider === "ollama"     && <OllamaSection />}
               {ai.provider === "anthropic"  && <AnthropicSection />}
+              {ai.provider === "openai"     && <OpenAiSection />}
+              {ai.provider === "gemini"     && <GeminiSection />}
+              {ai.provider === "openrouter" && <OpenRouterSection />}
             </div>
           )}
 
@@ -1128,15 +1347,14 @@ export function SettingsPage() {
               color: "var(--fg-3)",
               lineHeight: 1.6
             }}>
-              Without AI, job extraction uses regex patterns — company name, role title, and location are detected
-              from keywords. Select a provider above for accurate structured extraction including salary and tags.
+              {t("settings.aiNoProvider")}
             </div>
           )}
         </div>
 
         {/* Integrations */}
         <div style={{ marginBottom: 32 }}>
-          <div className="eyebrow" style={{ marginBottom: 12 }}>Integrationen</div>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>{t("settings.integrations")}</div>
           <div className="settings-group">
             <GoogleSection />
           </div>
@@ -1161,6 +1379,7 @@ export function SettingsPage() {
 
 // ─── Backup Section ────────────────────────────────────────────
 function BackupSection() {
+  const { t } = useTranslation();
   const [exporting, setExporting]     = useState(false);
   const [exportingDrive, setExportingDrive] = useState(false);
   const [importing, setImporting]     = useState(false);
@@ -1188,7 +1407,7 @@ function BackupSection() {
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      setResult({ ok: false, msg: "Export fehlgeschlagen." });
+      setResult({ ok: false, msg: t("settings.exportFailed") });
     } finally {
       setExporting(false);
     }
@@ -1198,9 +1417,9 @@ function BackupSection() {
     setExportingDrive(true); setResult(null);
     try {
       const res = await api.post<{ ok: boolean; fileName: string; fileUrl: string }>("/api/export/drive");
-      setResult({ ok: true, msg: `Auf Google Drive gespeichert: ${res.data.fileName}` });
+      setResult({ ok: true, msg: t("settings.savedToDrive", { fileName: res.data.fileName }) });
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Google Drive Export fehlgeschlagen";
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("settings.exportFailed");
       setResult({ ok: false, msg });
     } finally {
       setExportingDrive(false);
@@ -1216,18 +1435,18 @@ function BackupSection() {
       const text = await file.text();
       const data = JSON.parse(text);
       if (data?.meta?.app !== "application-pal" || data?.meta?.version !== 1) {
-        setResult({ ok: false, msg: "Ungültige Export-Datei — falsches Format." });
+        setResult({ ok: false, msg: t("settings.importInvalidFile") });
         return;
       }
       const res = await api.post<{ ok: boolean; imported: Record<string, number> }>("/api/import", { mode, data });
       const imp = res.data.imported;
-      setResult({ ok: true, msg: `Import erfolgreich: ${imp.applications} Bewerbungen, ${imp.documents} Dokumente, ${imp.userDocuments} Bibliotheks-Dokumente.` });
+      setResult({ ok: true, msg: t("settings.importSuccess", { applications: imp.applications, documents: imp.documents, userDocuments: imp.userDocuments }) });
       setFile(null);
       if (fileRef.current) fileRef.current.value = "";
       // Reload page data after short delay
       setTimeout(() => window.location.reload(), 1500);
     } catch {
-      setResult({ ok: false, msg: "Import fehlgeschlagen — Datei prüfen." });
+      setResult({ ok: false, msg: t("settings.importFailed") });
     } finally {
       setImporting(false);
     }
@@ -1237,20 +1456,20 @@ function BackupSection() {
     <div style={{ marginBottom: 32 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <Database width={13} height={13} style={{ color: "var(--fg-3)" }} />
-        <div className="eyebrow">Daten & Backup</div>
+        <div className="eyebrow">{t("settings.backup")}</div>
       </div>
       <div className="settings-group">
 
         {/* Export */}
         <div className="settings-row">
           <div>
-            <div className="settings-row-label">Export</div>
-            <div className="settings-row-sub">Alle Daten als JSON-Backup herunterladen oder auf Google Drive speichern</div>
+            <div className="settings-row-label">{t("settings.export")}</div>
+            <div className="settings-row-sub">{t("settings.exportSub")}</div>
           </div>
           <div className="settings-row-right" style={{ gap: 8 }}>
             <button className="btn btn-secondary" style={{ fontSize: 12, gap: 6 }} onClick={doExport} disabled={exporting}>
               {exporting ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> : <Download width={12} height={12} />}
-              Herunterladen
+              {t("settings.download")}
             </button>
             {googleConnected && (
               <button className="btn btn-secondary" style={{ fontSize: 12, gap: 6 }} onClick={doExportToDrive} disabled={exportingDrive}>
@@ -1267,8 +1486,8 @@ function BackupSection() {
         <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center" }}>
             <div style={{ flex: 1 }}>
-              <div className="settings-row-label">Import</div>
-              <div className="settings-row-sub">JSON-Backup wiederherstellen</div>
+              <div className="settings-row-label">{t("settings.importLabel")}</div>
+              <div className="settings-row-sub">{t("settings.importSub")}</div>
             </div>
           </div>
 
@@ -1282,11 +1501,11 @@ function BackupSection() {
                 color: mode === m ? "var(--accent)" : "var(--fg-3)",
                 fontFamily: "var(--font-sans)"
               }}>
-                {m === "replace" ? "Ersetzen" : "Zusammenführen"}
+                {m === "replace" ? t("settings.replace") : t("settings.merge")}
               </button>
             ))}
             <span style={{ fontSize: 11, color: "var(--fg-3)", alignSelf: "center" }}>
-              {mode === "replace" ? "— löscht alle bestehenden Daten" : "— fügt hinzu / überschreibt"}
+              {mode === "replace" ? t("settings.replaceHint") : t("settings.mergeHint")}
             </span>
           </div>
 
@@ -1308,7 +1527,7 @@ function BackupSection() {
               {importing
                 ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} />
                 : <Upload width={12} height={12} />}
-              Importieren
+              {t("settings.importBtn")}
             </button>
           </div>
 
@@ -1327,11 +1546,11 @@ function BackupSection() {
 
         {/* Docker hint */}
         <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch" }}>
-          <div className="settings-row-label" style={{ marginBottom: 6 }}>Direkter PostgreSQL-Dump</div>
+          <div className="settings-row-label" style={{ marginBottom: 6 }}>{t("settings.pgDump")}</div>
           <div style={{ background: "var(--surface-3, var(--bg))", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--fg-2)", lineHeight: 1.9 }}>
-            <div style={{ color: "var(--fg-3)", marginBottom: 4, fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>Backup</div>
+            <div style={{ color: "var(--fg-3)", marginBottom: 4, fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>{t("settings.pgDumpBackup")}</div>
             docker exec application-pal-db-1 pg_dump -U postgres application_pal {">"} backup.sql
-            <div style={{ color: "var(--fg-3)", marginTop: 8, marginBottom: 4, fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>Restore</div>
+            <div style={{ color: "var(--fg-3)", marginTop: 8, marginBottom: 4, fontFamily: "var(--font-sans)", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase" }}>{t("settings.pgDumpRestore")}</div>
             docker exec -i application-pal-db-1 psql -U postgres application_pal {"<"} backup.sql
           </div>
         </div>
@@ -1344,14 +1563,14 @@ function BackupSection() {
           onClick={() => setConfirm(false)}>
           <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 28, width: 400, display: "flex", flexDirection: "column", gap: 16 }}
             onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Daten ersetzen?</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{t("settings.confirmReplaceTitle")}</div>
             <div style={{ fontSize: 13, color: "var(--fg-2)", lineHeight: 1.6 }}>
-              Alle bestehenden Bewerbungen, Dokumente und Profilangaben werden gelöscht und durch die Backup-Daten ersetzt. Diese Aktion kann nicht rückgängig gemacht werden.
+              {t("settings.confirmReplaceDesc")}
             </div>
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setConfirm(false)}>Abbrechen</button>
+              <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setConfirm(false)}>{t("buttons.cancel")}</button>
               <button className="btn btn-primary" style={{ fontSize: 12, background: "#f43f5e", borderColor: "#f43f5e" }} onClick={doImport}>
-                Ja, ersetzen
+                {t("settings.confirmYes")}
               </button>
             </div>
           </div>

@@ -150,6 +150,7 @@ function UserModal({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const { t } = useTranslation();
 
   // Close on outside click
   useEffect(() => {
@@ -210,7 +211,7 @@ function UserModal({
             {email}
           </div>
           <div style={{ fontSize: 10, color: "var(--fg-3)", marginTop: 1 }}>
-            {applicationCount} Bewerbung{applicationCount !== 1 ? "en" : ""}
+            {t("user.applications", { count: applicationCount })}
           </div>
         </div>
       </div>
@@ -232,7 +233,7 @@ function UserModal({
           onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
         >
           <SwitchOff width={14} height={14} style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 12, fontWeight: 500 }}>Nutzer wechseln</span>
+          <span style={{ fontSize: 12, fontWeight: 500 }}>{t("user.switchUser")}</span>
         </button>
 
         {/* Logout — two-step confirmation */}
@@ -251,7 +252,7 @@ function UserModal({
             onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
           >
             <LogOut width={14} height={14} style={{ flexShrink: 0 }} />
-            <span style={{ fontSize: 12, fontWeight: 500 }}>Abmelden</span>
+            <span style={{ fontSize: 12, fontWeight: 500 }}>{t("user.logout")}</span>
           </button>
         ) : (
           <div style={{
@@ -264,7 +265,7 @@ function UserModal({
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
               <WarningCircle width={13} height={13} style={{ color: "#f87171", flexShrink: 0 }} />
               <span style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.4 }}>
-                Wirklich abmelden?
+                {t("user.confirmLogout")}
               </span>
             </div>
             <div style={{ display: "flex", gap: 6 }}>
@@ -277,7 +278,7 @@ function UserModal({
                   fontSize: 11, fontWeight: 600,
                 }}
               >
-                Abmelden
+                {t("user.logout")}
               </button>
               <button
                 onClick={() => setConfirmLogout(false)}
@@ -288,7 +289,7 @@ function UserModal({
                   fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 500,
                 }}
               >
-                Abbrechen
+                {t("buttons.cancel")}
               </button>
             </div>
           </div>
@@ -304,7 +305,7 @@ type Props = { applications: Application[] };
 
 export function Rail({ applications }: Props) {
   const { railOpen, toggleRail, theme, toggleTheme, density, toggleDensity, uiLanguage, setUiLanguage } = useUiStore();
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const { user, logout } = useAuth();
 
   const changeLanguage = async (lang: "de" | "en") => {
@@ -332,17 +333,17 @@ export function Rail({ applications }: Props) {
     navigate("/setup");
   };
 
-  // Ordered nav items
+  // Ordered nav items — labels via i18n
   const navItems = [
-    { to: "/",           label: "Board",     icon: <DashboardDots  width={15} height={15} />, count: applications.filter(a => a.stage !== undefined).length },
-    { to: "/table",      label: "Liste",     icon: <Table2Columns  width={15} height={15} /> },
-    { to: "/calendar",   label: "Calendar",  icon: <Calendar       width={15} height={15} /> },
-    { to: "/timeline",   label: "Timeline",  icon: <List           width={15} height={15} /> },
-    { to: "/profile",    label: "Profil",    icon: <ProfileCircle  width={15} height={15} /> },
-    { to: "/documents",  label: "Dokumente", icon: <Folder         width={15} height={15} /> },
-    { to: "/knowledge",  label: "Knowledge", icon: <Database       width={15} height={15} /> },
-    { to: "/templates",  label: "Templates", icon: <MultiplePages  width={15} height={15} /> },
-    { to: "/settings",   label: "Settings",  icon: <Settings       width={15} height={15} /> },
+    { to: "/",           label: t("nav.board"),     icon: <DashboardDots  width={15} height={15} />, count: applications.filter(a => a.stage !== undefined).length },
+    { to: "/table",      label: t("nav.list"),      icon: <Table2Columns  width={15} height={15} /> },
+    { to: "/calendar",   label: t("nav.calendar"),  icon: <Calendar       width={15} height={15} /> },
+    { to: "/timeline",   label: t("nav.timeline"),  icon: <List           width={15} height={15} /> },
+    { to: "/profile",    label: t("nav.profile"),   icon: <ProfileCircle  width={15} height={15} /> },
+    { to: "/documents",  label: t("nav.documents"), icon: <Folder         width={15} height={15} /> },
+    { to: "/knowledge",  label: t("nav.knowledge"), icon: <Database       width={15} height={15} /> },
+    { to: "/templates",  label: t("nav.templates"), icon: <MultiplePages  width={15} height={15} /> },
+    { to: "/settings",   label: t("nav.settings"),  icon: <Settings       width={15} height={15} /> },
   ];
 
   const email = user?.email ?? "";
@@ -372,7 +373,7 @@ export function Rail({ applications }: Props) {
           <button
             className="rail-toggle-btn"
             onClick={toggleRail}
-            title={railOpen ? "Collapse sidebar" : "Expand sidebar"}
+            title={railOpen ? t("rail.collapseSidebar") : t("rail.expandSidebar")}
             style={{ transform: railOpen ? "none" : "scaleX(-1)" }}
           >
             <SidebarCollapse width={15} height={15} />
@@ -381,7 +382,7 @@ export function Rail({ applications }: Props) {
 
         {/* ── Workspace nav ── */}
         <div className="rail-body">
-          <RailSection label="WORKSPACE" open={railOpen} />
+          <RailSection label={t("nav.workspace")} open={railOpen} />
           <div className="rail-section">
             {navItems.map((item, idx) => (
               <>
@@ -406,7 +407,7 @@ export function Rail({ applications }: Props) {
                   <div key="archive" style={{ position: "relative" }}>
                     <RailBtn
                       icon={<Archive width={15} height={15} />}
-                      label="Archiv"
+                      label={t("nav.archive")}
                       active={isArchive}
                       onClick={() => navigate(isArchive ? "/" : "/?archive=true")}
                       open={railOpen}
@@ -427,24 +428,24 @@ export function Rail({ applications }: Props) {
               <button
                 className={"rail-density-btn" + (density === "high" ? " active" : "")}
                 onClick={() => density !== "high" && toggleDensity()}
-                title="High density"
+                title={t("rail.highDensity")}
               >
                 <DashboardSpeed width={13} height={13} />
-                <span>High</span>
+                <span>{t("rail.highDensity")}</span>
               </button>
               <button
                 className={"rail-density-btn" + (density === "low" ? " active" : "")}
                 onClick={() => density !== "low" && toggleDensity()}
-                title="Low density"
+                title={t("rail.lowDensity")}
               >
                 <Sofa width={13} height={13} />
-                <span>Low</span>
+                <span>{t("rail.lowDensity")}</span>
               </button>
             </div>
           ) : (
             <RailBtn
               icon={density === "high" ? <DashboardSpeed width={15} height={15} /> : <Sofa width={15} height={15} />}
-              label={density === "high" ? "High density" : "Low density"}
+              label={density === "high" ? t("rail.highDensity") : t("rail.lowDensity")}
               onClick={toggleDensity}
               open={false}
             />
@@ -485,24 +486,24 @@ export function Rail({ applications }: Props) {
               <button
                 className={"rail-density-btn" + (theme === "light" ? " active" : "")}
                 onClick={() => theme !== "light" && toggleTheme()}
-                title="Light mode"
+                title={t("rail.lightMode")}
               >
                 <SunLight width={13} height={13} />
-                <span>Light</span>
+                <span>{t("rail.lightMode")}</span>
               </button>
               <button
                 className={"rail-density-btn" + (theme === "dark" ? " active" : "")}
                 onClick={() => theme !== "dark" && toggleTheme()}
-                title="Dark mode"
+                title={t("rail.darkMode")}
               >
                 <HalfMoon width={13} height={13} />
-                <span>Dark</span>
+                <span>{t("rail.darkMode")}</span>
               </button>
             </div>
           ) : (
             <RailBtn
               icon={theme === "dark" ? <HalfMoon width={15} height={15} /> : <SunLight width={15} height={15} />}
-              label={theme === "dark" ? "Dark mode" : "Light mode"}
+              label={theme === "dark" ? t("rail.darkMode") : t("rail.lightMode")}
               onClick={toggleTheme}
               open={false}
             />
@@ -520,7 +521,7 @@ export function Rail({ applications }: Props) {
               background: userModalOpen ? "var(--surface-2)" : "transparent",
               transition: "background 0.12s, border-color 0.12s",
             }}
-            title={railOpen ? undefined : email || "Konto"}
+            title={railOpen ? undefined : email || t("user.account")}
             onMouseEnter={e => { if (!userModalOpen) e.currentTarget.style.background = "var(--surface-2)"; }}
             onMouseLeave={e => { if (!userModalOpen) e.currentTarget.style.background = "transparent"; }}
           >
@@ -536,10 +537,10 @@ export function Rail({ applications }: Props) {
                   fontSize: 12, fontWeight: 600, color: "var(--fg-1)",
                   whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
                 }}>
-                  {email || "Konto"}
+                  {email || t("user.account")}
                 </div>
                 <div style={{ fontSize: 10, color: "var(--fg-3)" }}>
-                  {applications.length} aktiv
+                  {applications.length} {t("user.active")}
                 </div>
               </div>
             )}

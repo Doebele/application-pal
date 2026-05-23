@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   OpenNewWindow, Trash, Plus, RefreshCircle, Check, Calendar,
   ChatBubbleCheck, PageEdit, SendMail, Coins, Search, HandCash, TaskList,
@@ -180,12 +181,14 @@ function DrivePickerModal({
   onAdd: (entry: TemplateEntry) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const { data: driveTemplates = [], isLoading } = useQuery<DriveTemplate[]>({
     queryKey: ["drive-templates"],
     queryFn: () => api.get<DriveTemplate[]>("/api/drive/templates").then(r => r.data),
   });
 
   const ct = CONTENT_TYPES.find(c => c.id === type);
+  const ctLabel = ct ? t(`templates.${ct.id}.label`) : ct;
   const langLabel = lang === "de" ? "Deutsch" : "English";
 
   return (
@@ -199,25 +202,25 @@ function DrivePickerModal({
         boxShadow: "var(--shadow-modal)",
       }} onClick={e => e.stopPropagation()}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "var(--fg-1)", marginBottom: 4 }}>
-          <FlagIcon lang={lang} size={18} /> {langLabel} — Vorlage aus Drive hinzufügen
+          <FlagIcon lang={lang} size={18} /> {langLabel} — {t("templates.pickerTitle")}
         </div>
         <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 16 }}>
-          {ct?.label} — Wähle ein Google Doc aus deinem Drive-Master-Ordner
+          {ctLabel} — {t("templates.pickerHint")}
         </div>
         {isLoading ? (
           <div style={{ fontSize: 12, color: "var(--fg-3)", display: "flex", alignItems: "center", gap: 6 }}>
             <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} />
-            Lade Vorlagen aus Drive…
+            {t("templates.pickerLoading")}
           </div>
         ) : driveTemplates.length === 0 ? (
           <div style={{ fontSize: 12, color: "var(--fg-3)" }}>
-            Keine Google Docs im Master-Ordner gefunden. Erstelle zuerst eine Vorlage via „+ Neu erstellen".
+            {t("templates.pickerEmpty")}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {driveTemplates.map(t => (
-              <button key={t.id}
-                onClick={() => { onAdd({ id: t.id, name: t.name, language: lang }); onClose(); }}
+            {driveTemplates.map(tmpl => (
+              <button key={tmpl.id}
+                onClick={() => { onAdd({ id: tmpl.id, name: tmpl.name, language: lang }); onClose(); }}
                 style={{
                   display: "flex", alignItems: "center", gap: 10,
                   padding: "8px 12px", borderRadius: 8,
@@ -231,11 +234,11 @@ function DrivePickerModal({
                 <Calendar width={14} height={14} style={{ color: "var(--accent)", flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {t.name}
+                    {tmpl.name}
                   </div>
                 </div>
-                {t.webViewLink && (
-                  <a href={t.webViewLink} target="_blank" rel="noreferrer"
+                {tmpl.webViewLink && (
+                  <a href={tmpl.webViewLink} target="_blank" rel="noreferrer"
                     onClick={e => e.stopPropagation()}
                     style={{ color: "var(--fg-3)", display: "flex", flexShrink: 0 }}>
                     <OpenNewWindow width={12} height={12} />
@@ -247,7 +250,7 @@ function DrivePickerModal({
         )}
         <button onClick={onClose}
           className="btn btn-secondary" style={{ fontSize: 12, marginTop: 16, width: "100%" }}>
-          Abbrechen
+          {t("buttons.cancel")}
         </button>
       </div>
     </div>
@@ -272,6 +275,7 @@ function LangSection({
   onAddFromDrive: () => void;
   onCreateNew: () => void;
 }) {
+  const { t } = useTranslation();
   const [creating, setCreating] = useState(false);
   const label  = lang === "de" ? "Deutsch" : "English";
 
@@ -300,7 +304,7 @@ function LangSection({
           className="btn btn-ghost"
           style={{ fontSize: 10, gap: 3, padding: "3px 8px" }}
         >
-          <Plus width={10} height={10} /> Aus Drive
+          <Plus width={10} height={10} /> {t("templates.fromDrive")}
         </button>
         <button
           onClick={handleCreate}
@@ -309,8 +313,8 @@ function LangSection({
           disabled={creating}
         >
           {creating
-            ? <><RefreshCircle width={10} height={10} style={{ animation: "spin 1s linear infinite" }} /> Erstelle…</>
-            : <><Plus width={10} height={10} /> Neu erstellen</>
+            ? <><RefreshCircle width={10} height={10} style={{ animation: "spin 1s linear infinite" }} /> {t("templates.creating")}</>
+            : <><Plus width={10} height={10} /> {t("templates.createNew")}</>
           }
         </button>
       </div>
@@ -320,7 +324,7 @@ function LangSection({
         <div style={{
           padding: "10px 14px", fontSize: 11, color: "var(--fg-4)", fontStyle: "italic",
         }}>
-          Noch keine {label} Vorlage — „Neu erstellen" legt eine formatierte Vorlage mit Platzhaltern an.
+          {t("templates.noTemplateYet", { lang: label })}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column" }}>
@@ -354,7 +358,7 @@ function LangSection({
                   </div>
                   {isActive && (
                     <div style={{ fontSize: 10, color: "var(--accent)", fontWeight: 600, marginTop: 1 }}>
-                      Aktiv — wird beim Export verwendet
+                      {t("templates.activeLabel")}
                     </div>
                   )}
                 </div>
@@ -365,7 +369,7 @@ function LangSection({
                   rel="noreferrer"
                   onClick={e => e.stopPropagation()}
                   style={{ color: "var(--fg-3)", display: "flex", flexShrink: 0, padding: 4 }}
-                  title="In Google Docs öffnen"
+                  title={t("templates.openInDocs")}
                 >
                   <OpenNewWindow width={12} height={12} />
                 </a>
@@ -373,7 +377,7 @@ function LangSection({
                 <button
                   onClick={e => { e.stopPropagation(); onRemove(tmpl.id); }}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 4, display: "flex", flexShrink: 0 }}
-                  title="Aus Liste entfernen (bleibt in Drive)"
+                  title={t("templates.removeFromList")}
                 >
                   <Trash width={12} height={12} />
                 </button>
@@ -402,12 +406,13 @@ function ContentTypeSection({
   onRemove: (type: string, id: string) => Promise<void>;
   onCreateNew: (type: ContentTypeId, lang: Lang) => Promise<void>;
 }) {
+  const { t } = useTranslation();
   const [showPlaceholders, setShowPlaceholders] = useState(false);
   const typeConfig = config[contentType.id];
   const allTemplates = typeConfig?.templates ?? [];
 
-  const deTemplates = allTemplates.filter(t => !t.language || t.language === "de");
-  const enTemplates = allTemplates.filter(t => !t.language || t.language === "en");
+  const deTemplates = allTemplates.filter(tmpl => !tmpl.language || tmpl.language === "de");
+  const enTemplates = allTemplates.filter(tmpl => !tmpl.language || tmpl.language === "en");
 
   const activeIdDe = typeConfig?.activeIdDe ?? typeConfig?.activeId ?? null;
   const activeIdEn = typeConfig?.activeIdEn ?? typeConfig?.activeId ?? null;
@@ -418,8 +423,8 @@ function ContentTypeSection({
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <contentType.Icon width={28} height={28} style={{ color: "var(--fg-2)", flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>{contentType.label}</div>
-          <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{contentType.description}</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>{t(`templates.${contentType.id}.label`)}</div>
+          <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{t(`templates.${contentType.id}.description`)}</div>
         </div>
       </div>
 
@@ -454,7 +459,7 @@ function ContentTypeSection({
           fontFamily: "var(--font-sans)",
         }}
       >
-        {showPlaceholders ? "▲" : "▼"} Verfügbare Platzhalter für diese Vorlage
+        {showPlaceholders ? "▲" : "▼"} {t("templates.showPlaceholders")}
       </button>
       {showPlaceholders && (
         <div style={{
@@ -479,6 +484,7 @@ function ContentTypeSection({
 
 // ─── Main TemplatesPage ───────────────────────────────────────
 export function TemplatesPage() {
+  const { t } = useTranslation();
   const { config, isLoading, setActive, addTemplate, removeTemplate } = useDocTemplates();
   const queryClient = useQueryClient();
   const [pickerOpen, setPickerOpen] = useState<{ type: ContentTypeId; lang: Lang } | null>(null);
@@ -503,17 +509,17 @@ export function TemplatesPage() {
       );
       await addTemplate(type, { id: r.data.fileId, name: r.data.fileName, language: lang });
       queryClient.invalidateQueries({ queryKey: ["drive-templates"] });
-      showToast(`Vorlage „${r.data.fileName}" erstellt`);
+      showToast(t("templates.created", { name: r.data.fileName }));
     } catch {
-      showToast("Fehler beim Erstellen — Google Drive verbunden?");
+      showToast(t("templates.createError"));
     }
   };
 
   return (
     <>
       <Topbar
-        title="Vorlagen"
-        sub="Google Doc Vorlagen für KI-Exporte — je Sprache getrennt auswählbar"
+        title={t("templates.title")}
+        sub={t("templates.sub")}
       />
 
       <div className="page-content" style={{ maxWidth: 720 }}>
@@ -523,9 +529,9 @@ export function TemplatesPage() {
             background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)",
             fontSize: 12, color: "#fbbf24",
           }}>
-            Google Drive ist nicht verbunden.{" "}
+            {t("templates.noGoogleDrive")}{" "}
             <a href="/settings" style={{ color: "inherit", fontWeight: 700 }}>
-              Settings → Integrationen → Google verbinden
+              {t("templates.connectGoogle")}
             </a>
           </div>
         )}
@@ -535,18 +541,14 @@ export function TemplatesPage() {
           background: "var(--surface-2)", border: "1px solid var(--border)",
           fontSize: 12, color: "var(--fg-2)", lineHeight: 1.7,
         }}>
-          <strong style={{ color: "var(--fg-1)" }}>So funktioniert es:</strong>{" "}
-          Für jede Vorlage gibt es eine <strong style={{ color: "var(--fg-1)", display: "inline-flex", alignItems: "center", gap: 4, verticalAlign: "middle" }}><FlagIcon lang="de" size={15} /> Deutsch</strong>{" "}
-          und eine <strong style={{ color: "var(--fg-1)", display: "inline-flex", alignItems: "center", gap: 4, verticalAlign: "middle" }}><FlagIcon lang="en" size={15} /> English</strong> Version.
-          „Neu erstellen" legt ein formatiertes Google Doc mit Platzhaltern wie{" "}
-          <code style={{ fontFamily: "var(--font-mono)", fontSize: 10, background: "var(--surface)", borderRadius: 3, padding: "1px 4px", color: "var(--accent)" }}>{"{{FIRMA}}"}</code>{" "}
-          an. Beim Export wählt die App automatisch die Vorlage passend zur Bewerbungssprache.
+          <strong style={{ color: "var(--fg-1)" }}>{t("templates.howItWorks")}</strong>{" "}
+          {t("templates.howItWorksDesc")}
         </div>
 
         {isLoading ? (
           <div style={{ fontSize: 13, color: "var(--fg-3)", display: "flex", alignItems: "center", gap: 8 }}>
             <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} />
-            Lade Konfiguration…
+            {t("templates.loading")}
           </div>
         ) : (
           CONTENT_TYPES.map(ct => (

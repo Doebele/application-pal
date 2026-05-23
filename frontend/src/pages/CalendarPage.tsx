@@ -72,6 +72,7 @@ function FloatingPopup({
   onClose: () => void;
   onOpenApp: (appId: string) => void;
 }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const appId    = popup.event.metadata?.appId as string | undefined;
   const htmlLink = popup.event.metadata?.htmlLink as string | undefined;
@@ -141,7 +142,7 @@ function FloatingPopup({
               style={{ fontSize: 10, padding: "3px 10px" }}
               onClick={() => { onOpenApp(appId); onClose(); }}
             >
-              Bewerbung öffnen →
+              {t("calendar.openAppArrow")}
             </button>
           )}
           {htmlLink && (
@@ -149,7 +150,7 @@ function FloatingPopup({
               className="btn btn-secondary"
               style={{ fontSize: 10, padding: "3px 10px", textDecoration: "none" }}
             >
-              Google Kalender ↗
+              {t("calendar.googleCalLink")}
             </a>
           )}
         </div>
@@ -228,7 +229,8 @@ function MonthView({
   events: CalendarEvent[];
   onSelectEvent: (ev: CalendarEvent, x: number, y: number) => void;
 }) {
-  const DAYS = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
+  const { t } = useTranslation();
+  const DAYS = t("calendar.daysShort", { returnObjects: true }) as string[];
   const today = new Date();
 
   const firstDay = new Date(displayDate.getFullYear(), displayDate.getMonth(), 1);
@@ -348,6 +350,7 @@ function GoogleCalendarPanel({
   onSelect: (id: string) => void;
   onRefresh: () => void;
 }) {
+  const { t } = useTranslation();
   if (!status?.connected) return null;
 
   if (!status.hasCalendarScope) {
@@ -355,10 +358,10 @@ function GoogleCalendarPanel({
       <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
         <Calendar width={13} height={13} style={{ color: "var(--fg-3)" }} />
         <span style={{ fontSize: 11, color: "var(--fg-3)" }}>
-          Kalender-Zugriff fehlt —
+          {t("calendar.calAccessMissing")}
         </span>
         <a href="/settings" style={{ fontSize: 11, color: "var(--accent)", textDecoration: "none" }}>
-          Google neu verbinden
+          {t("calendar.reconnectGoogle")}
         </a>
       </div>
     );
@@ -377,10 +380,10 @@ function GoogleCalendarPanel({
           cursor: "pointer", fontFamily: "var(--font-sans)",
         }}
       >
-        <option value="">— Google Kalender —</option>
+        <option value="">{t("calendar.selectCalendar")}</option>
         {calendars.map((cal) => (
           <option key={cal.id} value={cal.id}>
-            {cal.primary ? "Primärer Kalender" : cal.summary}
+            {cal.primary ? t("calendar.primaryCalendar") : cal.summary}
           </option>
         ))}
       </select>
@@ -388,7 +391,7 @@ function GoogleCalendarPanel({
         <>
           <button onClick={onRefresh}
             style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 2 }}
-            title="Aktualisieren">
+            title={t("buttons.refresh")}>
             <RefreshDouble width={12} height={12} />
           </button>
           <Check width={12} height={12} style={{ color: "#a855f7" }} />
@@ -408,12 +411,13 @@ function FilterSection({
   onClear: () => void;
   hasActive: boolean;
 }) {
-  const { t } = useTranslation("stages");
+  const { t } = useTranslation();
+  const { t: tStages } = useTranslation("stages");
   return (
     <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
       {/* Type chips */}
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-        <span className="eyebrow" style={{ marginRight: 2 }}>Typ</span>
+        <span className="eyebrow" style={{ marginRight: 2 }}>{t("calendar.typeLabel")}</span>
         {ALL_EVENT_TYPES.map((type) => {
           const active = filters.types.includes(type);
           return (
@@ -434,7 +438,7 @@ function FilterSection({
 
       {/* Phase chips */}
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-        <span className="eyebrow" style={{ marginRight: 2 }}>Phase</span>
+        <span className="eyebrow" style={{ marginRight: 2 }}>{t("calendar.phaseLabel")}</span>
         {ALL_STAGES.map((stage) => {
           const active = filters.phases.includes(stage);
           const color  = stageColor(stage);
@@ -449,7 +453,7 @@ function FilterSection({
               cursor: "pointer", fontFamily: "var(--font-sans)",
               transition: "all 0.12s ease",
             }}>
-              {t(stage, { defaultValue: stage })}
+              {tStages(stage, { defaultValue: stage })}
             </button>
           );
         })}
@@ -462,7 +466,7 @@ function FilterSection({
           color: "var(--fg-3)", cursor: "pointer", fontFamily: "var(--font-sans)",
           display: "flex", alignItems: "center", gap: 4,
         }}>
-          <Xmark width={9} height={9} /> löschen
+          <Xmark width={9} height={9} /> {t("calendar.clearFilter")}
         </button>
       )}
     </div>
@@ -471,6 +475,7 @@ function FilterSection({
 
 // ─── Main CalendarPage ────────────────────────────────────────
 export function CalendarPage() {
+  const { t } = useTranslation();
   const { data: applications = [] } = useQuery<Application[]>({
     queryKey: ["applications"],
     queryFn: () => api.get("/api/applications").then((r) => r.data),
@@ -578,7 +583,7 @@ export function CalendarPage() {
   return (
     <>
       <Topbar
-        title="Kalender"
+        title={t("calendar.title")}
         actions={
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             {/* Month / Week toggle */}
@@ -592,7 +597,7 @@ export function CalendarPage() {
                   boxShadow: filters.view === v ? "var(--shadow-card)" : "none",
                   transition: "all 0.12s ease",
                 }}>
-                  {v === "month" ? "Monat" : "Woche"}
+                  {v === "month" ? t("calendar.monthView") : t("calendar.weekView")}
                 </button>
               ))}
             </div>
@@ -632,8 +637,8 @@ export function CalendarPage() {
           />
           {visibleEvents.length > 0 && (
             <span style={{ fontSize: 10, color: "var(--fg-3)" }}>
-              {visibleEvents.length} Event{visibleEvents.length !== 1 ? "s" : ""}
-              {hasActiveFilter ? " (gefiltert)" : ""}
+              {t(`calendar.eventsCount_${visibleEvents.length === 1 ? "one" : "other"}`, { count: visibleEvents.length })}
+              {hasActiveFilter ? ` (${t("calendar.filtered")})` : ""}
             </span>
           )}
         </div>
@@ -665,8 +670,8 @@ export function CalendarPage() {
         {visibleEvents.length === 0 && (
           <div style={{ textAlign: "center", padding: "48px 0", color: "var(--fg-3)", fontSize: 13 }}>
             {hasActiveFilter
-              ? "Keine Events für den gewählten Filter in diesem Zeitraum."
-              : "Keine Events in diesem Zeitraum. Füge Interviewtermine oder Deadlines im Prozess-Tab hinzu."}
+              ? t("calendar.noEventsFiltered")
+              : t("calendar.noEventsHint")}
           </div>
         )}
       </div>

@@ -14,6 +14,7 @@
   "email-follow":      { "label": "Follow-up-Email",        "tooltip": "Follow-up-Email formulieren" },
   "email-decline":     { "label": "Absage-Email",           "tooltip": "Absage-Email formulieren" },
   "email-linkedin":    { "label": "LinkedIn-Vernetzung",    "tooltip": "LinkedIn-Vernetzungsnachricht formulieren" },
+  "email-feedback":    { "label": "Feedback-Email",         "tooltip": "Feedback-Email nach Absage formulieren" },
   "interview-prep":    { "label": "Interview-Vorbereitung", "tooltip": "Fragen, STAR-Beispiele und Rückfragen generieren" },
   "salary-tips":       { "label": "Gehaltsverhandlung",     "tooltip": "Verhandlungstipps und Ackermann-Script erstellen" },
   "company-research":  { "label": "Unternehmensrecherche",  "tooltip": "Unternehmensrecherche erstellen" },

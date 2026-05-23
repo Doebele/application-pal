@@ -5,6 +5,7 @@ import { Settings, Plus, Check, ViewGrid, List, NavArrowUp, NavArrowDown } from 
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
+import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
 import { Board } from "../components/Board";
 import { ImportDrawer } from "../components/ImportDrawer";
@@ -24,16 +25,8 @@ const ALL_STAGES = [
 ];
 
 // ─── Time horizon filter options ──────────────────────────────
-const TIME_OPTIONS = [
-  { id: "all",   label: "Alle Zeiträume" },
-  { id: "1w",    label: "Letzte Woche" },
-  { id: "2w",    label: "Letzte 2 Wochen" },
-  { id: "1m",    label: "Letzter Monat" },
-  { id: "3m",    label: "Letzte 3 Monate" },
-  { id: "older5w", label: "Älter als 5 Wochen" },
-  { id: "older3m", label: "Älter als 3 Monate" },
-] as const;
-type TimeFilter = typeof TIME_OPTIONS[number]["id"];
+const TIME_OPTION_IDS = ["all", "1w", "2w", "1m", "3m", "older5w", "older3m"] as const;
+type TimeFilter = typeof TIME_OPTION_IDS[number];
 
 function matchesTimeFilter(app: Application, timeFilter: TimeFilter): boolean {
   if (timeFilter === "all") return true;
@@ -52,15 +45,8 @@ function matchesTimeFilter(app: Application, timeFilter: TimeFilter): boolean {
 }
 
 // ─── Archive reason filter options ────────────────────────────
-const ARCHIVE_REASON_OPTIONS = [
-  { id: "all",         label: "Alle Gründe" },
-  { id: "unavailable", label: ARCHIVE_REASON_LABELS.unavailable },
-  { id: "irrelevant",  label: ARCHIVE_REASON_LABELS.irrelevant },
-  { id: "taken",       label: ARCHIVE_REASON_LABELS.taken },
-  { id: "other",       label: ARCHIVE_REASON_LABELS.other },
-  { id: "none",        label: "Kein Grund angegeben" },
-] as const;
-type ReasonFilter = typeof ARCHIVE_REASON_OPTIONS[number]["id"];
+const ARCHIVE_REASON_OPTION_IDS = ["all", "unavailable", "irrelevant", "taken", "other", "none"] as const;
+type ReasonFilter = typeof ARCHIVE_REASON_OPTION_IDS[number];
 
 // ─── Filter Dropdown (main board: stages + time) ──────────────
 function FilterDropdown({
@@ -74,6 +60,7 @@ function FilterDropdown({
   onChangeTime: (t: TimeFilter) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const allSelected = visible.length === 0 || visible.length === ALL_STAGES.length;
 
@@ -93,6 +80,8 @@ function FilterDropdown({
 
   const isVisible = (id: string) => allSelected || visible.includes(id);
 
+  const timeOptions = TIME_OPTION_IDS.map(id => ({ id, label: t(`board.time.${id}`) }));
+
   return (
     <div ref={ref} style={{
       position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 50,
@@ -101,8 +90,8 @@ function FilterDropdown({
     }}>
       {/* Stages */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px 8px", borderBottom: "1px solid var(--border)", marginBottom: 6 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Phasen</span>
-        <button onClick={() => onChangeStages([])} style={{ fontSize: 10, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", padding: "2px 4px" }}>Alle</button>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("board.filterSection.phases")}</span>
+        <button onClick={() => onChangeStages([])} style={{ fontSize: 10, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", padding: "2px 4px" }}>{t("board.filterSection.all")}</button>
       </div>
       {ALL_STAGES.map((s) => {
         const active = isVisible(s.id);
@@ -122,17 +111,17 @@ function FilterDropdown({
 
       {/* Time horizon */}
       <div style={{ padding: "8px 8px 4px", borderTop: "1px solid var(--border)", marginTop: 6, marginBottom: 6 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Zeitraum</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("board.filterSection.period")}</span>
       </div>
-      {TIME_OPTIONS.map((t) => (
-        <button key={t.id} onClick={() => onChangeTime(t.id)} style={{
+      {timeOptions.map((opt) => (
+        <button key={opt.id} onClick={() => onChangeTime(opt.id)} style={{
           display: "flex", alignItems: "center", gap: 10, width: "100%",
           padding: "7px 10px", borderRadius: 8, border: "none",
-          background: timeFilter === t.id ? "var(--accent-08)" : "transparent",
+          background: timeFilter === opt.id ? "var(--accent-08)" : "transparent",
           cursor: "pointer", fontFamily: "var(--font-sans)", transition: "background 0.1s"
         }}>
-          <span style={{ flex: 1, fontSize: 13, fontWeight: timeFilter === t.id ? 600 : 400, color: timeFilter === t.id ? "var(--accent)" : "var(--fg-2)", textAlign: "left" }}>{t.label}</span>
-          {timeFilter === t.id && <Check width={12} height={12} style={{ color: "var(--accent)" }} />}
+          <span style={{ flex: 1, fontSize: 13, fontWeight: timeFilter === opt.id ? 600 : 400, color: timeFilter === opt.id ? "var(--accent)" : "var(--fg-2)", textAlign: "left" }}>{opt.label}</span>
+          {timeFilter === opt.id && <Check width={12} height={12} style={{ color: "var(--accent)" }} />}
         </button>
       ))}
     </div>
@@ -151,6 +140,7 @@ function ArchiveFilterDropdown({
   onChangeTime: (t: TimeFilter) => void;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -160,6 +150,16 @@ function ArchiveFilterDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
+  const reasonOptions = ARCHIVE_REASON_OPTION_IDS.map(id => {
+    let label: string;
+    if (id === "all")  label = t("board.reasonFilter.all");
+    else if (id === "none") label = t("board.reasonFilter.none");
+    else label = ARCHIVE_REASON_LABELS[id] ?? id;
+    return { id, label };
+  });
+
+  const timeOptions = TIME_OPTION_IDS.map(id => ({ id, label: t(`board.time.${id}`) }));
+
   return (
     <div ref={ref} style={{
       position: "absolute", top: "calc(100% + 8px)", right: 0, zIndex: 50,
@@ -168,9 +168,9 @@ function ArchiveFilterDropdown({
     }}>
       {/* Archive reason */}
       <div style={{ padding: "4px 8px 8px", borderBottom: "1px solid var(--border)", marginBottom: 6 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Archivierungsgrund</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("board.filterSection.archiveReason")}</span>
       </div>
-      {ARCHIVE_REASON_OPTIONS.map((r) => (
+      {reasonOptions.map((r) => (
         <button key={r.id} onClick={() => onChangeReason(r.id)} style={{
           display: "flex", alignItems: "center", gap: 10, width: "100%",
           padding: "7px 10px", borderRadius: 8, border: "none",
@@ -184,17 +184,17 @@ function ArchiveFilterDropdown({
 
       {/* Time horizon */}
       <div style={{ padding: "8px 8px 4px", borderTop: "1px solid var(--border)", marginTop: 6, marginBottom: 6 }}>
-        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Zeitraum</span>
+        <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("board.filterSection.period")}</span>
       </div>
-      {TIME_OPTIONS.map((t) => (
-        <button key={t.id} onClick={() => onChangeTime(t.id)} style={{
+      {timeOptions.map((opt) => (
+        <button key={opt.id} onClick={() => onChangeTime(opt.id)} style={{
           display: "flex", alignItems: "center", gap: 10, width: "100%",
           padding: "7px 10px", borderRadius: 8, border: "none",
-          background: timeFilter === t.id ? "var(--accent-08)" : "transparent",
+          background: timeFilter === opt.id ? "var(--accent-08)" : "transparent",
           cursor: "pointer", fontFamily: "var(--font-sans)", transition: "background 0.1s"
         }}>
-          <span style={{ flex: 1, fontSize: 13, fontWeight: timeFilter === t.id ? 600 : 400, color: timeFilter === t.id ? "var(--accent)" : "var(--fg-2)", textAlign: "left" }}>{t.label}</span>
-          {timeFilter === t.id && <Check width={12} height={12} style={{ color: "var(--accent)" }} />}
+          <span style={{ flex: 1, fontSize: 13, fontWeight: timeFilter === opt.id ? 600 : 400, color: timeFilter === opt.id ? "var(--accent)" : "var(--fg-2)", textAlign: "left" }}>{opt.label}</span>
+          {timeFilter === opt.id && <Check width={12} height={12} style={{ color: "var(--accent)" }} />}
         </button>
       ))}
     </div>
@@ -207,7 +207,7 @@ const ARCHIVE_COLS = [
   { id: "irrelevant",  color: "#fbbf24" },
   { id: "taken",       color: "#94a3b8" },
   { id: "other",       color: "#8896a8" },
-  { id: "_none",       color: "#535e6b", label: "Kein Grund" },
+  { id: "_none",       color: "#535e6b" },
 ] as const;
 
 function ArchiveCard({ app, onClick }: { app: Application; onClick: () => void }) {
@@ -238,13 +238,14 @@ function ArchiveCard({ app, onClick }: { app: Application; onClick: () => void }
 }
 
 function ArchiveKanban({ applications, onCardClick }: { applications: Application[]; onCardClick: (id: string) => void }) {
+  const { t } = useTranslation();
   return (
     <div style={{ display: "flex", gap: 12, padding: "16px 20px", overflowX: "auto", alignItems: "flex-start", flex: 1 }}>
       {ARCHIVE_COLS.map(col => {
         const apps = applications.filter(a =>
           col.id === "_none" ? !a.archiveReason : a.archiveReason === col.id
         );
-        const label = col.id === "_none" ? col.label : (ARCHIVE_REASON_LABELS[col.id] ?? col.id);
+        const label = col.id === "_none" ? t("board.noReasonLabel") : (ARCHIVE_REASON_LABELS[col.id] ?? col.id);
         return (
           <div key={col.id} style={{ width: 248, flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "0 2px" }}>
@@ -255,7 +256,7 @@ function ArchiveKanban({ applications, onCardClick }: { applications: Applicatio
             {apps.map(app => <ArchiveCard key={app.id} app={app} onClick={() => onCardClick(app.id)} />)}
             {apps.length === 0 && (
               <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "20px 12px", textAlign: "center", fontSize: 11, color: "var(--fg-4)" }}>
-                Keine Einträge
+                {t("board.noEntries")}
               </div>
             )}
           </div>
@@ -268,6 +269,7 @@ function ArchiveKanban({ applications, onCardClick }: { applications: Applicatio
 type ArchiveSortKey = "role" | "createdAt" | "company" | "reason" | "score";
 
 function ArchiveTable({ applications, onRowClick }: { applications: Application[]; onRowClick: (id: string) => void }) {
+  const { t } = useTranslation();
   const [sortKey, setSortKey] = useState<ArchiveSortKey>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
@@ -297,11 +299,11 @@ function ArchiveTable({ applications, onRowClick }: { applications: Application[
   );
 
   const cols: { key: ArchiveSortKey; label: string; flex: number }[] = [
-    { key: "role",      label: "Name",             flex: 3 },
-    { key: "createdAt", label: "Erstellt",          flex: 2 },
-    { key: "company",   label: "Unternehmen",       flex: 2 },
-    { key: "reason",    label: "Ablehnungsgrund",   flex: 2 },
-    { key: "score",     label: "Match",             flex: 1 },
+    { key: "role",      label: t("board.col.name"),            flex: 3 },
+    { key: "createdAt", label: t("board.col.created"),         flex: 2 },
+    { key: "company",   label: t("board.col.company"),         flex: 2 },
+    { key: "reason",    label: t("board.col.rejectionReason"), flex: 2 },
+    { key: "score",     label: t("board.col.match"),           flex: 1 },
   ];
 
   return (
@@ -346,13 +348,14 @@ function ArchiveTable({ applications, onRowClick }: { applications: Application[
         </div>
       ))}
       {sorted.length === 0 && (
-        <div style={{ textAlign: "center", padding: "56px 0", fontSize: 13, color: "var(--fg-3)" }}>Keine archivierten Bewerbungen</div>
+        <div style={{ textAlign: "center", padding: "56px 0", fontSize: 13, color: "var(--fg-3)" }}>{t("board.noArchived")}</div>
       )}
     </div>
   );
 }
 
 export function BoardPage() {
+  const { t } = useTranslation();
   const { cardVariant, setCardVariant, isImportModalOpen, setImportModalOpen, selectedApplicationId, setSelectedApplicationId } = useUiStore();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -455,7 +458,7 @@ export function BoardPage() {
           style={{ gap: 6, ...(isFiltered ? { border: "1px solid var(--accent)", background: "var(--accent-08)", color: "var(--accent)" } : {}) }}
         >
           <Settings width={13} height={13} />
-          Filter
+          {t("filter")}
           {isFiltered && filterBadgeCount > 0 && (
             <span style={{
               minWidth: 18, height: 18, borderRadius: 999, padding: "0 5px",
@@ -489,7 +492,7 @@ export function BoardPage() {
 
       {!showArchived && (
         <button className="btn btn-primary" onClick={() => setImportModalOpen(true)}>
-          <Plus width={13} height={13} /> Import Job
+          <Plus width={13} height={13} /> {t("buttons.import")}
         </button>
       )}
     </>
@@ -498,8 +501,10 @@ export function BoardPage() {
   return (
     <>
       <Topbar
-        title={showArchived ? "Archiv" : "Board"}
-        sub={`${applications.length} ${showArchived ? "archivierte" : ""} Bewerbungen`}
+        title={showArchived ? t("nav.archive") : t("nav.board")}
+        sub={showArchived
+          ? `${applications.length} ${t("board.archived")} ${t("applications")}`
+          : `${applications.length} ${t("applications")}`}
         actions={headerActions}
       />
       {showArchived ? (

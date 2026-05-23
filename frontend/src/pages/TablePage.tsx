@@ -42,11 +42,7 @@ const SOURCE_LABELS: Record<string, string> = {
 
 // Pensum values are stored as-is ("100%", "80-100%", etc.) — no mapping needed
 
-const WORK_MODEL_LABELS: Record<string, string> = {
-  onsite: "Vor Ort",
-  hybrid: "Hybrid",
-  remote: "Remote",
-};
+// WORK_MODEL_LABELS resolved dynamically via t() in component — see workModel cell
 
 const DEFAULT_VISIBLE: VisibilityState = {
   company: true, role: true, stage: true, location: true,
@@ -109,6 +105,7 @@ function RunAiButton({ appId, endpoint, hasValue }: {
   endpoint: string;
   hasValue: boolean;
 }) {
+  const { t } = useTranslation();
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
@@ -131,7 +128,7 @@ function RunAiButton({ appId, endpoint, hasValue }: {
     <button
       onClick={run}
       disabled={running}
-      title={hasValue ? "Neu analysieren" : "Analysieren"}
+      title={hasValue ? t("ki.rerun") : t("ki.run")}
       style={{
         background: "none", border: "none", cursor: running ? "default" : "pointer",
         padding: 0, display: "inline-flex", alignItems: "center", flexShrink: 0,
@@ -159,7 +156,8 @@ const ch = createColumnHelper<Application>();
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function TablePage() {
-  const { t } = useTranslation("stages");
+  const { t: tStages } = useTranslation("stages");
+  const { t } = useTranslation();
   const {
     tableColumnOrder, tableColumnVisibility, tableColumnPinning, tableColumnSizing,
     setTableColumnOrder, setTableColumnVisibility, setTableColumnPinning, setTableColumnSizing,
@@ -210,7 +208,7 @@ export function TablePage() {
   // Column definitions
   const columns = useMemo(() => [
     ch.accessor("company", {
-      header: "Unternehmen",
+      header: t("table.columns.company"),
       meta: { tooltip: (app) => app.company ?? undefined },
       cell: ({ row }) => {
         const app = row.original;
@@ -233,13 +231,13 @@ export function TablePage() {
       },
     }),
     ch.accessor("role", {
-      header: "Stelle",
+      header: t("table.columns.role"),
       meta: { tooltip: (app) => app.role ?? undefined },
       cell: ({ getValue }) => <span style={{ color: "var(--fg-1)", fontWeight: 400 }}>{getValue()}</span>,
     }),
     ch.accessor("stage", {
-      header: "Phase",
-      meta: { tooltip: (app) => t(app.stage ?? "", { defaultValue: app.stage ?? undefined }) },
+      header: t("table.columns.stage"),
+      meta: { tooltip: (app) => tStages(app.stage ?? "", { defaultValue: app.stage ?? undefined }) },
       cell: ({ getValue }) => {
         const s = getValue() ?? "";
         // Use CSS variables for WCAG-accessible colours in both light/dark modes
@@ -251,18 +249,18 @@ export function TablePage() {
             background: `color-mix(in srgb, ${colorVar} 12%, transparent)`,
             border: `1px solid color-mix(in srgb, ${colorVar} 27%, transparent)`,
           }}>
-            {t(s, { defaultValue: s })}
+            {tStages(s, { defaultValue: s })}
           </span>
         );
       },
     }),
     ch.accessor("location", {
-      header: "Ort",
+      header: t("table.columns.location"),
       meta: { tooltip: (app) => app.location ?? undefined },
       cell: ({ getValue }) => <span style={{ color: "var(--fg-2)" }}>{getValue() ?? "—"}</span>,
     }),
     ch.accessor("matchScore", {
-      header: "Match",
+      header: t("table.columns.matchScore"),
       meta: { tooltip: (app) => app.matchScore != null ? `${app.matchScore}%` : undefined },
       cell: ({ getValue, row }) => {
         const v = getValue();
@@ -282,7 +280,7 @@ export function TablePage() {
     }),
     ch.display({
       id: "salaryMedian",
-      header: "Lohn-Median",
+      header: t("table.columns.salaryMedian"),
       meta: { tooltip: (app) => { const v = getSalaryMedian(app); return v ? `CHF ${v.toLocaleString("de-CH")}` : undefined; } },
       cell: ({ row }) => {
         const v = getSalaryMedian(row.original);
@@ -296,7 +294,7 @@ export function TablePage() {
     }),
     ch.display({
       id: "glassdoor",
-      header: "Glassdoor",
+      header: t("table.columns.glassdoor"),
       meta: { tooltip: (app) => { const r = getGlassdoorRating(app); return r ? `${r.toFixed(1)} / 5` : undefined; } },
       cell: ({ row }) => {
         const r = getGlassdoorRating(row.original);
@@ -315,7 +313,7 @@ export function TablePage() {
     }),
     ch.display({
       id: "kununu",
-      header: "Kununu",
+      header: t("table.columns.kununu"),
       meta: { tooltip: (app) => { const r = getKununuRating(app); return r ? `${r.toFixed(1)} / 5` : undefined; } },
       cell: ({ row }) => {
         const r = getKununuRating(row.original);
@@ -333,7 +331,7 @@ export function TablePage() {
       },
     }),
     ch.accessor("jobType", {
-      header: "Pensum",
+      header: t("table.columns.jobType"),
       meta: { tooltip: (app) => (app as Application & { jobType?: string }).jobType ?? undefined },
       cell: ({ row }) => {
         const v = (row.original as Application & { jobType?: string }).jobType;
@@ -343,11 +341,11 @@ export function TablePage() {
       },
     }),
     ch.accessor("workModel", {
-      header: "Arbeitsmodell",
-      meta: { tooltip: (app) => WORK_MODEL_LABELS[(app as Application & { workModel?: string }).workModel ?? ""] ?? undefined },
+      header: t("table.columns.workModel"),
+      meta: { tooltip: (app) => { const wm = (app as Application & { workModel?: string }).workModel; return wm ? (t(`table.workModel.${wm}`, { defaultValue: wm })) : undefined; } },
       cell: ({ row }) => {
         const v = (row.original as Application & { workModel?: string }).workModel;
-        const label = v ? (WORK_MODEL_LABELS[v] ?? v) : null;
+        const label = v ? (t(`table.workModel.${v}`, { defaultValue: v })) : null;
         const colorMap: Record<string, string> = { onsite: "#60a5fa", hybrid: "#a78bfa", remote: "#34d399" };
         const color = v ? (colorMap[v] ?? "var(--fg-3)") : "var(--fg-4)";
         return label
@@ -356,27 +354,27 @@ export function TablePage() {
       },
     }),
     ch.accessor("contractType", {
-      header: "Vertrag",
+      header: t("table.columns.contractType"),
       meta: { tooltip: (app) => (app as Application & { contractType?: string }).contractType ?? undefined },
       cell: ({ row }) => {
         const v = (row.original as Application & { contractType?: string }).contractType;
         if (!v) return <span style={{ color: "var(--fg-4)" }}>—</span>;
         const isUnlimited = v.toLowerCase() === "unlimited" || v.toLowerCase() === "unbefristet";
-        return <span style={{ color: isUnlimited ? "var(--fg-2)" : "var(--fg-3)", fontSize: 11 }}>{isUnlimited ? "Unbefristet" : v}</span>;
+        return <span style={{ color: isUnlimited ? "var(--fg-2)" : "var(--fg-3)", fontSize: 11 }}>{isUnlimited ? t("overview.contractUnbefristet", { defaultValue: "Unbefristet" }) : v}</span>;
       },
     }),
     ch.accessor("salary", {
-      header: "Lohn (Inserat)",
+      header: t("table.columns.salary"),
       meta: { tooltip: (app) => app.salary ?? undefined },
       cell: ({ getValue }) => <span style={{ color: "var(--fg-2)" }}>{getValue() ?? "—"}</span>,
     }),
     ch.accessor("source", {
-      header: "Quelle",
+      header: t("table.columns.source"),
       meta: { tooltip: (app) => SOURCE_LABELS[app.source ?? ""] ?? app.source ?? undefined },
       cell: ({ getValue }) => <span style={{ color: "var(--fg-3)", fontSize: 11 }}>{SOURCE_LABELS[getValue() ?? ""] ?? getValue() ?? "—"}</span>,
     }),
     ch.accessor("tags", {
-      header: "Tags",
+      header: t("table.columns.tags"),
       meta: { tooltip: (app) => parseTags(app.tags).join(", ") || undefined },
       cell: ({ getValue }) => {
         const tags = parseTags(getValue());
@@ -392,19 +390,19 @@ export function TablePage() {
       },
     }),
     ch.accessor("appliedAt", {
-      header: "Beworben",
+      header: t("table.columns.appliedAt"),
       cell: ({ getValue }) => <span style={{ color: "var(--fg-3)", fontVariantNumeric: "tabular-nums" }}>{fmtDate(getValue())}</span>,
     }),
     ch.display({
       id: "interview1",
-      header: "1. Interview",
+      header: t("table.columns.interview1"),
       cell: ({ row }) => {
         const d = getInterview1Date(row.original);
         return <span style={{ color: "var(--fg-3)", fontVariantNumeric: "tabular-nums" }}>{d ? fmtDate(d) : "—"}</span>;
       },
     }),
     ch.accessor("createdAt", {
-      header: "Erstellt",
+      header: t("table.columns.createdAt"),
       cell: ({ getValue }) => {
         const d = getValue();
         if (!d) return <span style={{ color: "var(--fg-4)" }}>—</span>;
@@ -422,10 +420,10 @@ export function TablePage() {
       },
     }),
     ch.accessor("updatedAt", {
-      header: "Aktualisiert",
+      header: t("table.columns.updatedAt"),
       cell: ({ getValue }) => <span style={{ color: "var(--fg-4)", fontVariantNumeric: "tabular-nums" }}>{fmtDate(getValue())}</span>,
     }),
-  ], []);
+  ], [t, tStages]);
 
   // Resolve column config from store (with defaults)
   const columnOrder: ColumnOrderState      = tableColumnOrder.length > 0 ? tableColumnOrder : DEFAULT_ORDER;
@@ -502,7 +500,7 @@ export function TablePage() {
       {/* Column settings — left of filter */}
       <div style={{ position: "relative" }} ref={colPanelRef}>
         <button onClick={() => setColPanelOpen(v => !v)} className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
-          <Settings width={12} height={12} /> Spalten
+          <Settings width={12} height={12} /> {t("table.columnsBtn")}
         </button>
         {colPanelOpen && (
           <div style={{
@@ -511,7 +509,7 @@ export function TablePage() {
             padding: 8, minWidth: 260, maxHeight: 420, overflowY: "auto",
             boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
           }}>
-            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, padding: "0 4px" }}>Spalten</div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, padding: "0 4px" }}>{t("table.columnsBtn")}</div>
             {table.getAllLeafColumns().map(col => {
               const pinned = col.getIsPinned();
               const label = typeof col.columnDef.header === "string" ? col.columnDef.header : col.id;
@@ -522,7 +520,7 @@ export function TablePage() {
                   <input type="checkbox" checked={col.getIsVisible()} onChange={col.getToggleVisibilityHandler()}
                     style={{ accentColor: "var(--accent)", width: 13, height: 13, flexShrink: 0 }} />
                   <span style={{ flex: 1, fontSize: 12, color: "var(--fg-2)", cursor: "default" }}>{label}</span>
-                  <button onClick={() => pinColumn(col.id, pinned === "left" ? false : "left")} title={pinned === "left" ? "Links lösen" : "Links fixieren"}
+                  <button onClick={() => pinColumn(col.id, pinned === "left" ? false : "left")} title={pinned === "left" ? t("table.unpin") : t("table.pinLeft")}
                     style={{ background: "none", border: "none", cursor: "pointer", padding: "1px 3px", borderRadius: 3, display: "flex", alignItems: "center", color: pinned === "left" ? "var(--accent)" : "var(--fg-4)" }}>
                     {pinned === "left" ? <PinSlash width={11} height={11} /> : <Pin width={11} height={11} />}
                   </button>
@@ -530,7 +528,7 @@ export function TablePage() {
               );
             })}
             <button onClick={resetColumns} style={{ width: "100%", marginTop: 8, padding: "5px 8px", borderRadius: 5, border: "1px solid var(--border)", background: "none", cursor: "pointer", fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font-sans)" }}>
-              Zurücksetzen
+              {t("table.resetColumns")}
             </button>
           </div>
         )}
@@ -548,7 +546,7 @@ export function TablePage() {
           }}
         >
           <Settings width={12} height={12} />
-          Filter {isFiltered && `(${stageFilter.length})`}
+          {t("table.filter")} {isFiltered && `(${stageFilter.length})`}
           <NavArrowDown width={10} height={10} />
         </button>
         {filterOpen && (
@@ -558,9 +556,9 @@ export function TablePage() {
             padding: 8, minWidth: 200, boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
           }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "4px 8px 8px", borderBottom: "1px solid var(--border)", marginBottom: 6 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Phasen</span>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em" }}>{t("table.phases")}</span>
               {stageFilter.length > 0 && (
-                <button onClick={() => setStageFilter([])} style={{ fontSize: 10, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", padding: "2px 4px" }}>Alle</button>
+                <button onClick={() => setStageFilter([])} style={{ fontSize: 10, fontWeight: 600, color: "var(--accent)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", padding: "2px 4px" }}>{t("table.allFilter")}</button>
               )}
             </div>
             {ALL_STAGES.map(s => {
@@ -574,7 +572,7 @@ export function TablePage() {
                   cursor: "pointer", fontFamily: "var(--font-sans)", transition: "background 0.1s",
                 }}>
                   <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0, background: checked ? colorVar : "var(--border)", transition: "background 0.1s" }} />
-                  <span style={{ flex: 1, fontSize: 13, fontWeight: checked ? 600 : 400, color: checked ? "var(--fg-1)" : "var(--fg-3)", textAlign: "left" }}>{t(s, { defaultValue: s })}</span>
+                  <span style={{ flex: 1, fontSize: 13, fontWeight: checked ? 600 : 400, color: checked ? "var(--fg-1)" : "var(--fg-3)", textAlign: "left" }}>{tStages(s, { defaultValue: s })}</span>
                   {checked && <Check width={12} height={12} style={{ color: colorVar, flexShrink: 0 }} />}
                 </button>
               );
@@ -585,7 +583,7 @@ export function TablePage() {
 
       {/* Import */}
       <button className="btn btn-primary" onClick={() => setImportOpen(true)}>
-        <Plus width={13} height={13} /> Import Job
+        <Plus width={13} height={13} /> {t("table.importJob")}
       </button>
     </>
   );
@@ -595,11 +593,11 @@ export function TablePage() {
   return (
     <>
       <Topbar
-        title="Liste"
-        sub={`${filtered.length} Bewerbungen`}
+        title={t("table.title")}
+        sub={`${filtered.length} ${t("applications")}`}
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder="Suchen nach Firma, Stelle, Ort…"
+        searchPlaceholder={t("table.searchPlaceholder")}
         actions={actions}
       />
 
@@ -732,7 +730,7 @@ export function TablePage() {
             {table.getRowModel().rows.length === 0 && (
               <tr>
                 <td colSpan={table.getVisibleLeafColumns().length} style={{ padding: "48px 20px", textAlign: "center", color: "var(--fg-4)", fontSize: 13 }}>
-                  Keine Bewerbungen gefunden
+                  {t("table.noResults")}
                 </td>
               </tr>
             )}

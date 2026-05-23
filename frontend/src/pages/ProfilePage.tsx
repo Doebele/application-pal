@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { useTranslation } from "react-i18next";
 import imgSchulabgaenger   from "../assets/personas/schulabgaenger.png";
 import imgBerufseinsteiger from "../assets/personas/berufseinsteiger.png";
 import imgBerufsumsteiger  from "../assets/personas/berufsumsteiger.png";
-import { useUiStore } from "../lib/store";
 import { OpenNewWindow, FloppyDisk, User, Linkedin, Page, RefreshCircle, Expand, Collapse, LightBulb } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
@@ -40,8 +40,7 @@ function AutoResizeTextarea({ value, onChange, onBlur, placeholder, minRows = 4 
 // Notion-style underline — use className="input-line" instead of inline styles
 
 export function ProfilePage() {
-  const { theme } = useUiStore();
-  const isDark = theme === "dark";
+  const { t } = useTranslation();
   const [profile, setProfile] = useState<Partial<UserProfile>>({
     name: "", email: "", phone: "", location: "", headline: "",
     linkedinUrl: "", linkedinBio: "", photoUrl: "", masterCv: "", personalNotes: "", desiredSalary: ""
@@ -86,18 +85,39 @@ export function ProfilePage() {
 
   if (loading) return (
     <>
-      <Topbar title="Profil" />
+      <Topbar title={t("profile.title")} />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
         <RefreshCircle width={20} height={20} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />
       </div>
     </>
   );
 
+  const personas = [
+    {
+      value: "schulabgaenger" as const,
+      img: imgSchulabgaenger,
+      label: t("persona.schulabgaenger"),
+      sub: t("persona.schulabgaengerSub"),
+    },
+    {
+      value: "berufseinsteiger" as const,
+      img: imgBerufseinsteiger,
+      label: t("persona.berufseinsteiger"),
+      sub: t("persona.berufseinsteigervSub"),
+    },
+    {
+      value: "berufsumsteiger" as const,
+      img: imgBerufsumsteiger,
+      label: t("persona.berufsumsteiger"),
+      sub: t("persona.berufsumsteigerSub"),
+    },
+  ];
+
   return (
     <>
       <Topbar
-        title="Profil"
-        sub="Master-CV und persönliche Angaben für alle Bewerbungen"
+        title={t("profile.title")}
+        sub={t("profile.sub")}
         actions={
           <button
             className={"btn " + (saving ? "btn-secondary" : "btn-primary")}
@@ -105,38 +125,19 @@ export function ProfilePage() {
             disabled={saving}
           >
             {saving ? <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} /> : <FloppyDisk width={13} height={13} />}
-            {saved ? "Gespeichert" : "Speichern"}
+            {saved ? t("profile.saved") : t("profile.save")}
           </button>
         }
       />
       <div className="page-content" style={{ maxWidth: 720 }}>
 
-        {/* Persona selector — shown prominently at top */}
+        {/* Persona selector */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-            <div className="eyebrow">Bewerbungs-Fokus</div>
+            <div className="eyebrow">{t("profile.focus")}</div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-            {([
-              {
-                value: "schulabgaenger",
-                img: imgSchulabgaenger,
-                label: "Schulabgänger",
-                sub: "Schnupperlehre, Ausbildung oder Praktikum",
-              },
-              {
-                value: "berufseinsteiger",
-                img: imgBerufseinsteiger,
-                label: "Berufseinsteiger",
-                sub: "Nach Studium oder abgeschlossener Berufsausbildung",
-              },
-              {
-                value: "berufsumsteiger",
-                img: imgBerufsumsteiger,
-                label: "Berufsumsteiger",
-                sub: "Wechsel in eine neue Branche oder Rolle",
-              },
-            ] as const).map(p => {
+            {personas.map(p => {
               const active = (profile.persona ?? "") === p.value;
               return (
                 <button
@@ -155,11 +156,11 @@ export function ProfilePage() {
                     overflow: "hidden",
                   }}
                 >
-                  {/* Full-bleed image — top half of card */}
+                  {/* Full-bleed image */}
                   <div style={{
                     width: "100%", aspectRatio: "16/9",
                     overflow: "hidden",
-                    background: isDark ? "#000" : "#f5f0e8",
+                    background: "#0a0a0a",
                     borderBottom: `1px solid ${active ? "var(--accent)" : "var(--border)"}`,
                   }}>
                     <img
@@ -169,14 +170,14 @@ export function ProfilePage() {
                         width: "100%", height: "100%",
                         objectFit: "cover", objectPosition: "center top",
                         display: "block",
-                        // Invert for dark mode: white bg + black ink → black bg + white ink
-                        filter: isDark ? "invert(1) brightness(0.85) contrast(1.1)" : "brightness(1) contrast(1.05)",
+                        // No inversion — the illustrations work as-is in both themes
+                        filter: "brightness(0.85) contrast(1.05)",
                         opacity: active ? 1 : 0.7,
                         transition: "opacity 0.15s",
                       }}
                     />
                   </div>
-                  {/* Text — bottom half */}
+                  {/* Text */}
                   <div style={{ padding: "10px 14px 12px" }}>
                     <div style={{ fontSize: 13, fontWeight: active ? 700 : 600, color: active ? "var(--accent)" : "var(--fg-1)", marginBottom: 3 }}>
                       {p.label}
@@ -186,7 +187,7 @@ export function ProfilePage() {
                     </div>
                     {active && (
                       <div style={{ fontSize: 10, color: "var(--accent)", fontWeight: 700, marginTop: 6 }}>
-                        ✓ Aktiv
+                        {t("profile.active")}
                       </div>
                     )}
                   </div>
@@ -196,7 +197,7 @@ export function ProfilePage() {
           </div>
           {!(profile.persona) && (
             <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 8 }}>
-              Wähle deinen Bewerbungs-Fokus — beeinflusst KI-Prompts, Aufgaben und Vorschläge.
+              {t("profile.focusHint")}
             </div>
           )}
         </div>
@@ -205,7 +206,7 @@ export function ProfilePage() {
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <User width={14} height={14} style={{ color: "var(--accent)" }} />
-            <div className="eyebrow">Persönliche Angaben</div>
+            <div className="eyebrow">{t("profile.personalInfo")}</div>
           </div>
           <div className="settings-group">
             <div className="settings-row">
@@ -224,7 +225,7 @@ export function ProfilePage() {
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ marginBottom: 8 }}>
-                    <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>Foto-URL (z.B. LinkedIn-Profilbild)</div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>{t("profile.photoUrl")}</div>
                     <input {...field("photoUrl")} placeholder="https://…" />
                   </div>
                 </div>
@@ -233,10 +234,10 @@ export function ProfilePage() {
             <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 24px" }}>
                 {([
-                  { key: "name",     label: "Name *",                  placeholder: "Dein vollständiger Name",   type: "text"  },
-                  { key: "email",    label: "E-Mail",                   placeholder: "du@beispiel.com",            type: "email" },
-                  { key: "phone",    label: "Telefon",                  placeholder: "+41 79 123 45 67",           type: "text"  },
-                  { key: "location", label: "Ort",                      placeholder: "Zürich, Schweiz",            type: "text"  },
+                  { key: "name",     label: t("contacts.name").replace(" *","") + " *", placeholder: t("profile.namePlaceholder"),     type: "text"  },
+                  { key: "email",    label: t("contacts.email"),                         placeholder: t("profile.emailPlaceholder"),    type: "email" },
+                  { key: "phone",    label: t("contacts.phone"),                         placeholder: t("profile.phonePlaceholder"),    type: "text"  },
+                  { key: "location", label: t("overview.location"),                      placeholder: t("profile.locationPlaceholder"), type: "text"  },
                 ] as { key: keyof typeof profile; label: string; placeholder: string; type: string }[]).map(({ key, label, placeholder, type }) => (
                   <div key={key} style={{ paddingBottom: 12 }}>
                     <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
@@ -245,10 +246,10 @@ export function ProfilePage() {
                 ))}
               </div>
               <div style={{ paddingBottom: 8 }}>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>Headline / Kurzbeschreibung</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>{t("profile.headline")}</div>
                 <input
                   {...field("headline")}
-                  placeholder="Senior UX Designer · 8 Jahre Erfahrung · Figma & Design Systems"
+                  placeholder={t("profile.headlinePlaceholder")}
                 />
               </div>
             </div>
@@ -266,11 +267,11 @@ export function ProfilePage() {
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <Linkedin width={14} height={14} style={{ color: "#0a66c2" }} />
-            <div className="eyebrow" style={{ flex: 1 }}>LinkedIn Profil</div>
+            <div className="eyebrow" style={{ flex: 1 }}>{t("profile.linkedinSection")}</div>
             <button
               className="btn btn-ghost btn-icon"
               onClick={() => setLinkedinExpanded((v) => !v)}
-              title={linkedinExpanded ? "Minimieren" : "Maximieren"}
+              title={linkedinExpanded ? t("activities.minimize") : t("activities.maximize")}
               style={{ padding: 4 }}
             >
               {linkedinExpanded ? <Collapse width={14} height={14} /> : <Expand width={14} height={14} />}
@@ -280,11 +281,11 @@ export function ProfilePage() {
             <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 12, ...(linkedinExpanded ? { flex: 1 } : {}) }}>
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>LinkedIn URL</div>
+                  <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("contacts.linkedin")}</div>
                   {profile.linkedinUrl && (
                     <a href={profile.linkedinUrl} target="_blank" rel="noreferrer"
                       style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent)", fontSize: 10, fontWeight: 600, textDecoration: "none" }}>
-                      <OpenNewWindow width={10} height={10} /> Profil öffnen
+                      <OpenNewWindow width={10} height={10} /> {t("profile.openProfile")}
                     </a>
                   )}
                 </div>
@@ -292,21 +293,21 @@ export function ProfilePage() {
               </div>
               <div style={linkedinExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
-                  Profil-Bio / Zusammenfassung
+                  {t("profile.linkedinBioLabel")}
                 </div>
                 {linkedinExpanded ? (
                   <textarea
                     value={profile.linkedinBio ?? ""}
                     onChange={(e) => setProfile((p) => ({ ...p, linkedinBio: e.target.value }))}
                     onBlur={() => save({ linkedinBio: profile.linkedinBio })}
-                    placeholder="Kopiere hier deine LinkedIn About-Section ein…"
+                    placeholder={t("profile.linkedinBioPlaceholder")}
                     style={{ flex: 1, resize: "none", minHeight: 200, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none" }}
                   />
                 ) : (
                   <AutoResizeTextarea
                     value={profile.linkedinBio ?? ""}
                     onChange={(v) => setProfile((p) => ({ ...p, linkedinBio: v }))}
-                    placeholder="Kopiere hier deine LinkedIn About-Section ein…"
+                    placeholder={t("profile.linkedinBioPlaceholder")}
                     minRows={4}
                   />
                 )}
@@ -326,7 +327,7 @@ export function ProfilePage() {
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <Page width={14} height={14} style={{ color: "var(--accent)" }} />
-            <div className="eyebrow" style={{ flex: 1 }}>Master-Lebenslauf</div>
+            <div className="eyebrow" style={{ flex: 1 }}>{t("profile.masterCv")}</div>
             {/* Vorschau / Bearbeiten toggle */}
             <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", borderRadius: 6, padding: 2 }}>
               {(["preview", "edit"] as const).map(m => (
@@ -336,7 +337,7 @@ export function ProfilePage() {
                   color: cvMode === m ? "var(--fg-1)" : "var(--fg-3)",
                   fontFamily: "var(--font-sans)", fontWeight: 600,
                 }}>
-                  {m === "preview" ? "Vorschau" : "Bearbeiten"}
+                  {m === "preview" ? t("description.preview") : t("description.edit")}
                 </button>
               ))}
             </div>
@@ -346,7 +347,7 @@ export function ProfilePage() {
             <button
               className="btn btn-ghost btn-icon"
               onClick={() => setCvExpanded((v) => !v)}
-              title={cvExpanded ? "Minimieren" : "Maximieren"}
+              title={cvExpanded ? t("activities.minimize") : t("activities.maximize")}
               style={{ padding: 4 }}
             >
               {cvExpanded ? <Collapse width={14} height={14} /> : <Expand width={14} height={14} />}
@@ -354,7 +355,7 @@ export function ProfilePage() {
           </div>
           {!cvExpanded && (
             <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 14 }}>
-              Dieser Text dient als Basis für alle KI-generierten CV-Tailorings. Je detaillierter, desto besser die Ergebnisse.
+              {t("profile.masterCvHint")}
             </div>
           )}
           <div className="settings-group" style={cvExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
@@ -370,8 +371,8 @@ export function ProfilePage() {
                       background: "var(--surface-2)",
                       overflow: "auto",
                       ...(cvExpanded
-                        ? { flex: 1 }                          // fills parent in expand mode
-                        : { maxHeight: 480, minHeight: 160 }), // scrollable box in normal mode
+                        ? { flex: 1 }
+                        : { maxHeight: 480, minHeight: 160 }),
                     }}
                   >
                     {profile.masterCv
@@ -382,7 +383,7 @@ export function ProfilePage() {
                           {profile.masterCv}
                         </ReactMarkdown>
                       : <div style={{ fontSize: 12, color: "var(--fg-3)", fontStyle: "italic" }}>
-                          Noch kein Lebenslauf vorhanden — wechsle zu „Bearbeiten" um Text einzufügen.
+                          {t("profile.masterCvEmpty")}
                         </div>
                     }
                   </div>
@@ -391,14 +392,14 @@ export function ProfilePage() {
                     value={profile.masterCv ?? ""}
                     onChange={(e) => setProfile((p) => ({ ...p, masterCv: e.target.value }))}
                     onBlur={() => save({ masterCv: profile.masterCv })}
-                    placeholder={`# [Dein Name]\n\n## Berufserfahrung\n\n**Senior UX Designer** · Firma GmbH (2021–heute)\n- Verantwortlich für…`}
+                    placeholder={t("profile.masterCvPlaceholder")}
                     style={{ flex: 1, resize: "none", minHeight: 200, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none" }}
                   />
                 ) : (
                   <AutoResizeTextarea
                     value={profile.masterCv ?? ""}
                     onChange={(v) => setProfile((p) => ({ ...p, masterCv: v }))}
-                    placeholder={`# [Dein Name]\n\n## Berufserfahrung\n\n**Senior UX Designer** · Firma GmbH (2021–heute)\n- Verantwortlich für…\n\n## Ausbildung\n\n## Skills\n\nFigma, UX Research, Prototyping, Design Systems…`}
+                    placeholder={t("profile.masterCvPlaceholder")}
                     minRows={12}
                   />
                 )}
@@ -407,7 +408,7 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {/* Personal Notes — für Match-Score & Interview */}
+        {/* Personal Notes */}
         <div style={{
           marginBottom: 32,
           ...(notesExpanded ? {
@@ -418,7 +419,7 @@ export function ProfilePage() {
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <LightBulb width={14} height={14} style={{ color: "#f59e0b" }} />
-            <div className="eyebrow" style={{ flex: 1 }}>Persönliche Stichpunkte</div>
+            <div className="eyebrow" style={{ flex: 1 }}>{t("profile.personalNotes")}</div>
             {/* Vorschau / Bearbeiten toggle */}
             <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", borderRadius: 6, padding: 2 }}>
               {(["preview", "edit"] as const).map(m => (
@@ -428,22 +429,22 @@ export function ProfilePage() {
                   color: notesMode === m ? "var(--fg-1)" : "var(--fg-3)",
                   fontFamily: "var(--font-sans)", fontWeight: 600,
                 }}>
-                  {m === "preview" ? "Vorschau" : "Bearbeiten"}
+                  {m === "preview" ? t("description.preview") : t("description.edit")}
                 </button>
               ))}
             </div>
             <button
               className="btn btn-ghost btn-icon"
               onClick={() => setNotesExpanded((v) => !v)}
-              title={notesExpanded ? "Minimieren" : "Maximieren"}
+              title={notesExpanded ? t("activities.minimize") : t("activities.maximize")}
               style={{ padding: 4 }}
             >
               {notesExpanded ? <Collapse width={14} height={14} /> : <Expand width={14} height={14} />}
             </button>
           </div>
           <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 14, lineHeight: 1.6 }}>
-            <span style={{ color: "#f59e0b", fontWeight: 600 }}>Für Match-Score & Interviews:</span>{" "}
-            Notiere hier persönliche Prioritäten, Gehaltsvorstellungen, bevorzugte Arbeitsweise, besondere Stärken oder Punkte die dir in Bewerbungsgesprächen wichtig sind. Diese Informationen fliessen in die KI-Analyse ein.
+            <span style={{ color: "#f59e0b", fontWeight: 600 }}>{t("profile.personalNotesHintLabel")}</span>{" "}
+            {t("profile.personalNotesHint")}
           </div>
           <div className="settings-group" style={notesExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
             <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", ...(notesExpanded ? { flex: 1 } : {}) }}>
@@ -470,7 +471,7 @@ export function ProfilePage() {
                           {profile.personalNotes}
                         </ReactMarkdown>
                       : <div style={{ fontSize: 12, color: "var(--fg-3)", fontStyle: "italic" }}>
-                          Noch keine Stichpunkte vorhanden — wechsle zu „Bearbeiten" um Text einzufügen.
+                          {t("profile.personalNotesEmpty")}
                         </div>
                     }
                   </div>
@@ -479,7 +480,7 @@ export function ProfilePage() {
                     value={profile.personalNotes ?? ""}
                     onChange={(e) => setProfile((p) => ({ ...p, personalNotes: e.target.value }))}
                     onBlur={() => save({ personalNotes: profile.personalNotes })}
-                    placeholder={`- Gehaltsvorstellung: CHF 110–130k\n- Remote-first bevorzugt, gerne 1–2 Tage Büro\n- Stärken: UX Research, Design Systems, Team-Führung\n- Wichtig: flache Hierarchien, agiles Umfeld\n- Sprachen: Deutsch (Muttersprache), Englisch (C1)`}
+                    placeholder={t("profile.personalNotesPlaceholder")}
                     style={{ flex: 1, resize: "none", minHeight: 200, padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none" }}
                   />
                 ) : (
@@ -487,7 +488,7 @@ export function ProfilePage() {
                     value={profile.personalNotes ?? ""}
                     onChange={(v) => setProfile((p) => ({ ...p, personalNotes: v }))}
                     onBlur={() => save({ personalNotes: profile.personalNotes })}
-                    placeholder={`- Gehaltsvorstellung: CHF 110–130k\n- Remote-first bevorzugt\n- Stärken: UX Research, Design Systems\n- Wichtig: flache Hierarchien, agiles Umfeld`}
+                    placeholder={t("profile.personalNotesPlaceholder")}
                     minRows={4}
                   />
                 )}
@@ -496,27 +497,27 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {/* Wunschgehalt — für die Salary-Check-Balkengrafik */}
+        {/* Desired salary */}
         <div className="settings-group">
           <div className="settings-row">
             <div className="field" style={{ flex: 1 }}>
-              <label>Wunschgehalt (CHF, Jahresbrutto)</label>
+              <label>{t("profile.desiredSalary")}</label>
               <input
                 type="number"
                 value={profile.desiredSalary ?? ""}
                 onChange={(e) => setProfile((p) => ({ ...p, desiredSalary: e.target.value }))}
                 onBlur={() => save({ desiredSalary: profile.desiredSalary })}
-                placeholder="z.B. 110000"
+                placeholder={t("profile.desiredSalaryPlaceholder")}
                 style={{ maxWidth: 200 }}
               />
-              <span className="field-hint">Wird in der Salary-Check-Grafik als Referenzlinie angezeigt</span>
+              <span className="field-hint">{t("profile.desiredSalaryHint")}</span>
             </div>
           </div>
         </div>
 
         <div className="autosave-indicator">
           <span className="dot" style={{ background: saved ? "var(--accent)" : "var(--green)" }} />
-          {saved ? "Gespeichert." : "Änderungen werden beim Verlassen des Felds gespeichert."}
+          {saved ? t("saved") : t("profile.autosave")}
         </div>
 
       </div>

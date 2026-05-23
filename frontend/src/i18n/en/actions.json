@@ -14,6 +14,7 @@
   "email-follow":      { "label": "Follow-up Email",        "tooltip": "Draft follow-up email" },
   "email-decline":     { "label": "Decline Email",          "tooltip": "Draft decline email" },
   "email-linkedin":    { "label": "LinkedIn Message",       "tooltip": "Draft LinkedIn connection message" },
+  "email-feedback":    { "label": "Feedback Email",         "tooltip": "Draft feedback request email after rejection" },
   "interview-prep":    { "label": "Interview Prep",         "tooltip": "Generate questions, STAR examples and follow-up questions" },
   "salary-tips":       { "label": "Salary Negotiation",     "tooltip": "Create negotiation tips and Ackermann script" },
   "company-research":  { "label": "Company Research",       "tooltip": "Create company research" },

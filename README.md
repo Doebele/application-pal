@@ -184,7 +184,7 @@ Alle grösseren KI-Inhalte können als Google Doc exportiert werden. Mit einem a
 - Wunschgehalt (Referenzlinie in Gehaltsdiagramm)
 
 ### Einstellungen
-- KI-Anbieter (LM Studio lokal / Anthropic API)
+- KI-Anbieter: LM Studio · Ollama · Anthropic · OpenAI · Google Gemini · OpenRouter
 - Dark/Light Theme, Accent-Farbe (Indigo / Violet / Emerald / Amber / Rose)
 - Kartenansicht (kompakt / standard / ausführlich / editorial)
 - Session-Timeout (15 min bis 30 Tage)
@@ -253,10 +253,20 @@ Daten bleiben erhalten (PostgreSQL-Volume wird nicht gelöscht).
 
 ## KI-Konfiguration
 
-| Anbieter | Anforderung |
-|----------|-------------|
-| **LM Studio** (lokal) | LM Studio installieren, Modell laden (empfohlen: Qwen3 14B+) |
-| **Anthropic** | API-Key von [console.anthropic.com](https://console.anthropic.com) |
+Sechs Anbieter werden unterstützt. Konfiguration unter **Einstellungen → KI-Integration**:
+
+![KI-Integration Settings](docs/screenshots/settings-ai.png)
+
+| Anbieter | Typ | Anforderung |
+|----------|-----|-------------|
+| **LM Studio** ★ | Lokal | [lmstudio.ai](https://lmstudio.ai) installieren, Modell laden (Qwen3 8B+) |
+| **Ollama** | Lokal | [ollama.ai](https://ollama.ai) installieren, `ollama pull qwen3:8b` |
+| **Anthropic** | Cloud | API-Key von [console.anthropic.com](https://console.anthropic.com) |
+| **OpenAI** | Cloud | API-Key von [platform.openai.com](https://platform.openai.com) |
+| **Google Gemini** | Cloud | API-Key von [aistudio.google.com](https://aistudio.google.com) (Gratis-Tier) |
+| **OpenRouter** | Cloud | API-Key von [openrouter.ai](https://openrouter.ai) (200+ Modelle) |
+
+→ Vollständige Anleitung: [docs/ai-setup.md](docs/ai-setup.md)
 
 Alle KI-Funktionen sind optional — ohne Konfiguration läuft die App als reines Verwaltungswerkzeug.
 
@@ -295,7 +305,7 @@ Technischer Überblick: [CLAUDE.md](CLAUDE.md)
 | Frontend | React 19 + Vite, TanStack Query, TanStack Table, Zustand, React Router |
 | Backend | Hono.js (Bun/Node), Drizzle ORM |
 | Datenbank | PostgreSQL 16 |
-| KI | LM Studio (lokal) / Anthropic Claude API |
+| KI | LM Studio · Ollama (lokal) / Anthropic · OpenAI · Gemini · OpenRouter (Cloud) |
 | Drive | Google Drive API v3 + Docs API |
 | Auth | JWT (httpOnly-Cookie), bcrypt, WebAuthn (@simplewebauthn) |
 | Fonts | Fira Sans · Libre Caslon Text · Fira Mono |

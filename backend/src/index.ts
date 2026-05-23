@@ -862,10 +862,62 @@ function cleanJobText(raw: string): string {
     .trim();
 }
 
+async function extractWithOpenAiCompat(text: string, ai: AiConfig, baseUrl: string, apiKey: string, model: string, extraHeaders?: Record<string, string>): Promise<LlmExtracted | null> {
+  const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${apiKey}`, "Content-Type": "application/json", ...extraHeaders },
+    body: JSON.stringify({
+      model,
+      messages: [{ role: "system", content: EXTRACTION_PROMPT }, { role: "user", content: EXTRACTION_PROMPT_USER_PREFIX + text.slice(0, 6000) }],
+      temperature: 0.05,
+      max_tokens: 8192
+    }),
+    signal: AbortSignal.timeout(480_000)
+  });
+  if (!res.ok) { console.warn("AI extraction failed:", res.status, await res.text()); return null; }
+  const json = await res.json() as { choices?: { message?: { content?: string } }[] };
+  return parseJsonResponse(json.choices?.[0]?.message?.content ?? "");
+}
+
+async function extractWithGemini(text: string, ai: AiConfig): Promise<LlmExtracted | null> {
+  const apiKey = ai.geminiApiKey;
+  if (!apiKey) return null;
+  const model = (ai as AiConfig & { geminiModel?: string }).geminiModel || "gemini-2.0-flash";
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      system_instruction: { parts: [{ text: EXTRACTION_PROMPT }] },
+      contents: [{ role: "user", parts: [{ text: EXTRACTION_PROMPT_USER_PREFIX + text.slice(0, 6000) }] }],
+      generationConfig: { temperature: 0.05, maxOutputTokens: 2048 }
+    }),
+    signal: AbortSignal.timeout(120_000)
+  });
+  if (!res.ok) { console.warn("Gemini extraction failed:", res.status, await res.text()); return null; }
+  const json = await res.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+  return parseJsonResponse(json.candidates?.[0]?.content?.parts?.[0]?.text ?? "");
+}
+
 async function extractWithAi(text: string, ai: AiConfig): Promise<LlmExtracted | null> {
   const cleaned = cleanJobText(text);
   if (ai.provider === "lm-studio") return extractWithLmStudio(cleaned, ai);
   if (ai.provider === "anthropic") return extractWithAnthropic(cleaned, ai);
+  if (ai.provider === "openai") {
+    if (!ai.openaiApiKey) return null;
+    const model = (ai as AiConfig & { openaiModel?: string }).openaiModel || "gpt-4o-mini";
+    return extractWithOpenAiCompat(cleaned, ai, "https://api.openai.com", ai.openaiApiKey, model);
+  }
+  if (ai.provider === "gemini") return extractWithGemini(cleaned, ai);
+  if (ai.provider === "openrouter") {
+    if (!ai.openrouterApiKey) return null;
+    const model = (ai as AiConfig & { openrouterModel?: string }).openrouterModel || "anthropic/claude-haiku-4-5";
+    return extractWithOpenAiCompat(cleaned, ai, "https://openrouter.ai/api", ai.openrouterApiKey, model, { "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" });
+  }
+  if (ai.provider === "ollama") {
+    const baseUrl = resolveHostUrl((ai.ollamaUrl ?? "http://localhost:11434").replace(/\/$/, ""));
+    const model = ai.ollamaModel || "";
+    return extractWithOpenAiCompat(cleaned, ai, baseUrl, "", model);
+  }
   return null;
 }
 
@@ -1597,6 +1649,27 @@ app.get("/api/lm-studio/models", async (c) => {
   }
 });
 
+app.get("/api/ollama/models", async (c) => {
+  const baseUrl = resolveHostUrl((c.req.query("url") ?? "http://localhost:11434").replace(/\/$/, ""));
+  try {
+    // Try OpenAI-compatible endpoint first, fall back to Ollama native /api/tags
+    const res = await fetch(`${baseUrl}/v1/models`, { signal: AbortSignal.timeout(5_000) });
+    if (res.ok) {
+      const data = await res.json() as { data?: { id: string }[] };
+      const models = (data.data ?? []).map((m) => m.id);
+      if (models.length > 0) return c.json({ models });
+    }
+    // Ollama native
+    const res2 = await fetch(`${baseUrl}/api/tags`, { signal: AbortSignal.timeout(5_000) });
+    if (!res2.ok) return c.json({ models: [] });
+    const data2 = await res2.json() as { models?: { name: string }[] };
+    const models2 = (data2.models ?? []).map((m) => m.name);
+    return c.json({ models: models2 });
+  } catch {
+    return c.json({ models: [] });
+  }
+});
+
 app.get("/api/applications/:id/cv", (c) => c.json(stubDocumentResponseSchema.parse({ content: null })));
 app.get("/api/applications/:id/letter", (c) =>
   c.json(stubDocumentResponseSchema.parse({ content: null }))
@@ -2058,7 +2131,10 @@ app.delete("/api/applications/:id/tasks/:taskId", async (c) => {
 
 // ─── Stage AI Actions ─────────────────────────────────────────
 /** Shared helper: call AI with a system + user prompt, return raw text */
-async function callAi(system: string, user: string, ai: AiConfig): Promise<string> {
+async function callAi(system: string, user: string, ai: AiConfig, additionalContext?: string): Promise<string> {
+  const fullUser = additionalContext?.trim()
+    ? `${user}\n\n---\nZusätzliche Hinweise des Nutzers:\n${additionalContext.trim()}`
+    : user;
   if (ai.provider === "lm-studio") {
     const baseUrl = resolveHostUrl((ai.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -2066,7 +2142,7 @@ async function callAi(system: string, user: string, ai: AiConfig): Promise<strin
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: ai.lmStudioModel || undefined,
-        messages: [{ role: "system", content: system }, { role: "user", content: user }],
+        messages: [{ role: "system", content: system }, { role: "user", content: fullUser }],
         temperature: 0.15,
         max_tokens: 32768
       }),
@@ -2080,12 +2156,69 @@ async function callAi(system: string, user: string, ai: AiConfig): Promise<strin
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": ai.anthropicApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 8192, system, messages: [{ role: "user", content: user }] }),
+      body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 8192, system, messages: [{ role: "user", content: fullUser }] }),
       signal: AbortSignal.timeout(120_000)
     });
     if (!res.ok) throw new Error(`Anthropic error: ${res.status}`);
     const json = await res.json() as { content?: { type: string; text: string }[] };
     return json.content?.find((b) => b.type === "text")?.text ?? "";
+  } else if (ai.provider === "openai") {
+    if (!ai.openaiApiKey) throw new Error("OpenAI API Key fehlt");
+    const model = (ai as AiConfig & { openaiModel?: string }).openaiModel || "gpt-4o-mini";
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${ai.openaiApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: fullUser }], temperature: 0.15, max_tokens: 8192 }),
+      signal: AbortSignal.timeout(120_000)
+    });
+    if (!res.ok) throw new Error(`OpenAI error: ${res.status} ${await res.text()}`);
+    const json = await res.json() as { choices?: { message?: { content?: string } }[] };
+    return json.choices?.[0]?.message?.content ?? "";
+  } else if (ai.provider === "gemini") {
+    if (!ai.geminiApiKey) throw new Error("Gemini API Key fehlt");
+    const model = (ai as AiConfig & { geminiModel?: string }).geminiModel || "gemini-2.0-flash";
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${ai.geminiApiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        system_instruction: { parts: [{ text: system }] },
+        contents: [{ role: "user", parts: [{ text: fullUser }] }],
+        generationConfig: { temperature: 0.15, maxOutputTokens: 8192 }
+      }),
+      signal: AbortSignal.timeout(120_000)
+    });
+    if (!res.ok) throw new Error(`Gemini error: ${res.status} ${await res.text()}`);
+    const json = await res.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
+    return json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  } else if (ai.provider === "openrouter") {
+    if (!ai.openrouterApiKey) throw new Error("OpenRouter API Key fehlt");
+    const model = (ai as AiConfig & { openrouterModel?: string }).openrouterModel || "anthropic/claude-haiku-4-5";
+    const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${ai.openrouterApiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" },
+      body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: fullUser }], temperature: 0.15, max_tokens: 8192 }),
+      signal: AbortSignal.timeout(120_000)
+    });
+    if (!res.ok) throw new Error(`OpenRouter error: ${res.status} ${await res.text()}`);
+    const json = await res.json() as { choices?: { message?: { content?: string } }[] };
+    return json.choices?.[0]?.message?.content ?? "";
+  } else if (ai.provider === "ollama") {
+    const baseUrl = resolveHostUrl((ai.ollamaUrl ?? "http://localhost:11434").replace(/\/$/, ""));
+    const model = (ai as AiConfig & { ollamaModel?: string }).ollamaModel || "";
+    const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: model || undefined,
+        messages: [{ role: "system", content: system }, { role: "user", content: fullUser }],
+        temperature: 0.15,
+        max_tokens: 32768
+      }),
+      signal: AbortSignal.timeout(480_000)
+    });
+    if (!res.ok) throw new Error(`Ollama error: ${res.status}`);
+    const json = await res.json() as { choices?: { message?: { content?: string } }[] };
+    return json.choices?.[0]?.message?.content ?? "";
   }
   throw new Error("Kein KI-Modell konfiguriert");
 }
@@ -2111,7 +2244,7 @@ async function persistAiResult(appId: string, key: string, data: Record<string, 
 app.post("/api/applications/:id/ai/cv-highlights", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
@@ -2126,7 +2259,7 @@ Antworte NUR mit diesem JSON:
 }`;
   const user = `## Lebenslauf\n${profile.masterCv.slice(0, 4000)}\n\n## Stellenbeschreibung\nRolle: ${app_.role}\n${app_.description?.slice(0, 2000) ?? ""}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { highlights: string[]; keywords: string[]; gaps: string[] };
     await persistAiResult(id, "cv-highlights", parsed as Record<string, unknown>);
     return c.json(parsed);
@@ -2140,7 +2273,7 @@ Antworte NUR mit diesem JSON:
 app.post("/api/applications/:id/ai/cv-doc", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
@@ -2155,7 +2288,7 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
     const system = `${langPrompt(lang_)} Analysiere den Lebenslauf und die Stellenbeschreibung. Antworte NUR mit JSON:
 {"highlights":["<Erfahrung besonders relevant>"],"keywords":["<Keyword>"]}`;
     const user = `Lebenslauf:\n${profile.masterCv.slice(0, 3000)}\n\nStelle: ${app_.role} bei ${app_.company}\n${app_.description?.slice(0, 1500) ?? ""}`;
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const p = extractJson(raw) as { highlights: string[]; keywords: string[] };
     highlightText = `═══ FÜR DIESE STELLE BESONDERS RELEVANT: ${app_.role} @ ${app_.company} ═══\n\n`;
     if (p.highlights?.length) {
@@ -2216,7 +2349,7 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
 app.post("/api/applications/:id/ai/cover-letter", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
@@ -2230,7 +2363,7 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
   if (profile?.personalNotes) candidateParts.push(`Persönliche Stichpunkte: ${profile.personalNotes.slice(0, 400)}`);
   const user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\nOrt: ${app_.location ?? ""}\nGehalt: ${app_.salary ?? ""}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { subject: string; body: string };
     // Persist to aiResultsCache so the tile system can display it
     await persistAiResult(id, "cover-letter", parsed);
@@ -2306,7 +2439,7 @@ app.post("/api/applications/:id/ai/cover-letter/export-doc", async (c) => {
 app.post("/api/applications/:id/ai/email-draft", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, type } = await c.req.json<{ ai: AiConfig; type: "application" | "followup" | "decline" | "feedback" | "linkedin" }>();
+  const { ai, type, additionalContext } = await c.req.json<{ ai: AiConfig; type: "application" | "followup" | "decline" | "feedback" | "linkedin"; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
@@ -2325,7 +2458,7 @@ Antworte NUR mit JSON: { "subject": "<Betreff>", "body": "<Email-Text>" }`;
   const contact = contacts[0];
   const user = `Absender: ${profile?.name ?? ""} (${profile?.email ?? ""})\nEmpfänger: ${contact ? `${contact.name}${contact.role ? ` (${contact.role})` : ""}` : "HR-Team"} bei ${app_.company}\nStelle: ${app_.role}\nStellenbeschreibung: ${app_.description?.slice(0, 500) ?? ""}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { subject: string; body: string };
     return c.json(parsed);
   } catch (err) {
@@ -2338,7 +2471,7 @@ Antworte NUR mit JSON: { "subject": "<Betreff>", "body": "<Email-Text>" }`;
 app.post("/api/applications/:id/ai/interview-prep", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
@@ -2361,7 +2494,7 @@ Regeln:
 - rueckfragen: 5 gute Rückfragen die Interesse und Vorbereitung zeigen`;
   const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nBeschreibung: ${app_.description?.slice(0, 2000) ?? ""}\n\nKandidatenprofil:\n${profile?.masterCv?.slice(0, 2500) ?? "Kein Profil hinterlegt"}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as {
       rollenFragen: string[];
       starBeispiele: { frage: string; situation: string; aufgabe: string; aktion: string; ergebnis: string }[];
@@ -2473,7 +2606,7 @@ app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
 app.post("/api/applications/:id/ai/salary-tips", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
@@ -2487,7 +2620,7 @@ Antworte NUR mit JSON:
 }`;
   const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nGenanntes Gehalt in Stellenanzeige: ${app_.salary ?? "nicht angegeben"}\nLocation: ${app_.location ?? ""}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { markteinschätzung: string; taktiken: string[]; formulierungen: string[]; vossAnker: string };
     await persistAiResult(id, "salary-tips", parsed as Record<string, unknown>);
     return c.json(parsed);
@@ -2502,7 +2635,7 @@ Antworte NUR mit JSON:
 app.post("/api/applications/:id/ai/glassdoor-check", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
 
@@ -2530,7 +2663,7 @@ Felder sind null wenn keine verlässlichen Daten vorhanden. confidence="niedrig"
   const user = `Unternehmen: ${app_.company}\nBranche (aus Stellenbeschreibung): ${app_.description?.slice(0, 300) ?? "unbekannt"}`;
 
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as {
       rating: number | null; reviewCount: number | null;
       ceoApproval: number | null; recommendToFriend: number | null;
@@ -2562,7 +2695,7 @@ app.patch("/api/applications/:id/ai/glassdoor-check", async (c) => {
 app.post("/api/applications/:id/ai/kununu-check", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
 
@@ -2582,7 +2715,7 @@ rating ist null wenn keine Daten bekannt. confidence="niedrig" für unbekannte/s
   const user = `Unternehmen: ${app_.company}\nBeschreibung: ${app_.description?.slice(0, 300) ?? ""}`;
 
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { rating: number | null; reviewCount: number | null; confidence: string; summary: string; hinweis: string };
     const result = { ...parsed, url: urlEstimate, updatedAt: new Date().toISOString(), manuallyEdited: false };
     await db.update(applications).set({ kununuData: JSON.stringify(result) }).where(eq(applications.id, id));
@@ -2608,7 +2741,7 @@ app.patch("/api/applications/:id/ai/kununu-check", async (c) => {
 app.post("/api/applications/:id/ai/linkedin-profile", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
 
@@ -2626,7 +2759,7 @@ Antworte NUR mit diesem JSON:
   const user = `Unternehmen: ${app_.company}\nBeschreibung: ${app_.description?.slice(0, 300) ?? ""}`;
 
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { url: string; employeeCount?: string; description?: string; hinweis: string };
     const result = { ...parsed, url: parsed.url || urlEstimate, updatedAt: new Date().toISOString(), manuallyEdited: false };
     await db.update(applications).set({ linkedinData: JSON.stringify(result) }).where(eq(applications.id, id));
@@ -2652,7 +2785,7 @@ app.patch("/api/applications/:id/ai/linkedin-profile", async (c) => {
 app.post("/api/applications/:id/ai/salary-check", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
@@ -2660,7 +2793,7 @@ app.post("/api/applications/:id/ai/salary-check", async (c) => {
 { "lohnband": { "min": number, "max": number, "median": number }, "waehrung": "CHF", "basis": "Jahresbrutto", "begruendung": "<string 2-3 Sätze>", "faktoren": ["<string>"] }`;
   const user = `Stelle: ${app_.role}\nUnternehmen: ${app_.company}\nBranche (falls erkennbar): aus Stellenbeschreibung ableiten\nStellenbeschreibung:\n${app_.description?.slice(0, 2000) ?? ""}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { lohnband: { min: number; max: number; median: number }; waehrung: string; basis: string; begruendung: string; faktoren: string[] };
     await persistAiResult(id, "salary-check", parsed as Record<string, unknown>);
     return c.json(parsed);
@@ -2741,7 +2874,7 @@ app.post("/api/applications/:id/ai/salary-check/export-doc", async (c) => {
 app.post("/api/applications/:id/ai/ats-keywords", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
@@ -2749,7 +2882,7 @@ app.post("/api/applications/:id/ai/ats-keywords", async (c) => {
 { "mustHave": ["<string>"], "niceToHave": ["<string>"], "softSkills": ["<string>"], "tools": ["<string>"] }`;
   const user = `Stellenbeschreibung:\n${app_.description?.slice(0, 2500) ?? ""}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { mustHave: string[]; niceToHave: string[]; softSkills: string[]; tools: string[] };
     await persistAiResult(id, "ats-keywords", parsed as Record<string, unknown>);
     return c.json(parsed);
@@ -2763,7 +2896,7 @@ app.post("/api/applications/:id/ai/ats-keywords", async (c) => {
 app.post("/api/applications/:id/ai/company-research", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
@@ -2771,7 +2904,7 @@ app.post("/api/applications/:id/ai/company-research", async (c) => {
 { "unternehmensueberblick": "<string>", "branche": "<string>", "marktposition": "<string>", "unternehmenskultur": "<string>", "wettbewerber": ["<string>"], "aktuelleThemen": ["<string>"], "gespraechsthemen": ["<string>"] }`;
   const user = `Unternehmen: ${app_.company}\nRolle: ${app_.role}\nStellenbeschreibung:\n${app_.description?.slice(0, 2000) ?? ""}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { unternehmensueberblick: string; branche: string; marktposition: string; unternehmenskultur: string; wettbewerber: string[]; aktuelleThemen: string[]; gespraechsthemen: string[] };
     await persistAiResult(id, "company-research", parsed as Record<string, unknown>);
     return c.json(parsed);
@@ -2857,7 +2990,7 @@ app.post("/api/applications/:id/ai/company-research/export-doc", async (c) => {
 app.post("/api/applications/:id/ai/ackermann-script", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
@@ -2879,7 +3012,7 @@ Antworte NUR mit JSON:
 { "zielgehalt": number, "ankergebot": number, "schritte": [{ "runde": number, "angebot": number, "formulierung": "<string>", "taktik": "<string>" }], "nichtmonetaer": ["<string>"], "vossAnker": "<string>" }`;
   const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nLohnband (falls bekannt): ${app_.salary ?? "nicht angegeben"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1500) ?? ""}\nProfil des Kandidaten: ${profile?.masterCv?.slice(0, 1000) ?? "Kein Profil hinterlegt"}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { zielgehalt: number; ankergebot: number; schritte: Array<{ runde: number; angebot: number; formulierung: string; taktik: string }>; nichtmonetaer: string[]; vossAnker: string };
     await persistAiResult(id, "ackermann-script", parsed as Record<string, unknown>);
     return c.json(parsed);
@@ -2962,7 +3095,7 @@ app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
 app.post("/api/applications/:id/ai/letter-review", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, coverLetterContent } = await c.req.json<{ ai: AiConfig; coverLetterContent?: string }>();
+  const { ai, coverLetterContent, additionalContext } = await c.req.json<{ ai: AiConfig; coverLetterContent?: string; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
@@ -2981,7 +3114,7 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
   if (!letterText) letterText = "Kein Anschreiben vorhanden. Bitte zuerst im Tab 'Aktionen' → Phase Anschreiben ein Anschreiben generieren.";
   const user = `Stelle: ${app_.role} bei ${app_.company}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}\n\nAnschreiben:\n${letterText}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { gesamteindruck: string; staerken: string[]; verbesserungen: string[]; cliches: string[]; tonalitaet: string; laenge: string; personalisierung: string };
     await persistAiResult(id, "letter-review", parsed as Record<string, unknown>);
     return c.json(parsed);
@@ -2995,7 +3128,7 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
 app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
@@ -3004,7 +3137,7 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
 { "saetze": [{ "satz": "<string>", "ansatz": "<string>", "erklaerung": "<string>" }] }`;
   const user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { saetze: Array<{ satz: string; ansatz: string; erklaerung: string }> };
     await persistAiResult(id, "opening-sentences", parsed as Record<string, unknown>);
     return c.json(parsed);
@@ -3018,7 +3151,7 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
 app.post("/api/applications/:id/ai/onboarding", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
@@ -3026,7 +3159,7 @@ app.post("/api/applications/:id/ai/onboarding", async (c) => {
 { "erste30Tage": ["<string>"], "erste60Tage": ["<string>"], "erste90Tage": ["<string>"], "allgemein": ["<string>"] }`;
   const user = `Stelle: ${app_.role}\nUnternehmen: ${app_.company}\nBranche: aus Stellenbeschreibung ableiten\nStellenbeschreibung:\n${app_.description?.slice(0, 1500) ?? ""}`;
   try {
-    const raw = await callAi(system, user, ai);
+    const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { erste30Tage: string[]; erste60Tage: string[]; erste90Tage: string[]; allgemein: string[] };
     await persistAiResult(id, "onboarding", parsed as Record<string, unknown>);
     return c.json(parsed);

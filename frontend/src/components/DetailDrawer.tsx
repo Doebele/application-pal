@@ -54,12 +54,7 @@ async function copyText(text: string): Promise<void> {
   document.body.removeChild(el);
 }
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "process",   label: "Aktionen"   },
-  { id: "details",   label: "Details"    },
-  { id: "documents", label: "Dokumente"  },
-  { id: "ki",        label: "KI-Inhalte" },
-];
+// TABS are computed inside DetailDrawer using i18n — see useTabs() below
 
 import { STAGE_COLORS, STAGE_LABELS_DE as STAGE_LABELS, STAGE_ORDER } from "../lib/stages";
 
@@ -327,6 +322,7 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
   url: string; onUrlChange: (url: string) => void;
   onSave: (patch: Partial<Application>) => void
 }) {
+  const { t } = useTranslation();
   const [company, setCompany]       = useState(app.company);
   const [role, setRole]             = useState(app.role);
   const [location, setLocation]     = useState(app.location ?? "");
@@ -358,25 +354,25 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
       {/* Row 1: Firma + Ort */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div className="field">
-          <label>Firma</label>
+          <label>{t("overview.company")}</label>
           <input value={company} onChange={(e) => setCompany(e.target.value)} onBlur={() => save({ company })} />
         </div>
         <div className="field">
-          <label>Ort</label>
+          <label>{t("overview.location")}</label>
           <input value={location} onChange={(e) => setLocation(e.target.value)} onBlur={() => save({ location })} />
         </div>
       </div>
 
       {/* Row 2: Rolle (full width) */}
       <div className="field">
-        <label>Rolle</label>
+        <label>{t("overview.role")}</label>
         <input value={role} onChange={(e) => setRole(e.target.value)} onBlur={() => save({ role })} />
       </div>
 
       {/* Row 3: Original URL + Bewerbungsportal */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div className="field">
-          <label>Original URL</label>
+          <label>{t("overview.originalUrl")}</label>
           <div style={{ position: "relative" }}>
             <Link width={12} height={12} style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
             <input value={url} onChange={(e) => onUrlChange(e.target.value)} onBlur={() => save({ url })}
@@ -385,7 +381,7 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
           </div>
         </div>
         <div className="field">
-          <label>Bewerbungsportal</label>
+          <label>{t("overview.portal")}</label>
           <div style={{ position: "relative" }}>
             <OpenNewWindow width={12} height={12} style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", color: "var(--fg-3)", pointerEvents: "none" }} />
             <input value={app.portalUrl ?? ""} onChange={(e) => save({ portalUrl: e.target.value })} onBlur={(e) => save({ portalUrl: e.target.value })}
@@ -398,11 +394,11 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
       {/* Row 4: Salary + Nächster Schritt */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div className="field">
-          <label>Salary</label>
+          <label>{t("overview.salary")}</label>
           <input value={salary} onChange={(e) => setSalary(e.target.value)} onBlur={() => save({ salary })} placeholder="e.g. €80–100k" />
         </div>
         <div className="field">
-          <label>Nächster Schritt</label>
+          <label>{t("overview.nextStep")}</label>
           <input value={app.nextDeadline ?? ""} onChange={(e) => save({ nextDeadline: e.target.value })} placeholder="z.B. Interview 15. Mai" />
         </div>
       </div>
@@ -410,27 +406,27 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
       {/* Row 5: Pensum + Work Model + Contract */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
         <div className="field">
-          <label>Pensum</label>
+          <label>{t("overview.pensum")}</label>
           <PensumField
             value={jobType}
             onChange={v => { setJobType(v); save({ jobType: v || null } as Partial<Application>); }}
           />
         </div>
         <div className="field">
-          <label>Arbeitsmodell</label>
+          <label>{t("overview.workModel")}</label>
           <select
             value={workModel}
             onChange={e => { setWorkModel(e.target.value); save({ workModel: e.target.value || null } as Partial<Application>); }}
             style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontSize: 12, fontFamily: "var(--font-sans)", outline: "none" }}
           >
             <option value="">—</option>
-            <option value="onsite">Vor Ort</option>
-            <option value="hybrid">Hybrid</option>
-            <option value="remote">Remote</option>
+            <option value="onsite">{t("overview.onsite")}</option>
+            <option value="hybrid">{t("overview.hybrid")}</option>
+            <option value="remote">{t("overview.remote")}</option>
           </select>
         </div>
         <div className="field">
-          <label>Vertrag</label>
+          <label>{t("overview.contract")}</label>
           <ContractField
             value={contractType}
             onChange={v => { setContractType(v); save({ contractType: v || null } as Partial<Application>); }}
@@ -440,7 +436,7 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
 
       {/* Tags */}
       <div className="field">
-        <label>Tags</label>
+        <label>{t("overview.tags")}</label>
         <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", padding: "8px 10px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", minHeight: 38 }}>
           {tags.map((t) => (
             <span key={t} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 999, background: "var(--accent-08)", color: "var(--accent)", fontSize: 11, fontWeight: 600, border: "1px solid var(--accent-15)" }}>
@@ -455,7 +451,7 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
 
       <div className="autosave-indicator">
         <span className="dot" style={{ background: saved ? "var(--accent)" : "var(--green)" }} />
-        {saved ? "Gespeichert." : "Änderungen werden automatisch gespeichert."}
+        {saved ? t("saved") : t("autosave")}
       </div>
     </>
   );
@@ -463,26 +459,27 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
 
 // ─── Description Tab ──────────────────────────────────────────
 function DescriptionTab({ app, onSave }: { app: Application; onSave: (patch: Partial<Application>) => void }) {
+  const { t } = useTranslation();
   const [description, setDescription] = useState(app.description ?? "");
   const [saved, setSaved] = useState(false);
   const save = () => { onSave({ description }); setSaved(true); setTimeout(() => setSaved(false), 1500); };
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Originale Stellenbeschreibung</div>
+        <div style={{ fontSize: 12, color: "var(--fg-3)" }}>{t("description.fullLabel")}</div>
         {app.url && (
           <a href={app.url} target="_blank" rel="noreferrer" style={{ display: "flex", alignItems: "center", gap: 4, color: "var(--accent)", fontSize: 11, fontWeight: 600, textDecoration: "none" }}>
-            <OpenNewWindow width={11} height={11} /> Original öffnen
+            <OpenNewWindow width={11} height={11} /> {t("description.open")}
           </a>
         )}
       </div>
       <div className="field">
         <AutoTextarea value={description} onChange={(e) => setDescription(e.target.value)} onBlur={save}
-          placeholder="Originale Stellenbeschreibung einfügen…" minRows={12} />
+          placeholder={t("description.placeholder")} minRows={12} />
       </div>
       <div className="autosave-indicator">
         <span className="dot" style={{ background: saved ? "var(--accent)" : "var(--green)" }} />
-        {saved ? "Gespeichert." : "Wird beim Verlassen des Felds gespeichert."}
+        {saved ? t("saved") : t("overview.autosave")}
       </div>
     </>
   );
@@ -602,6 +599,7 @@ const BulletList = ({ items, accent }: { items: string[]; accent?: string }) => 
 function GlassdoorCardDetail({ data, appId, onUpdate }: {
   data: GlassdoorData; appId: string; onUpdate: (v: GlassdoorData) => void;
 }) {
+  const { t } = useTranslation();
   const [editUrl, setEditUrl] = useState(data.glassdoorUrl ?? "");
   const [saving,  setSaving]  = useState(false);
   const stars = data.rating ? "★".repeat(Math.round(data.rating)) + "☆".repeat(5 - Math.round(data.rating)) : null;
@@ -629,11 +627,11 @@ function GlassdoorCardDetail({ data, appId, onUpdate }: {
         {(data.ceoApproval != null || data.recommendToFriend != null) && (
           <div style={{ flex: 1, minWidth: 100, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>
             {data.ceoApproval != null && <div style={{ marginBottom: 6 }}>
-              <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 2 }}>CEO-ZUSTIMMUNG</div>
+              <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 2 }}>{t("aiResult.ceoApproval").toUpperCase()}</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg-1)" }}>{data.ceoApproval}%</div>
             </div>}
             {data.recommendToFriend != null && <div>
-              <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 2 }}>EMPFEHLEN</div>
+              <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 2 }}>{t("aiResult.recommend").toUpperCase()}</div>
               <div style={{ fontSize: 16, fontWeight: 700, color: "var(--fg-1)" }}>{data.recommendToFriend}%</div>
             </div>}
           </div>
@@ -642,13 +640,13 @@ function GlassdoorCardDetail({ data, appId, onUpdate }: {
       {data.summary && <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6, marginBottom: 10 }}>{data.summary}</div>}
       {(data.pros?.length > 0 || data.cons?.length > 0) && (
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-          {data.pros?.length > 0 && <AiSection title="Positiv"><BulletList items={data.pros} accent="#34d399" /></AiSection>}
-          {data.cons?.length > 0 && <AiSection title="Kritisch"><BulletList items={data.cons} accent="#f87171" /></AiSection>}
+          {data.pros?.length > 0 && <AiSection title={t("aiResult.positive")}><BulletList items={data.pros} accent="#34d399" /></AiSection>}
+          {data.cons?.length > 0 && <AiSection title={t("aiResult.critical")}><BulletList items={data.cons} accent="#f87171" /></AiSection>}
         </div>
       )}
       {/* Editierbarer Glassdoor-Link */}
       <div style={{ marginBottom: 14 }}>
-        <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 4 }}>GLASSDOOR-LINK</div>
+        <div style={{ fontSize: 9, color: "var(--fg-3)", marginBottom: 4 }}>{t("aiResult.glassdoorLink").toUpperCase()}</div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <input type="url" value={editUrl} onChange={e => setEditUrl(e.target.value)}
             placeholder="https://www.glassdoor.com/..."
@@ -666,7 +664,7 @@ function GlassdoorCardDetail({ data, appId, onUpdate }: {
         </div>
       </div>
       <div style={{ fontSize: 10, color: "var(--fg-3)" }}>
-        <span style={{ color: confidenceColor, fontWeight: 600 }}>Konfidenz: {data.confidence}</span>
+        <span style={{ color: confidenceColor, fontWeight: 600 }}>{t("aiResult.confidence")}: {data.confidence}</span>
         {data.hinweis && <span> · {data.hinweis}</span>}
       </div>
     </>
@@ -694,6 +692,7 @@ function KununuCardDetail({ data }: { data: KununuData }) {
 function LinkedinCardDetail({ data, appId, onUpdate }: {
   data: LinkedinData; appId: string; onUpdate: (v: LinkedinData) => void;
 }) {
+  const { t } = useTranslation();
   const [editUrl, setEditUrl] = useState(data.url ?? "");
   const [saving,  setSaving]  = useState(false);
 
@@ -729,7 +728,7 @@ function LinkedinCardDetail({ data, appId, onUpdate }: {
             style={{ width: "100%", boxSizing: "border-box", background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 11, color: "var(--fg-1)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
         </div>
         <button className="btn btn-secondary" style={{ fontSize: 11 }} onClick={save} disabled={saving}>
-          {saving ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : "Speichern"}
+          {saving ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : t("buttons.save")}
         </button>
         {data.hinweis && <div style={{ marginTop: 8, fontSize: 10, color: "var(--fg-3)" }}>{data.hinweis}</div>}
         {data.manuallyEdited && <div style={{ marginTop: 4, fontSize: 10, color: "var(--accent)" }}>· manuell bearbeitet</div>}
@@ -801,6 +800,7 @@ function SalaryBandChart({ min, max, median, desired, currency = "CHF" }: {
 
 // Salary-check expanded detail — fetches profile for desired salary
 function SalaryCheckDetail({ data, appId }: { data: SalaryCheck; appId: string }) {
+  const { t } = useTranslation();
   const { data: profile } = useQuery<{ desiredSalary?: string | null }>({
     queryKey: ["profile"],
     queryFn: () => api.get("/api/profile").then(r => r.data),
@@ -829,8 +829,8 @@ function SalaryCheckDetail({ data, appId }: { data: SalaryCheck; appId: string }
           </div>
         ))}
       </div>
-      {sc.begruendung && <AiSection title="Begründung"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{sc.begruendung}</div></AiSection>}
-      {sc.faktoren?.length > 0 && <AiSection title="Einflussfaktoren"><div>{sc.faktoren.map((f, i) => <TagBadge key={i} text={f} />)}</div></AiSection>}
+      {sc.begruendung && <AiSection title={t("aiResult.reasoning")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{sc.begruendung}</div></AiSection>}
+      {sc.faktoren?.length > 0 && <AiSection title={t("aiResult.influenceFactors")}><div>{sc.faktoren.map((f, i) => <TagBadge key={i} text={f} />)}</div></AiSection>}
     </>
   );
 }
@@ -958,6 +958,7 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
 }
 
 function AckermannScriptDetail({ script, appId }: { script: AckermannScript; appId: string }) {
+  const { t } = useTranslation();
   const [exporting, setExporting] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
 
@@ -1054,7 +1055,7 @@ function AckermannScriptDetail({ script, appId }: { script: AckermannScript; app
       {/* Nicht-monetäre Alternativen */}
       {script.nichtmonetaer?.length > 0 && (
         <div style={{ marginTop: 14 }}>
-          <AiSection title="Nicht-monetäre Alternativen">
+          <AiSection title={t("aiResult.nonMonetary")}>
             <div>{script.nichtmonetaer.map((n, i) => <TagBadge key={i} text={n} />)}</div>
           </AiSection>
         </div>
@@ -1066,31 +1067,32 @@ function AckermannScriptDetail({ script, appId }: { script: AckermannScript; app
 function AiResultDetail({ id, data, appId, onUpdate }: {
   id: string; data: unknown; appId: string; onUpdate?: (id: string, data: unknown) => void;
 }) {
+  const { t } = useTranslation();
   if (id === "match-score") {
     const r = data as MatchResult;
     const scoreColor = r.score >= 75 ? "#34d399" : r.score >= 50 ? "#fbbf24" : "#f87171";
     return (
       <>
         <div style={{ fontSize: 12, fontWeight: 700, color: scoreColor, marginBottom: 12 }}>
-          {r.score >= 75 ? "Starke Übereinstimmung" : r.score >= 50 ? "Moderate Übereinstimmung" : "Schwache Übereinstimmung"}
+          {r.score >= 75 ? t("aiResult.matchStrong") : r.score >= 50 ? t("aiResult.matchModerate") : t("aiResult.matchWeak")}
         </div>
-        <MiniBar label="Fachkompetenz"     value={r.breakdown.fachkompetenz}     color={scoreColor} />
-        <MiniBar label="Erfahrung"          value={r.breakdown.erfahrung}          color={scoreColor} />
-        <MiniBar label="Soft Skills"        value={r.breakdown.soft_skills}        color={scoreColor} />
-        <MiniBar label="Kulturelle Passung" value={r.breakdown.kulturelle_passung} color={scoreColor} />
+        <MiniBar label={t("aiResult.fachkompetenz")}  value={r.breakdown.fachkompetenz}     color={scoreColor} />
+        <MiniBar label={t("aiResult.experience")}     value={r.breakdown.erfahrung}          color={scoreColor} />
+        <MiniBar label={t("aiResult.softSkills")}     value={r.breakdown.soft_skills}        color={scoreColor} />
+        <MiniBar label={t("aiResult.cultureFit")}     value={r.breakdown.kulturelle_passung} color={scoreColor} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 16, marginBottom: 16 }}>
           <div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>✓ Stärken</div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>{t("aiResult.strengths")}</div>
             {r.staerken.map((s, i) => <div key={i} style={{ fontSize: 11, color: "var(--fg-2)", padding: "3px 0", borderBottom: "1px solid var(--border)", lineHeight: 1.5 }}>{s}</div>)}
           </div>
           <div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "#f87171", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>✗ Lücken</div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "#f87171", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 8 }}>{t("aiResult.gaps")}</div>
             {r.luecken.map((l, i) => <div key={i} style={{ fontSize: 11, color: "var(--fg-2)", padding: "3px 0", borderBottom: "1px solid var(--border)", lineHeight: 1.5 }}>{l}</div>)}
           </div>
         </div>
         {r.reasoning && (
           <div>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>KI-Begründung</div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>{t("aiResult.aiReasoning")}</div>
             <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.75, padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>{r.reasoning}</div>
           </div>
         )}
@@ -1101,9 +1103,9 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
     const cl = data as { subject: string; body: string };
     return (
       <>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Betreff</div>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>{t("aiResult.subject")}</div>
         <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)", marginBottom: 16, padding: "8px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>{cl.subject}</div>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Anschreiben</div>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>{t("aiResult.coverLetter")}</div>
         <div style={{ fontSize: 12, color: "var(--fg-1)", lineHeight: 1.75, whiteSpace: "pre-wrap", padding: "10px 12px", borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)" }}>{cl.body}</div>
       </>
     );
@@ -1126,8 +1128,8 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
       <>
         {kw.mustHave?.length > 0    && <AiSection title="Must Have">{kw.mustHave.map((k, i)    => <TagBadge key={i} text={k} color="var(--accent)" />)}</AiSection>}
         {kw.niceToHave?.length > 0  && <AiSection title="Nice to Have">{kw.niceToHave.map((k, i)  => <TagBadge key={i} text={k} />)}</AiSection>}
-        {kw.softSkills?.length > 0  && <AiSection title="Soft Skills">{kw.softSkills.map((k, i)  => <TagBadge key={i} text={k} color="#a78bfa" />)}</AiSection>}
-        {kw.tools?.length > 0       && <AiSection title="Tools & Technologien">{kw.tools.map((k, i)       => <TagBadge key={i} text={k} color="#34d399" />)}</AiSection>}
+        {kw.softSkills?.length > 0  && <AiSection title={t("aiResult.softSkills")}>{kw.softSkills.map((k, i)  => <TagBadge key={i} text={k} color="#a78bfa" />)}</AiSection>}
+        {kw.tools?.length > 0       && <AiSection title={t("aiResult.tools")}>{kw.tools.map((k, i)       => <TagBadge key={i} text={k} color="#34d399" />)}</AiSection>}
       </>
     );
   }
@@ -1135,9 +1137,9 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
     const cv = data as CvHighlights;
     return (
       <>
-        {cv.highlights?.length > 0 && <AiSection title="Relevante Stärken"><BulletList items={cv.highlights} accent="#34d399" /></AiSection>}
+        {cv.highlights?.length > 0 && <AiSection title={t("aiResult.relevantStrengths")}><BulletList items={cv.highlights} accent="#34d399" /></AiSection>}
         {cv.keywords?.length > 0   && <AiSection title="Keywords">{cv.keywords.map((k, i) => <TagBadge key={i} text={k} />)}</AiSection>}
-        {cv.gaps?.length > 0       && <AiSection title="Lücken"><BulletList items={cv.gaps} accent="#f87171" /></AiSection>}
+        {cv.gaps?.length > 0       && <AiSection title={t("aiResult.gaps")}><BulletList items={cv.gaps} accent="#f87171" /></AiSection>}
       </>
     );
   }
@@ -1149,9 +1151,9 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
     const st = data as SalaryTips;
     return (
       <>
-        {(st["markteinschätzung"] as string | undefined) && <AiSection title="Markteinschätzung"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{st["markteinschätzung"] as string}</div></AiSection>}
-        {st.taktiken?.length > 0     && <AiSection title="Taktiken"><BulletList items={st.taktiken} accent="var(--accent)" /></AiSection>}
-        {st.vossAnker               && <AiSection title="Voss-Anker"><div style={{ fontSize: 11, color: "var(--fg-2)", fontStyle: "italic", lineHeight: 1.6, padding: "6px 10px", borderLeft: "3px solid var(--accent)", background: "var(--surface-2)", borderRadius: "0 6px 6px 0" }}>„{st.vossAnker}"</div></AiSection>}
+        {(st["markteinschätzung"] as string | undefined) && <AiSection title={t("aiResult.marketAssessment")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{st["markteinschätzung"] as string}</div></AiSection>}
+        {st.taktiken?.length > 0     && <AiSection title={t("aiResult.tactics")}><BulletList items={st.taktiken} accent="var(--accent)" /></AiSection>}
+        {st.vossAnker               && <AiSection title={t("aiResult.vossAnchor")}><div style={{ fontSize: 11, color: "var(--fg-2)", fontStyle: "italic", lineHeight: 1.6, padding: "6px 10px", borderLeft: "3px solid var(--accent)", background: "var(--surface-2)", borderRadius: "0 6px 6px 0" }}>„{st.vossAnker}"</div></AiSection>}
       </>
     );
   }
@@ -1159,11 +1161,11 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
     const cr = data as CompanyResearch;
     return (
       <>
-        {cr.unternehmensueberblick && <AiSection title="Überblick"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmensueberblick}</div></AiSection>}
-        {cr.unternehmenskultur     && <AiSection title="Kultur"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmenskultur}</div></AiSection>}
-        {cr.marktposition          && <AiSection title="Marktposition"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.marktposition}</div></AiSection>}
-        {cr.wettbewerber?.length > 0  && <AiSection title="Wettbewerber">{cr.wettbewerber.map((w, i) => <TagBadge key={i} text={w} />)}</AiSection>}
-        {cr.aktuelleThemen?.length > 0 && <AiSection title="Aktuelle Themen"><BulletList items={cr.aktuelleThemen} /></AiSection>}
+        {cr.unternehmensueberblick && <AiSection title={t("aiResult.overview")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmensueberblick}</div></AiSection>}
+        {cr.unternehmenskultur     && <AiSection title={t("aiResult.culture")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmenskultur}</div></AiSection>}
+        {cr.marktposition          && <AiSection title={t("aiResult.marketPosition")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.marktposition}</div></AiSection>}
+        {cr.wettbewerber?.length > 0  && <AiSection title={t("aiResult.competitors")}>{cr.wettbewerber.map((w, i) => <TagBadge key={i} text={w} />)}</AiSection>}
+        {cr.aktuelleThemen?.length > 0 && <AiSection title={t("aiResult.currentTopics")}><BulletList items={cr.aktuelleThemen} /></AiSection>}
       </>
     );
   }
@@ -1175,16 +1177,16 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
     const lr = data as LetterReview;
     return (
       <>
-        {lr.gesamteindruck && <AiSection title="Gesamteindruck"><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{lr.gesamteindruck}</div></AiSection>}
+        {lr.gesamteindruck && <AiSection title={t("aiResult.overallImpression")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{lr.gesamteindruck}</div></AiSection>}
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-          {lr.staerken?.length > 0      && <AiSection title="Stärken"><BulletList items={lr.staerken} accent="#34d399" /></AiSection>}
-          {lr.verbesserungen?.length > 0 && <AiSection title="Verbesserungen"><BulletList items={lr.verbesserungen} accent="#fbbf24" /></AiSection>}
+          {lr.staerken?.length > 0      && <AiSection title={t("aiResult.relevantStrengths")}><BulletList items={lr.staerken} accent="#34d399" /></AiSection>}
+          {lr.verbesserungen?.length > 0 && <AiSection title={t("aiResult.improvements")}><BulletList items={lr.verbesserungen} accent="#fbbf24" /></AiSection>}
         </div>
-        {lr.cliches?.length > 0 && <AiSection title="Clichés"><div>{lr.cliches.map((c, i) => <TagBadge key={i} text={c} color="#f87171" />)}</div></AiSection>}
+        {lr.cliches?.length > 0 && <AiSection title={t("aiResult.cliches")}><div>{lr.cliches.map((c, i) => <TagBadge key={i} text={c} color="#f87171" />)}</div></AiSection>}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 10, color: "var(--fg-3)" }}>
-          {lr.tonalitaet     && <span>Ton: <strong style={{ color: "var(--fg-2)" }}>{lr.tonalitaet}</strong></span>}
-          {lr.laenge         && <span>· Länge: <strong style={{ color: "var(--fg-2)" }}>{lr.laenge}</strong></span>}
-          {lr.personalisierung && <span>· Personalisierung: <strong style={{ color: "var(--fg-2)" }}>{lr.personalisierung}</strong></span>}
+          {lr.tonalitaet     && <span>{t("aiResult.tone")}: <strong style={{ color: "var(--fg-2)" }}>{lr.tonalitaet}</strong></span>}
+          {lr.laenge         && <span>· {t("aiResult.length")}: <strong style={{ color: "var(--fg-2)" }}>{lr.laenge}</strong></span>}
+          {lr.personalisierung && <span>· {t("aiResult.personalization")}: <strong style={{ color: "var(--fg-2)" }}>{lr.personalisierung}</strong></span>}
         </div>
       </>
     );
@@ -1208,9 +1210,9 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
     return (
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
         {([
-          { label: "Erste 30 Tage", items: oc.erste30Tage, color: "var(--accent)" },
-          { label: "Erste 60 Tage", items: oc.erste60Tage, color: "#fbbf24" },
-          { label: "Erste 90 Tage", items: oc.erste90Tage, color: "#34d399" },
+          { label: t("aiResult.day30"), items: oc.erste30Tage, color: "var(--accent)" },
+          { label: t("aiResult.day60"), items: oc.erste60Tage, color: "#fbbf24" },
+          { label: t("aiResult.day90"), items: oc.erste90Tage, color: "#34d399" },
         ]).map(({ label, items, color }) => items?.length > 0 && (
           <div key={label}>
             <div style={{ fontSize: 9, fontWeight: 700, color, textTransform: "uppercase", marginBottom: 5 }}>{label}</div>
@@ -1984,12 +1986,14 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
   onClose: () => void;
   onRegister?: (id: string, data: unknown) => void;
 }) {
+  const { t } = useTranslation();
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState("");
 
   // ── Local toast ──
   const [toast, setToast] = useState<{ msg: string; type: "ok" | "err"; leaving: boolean } | null>(null);
@@ -2013,10 +2017,11 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
   const run = async () => {
     const endpoint = ACTION_ENDPOINTS[id];
     if (!endpoint) return;
-    if (ai.provider === "none") { setErr("KI-Modell in Settings konfigurieren"); return; }
+    if (ai.provider === "none") { setErr(t("tileExpand.noAiModel")); return; }
     setErr(null); setRunning(true);
     try {
-      const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+      const aiBody: Record<string, unknown> = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+      if (prompt.trim()) aiBody.additionalContext = prompt.trim();
       const r = await api.post<Record<string, unknown>>(`/api/applications/${appId}${endpoint}`, aiBody);
       onRegister?.(id, r.data);
       // Invalidate so the parent re-fetches fresh aiResultsCache from DB
@@ -2050,8 +2055,8 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
       else if (id === "opening-sentences") body.sentences   = entry.data;
       const r = await api.post<{ docUrl: string }>(`/api/applications/${appId}${endpoint}`, body);
       setExportUrl(r.data.docUrl);
-      fireToast("Google Doc erstellt ↗");
-    } catch { fireToast("Export fehlgeschlagen", "err"); }
+      fireToast(t("tileExpand.docCreated"));
+    } catch { fireToast(t("tileExpand.exportFailed"), "err"); }
     finally { setExporting(false); }
   };
 
@@ -2074,12 +2079,12 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
               style={{ fontSize: 11, gap: 5 }}
               onClick={() =>
                 copyText(tileTextContent(id, entry.data))
-                  .then(() => fireToast("Text kopiert"))
-                  .catch(() => fireToast("Kopieren fehlgeschlagen", "err"))
+                  .then(() => fireToast(t("tileExpand.copied")))
+                  .catch(() => fireToast(t("tileExpand.copyFailed"), "err"))
               }
             >
               <IcCopy width={11} height={11} />
-              Kopieren
+              {t("buttons.copy")}
             </button>
 
             {/* Google Doc export */}
@@ -2101,24 +2106,14 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
                     ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} />
                     : <Page width={11} height={11} />
                   }
-                  Als Google Doc
+                  {t("buttons.exportDoc")}
                 </button>
               )
             )}
           </>
         )}
 
-        {/* Aktualisieren / Jetzt ausführen */}
-        {ACTION_ENDPOINTS[id] && (
-          <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={running} onClick={run}>
-            {running
-              ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} />
-              : <Refresh width={11} height={11} />
-            }
-            {hasData ? "Aktualisieren" : "Jetzt ausführen"}
-          </button>
-        )}
-        <button onClick={onClose} title="Schliessen"
+        <button onClick={onClose} title={t("buttons.close")}
           style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
           <Collapse width={13} height={13} />
         </button>
@@ -2191,12 +2186,59 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
       </div>
       )}
 
+      {/* ── Sticky footer: prompt input + Aktualisieren button ── */}
+      {ACTION_ENDPOINTS[id] && (
+        <div style={{
+          flexShrink: 0,
+          display: "flex", gap: 8, alignItems: "flex-end",
+          paddingTop: 10,
+          borderTop: "1px solid var(--border)",
+          marginTop: 10,
+        }}>
+          <textarea
+            value={prompt}
+            onChange={e => setPrompt(e.target.value)}
+            onKeyDown={e => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); run(); } }}
+            placeholder={hasData ? t("tileExpand.hintRefresh") : t("tileExpand.hint")}
+            rows={2}
+            style={{
+              flex: 1,
+              resize: "none",
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              background: "var(--surface-2)",
+              color: "var(--fg-1)",
+              padding: "7px 10px",
+              fontSize: 12,
+              fontFamily: "var(--font-sans)",
+              lineHeight: 1.5,
+              outline: "none",
+              transition: "border-color 0.15s",
+            }}
+            onFocus={e => e.currentTarget.style.borderColor = "var(--accent)"}
+            onBlur={e => e.currentTarget.style.borderColor = "var(--border)"}
+          />
+          <button
+            className="btn btn-secondary"
+            style={{ fontSize: 11, gap: 5, flexShrink: 0, height: 52, alignSelf: "stretch" }}
+            disabled={running}
+            onClick={run}
+          >
+            {running
+              ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} />
+              : <Refresh width={11} height={11} />
+            }
+            {hasData ? t("tileExpand.refresh") : t("tileExpand.runNow")}
+          </button>
+        </div>
+      )}
+
       {/* ── Toast notification — bottom-center of expand overlay ── */}
       {toast && (
         <div
           className={toast.leaving ? "toast-leave" : "toast-enter"}
           style={{
-            position: "absolute", bottom: 20, left: "50%", transform: "translateX(-50%)",
+            position: "absolute", bottom: 76, left: "50%", transform: "translateX(-50%)",
             display: "flex", alignItems: "center", gap: 8,
             padding: "9px 16px", borderRadius: 10, zIndex: 20,
             background: toast.type === "ok" ? "rgba(52,211,153,0.12)" : "rgba(248,113,113,0.12)",
@@ -2228,6 +2270,7 @@ function ContactForm({
   onCancel: () => void;
   saveLabel: string;
 }) {
+  const { t } = useTranslation();
   const set = (k: keyof ContactForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
     onChange({ ...form, [k]: e.target.value });
   return (
@@ -2243,32 +2286,32 @@ function ContactForm({
       </datalist>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
         <div className="field" style={{ margin: 0 }}>
-          <label>Name *</label>
-          <input value={form.name} onChange={set("name")} placeholder="Max Muster" autoFocus />
+          <label>{t("contacts.name")}</label>
+          <input value={form.name} onChange={set("name")} placeholder={t("contacts.namePlaceholder")} autoFocus />
         </div>
         <div className="field" style={{ margin: 0 }}>
-          <label>Rolle</label>
-          <input list="contact-role-opts" value={form.role} onChange={set("role")} placeholder="Recruiter, Teamleiter …" />
+          <label>{t("contacts.role")}</label>
+          <input list="contact-role-opts" value={form.role} onChange={set("role")} placeholder={t("contacts.rolePlaceholder")} />
         </div>
         <div className="field" style={{ margin: 0 }}>
-          <label>E-Mail</label>
+          <label>{t("contacts.email")}</label>
           <input value={form.email} onChange={set("email")} placeholder="kontakt@firma.de" type="email" />
         </div>
         <div className="field" style={{ margin: 0 }}>
-          <label>Telefon</label>
+          <label>{t("contacts.phone")}</label>
           <input value={form.phone} onChange={set("phone")} placeholder="+41 79 …" />
         </div>
       </div>
       <div className="field" style={{ margin: 0 }}>
-        <label>LinkedIn URL</label>
+        <label>{t("contacts.linkedin")}</label>
         <input value={form.linkedinUrl} onChange={set("linkedinUrl")} placeholder="https://linkedin.com/in/…" />
       </div>
       <div className="field" style={{ margin: 0 }}>
-        <label>Notizen</label>
-        <textarea value={form.notes} onChange={set("notes")} placeholder="Gesprächsnotizen, Eindrücke …" rows={3} style={{ resize: "vertical" }} />
+        <label>{t("contacts.contactNotes")}</label>
+        <textarea value={form.notes} onChange={set("notes")} placeholder={t("contacts.notesPlaceholder")} rows={3} style={{ resize: "vertical" }} />
       </div>
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button className="btn btn-secondary" onClick={onCancel}>Abbrechen</button>
+        <button className="btn btn-secondary" onClick={onCancel}>{t("buttons.cancel")}</button>
         <button className="btn btn-primary" onClick={onSave} disabled={!form.name.trim()}>{saveLabel}</button>
       </div>
     </div>
@@ -2277,6 +2320,7 @@ function ContactForm({
 
 // ─── Contacts Section (inline in DetailsTab) ──────────────────
 function ContactsSection({ app }: { app: Application }) {
+  const { t } = useTranslation();
   const { data: contacts = [], refetch } = useQuery<ApplicationContact[]>({
     queryKey: ["contacts", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/contacts`).then((r) => r.data)
@@ -2310,7 +2354,7 @@ function ContactsSection({ app }: { app: Application }) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: open ? 10 : 0, cursor: "pointer" }}
         onClick={() => setOpen(v => !v)}>
         <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Kontakte {contacts.length > 0 && `(${contacts.length})`}
+          {t("contacts.label")} {contacts.length > 0 && `(${contacts.length})`}
         </div>
         <NavArrowDown width={11} height={11} style={{ color: "var(--fg-3)", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </div>
@@ -2319,24 +2363,24 @@ function ContactsSection({ app }: { app: Application }) {
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>
             <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, padding: "5px 10px" }}
               onClick={(e) => { e.stopPropagation(); setAdding(v => !v); setEditId(null); }}>
-              <Plus width={11} height={11} /> Kontakt
+              <Plus width={11} height={11} /> {t("contacts.add")}
             </button>
           </div>
           {adding && (
             <div style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", marginBottom: 14 }}>
-              <ContactForm form={addForm} onChange={setAddForm} onSave={add} onCancel={() => setAdding(false)} saveLabel="Hinzufügen" />
+              <ContactForm form={addForm} onChange={setAddForm} onSave={add} onCancel={() => setAdding(false)} saveLabel={t("buttons.add")} />
             </div>
           )}
           {contacts.length === 0 && !adding && (
             <div style={{ color: "var(--fg-3)", fontSize: 12, textAlign: "center", padding: "24px 0", border: "1px dashed var(--border)", borderRadius: 8 }}>
-              Noch keine Kontakte
+              {t("contacts.none")}
             </div>
           )}
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {contacts.map((c) => (
               <div key={c.id} style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${editId === c.id ? "var(--accent-40)" : "var(--border)"}`, background: "var(--surface)" }}>
                 {editId === c.id ? (
-                  <ContactForm form={editForm} onChange={setEditForm} onSave={saveEdit} onCancel={() => setEditId(null)} saveLabel="Speichern" />
+                  <ContactForm form={editForm} onChange={setEditForm} onSave={saveEdit} onCancel={() => setEditId(null)} saveLabel={t("buttons.save")} />
                 ) : (
                   <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
@@ -2350,8 +2394,8 @@ function ContactsSection({ app }: { app: Application }) {
                       {c.notes && <div style={{ marginTop: 6, fontSize: 13, color: "var(--fg-2)", whiteSpace: "pre-wrap" }}>{c.notes}</div>}
                     </div>
                     <div style={{ display: "flex", gap: 4 }}>
-                      <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Bearbeiten" onClick={() => startEdit(c)}><EditPencil width={11} height={11} /></button>
-                      <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Löschen" onClick={() => del(c.id)}><Trash width={12} height={12} /></button>
+                      <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title={t("buttons.edit")} onClick={() => startEdit(c)}><EditPencil width={11} height={11} /></button>
+                      <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title={t("buttons.delete")} onClick={() => del(c.id)}><Trash width={12} height={12} /></button>
                     </div>
                   </div>
                 )}
@@ -2366,6 +2410,7 @@ function ContactsSection({ app }: { app: Application }) {
 
 // ─── Notes Section (inline in DetailsTab) ─────────────────────
 function NotesSection({ app, onSave }: { app: Application; onSave: (patch: Partial<Application>) => void }) {
+  const { t } = useTranslation();
   const [notes, setNotes] = useState(app.notes ?? "");
   const [saved, setSaved] = useState(false);
   const [open, setOpen] = useState(false);
@@ -2374,17 +2419,17 @@ function NotesSection({ app, onSave }: { app: Application; onSave: (patch: Parti
     <div style={{ marginTop: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: open ? 10 : 0, cursor: "pointer" }}
         onClick={() => setOpen(v => !v)}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Notizen</div>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("notes.label")}</div>
         <NavArrowDown width={11} height={11} style={{ color: "var(--fg-3)", transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </div>
       {open && (
         <>
           <div className="field" style={{ marginTop: 8 }}>
-            <AutoTextarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={save} placeholder="Notizen, Eindrücke, nächste Schritte…" minRows={5} />
+            <AutoTextarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={save} placeholder={t("notes.placeholder")} minRows={5} />
           </div>
           <div className="autosave-indicator">
             <span className="dot" style={{ background: saved ? "var(--accent)" : "var(--green)" }} />
-            {saved ? "Gespeichert." : "Wird beim Verlassen gespeichert."}
+            {saved ? t("saved") : t("notes.autosave")}
           </div>
         </>
       )}
@@ -2397,6 +2442,7 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
   url: string; onUrlChange: (url: string) => void;
   onSave: (patch: Partial<Application>) => void;
 }) {
+  const { t } = useTranslation();
   const [description, setDescription] = useState(app.description ?? "");
   const [descSaved,   setDescSaved]   = useState(false);
   const [descExpanded,  setDescExpanded]  = useState(false);
@@ -2429,7 +2475,7 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
       <div style={descExpanded ? expandStyle : { marginTop: 8 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
           <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-            Stellenbeschreibung
+            {t("description.label")}
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             {/* Vorschau / Bearbeiten toggle */}
@@ -2441,7 +2487,7 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
                   color: descMode === m ? "var(--fg-1)" : "var(--fg-3)",
                   fontFamily: "var(--font-sans)", fontWeight: 600,
                 }}>
-                  {m === "preview" ? "Vorschau" : "Bearbeiten"}
+                  {m === "preview" ? t("description.preview") : t("description.edit")}
                 </button>
               ))}
             </div>
@@ -2452,7 +2498,7 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
               </a>
             )}
             {descSaved && <span style={{ fontSize: 11, color: "#4ade80" }}>✓</span>}
-            <button onClick={() => setDescExpanded(v => !v)} title={descExpanded ? "Minimieren" : "Maximieren"}
+            <button onClick={() => setDescExpanded(v => !v)} title={descExpanded ? t("activities.minimize") : t("activities.maximize")}
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
               {descExpanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
             </button>
@@ -2468,7 +2514,7 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
                     )}}>
                     {description}
                   </ReactMarkdown>
-                : <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Noch keine Stellenbeschreibung vorhanden — wechsle zu „Bearbeiten" um Text einzufügen.</div>
+                : <div style={{ fontSize: 12, color: "var(--fg-3)" }}>{t("description.empty")}</div>
               }
             </div>
           ) : (
@@ -2476,7 +2522,7 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
               value={description}
               onChange={e => setDescription(e.target.value)}
               onBlur={saveDesc}
-              placeholder="Stellenbeschreibung einfügen (Markdown unterstützt)…"
+              placeholder={t("description.placeholder")}
               minRows={descExpanded ? 20 : 8}
             />
           )}
@@ -2587,6 +2633,7 @@ function docTileAccent(fileType: string): string {
 type DriveTemplate = { id: string; name: string; mimeType: string; webViewLink: string; capabilities?: { canCopy?: boolean } };
 
 function DocumentsTab({ app }: { app: Application }) {
+  const { t } = useTranslation();
   const { driveNameFolder, driveNameDoc } = useUiStore();
   // driveApplicationsFolderId is now per-user in the profile — fetch from API
   const [driveApplicationsFolderId, setDriveApplicationsFolderId_] = useState("");
@@ -2719,7 +2766,7 @@ function DocumentsTab({ app }: { app: Application }) {
       const match = appDocs.find((d) => d.userDocumentId === libDoc.id);
       if (match) {
         await api.delete(`/api/applications/${app.id}/documents/${match.id}`).catch(() => {});
-        showToast(`„${libDoc.name}" entfernt`);
+        showToast(t("documents.removed", { name: libDoc.name }));
       }
     } else {
       const isGDoc = libDoc.fileType === "gdoc";
@@ -2768,8 +2815,8 @@ function DocumentsTab({ app }: { app: Application }) {
       }).catch(() => {});
       showToast(
         folderState && (isGDoc || isPdf)
-          ? `„${libDoc.name}" hinzugefügt & auf Drive kopiert`
-          : `„${libDoc.name}" hinzugefügt`
+          ? t("documents.addedAndCopied", { name: libDoc.name })
+          : t("documents.addedToApp", { name: libDoc.name })
       );
       // Refresh Drive file list
       void loadDriveFiles();
@@ -2793,7 +2840,7 @@ function DocumentsTab({ app }: { app: Application }) {
         await api.patch(`/api/applications/${app.id}/documents/${match.id}`, { googleDocUrl: r.data.driveUrl }).catch(() => {});
         refetch();
       }
-      showToast(`„${libDoc.name}" auf Drive kopiert`);
+      showToast(t("documents.copiedToDrive", { name: libDoc.name }));
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
       showToast(msg ?? "Kopieren fehlgeschlagen", "error");
@@ -2802,7 +2849,7 @@ function DocumentsTab({ app }: { app: Application }) {
   };
 
   const create = async (type: "cv" | "letter") => {
-    const name = newName.trim() || (type === "cv" ? "Lebenslauf" : "Anschreiben");
+    const name = newName.trim() || (type === "cv" ? t("documents.cv") : t("documents.letter"));
     let googleDocUrl: string | undefined;
     let googleDocId: string | undefined;
     if (googleConnected) {
@@ -2836,16 +2883,16 @@ function DocumentsTab({ app }: { app: Application }) {
           {/* Header row */}
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, paddingBottom: 6, borderBottom: "1px solid var(--border)" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z" stroke="var(--fg-3)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-2)", flex: 1 }}>Google Drive</span>
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-2)", flex: 1 }}>{t("documents.googleDrive")}</span>
             {folderState && (
               <>
-                <button onClick={() => { setDriveFiles(null); }} title="Aktualisieren"
+                <button onClick={() => { setDriveFiles(null); }} title={t("buttons.refresh")}
                   style={{ background: "none", border: "none", cursor: driveFilesLoading ? "wait" : "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
                   <Refresh width={11} height={11} style={{ animation: driveFilesLoading ? "spin 1s linear infinite" : "none" }} />
                 </button>
                 <a href={folderState.folderUrl} target="_blank" rel="noreferrer"
                   style={{ fontSize: 11, color: "var(--fg-3)", textDecoration: "none", display: "flex", alignItems: "center", gap: 3 }}>
-                  <OpenNewWindow width={10} height={10} /> Ordner öffnen
+                  <OpenNewWindow width={10} height={10} /> {t("documents.openFolder")}
                 </a>
               </>
             )}
@@ -2857,19 +2904,19 @@ function DocumentsTab({ app }: { app: Application }) {
             <button onClick={createFolder} disabled={folderCreating}
               style={{ fontSize: 11, color: "var(--fg-3)", background: "none", border: "none", cursor: folderCreating ? "wait" : "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 5, padding: "4px 0" }}>
               {folderCreating
-                ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> Erstelle Ordner…</>
-                : <><Plus width={11} height={11} /> Bewerbungsordner erstellen</>}
+                ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> {t("documents.creatingFolder")}</>
+                : <><Plus width={11} height={11} /> {t("documents.createFolder")}</>}
             </button>
           ) : (
             <>
               {/* Live Drive folder contents */}
               {driveFiles === null && driveFilesLoading && (
                 <div style={{ fontSize: 11, color: "var(--fg-3)", display: "flex", alignItems: "center", gap: 5, marginBottom: 8 }}>
-                  <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> Lade Ordner-Inhalt…
+                  <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> {t("documents.loadingFiles")}
                 </div>
               )}
               {driveFiles !== null && driveFiles.length === 0 && (
-                <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8 }}>Ordner ist leer</div>
+                <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8 }}>{t("documents.emptyFolder")}</div>
               )}
               {driveFiles !== null && driveFiles.length > 0 && (
                 <div style={{ marginBottom: 4 }}>
@@ -2893,7 +2940,7 @@ function DocumentsTab({ app }: { app: Application }) {
                           <OpenNewWindow width={10} height={10} />
                         </a>
                         <button className="btn btn-ghost btn-icon" style={{ padding: 2, flexShrink: 0, opacity: 0.5 }}
-                          title="Aus Drive löschen" disabled={isDeleting} onClick={() => deleteDriveFile(f.id)}>
+                          title={t("buttons.remove")} disabled={isDeleting} onClick={() => deleteDriveFile(f.id)}>
                           {isDeleting
                             ? <RefreshCircle width={10} height={10} style={{ animation: "spin 1s linear infinite" }} />
                             : <Trash width={10} height={10} />}
@@ -2912,39 +2959,39 @@ function DocumentsTab({ app }: { app: Application }) {
       {/* ── Section 1: Zugewiesene Dokumente ── */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", marginBottom: 10, gap: 8 }}>
-          <div className="eyebrow" style={{ flex: 1 }}>Zugewiesen</div>
+          <div className="eyebrow" style={{ flex: 1 }}>{t("documents.assigned")}</div>
           <button className="btn btn-ghost" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }}
             onClick={() => setCreating(creating ? null : "cv")}>
-            <Plus width={11} height={11} /> Neu erstellen
+            <Plus width={11} height={11} /> {t("documents.createNew")}
           </button>
         </div>
 
         {!googleConnected && (
           <div style={{ padding: "8px 12px", borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.2)", fontSize: 11, color: "#fbbf24", marginBottom: 10 }}>
-            Google Drive nicht verbunden.{" "}
-            <a href="/settings" style={{ color: "inherit", fontWeight: 700 }}>Verbinden →</a>
+            {t("documents.notConnected")}{" "}
+            <a href="/settings" style={{ color: "inherit", fontWeight: 700 }}>{t("documents.connect")}</a>
           </div>
         )}
 
         {creating && (
           <div style={{ display: "flex", gap: 8, marginBottom: 10, padding: 10, borderRadius: 8, background: "var(--surface-2)", border: "1px solid var(--border)", flexWrap: "wrap", alignItems: "center" }}>
             <div style={{ display: "flex", gap: 4 }}>
-              {(["cv", "letter"] as const).map((t) => (
-                <button key={t} onClick={() => setCreating(t)} style={{
+              {(["cv", "letter"] as const).map((docType) => (
+                <button key={docType} onClick={() => setCreating(docType)} style={{
                   padding: "3px 8px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer",
-                  border: `1px solid ${creating === t ? "var(--accent)" : "var(--border)"}`,
-                  background: creating === t ? "var(--accent-08)" : "transparent",
-                  color: creating === t ? "var(--accent)" : "var(--fg-3)",
+                  border: `1px solid ${creating === docType ? "var(--accent)" : "var(--border)"}`,
+                  background: creating === docType ? "var(--accent-08)" : "transparent",
+                  color: creating === docType ? "var(--accent)" : "var(--fg-3)",
                   fontFamily: "var(--font-sans)"
-                }}>{t === "cv" ? "Lebenslauf" : "Anschreiben"}</button>
+                }}>{docType === "cv" ? t("documents.cv") : t("documents.letter")}</button>
               ))}
             </div>
             <input value={newName} onChange={(e) => setNewName(e.target.value)}
-              placeholder={creating === "cv" ? "Lebenslauf v1" : "Anschreiben v1"}
+              placeholder={creating === "cv" ? t("documents.cvPlaceholder") : t("documents.letterPlaceholder")}
               style={{ flex: 1, minWidth: 120, border: "none", background: "transparent", color: "var(--fg-1)", fontSize: 12, outline: "none" }}
               onKeyDown={(e) => e.key === "Enter" && create(creating)} autoFocus />
             <button className="btn btn-primary" style={{ padding: "4px 10px", fontSize: 11 }} onClick={() => create(creating)}>
-              {googleConnected ? "Erstellen + Google Doc" : "Erstellen"}
+              {googleConnected ? t("documents.createWithGoogle") : t("buttons.create")}
             </button>
             <button className="btn btn-ghost btn-icon" onClick={() => setCreating(null)}><Xmark width={13} height={13} /></button>
           </div>
@@ -2952,7 +2999,7 @@ function DocumentsTab({ app }: { app: Application }) {
 
         {linkedDocs.length === 0 && !creating ? (
           <div style={{ color: "var(--fg-3)", fontSize: 12, padding: "14px 0", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 8 }}>
-            Noch keine Dokumente zugewiesen
+            {t("documents.noneAssigned")}
           </div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -2968,7 +3015,7 @@ function DocumentsTab({ app }: { app: Application }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{doc.name}</div>
                     <div style={{ fontSize: 10, color: "var(--fg-3)" }}>
-                      {doc.type === "cv" ? "Lebenslauf" : doc.type === "letter" ? "Anschreiben" : "Dokument"}
+                      {doc.type === "cv" ? t("documents.cv") : doc.type === "letter" ? t("documents.letter") : t("documents.document")}
                       {doc.userDocumentId && <span style={{ marginLeft: 4, color: "var(--accent)" }}>· Bibliothek</span>}
                     </div>
                   </div>
@@ -2985,7 +3032,7 @@ function DocumentsTab({ app }: { app: Application }) {
                       textDecoration: "none", whiteSpace: "nowrap"
                     }}>
                       {isGDoc ? <GDocIcon size={11} /> : <OpenNewWindow width={11} height={11} />}
-                      {isGDoc ? "Öffnen" : "Link"}
+                      {isGDoc ? t("buttons.open") : "Link"}
                     </a>
                   )}
                   <button className="btn btn-ghost btn-icon" onClick={() => deleteDoc(doc.id)}><Trash width={12} height={12} /></button>
@@ -3003,18 +3050,18 @@ function DocumentsTab({ app }: { app: Application }) {
           style={{ display: "flex", alignItems: "center", gap: 6, width: "100%", background: "none", border: "none", cursor: "pointer", padding: "4px 0 10px", color: "var(--fg-2)", fontFamily: "var(--font-sans)" }}
         >
           <NavArrowRight width={13} height={13} style={{ transform: libOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }} />
-          <div className="eyebrow" style={{ flex: 1, textAlign: "left" }}>Aus Bibliothek zuweisen</div>
+          <div className="eyebrow" style={{ flex: 1, textAlign: "left" }}>{t("documents.fromLibrary")}</div>
           {copyLibErr && null /* errors shown as toast */}
           {library.length > 0 && (
-            <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{library.length} Dokumente</span>
+            <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{t("documents.count", { count: library.length })}</span>
           )}
         </button>
 
         {libOpen && (
           library.length === 0 ? (
             <div style={{ fontSize: 12, color: "var(--fg-3)", padding: "12px 0", textAlign: "center", border: "1px dashed var(--border)", borderRadius: 8 }}>
-              Keine Dokumente in der Bibliothek —{" "}
-              <a href="/documents" style={{ color: "var(--accent)", fontWeight: 600 }}>Dokumente hinzufügen →</a>
+              {t("documents.emptyLibrary")} —{" "}
+              <a href="/documents" style={{ color: "var(--accent)", fontWeight: 600 }}>{t("documents.addToLibrary")}</a>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -3085,21 +3132,21 @@ function DocumentsTab({ app }: { app: Application }) {
                               ) : isLinked ? (
                                 hasDriveCopy ? (
                                   <span style={{ fontSize: 9, color: "#34d399", fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
-                                    <Check width={9} height={9} /> Drive ✓
+                                    <Check width={9} height={9} /> {t("documents.driveCheck")}
                                   </span>
                                 ) : canCopyToDrive ? (
                                   <button onClick={(e) => { e.stopPropagation(); copyLibDocToDrive(libDoc); }} disabled={isCopying}
                                     style={{ fontSize: 9, color: "#4285f4", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 2, padding: 0 }}>
                                     {isCopying ? <RefreshCircle width={9} height={9} style={{ animation: "spin 1s linear infinite" }} /> : <GDocIcon size={9} />}
-                                    {isCopying ? "…" : "→ Drive"}
+                                    {isCopying ? "…" : t("documents.toDrive")}
                                   </button>
                                 ) : (
                                   <span style={{ fontSize: 9, color: fileAccent, fontWeight: 700, display: "flex", alignItems: "center", gap: 2 }}>
-                                    <Check width={9} height={9} /> Hinzugefügt
+                                    <Check width={9} height={9} /> {t("documents.addedStatus")}
                                   </span>
                                 )
                               ) : canDriveCopy ? (
-                                <span style={{ fontSize: 9, color: "var(--fg-3)" }}>+ Hinzufügen</span>
+                                <span style={{ fontSize: 9, color: "var(--fg-3)" }}>{t("documents.addPlus")}</span>
                               ) : (
                                 /* Figma / link / image — can't copy, offer link-copy instead */
                                 <button
@@ -3108,13 +3155,13 @@ function DocumentsTab({ app }: { app: Application }) {
                                     if (!libDoc.url) return;
                                     try {
                                       await copyText(libDoc.url);
-                                      showToast("Link kopiert");
+                                      showToast(t("documents.linkCopied"));
                                     } catch {
-                                      showToast("Kopieren fehlgeschlagen", "error");
+                                      showToast(t("tileExpand.copyFailed"), "error");
                                     }
                                   }}
                                   style={{ fontSize: 9, color: fileAccent, background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 2, padding: 0 }}>
-                                  <Link width={9} height={9} /> Link kopieren
+                                  <Link width={9} height={9} /> {t("documents.copyLink")}
                                 </button>
                               )}
                             </div>
@@ -3131,7 +3178,7 @@ function DocumentsTab({ app }: { app: Application }) {
                                   color: hasDriveCopy ? "#4285f4" : "var(--fg-3)",
                                   display: "flex", alignItems: "center", justifyContent: "center"
                                 }}
-                                title={hasDriveCopy ? "In Drive öffnen" : "Öffnen"}>
+                                title={hasDriveCopy ? t("documents.openInDrive") : t("buttons.open")}>
                                 <OpenNewWindow width={9} height={9} />
                               </a>
                             )}
@@ -3320,6 +3367,7 @@ function Accordion({ title, count, color, children, onCopy, defaultOpen = true }
 
 // ── Email Modal ──
 function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const copy = () => { copyText(`${draft.subject}\n\n${draft.body}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }); };
   return (
@@ -3327,18 +3375,18 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
       onClick={onClose}>
       <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 28, width: 520, maxHeight: "80vh", overflow: "auto", display: "flex", flexDirection: "column", gap: 14 }}
         onClick={e => e.stopPropagation()}>
-        <div style={{ fontWeight: 700, fontSize: 15, color: "var(--fg-1)" }}>Email-Entwurf</div>
+        <div style={{ fontWeight: 700, fontSize: 15, color: "var(--fg-1)" }}>{t("aiResult.emailDraftTitle")}</div>
         <div className="field" style={{ margin: 0 }}>
-          <label>Betreff</label>
+          <label>{t("aiResult.subject")}</label>
           <div style={{ fontSize: 13, color: "var(--fg-1)", padding: "4px 0", borderBottom: "1px solid var(--border)" }}>{draft.subject}</div>
         </div>
         <div className="field" style={{ margin: 0 }}>
-          <label>Nachricht</label>
+          <label>{t("aiResult.message")}</label>
           <div style={{ fontSize: 13, color: "var(--fg-1)", whiteSpace: "pre-wrap", lineHeight: 1.7, padding: "8px 0" }}>{draft.body}</div>
         </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-          <button className="btn btn-secondary" onClick={onClose}><Xmark width={12} height={12} /> Schliessen</button>
-          <button className="btn btn-primary" onClick={copy}>{copied ? "✓ Kopiert!" : "Text kopieren"}</button>
+          <button className="btn btn-secondary" onClick={onClose}><Xmark width={12} height={12} /> {t("buttons.close")}</button>
+          <button className="btn btn-primary" onClick={copy}>{copied ? `✓ ${t("tileExpand.copied")}` : t("buttons.copy")}</button>
         </div>
       </div>
     </div>
@@ -3348,6 +3396,7 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
 // ── Stage AI Actions ──
 // ─── Drive Folder Button (CV Phase) ──────────────────────────────────────────
 function DriveFolderBtn({ app, onSave }: { app: Application; onSave: (patch: Partial<Application>) => void }) {
+  const { t } = useTranslation();
   const { driveNameFolder } = useUiStore();
   const queryClient = useQueryClient();
   const [creating, setCreating] = useState(false);
@@ -3366,10 +3415,10 @@ function DriveFolderBtn({ app, onSave }: { app: Application; onSave: (patch: Par
       onSave({ googleFolderId: r.data.folderId, googleFolderUrl: r.data.folderUrl } as Partial<Application>);
       queryClient.invalidateQueries({ queryKey: ["applications"] });
       queryClient.invalidateQueries({ queryKey: ["application", app.id] });
-      setToast("Ordner erstellt ✓");
+      setToast(t("driveFolder.open").replace(" ↗", " ✓"));
       setTimeout(() => setToast(null), 2500);
     } catch {
-      setToast("Ordner-Erstellung fehlgeschlagen");
+      setToast(t("buttons.cancel"));
       setTimeout(() => setToast(null), 2500);
     } finally { setCreating(false); }
   };
@@ -3382,7 +3431,7 @@ function DriveFolderBtn({ app, onSave }: { app: Application; onSave: (patch: Par
         className="btn btn-secondary"
         onClick={hasFolderAlready ? () => window.open(folderUrl, "_blank") : createFolder}
         disabled={creating}
-        title={hasFolderAlready ? "Google Drive Ordner öffnen" : "Google Drive Ordner erstellen"}
+        title={hasFolderAlready ? t("driveFolder.open") : t("driveFolder.create")}
         style={{
           fontSize: 10, padding: "10px 8px", minHeight: 58,
           flexDirection: "column", alignItems: "center", justifyContent: "center",
@@ -3393,7 +3442,7 @@ function DriveFolderBtn({ app, onSave }: { app: Application; onSave: (patch: Par
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 5, width: "100%" }}>
           <FolderPlus width={12} height={12} />
           <span style={{ textAlign: "center", lineHeight: 1.3 }}>
-            {creating ? "Erstelle…" : hasFolderAlready ? "Drive-Ordner öffnen ↗" : "Drive-Ordner anlegen"}
+            {creating ? t("driveFolder.creating") : hasFolderAlready ? t("driveFolder.open") : t("driveFolder.create")}
           </span>
         </div>
       </button>
@@ -3415,6 +3464,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
 }) {
   const { ai } = useUiStore();
   const { t } = useTranslation("actions");
+  const { t: tc } = useTranslation();
   const stage = app.stage;
   const [loading, setLoading] = useState<string | null>(null);
   const [resultTimes, setResultTimes] = useState<Record<string, Date>>(() => {
@@ -3589,7 +3639,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
   const queryClient = useQueryClient();
 
   const run = async (key: string, fn: () => Promise<void>) => {
-    if (ai.provider === "none") { setErr("KI-Modell in Settings konfigurieren"); return; }
+    if (ai.provider === "none") { setErr(t("tileExpand.noAiModel")); return; }
     setErr(null); setLoading(key);
     try {
       await fn();
@@ -3724,12 +3774,12 @@ function StageAiActions({ app, onSave, onAiResult }: {
       {/* Inbox Phase */}
       {showInbox && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="match-score"     icon={<Sparks width={12} height={12} />}   label="Match Score" />
-          <AiBtn id="glassdoor-check" icon={<Building width={12} height={12} />} label="Glassdoor Rating" />
-          <AiBtn id="kununu-check"    icon={<Star width={12} height={12} />}     label="Kununu Rating" />
-          <AiBtn id="linkedin-profile" icon={<Linkedin width={12} height={12} />} label="LinkedIn Profil" />
-          <AiBtn id="salary-check"   icon={<Coins width={12} height={12} />}     label="Gehalts-Check" />
-          <AiBtn id="ats-keywords"   icon={<Search width={12} height={12} />}    label="ATS-Keywords" />
+          <AiBtn id="match-score"     icon={<Sparks width={12} height={12} />}   label={t("match-score.label")} />
+          <AiBtn id="glassdoor-check" icon={<Building width={12} height={12} />} label={t("glassdoor-check.label")} />
+          <AiBtn id="kununu-check"    icon={<Star width={12} height={12} />}     label={t("kununu-check.label")} />
+          <AiBtn id="linkedin-profile" icon={<Linkedin width={12} height={12} />} label={t("linkedin-profile.label")} />
+          <AiBtn id="salary-check"   icon={<Coins width={12} height={12} />}     label={t("salary-check.label")} />
+          <AiBtn id="ats-keywords"   icon={<Search width={12} height={12} />}    label={t("ats-keywords.label")} />
         </div>
       )}
 
@@ -3739,7 +3789,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
           {/* Language selector — required first step in CV phase */}
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 6 }}>
-              Bewerbungssprache — gilt für alle KI-Inhalte
+              {tc("language.label")}
             </div>
             <div style={{ display: "flex", gap: 4 }}>
               {(["de", "en"] as const).map(l => (
@@ -3752,14 +3802,14 @@ function StageAiActions({ app, onSave, onAiResult }: {
                   cursor: "pointer", fontFamily: "var(--font-sans)",
                 }}>
                   <FlagIcon lang={l} size={18} />
-                  {l === "de" ? "Deutsch" : "English"}
+                  {tc(`language.${l}`)}
                 </button>
               ))}
             </div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
-            <AiBtn id="cv-highlights" icon={<BrainElectricity width={12} height={12} />} label="CV-Highlights" />
-            <AiBtn id="cv-doc"        icon={<PageEdit width={12} height={12} />}          label="Google Doc aus Master-CV" />
+            <AiBtn id="cv-highlights" icon={<BrainElectricity width={12} height={12} />} label={t("cv-highlights.label")} />
+            <AiBtn id="cv-doc"        icon={<PageEdit width={12} height={12} />}          label={t("cv-doc.label")} />
             {onSave && <DriveFolderBtn app={app} onSave={onSave} />}
           </div>
         </>
@@ -3768,34 +3818,34 @@ function StageAiActions({ app, onSave, onAiResult }: {
       {/* Letter Phase — cover-letter is now a tile; only supplementary actions remain */}
       {showLetter && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="letter-review"    icon={<ChatBubbleCheck width={12} height={12} />} label="Anschreiben reviewen" />
-          <AiBtn id="opening-sentences" icon={<Spark width={12} height={12} />}          label="3 Eröffnungssätze" />
+          <AiBtn id="letter-review"    icon={<ChatBubbleCheck width={12} height={12} />} label={t("letter-review.label")} />
+          <AiBtn id="opening-sentences" icon={<Spark width={12} height={12} />}          label={t("opening-sentences.label")} />
         </div>
       )}
 
       {/* Email Phase */}
       {showEmail && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
-          {stage === "application_sent" && <AiBtn id="email-app"     icon={<SendMail width={12} height={12} />}  label="Bewerbungs-Email" />}
-          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-follow"   icon={<SendMail width={12} height={12} />}  label="Follow-up-Email" />}
-          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-linkedin" icon={<Linkedin width={12} height={12} />}  label="LinkedIn-Vernetzung" />}
-          {stage === "accepted" && <AiBtn id="email-decline" icon={<MailOut width={12} height={12} />}     label="Absage-Email" />}
-          {stage === "accepted" && <AiBtn id="onboarding"    icon={<CheckCircle width={12} height={12} />} label="Onboarding-Checkliste" />}
+          {stage === "application_sent" && <AiBtn id="email-app"     icon={<SendMail width={12} height={12} />}  label={t("email-app.label")} />}
+          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-follow"   icon={<SendMail width={12} height={12} />}  label={t("email-follow.label")} />}
+          {(stage === "application_sent" || stage === "pending") && <AiBtn id="email-linkedin" icon={<Linkedin width={12} height={12} />}  label={t("email-linkedin.label")} />}
+          {stage === "accepted" && <AiBtn id="email-decline" icon={<MailOut width={12} height={12} />}     label={t("email-decline.label")} />}
+          {stage === "accepted" && <AiBtn id="onboarding"    icon={<CheckCircle width={12} height={12} />} label={t("onboarding.label")} />}
         </div>
       )}
 
       {/* Pending Phase */}
       {stage === "pending" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="company-research"  icon={<Building width={12} height={12} />} label="Unternehmens-recherche" />
-          <AiBtn id="ackermann-script"  icon={<Coins width={12} height={12} />}    label="Ackermann-Script" />
+          <AiBtn id="company-research"  icon={<Building width={12} height={12} />} label={t("company-research.label")} />
+          <AiBtn id="ackermann-script"  icon={<Coins width={12} height={12} />}    label={t("ackermann-script.label")} />
         </div>
       )}
 
       {/* Rejected Phase */}
       {showRejected && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="email-feedback" icon={<Mail width={12} height={12} />} label="Feedback-Email" />
+          <AiBtn id="email-feedback" icon={<Mail width={12} height={12} />} label={t("email-feedback.label")} />
         </div>
       )}
 
@@ -3803,8 +3853,8 @@ function StageAiActions({ app, onSave, onAiResult }: {
       {showIv && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: interviewPrep ? 8 : 0 }}>
-            <AiBtn id="interview-prep" icon={interviewPrep ? <Refresh width={12} height={12} /> : <Brain width={12} height={12} />} label={interviewPrep ? "Neu generieren" : "Interview-Vorbereitung"} />
-            {showSalary && <AiBtn id="salary-tips" icon={<Coins width={12} height={12} />} label="Gehaltsverhandlung" />}
+            <AiBtn id="interview-prep" icon={interviewPrep ? <Refresh width={12} height={12} /> : <Brain width={12} height={12} />} label={interviewPrep ? tc("tileExpand.refresh") : t("interview-prep.label")} />
+            {showSalary && <AiBtn id="salary-tips" icon={<Coins width={12} height={12} />} label={t("salary-tips.label")} />}
             {interviewPrep && <>
               <button className="btn btn-ghost" style={{ fontSize: 11, gap: 5 }}
                 onClick={() => {
@@ -3819,9 +3869,9 @@ function StageAiActions({ app, onSave, onAiResult }: {
                     `\n${sep}\nMEINE RÜCKFRAGEN\n${sep}`,
                     interviewPrep.rueckfragen.map(q => `? ${q}`).join("\n"),
                   ].join("\n");
-                  copySection(text, "Alle Fragen kopiert");
+                  copySection(text, tc("calendarActions.copyAll"));
                 }}>
-                <IcCopy width={11} height={11} /> Alles kopieren
+                <IcCopy width={11} height={11} /> {tc("calendarActions.copyAll")}
               </button>
               <button className="btn btn-ghost" style={{ fontSize: 11, gap: 5 }}
                 disabled={loading === "iv-export"}
@@ -3830,30 +3880,30 @@ function StageAiActions({ app, onSave, onAiResult }: {
                   try {
                     const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/interview-prep/export-doc`, { interviewPrep });
                     window.open(r.data.docUrl, "_blank");
-                    showToast("Google Doc erstellt & geöffnet");
+                    showToast(tc("tileExpand.docCreated"));
                   } catch (e: unknown) {
                     const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
                     if (msg === "Unauthorized" || (e as { response?: { status?: number } })?.response?.status === 401) {
                       showToast("Session abgelaufen — bitte Seite neu laden", "error");
                     } else {
-                      showToast(msg ?? "Export fehlgeschlagen", "error");
+                      showToast(msg ?? tc("tileExpand.exportFailed"), "error");
                     }
                   } finally {
                     setLoading(null);
                   }
                 }}>
                 {loading === "iv-export" ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />}
-                Als Google Doc
+                {tc("buttons.exportDoc")}
               </button>
             </>}
           </div>
         {/* Calendar actions — always shown for interview stages */}
         <div style={{ borderTop: "1px solid var(--border)", marginTop: 10, paddingTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
           <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5, justifyContent: "flex-start" }} onClick={openGoogleCalendar}>
-            <IcCalendar width={12} height={12} /> Google Kalender
+            <IcCalendar width={12} height={12} /> {tc("calendarActions.openGoogleCalendar")}
           </button>
           <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5, justifyContent: "flex-start" }} onClick={downloadIcal}>
-            <CalendarArrowDown width={12} height={12} /> iCal herunterladen
+            <CalendarArrowDown width={12} height={12} /> {tc("calendarActions.downloadIcal")}
           </button>
         </div>
         </div>
@@ -3986,6 +4036,7 @@ function GlassdoorPanel({ data, appId, onChange }: {
 }
 
 function TaskChecklist({ app }: { app: Application }) {
+  const { t } = useTranslation();
   const { data: tasks = [], refetch } = useQuery<Task[]>({
     queryKey: ["tasks", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/tasks`).then(r => r.data)
@@ -4021,7 +4072,7 @@ function TaskChecklist({ app }: { app: Application }) {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          Aufgaben
+          {t("tasks.label")}
         </div>
         {total > 0 && (
           <span style={{
@@ -4045,7 +4096,7 @@ function TaskChecklist({ app }: { app: Application }) {
       {/* Task list */}
       <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {stageTasks.length === 0 && !showAdd && (
-          <div style={{ fontSize: 12, color: "var(--fg-3)", padding: "6px 0" }}>Keine Aufgaben für diese Phase</div>
+          <div style={{ fontSize: 12, color: "var(--fg-3)", padding: "6px 0" }}>{t("tasks.none")}</div>
         )}
         {stageTasks.map((t) => (
           <div key={t.id} className="task-row" style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0" }}>
@@ -4080,7 +4131,7 @@ function TaskChecklist({ app }: { app: Application }) {
               onChange={e => setAddText(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter") addTask(); if (e.key === "Escape") setShowAdd(false); }}
               onBlur={() => { if (!addText.trim()) setShowAdd(false); }}
-              placeholder="Neue Aufgabe…"
+              placeholder={t("tasks.newTask")}
               style={{ flex: 1, background: "none", border: "none", outline: "none", fontSize: 13, color: "var(--fg-1)", fontFamily: "var(--font-sans)" }}
             />
           </div>
@@ -4092,7 +4143,7 @@ function TaskChecklist({ app }: { app: Application }) {
         onClick={() => setShowAdd(true)}
         style={{ marginTop: 8, fontSize: 11, color: "var(--fg-3)", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-sans)", display: "flex", alignItems: "center", gap: 4, padding: "2px 0" }}
       >
-        <Plus width={11} height={11} /> Aufgabe hinzufügen
+        <Plus width={11} height={11} /> {t("tasks.addTask")}
       </button>
     </div>
   );
@@ -4112,6 +4163,7 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
   app: Application; round: 1 | 2; onSave: (patch: Partial<Application>) => void;
   expanded?: boolean; onToggleExpand?: () => void;
 }) {
+  const { t } = useTranslation();
   const field = round === 1 ? "interview1Details" : "interview2Details";
   const raw = round === 1 ? app.interview1Details : app.interview2Details;
   const [details, setDetails] = useState<InterviewDetails>(() => {
@@ -4149,10 +4201,10 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
     <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16, ...(expanded ? { flex: 1, overflow: "auto" } : {}) }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
         <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          Interview {round} — Termin
+          {t("interview.title", { round })}
         </div>
         {onToggleExpand && (
-          <button onClick={onToggleExpand} title={expanded ? "Minimieren" : "Maximieren"} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
+          <button onClick={onToggleExpand} title={expanded ? t("interview.minimize") : t("interview.maximize")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
             {expanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
           </button>
         )}
@@ -4161,40 +4213,40 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
       {/* Date / Time / Duration row */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
         <div>
-          <div style={lbl}>Datum</div>
+          <div style={lbl}>{t("interview.date")}</div>
           <input type="date" value={details.date ?? ""} style={inp}
             onChange={e => setDetails(d => ({ ...d, date: e.target.value }))}
             onBlur={e => save({ date: e.target.value || undefined })} />
         </div>
         <div>
-          <div style={lbl}>Uhrzeit</div>
+          <div style={lbl}>{t("interview.time")}</div>
           <input type="time" value={details.time ?? ""} style={inp}
             onChange={e => setDetails(d => ({ ...d, time: e.target.value }))}
             onBlur={e => save({ time: e.target.value || undefined })} />
         </div>
         <div>
-          <div style={lbl}>Dauer</div>
+          <div style={lbl}>{t("interview.duration")}</div>
           <select value={details.duration ?? 60} style={{ ...inp, cursor: "pointer" }}
             onChange={e => save({ duration: Number(e.target.value) })}>
-            {DURATIONS.map(d => <option key={d} value={d}>{d} Min</option>)}
+            {DURATIONS.map(d => <option key={d} value={d}>{t("interview.minutes", { count: d })}</option>)}
           </select>
         </div>
       </div>
 
       {/* Format */}
       <div style={{ marginBottom: 14 }}>
-        <div style={lbl}>Format</div>
+        <div style={lbl}>{t("interview.format")}</div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {fmtBtn("onsite", <MapPin width={11} height={11} />, "Vor Ort")}
-          {fmtBtn("video", <VideoCamera width={11} height={11} />, "Video")}
-          {fmtBtn("phone", <Phone width={11} height={11} />, "Telefon")}
+          {fmtBtn("onsite", <MapPin width={11} height={11} />, t("interview.onsite"))}
+          {fmtBtn("video", <VideoCamera width={11} height={11} />, t("interview.video"))}
+          {fmtBtn("phone", <Phone width={11} height={11} />, t("interview.phone"))}
         </div>
       </div>
 
       {/* Location (onsite) */}
       {details.format === "onsite" && (
         <div style={{ marginBottom: 14 }}>
-          <div style={lbl}>Adresse</div>
+          <div style={lbl}>{t("interview.address")}</div>
           <input type="text" value={details.location ?? ""} placeholder="Bahnhofstrasse 1, 8001 Zürich" style={inp}
             onChange={e => setDetails(d => ({ ...d, location: e.target.value }))}
             onBlur={e => save({ location: e.target.value || undefined })} />
@@ -4205,22 +4257,22 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
       {details.format === "video" && (
         <div style={{ marginBottom: 14, display: "flex", flexDirection: "column", gap: 10 }}>
           <div>
-            <div style={lbl}>Anbieter</div>
+            <div style={lbl}>{t("interview.provider")}</div>
             <select value={details.videoProvider ?? ""} style={{ ...inp, cursor: "pointer" }}
               onChange={e => save({ videoProvider: e.target.value || undefined })}>
-              <option value="">— Auswählen —</option>
+              <option value="">{t("interview.selectProvider")}</option>
               {VIDEO_PROVIDERS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 10 }}>
             <div>
-              <div style={lbl}>Meeting-URL</div>
+              <div style={lbl}>{t("interview.meetingUrl")}</div>
               <input type="url" value={details.videoUrl ?? ""} placeholder="https://zoom.us/j/..." style={inp}
                 onChange={e => setDetails(d => ({ ...d, videoUrl: e.target.value }))}
                 onBlur={e => save({ videoUrl: e.target.value || undefined })} />
             </div>
             <div style={{ minWidth: 110 }}>
-              <div style={lbl}>Meeting-Code</div>
+              <div style={lbl}>{t("interview.meetingCode")}</div>
               <input type="text" value={details.videoCode ?? ""} placeholder="123 456" style={inp}
                 onChange={e => setDetails(d => ({ ...d, videoCode: e.target.value }))}
                 onBlur={e => save({ videoCode: e.target.value || undefined })} />
@@ -4231,7 +4283,7 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
 
       {/* Interviewer */}
       <div style={{ marginBottom: 14 }}>
-        <div style={lbl}>Gesprächspartner</div>
+        <div style={lbl}>{t("interview.interviewers")}</div>
         <input type="text" value={details.interviewer ?? ""} placeholder="Max Muster (HR), Anna Schmidt (Fachteam)" style={inp}
           onChange={e => setDetails(d => ({ ...d, interviewer: e.target.value }))}
           onBlur={e => save({ interviewer: e.target.value || undefined })} />
@@ -4239,7 +4291,7 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
 
       {/* Notes */}
       <div style={{ marginBottom: 14 }}>
-        <div style={lbl}>Notizen</div>
+        <div style={lbl}>{t("interview.notes")}</div>
         <textarea value={details.notes ?? ""} placeholder="Portfolio mitbringen, Laptop vorbereiten…" rows={2}
           style={{ ...inp, resize: "vertical", lineHeight: 1.5 }}
           onChange={e => setDetails(d => ({ ...d, notes: e.target.value }))}
@@ -4256,6 +4308,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
   onAiResult?: (id: string, data: unknown) => void;
   aiResults?: Record<string, { data: unknown; createdAt: Date }>;
 }) {
+  const { t } = useTranslation();
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const { data: activities = [], refetch } = useQuery<ApplicationActivity[]>({
@@ -4318,7 +4371,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
         if (stageTileIds.length === 0) return null;
         return (
           <>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-4)", letterSpacing: "0.07em", textTransform: "uppercase", marginTop: 20, marginBottom: 8 }}>KI-Auswertungen</div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-4)", letterSpacing: "0.07em", textTransform: "uppercase", marginTop: 20, marginBottom: 8 }}>{t("kiResults")}</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 6, marginBottom: 16 }}>
               {stageTileIds.map(id => (
                 <AiResultTile key={id} id={id} entry={aiResults?.[id] ?? null}
@@ -4342,12 +4395,12 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
       {/* 2. Aktivitäten */}
       <div style={activitiesExpanded ? expandStyle : {}}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>Aktivitäten</div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("activities.label")}</div>
           <div style={{ display: "flex", gap: 6 }}>
             <button className="btn btn-secondary" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} onClick={() => setAdding((v) => !v)}>
-              <Plus width={11} height={11} /> Aktivität
+              <Plus width={11} height={11} /> {t("activities.addActivity")}
             </button>
-            <button onClick={() => setActivitiesExpanded(v => !v)} title={activitiesExpanded ? "Minimieren" : "Maximieren"}
+            <button onClick={() => setActivitiesExpanded(v => !v)} title={activitiesExpanded ? t("activities.minimize") : t("activities.maximize")}
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 4 }}>
               {activitiesExpanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
             </button>
@@ -4357,32 +4410,32 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
       {adding && (
         <div style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", marginBottom: 14, display: "flex", flexDirection: "column", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {ACTIVITY_TYPES.map((t) => (
-              <button key={t.id} onClick={() => setNewType(t.id)}
+            {ACTIVITY_TYPES.map((act) => (
+              <button key={act.id} onClick={() => setNewType(act.id)}
                 style={{ padding: "4px 10px", borderRadius: 999, border: "1px solid", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "var(--font-sans)",
-                  background: newType === t.id ? "var(--accent-08)" : "transparent",
-                  color: newType === t.id ? "var(--accent)" : "var(--fg-2)",
-                  borderColor: newType === t.id ? "var(--accent)" : "var(--border)" }}>
-                {t.label}
+                  background: newType === act.id ? "var(--accent-08)" : "transparent",
+                  color: newType === act.id ? "var(--accent)" : "var(--fg-2)",
+                  borderColor: newType === act.id ? "var(--accent)" : "var(--border)" }}>
+                {t(`activityType.${act.id}`)}
               </button>
             ))}
           </div>
           <div className="field" style={{ margin: 0 }}>
-            <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Titel…" autoFocus onKeyDown={(e) => e.key === "Enter" && add()} />
+            <input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder={t("activities.titlePlaceholder")} autoFocus onKeyDown={(e) => e.key === "Enter" && add()} />
           </div>
           <div className="field" style={{ margin: 0 }}>
-            <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder="Beschreibung (optional)…" />
+            <input value={newDesc} onChange={(e) => setNewDesc(e.target.value)} placeholder={t("activities.descPlaceholder")} />
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-            <button className="btn btn-secondary" onClick={() => setAdding(false)}>Abbrechen</button>
-            <button className="btn btn-primary" onClick={add}>Hinzufügen</button>
+            <button className="btn btn-secondary" onClick={() => setAdding(false)}>{t("buttons.cancel")}</button>
+            <button className="btn btn-primary" onClick={add}>{t("buttons.add")}</button>
           </div>
         </div>
       )}
 
       {activities.length === 0 && (
         <div style={{ color: "var(--fg-3)", fontSize: 12, textAlign: "center", padding: "24px 0", border: "1px dashed var(--border)", borderRadius: 8 }}>
-          Noch keine Aktivitäten.
+          {t("activities.none")}
         </div>
       )}
 
@@ -4471,6 +4524,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
   aiResults?: Record<string, { data: unknown; createdAt: Date }>;
   onAiResultUpdate?: (id: string, data: unknown) => void;
 }) {
+  const { t } = useTranslation();
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
@@ -4488,11 +4542,11 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
 
   const runAnalysis = async () => {
     if (ai.provider === "none") {
-      setError("Bitte zuerst ein KI-Modell in den Settings konfigurieren (LM Studio oder Anthropic).");
+      setError(t("ki.noModelError"));
       return;
     }
     if (!app.description?.trim()) {
-      setError("Keine Stellenbeschreibung vorhanden. Bitte im Tab 'Beschreibung' einfuegen.");
+      setError(t("ki.noDescription"));
       return;
     }
     setError(null); setRunning(true); setStepN(0);
@@ -4528,8 +4582,8 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
       {/* No AI warning */}
       {ai.provider === "none" && (
         <div style={{ padding: "10px 14px", borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)", fontSize: 12, color: "#fbbf24", marginBottom: 14 }}>
-          Kein KI-Modell konfiguriert.{" "}
-          <a href="/settings" style={{ color: "inherit", fontWeight: 700 }}>Settings → AI Integration →</a>
+          {t("ki.noModelWarning")}{" "}
+          <a href="/settings" style={{ color: "inherit", fontWeight: 700 }}>{t("ki.noModelLink")}</a>
         </div>
       )}
       {error && (
@@ -4541,10 +4595,10 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
       {/* Live analysis steps */}
       {running && (
         <div className="card" style={{ background: "var(--surface-2)", padding: 14, marginBottom: 14 }}>
-          <AgentStep done={stepN >= 1} active={stepN === 0} label="Profil laden" meta="Master-CV · Dokumente · Stichpunkte" />
-          <AgentStep done={stepN >= 2} active={stepN === 1} label="Stellenbeschreibung analysieren" meta="Anforderungen · Skills · Kontext" />
-          <AgentStep done={stepN >= 3} active={stepN === 2} label="Abgleich berechnen" meta="Fachkompetenz · Erfahrung · Culture Fit" />
-          <AgentStep done={stepN >= 4} active={stepN === 3} label="Bewertung finalisieren" meta="Score · Stärken · Lücken · Begründung" />
+          <AgentStep done={stepN >= 1} active={stepN === 0} label={t("ki.step1")} meta={t("ki.step1Meta")} />
+          <AgentStep done={stepN >= 2} active={stepN === 1} label={t("ki.step2")} meta={t("ki.step2Meta")} />
+          <AgentStep done={stepN >= 3} active={stepN === 2} label={t("ki.step3")} meta={t("ki.step3Meta")} />
+          <AgentStep done={stepN >= 4} active={stepN === 3} label={t("ki.step4")} meta={t("ki.step4Meta")} />
         </div>
       )}
 
@@ -4580,6 +4634,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
 
 // ─── Contacts Tab (standalone, kept for potential future use) ─────────────────────────────────────────────
 function ContactsTab({ app }: { app: Application }) {
+  const { t } = useTranslation();
   const { data: contacts = [], refetch } = useQuery<ApplicationContact[]>({
     queryKey: ["contacts", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/contacts`).then((r) => r.data)
@@ -4619,19 +4674,19 @@ function ContactsTab({ app }: { app: Application }) {
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
         <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, padding: "5px 10px" }}
           onClick={() => { setAdding((v) => !v); setEditId(null); }}>
-          <Plus width={11} height={11} /> Kontakt
+          <Plus width={11} height={11} /> {t("contacts.add")}
         </button>
       </div>
 
       {adding && (
         <div style={{ padding: 14, borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", marginBottom: 14 }}>
-          <ContactForm form={addForm} onChange={setAddForm} onSave={add} onCancel={() => setAdding(false)} saveLabel="Hinzufügen" />
+          <ContactForm form={addForm} onChange={setAddForm} onSave={add} onCancel={() => setAdding(false)} saveLabel={t("buttons.add")} />
         </div>
       )}
 
       {contacts.length === 0 && !adding && (
         <div style={{ color: "var(--fg-3)", fontSize: 12, textAlign: "center", padding: "40px 0", border: "1px dashed var(--border)", borderRadius: 8 }}>
-          Noch keine Kontakte
+          {t("contacts.none")}
         </div>
       )}
 
@@ -4639,7 +4694,7 @@ function ContactsTab({ app }: { app: Application }) {
         {contacts.map((c) => (
           <div key={c.id} style={{ padding: "12px 14px", borderRadius: 10, border: `1px solid ${editId === c.id ? "var(--accent-40)" : "var(--border)"}`, background: "var(--surface)" }}>
             {editId === c.id ? (
-              <ContactForm form={editForm} onChange={setEditForm} onSave={saveEdit} onCancel={() => setEditId(null)} saveLabel="Speichern" />
+              <ContactForm form={editForm} onChange={setEditForm} onSave={saveEdit} onCancel={() => setEditId(null)} saveLabel={t("buttons.save")} />
             ) : (
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -4653,8 +4708,8 @@ function ContactsTab({ app }: { app: Application }) {
                   {c.notes && <div style={{ marginTop: 6, fontSize: 13, color: "var(--fg-2)", whiteSpace: "pre-wrap" }}>{c.notes}</div>}
                 </div>
                 <div style={{ display: "flex", gap: 4 }}>
-                  <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Bearbeiten" onClick={() => startEdit(c)}><EditPencil width={11} height={11} /></button>
-                  <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title="Löschen" onClick={() => del(c.id)}><Trash width={12} height={12} /></button>
+                  <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title={t("buttons.edit")} onClick={() => startEdit(c)}><EditPencil width={11} height={11} /></button>
+                  <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} title={t("buttons.delete")} onClick={() => del(c.id)}><Trash width={12} height={12} /></button>
                 </div>
               </div>
             )}
@@ -4667,17 +4722,18 @@ function ContactsTab({ app }: { app: Application }) {
 
 // ─── Notes Tab ────────────────────────────────────────────────
 function NotesTab({ app, onSave }: { app: Application; onSave: (patch: Partial<Application>) => void }) {
+  const { t } = useTranslation();
   const [notes, setNotes] = useState(app.notes ?? "");
   const [saved, setSaved] = useState(false);
   const save = () => { onSave({ notes }); setSaved(true); setTimeout(() => setSaved(false), 1500); };
   return (
     <>
       <div className="field">
-        <AutoTextarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={save} placeholder="Notizen, Eindrücke, nächste Schritte…" minRows={8} />
+        <AutoTextarea value={notes} onChange={(e) => setNotes(e.target.value)} onBlur={save} placeholder={t("notes.placeholder")} minRows={8} />
       </div>
       <div className="autosave-indicator">
         <span className="dot" style={{ background: saved ? "var(--accent)" : "var(--green)" }} />
-        {saved ? "Gespeichert." : "Wird beim Verlassen gespeichert."}
+        {saved ? t("saved") : t("notes.autosave")}
       </div>
     </>
   );
@@ -4689,6 +4745,7 @@ function ConfirmModal({ title, description, confirmLabel, confirmColor = "var(--
   confirmColor?: string; icon: React.ReactNode;
   onConfirm: () => void; onClose: () => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 200, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center" }}
       onClick={onClose}>
@@ -4699,7 +4756,7 @@ function ConfirmModal({ title, description, confirmLabel, confirmColor = "var(--
         </div>
         <div style={{ fontSize: 13, color: "var(--fg-2)", lineHeight: 1.6 }}>{description}</div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><Xmark width={12} height={12} /> Abbrechen</button>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><Xmark width={12} height={12} /> {t("buttons.cancel")}</button>
           <button style={{
             display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8,
             border: "none", background: confirmColor, color: "#fff",
@@ -4724,6 +4781,7 @@ const ARCHIVE_REASONS = [
 function ArchiveReasonModal({
   role, company, onConfirm, onClose
 }: { role: string; company: string; onConfirm: (reason: string) => void; onClose: () => void }) {
+  const { t } = useTranslation();
   const [selected, setSelected] = useState<string | null>(null);
   const [customText, setCustomText] = useState("");
 
@@ -4738,10 +4796,10 @@ function ArchiveReasonModal({
       <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 28, width: 400, display: "flex", flexDirection: "column", gap: 16 }}
         onClick={(e) => e.stopPropagation()}>
         <div style={{ fontWeight: 700, fontSize: 16, color: "var(--fg-1)", display: "flex", alignItems: "center", gap: 8 }}>
-          <Archive width={15} height={15} /> Bewerbung archivieren
+          <Archive width={15} height={15} /> {t("archive.title")}
         </div>
         <div style={{ fontSize: 13, color: "var(--fg-3)" }}>
-          <strong style={{ color: "var(--fg-1)" }}>„{role}"</strong> bei {company} — warum wird diese Stelle archiviert?
+          <strong style={{ color: "var(--fg-1)" }}>„{role}"</strong> bei {company}
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {ARCHIVE_REASONS.map((r) => (
@@ -4752,7 +4810,7 @@ function ArchiveReasonModal({
               cursor: "pointer", fontFamily: "var(--font-sans)", textAlign: "left", transition: "all 0.12s"
             }}>
               <span style={{ fontSize: 16 }}>{r.emoji}</span>
-              <span style={{ fontSize: 13, fontWeight: selected === r.id ? 600 : 400, color: selected === r.id ? "var(--accent)" : "var(--fg-1)" }}>{r.label}</span>
+              <span style={{ fontSize: 13, fontWeight: selected === r.id ? 600 : 400, color: selected === r.id ? "var(--accent)" : "var(--fg-1)" }}>{t(`archive.${r.id}`)}</span>
               {selected === r.id && <Check width={13} height={13} style={{ marginLeft: "auto", color: "var(--accent)" }} />}
             </button>
           ))}
@@ -4762,14 +4820,14 @@ function ArchiveReasonModal({
                 autoFocus
                 value={customText}
                 onChange={(e) => setCustomText(e.target.value)}
-                placeholder="Kurze Begründung…"
+                placeholder={t("archive.customPlaceholder")}
                 onKeyDown={(e) => e.key === "Enter" && confirm()}
               />
             </div>
           )}
         </div>
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><Xmark width={12} height={12} /> Abbrechen</button>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><Xmark width={12} height={12} /> {t("buttons.cancel")}</button>
           <button
             disabled={!selected}
             style={{
@@ -4779,7 +4837,7 @@ function ArchiveReasonModal({
             }}
             onClick={confirm}
           >
-            <Archive width={12} height={12} /> Archivieren
+            <Archive width={12} height={12} /> {t("archive.confirm")}
           </button>
         </div>
       </div>
@@ -4789,6 +4847,7 @@ function ArchiveReasonModal({
 
 // ─── More Menu ────────────────────────────────────────────────
 function MoreMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: () => void }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -4827,9 +4886,9 @@ function MoreMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: ()
           borderRadius: 10, padding: 4, minWidth: 200,
           boxShadow: "0 8px 24px rgba(0,0,0,0.18)"
         }}>
-          {menuItem("Archivieren", <Archive width={13} height={13} style={{ color: "var(--fg-3)" }} />, onArchive)}
+          {menuItem(t("moreMenu.archive"), <Archive width={13} height={13} style={{ color: "var(--fg-3)" }} />, onArchive)}
           <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
-          {menuItem("Entfernen", <Trash width={13} height={13} />, onDelete, true)}
+          {menuItem(t("moreMenu.remove"), <Trash width={13} height={13} />, onDelete, true)}
         </div>
       )}
     </div>
@@ -4840,6 +4899,14 @@ function MoreMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: ()
 type Props = { app: Application; onClose: () => void; onArchived?: () => void };
 
 export function DetailDrawer({ app, onClose, onArchived }: Props) {
+  const { t: tCommon } = useTranslation();
+  const TABS: { id: Tab; label: string }[] = [
+    { id: "process",   label: tCommon("tabs.actions")   },
+    { id: "details",   label: tCommon("tabs.details")   },
+    { id: "documents", label: tCommon("tabs.documents") },
+    { id: "ki",        label: tCommon("tabs.ki")        },
+  ];
+
   const [tab, setTab]             = useState<Tab>("process");
   const [stage, setStage]         = useState<Application["stage"]>(app.stage);
   const [url, setUrl]             = useState(app.url ?? "");

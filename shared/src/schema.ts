@@ -322,10 +322,24 @@ export const userDocumentPatchSchema = userDocumentInsertSchema.partial();
 export type UserDocument = z.infer<typeof userDocumentSelectSchema>;
 
 export const aiConfigSchema = z.object({
-  provider: z.enum(["none", "lm-studio", "anthropic"]).default("none"),
-  anthropicApiKey: z.string().optional(),
+  provider: z.enum(["none", "lm-studio", "anthropic", "openai", "gemini", "openrouter", "ollama"]).default("none"),
+  // LM Studio
   lmStudioUrl: z.string().optional(),
-  lmStudioModel: z.string().optional()
+  lmStudioModel: z.string().optional(),
+  // Anthropic
+  anthropicApiKey: z.string().optional(),
+  // OpenAI
+  openaiApiKey: z.string().optional(),
+  openaiModel: z.string().optional(),
+  // Google Gemini
+  geminiApiKey: z.string().optional(),
+  geminiModel: z.string().optional(),
+  // OpenRouter
+  openrouterApiKey: z.string().optional(),
+  openrouterModel: z.string().optional(),
+  // Ollama
+  ollamaUrl: z.string().optional(),
+  ollamaModel: z.string().optional(),
 });
 
 export const kbIngestUrlRequestSchema = z.object({
