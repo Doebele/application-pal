@@ -1,55 +1,55 @@
-# Daten sichern & wiederherstellen
+# Backup & Restore
 
-Application Pal speichert alle Daten lokal in einer PostgreSQL-Datenbank. Du kannst jederzeit ein vollständiges Backup als JSON-Datei exportieren und auf einem anderen Gerät importieren.
-
----
-
-## Export (Backup erstellen)
-
-1. Öffne **Settings → Daten & Backup**
-2. Klicke **Exportieren**
-3. Eine JSON-Datei (`application-pal-export-YYYY-MM-DD.json`) wird heruntergeladen
-
-Das Backup enthält:
-- Alle Bewerbungen (inkl. Match-Scores, Notizen, Stage)
-- Profilangaben (Master-CV, LinkedIn-Bio, persönliche Stichpunkte)
-- Dokumente-Bibliothek
-- Aktivitäten & Kontakte pro Bewerbung
-
-**Nicht enthalten**: Google OAuth-Token, Passkey-Credentials (aus Sicherheitsgründen)
+Application Pal stores all data locally in a PostgreSQL database. You can export a complete backup as a JSON file at any time and import it on another device.
 
 ---
 
-## Import (Backup wiederherstellen)
+## Export (Create a Backup)
 
-1. Öffne **Settings → Daten & Backup**
-2. Klicke **Importieren**
-3. Wähle die JSON-Export-Datei aus
-4. Bestätige den Dialog — **alle bestehenden Daten werden ersetzt**
+1. Open **Settings → Data & Backup**
+2. Click **Export**
+3. A JSON file (`application-pal-export-YYYY-MM-DD.json`) is downloaded
 
-> ⚠️ Der Import löscht alle aktuellen Daten und ersetzt sie durch die Backup-Daten. Diese Aktion kann nicht rückgängig gemacht werden.
+The backup includes:
+- All applications (incl. match scores, notes, stage)
+- Profile data (Master CV, LinkedIn bio, personal notes)
+- Document library
+- Activities & contacts per application
 
----
-
-## Migration auf neues Gerät
-
-1. Auf altem Gerät: Export erstellen
-2. Auf neuem Gerät: Docker installieren + Application Pal starten
-3. Account erstellen (Setup-Seite)
-4. Import durchführen
+**Not included**: Google OAuth tokens, passkey credentials (for security reasons)
 
 ---
 
-## Automatisches Backup (optional)
+## Import (Restore a Backup)
 
-Für regelmässige automatische Backups kannst du einen Cron-Job einrichten:
+1. Open **Settings → Data & Backup**
+2. Click **Import**
+3. Select the JSON export file
+4. Confirm the dialog — **all existing data will be replaced**
+
+> ⚠️ Import deletes all current data and replaces it with the backup data. This action cannot be undone.
+
+---
+
+## Migration to a New Device
+
+1. On the old device: create an export
+2. On the new device: install Docker + start Application Pal
+3. Create an account (setup page)
+4. Run the import
+
+---
+
+## Automated Backup (Optional)
+
+For regular automatic backups you can set up a cron job:
 
 ```bash
-# Täglich um 02:00 Uhr exportieren
+# Export daily at 02:00
 0 2 * * * curl -s http://localhost:8070/api/export -o ~/backups/app-pal-$(date +\%Y-\%m-\%d).json
 ```
 
-Stelle sicher, dass du eingeloggt bist (Cookie wird benötigt). Alternativ: PostgreSQL-Dump direkt:
+Make sure you are logged in (a cookie is required). Alternatively, take a PostgreSQL dump directly:
 
 ```bash
 docker exec application-pal-db pg_dump -U postgres application_pal > backup.sql
