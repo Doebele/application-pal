@@ -1,8 +1,10 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import type { Application } from "@application-pal/shared";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
 import { Topbar } from "../components/Topbar";
+import { matchesSearch } from "../lib/search";
 import { Settings } from "iconoir-react";
 
 function getCompanyColor(company: string): string {
@@ -19,11 +21,14 @@ type ActivityEvent = {
 };
 
 export function TimelinePage() {
-  const { t } = useTranslation("stages");
-  const { data: applications = [] } = useQuery<Application[]>({
+  const { t: tStages } = useTranslation("stages");
+  const { t } = useTranslation();
+  const [search, setSearch] = useState("");
+  const { data: allApplications = [] } = useQuery<Application[]>({
     queryKey: ["applications"],
     queryFn: () => api.get("/api/applications").then((r) => r.data)
   });
+  const applications = search.trim() ? allApplications.filter(a => matchesSearch(a, search)) : allApplications;
 
   const events: ActivityEvent[] = applications
     .flatMap((app) => {
@@ -36,7 +41,7 @@ export function TimelinePage() {
       if (new Date(app.updatedAt).getTime() !== new Date(app.createdAt).getTime()) {
         evs.push({
           app,
-          text: `Updated — now in "${t(app.stage, { defaultValue: app.stage })}"`,
+          text: `Updated — now in "${tStages(app.stage, { defaultValue: app.stage })}"`,
           time: new Date(app.updatedAt)
         });
       }
@@ -47,8 +52,13 @@ export function TimelinePage() {
   return (
     <>
       <Topbar
-        title="Timeline"
-        sub="Workspace activity — all changes across applications"
+        title={t("nav.timeline")}
+        sub={search.trim()
+          ? `${applications.length} ${t("of")} ${allApplications.length} ${t("applications")}`
+          : t("nav.timelineSub")}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchSuggestions={t("search.suggestions", { returnObjects: true }) as string[]}
         actions={
           <button className="btn btn-secondary"><Settings width={13} height={13} /> Filter</button>
         }
@@ -83,7 +93,7 @@ export function TimelinePage() {
                       {ev.time.toLocaleString()}
                     </span>
                     <span className={`chip chip-stage stage-${ev.app.stage}`} style={{ fontSize: 9.5, padding: "1px 6px" }}>
-                      {t(ev.app.stage, { defaultValue: ev.app.stage })}
+                      {tStages(ev.app.stage, { defaultValue: ev.app.stage })}
                     </span>
                   </div>
                 </div>

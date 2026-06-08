@@ -62,8 +62,8 @@ function MainApp() {
           <Route path="/timeline"  element={<TimelinePage />} />
           <Route path="/profile"   element={<ProfilePage />} />
           <Route path="/documents" element={<DocumentsPage />} />
-          <Route path="/knowledge" element={<KnowledgeBasePage />} />
-          <Route path="*"          element={<Navigate to="/" replace />} />
+          <Route path="/knowledge"     element={<KnowledgeBasePage />} />
+          <Route path="*"              element={<Navigate to="/" replace />} />
         </Routes>
       </div>
     </div>

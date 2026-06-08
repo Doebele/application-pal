@@ -76,7 +76,7 @@ const SESSION_TIMEOUT_SECONDS: Record<string, number> = {
   "24h": 86400, "7d": 604800, "30d": 2592000
 };
 
-function issueTokens(c: Parameters<typeof setCookie>[0], userId: string, rememberMe = false, accessTimeout = "15m") {
+function issueTokens(c: Parameters<typeof setCookie>[0], userId: string, rememberMe = false, accessTimeout = "15m"): string {
   const maxAge = SESSION_TIMEOUT_SECONDS[accessTimeout] ?? 900;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const access  = jwt.sign({ userId }, getJwtSecret(), { expiresIn: accessTimeout } as any);
@@ -86,6 +86,7 @@ function issueTokens(c: Parameters<typeof setCookie>[0], userId: string, remembe
   const secure  = env.APP_URL.startsWith("https");
   setCookie(c, "access_token",  access,  { httpOnly: true, sameSite: "Lax", path: "/", secure, maxAge });
   setCookie(c, "refresh_token", refresh, { httpOnly: true, sameSite: "Lax", path: "/", secure, ...(rememberMe ? { maxAge: 60 * 60 * 24 * 90 } : {}) });
+  return refresh;
 }
 
 function getUserId(c: Parameters<typeof issueTokens>[0]): string {
@@ -162,6 +163,12 @@ app.get("/api/auth/status", async (c) => {
   return c.json({ setup: !!u });
 });
 
+// Public: list all registered user emails (for user-picker on login/switch screen)
+app.get("/api/auth/users", async (c) => {
+  const rows = await db.select({ email: users.email }).from(users).orderBy(users.email);
+  return c.json(rows.map(r => ({ email: r.email })));
+});
+
 // First-run or invited: create a user account
 app.post("/api/auth/setup", async (c) => {
   const { email, password, rememberMe, inviteToken } = await c.req.json<{
@@ -194,8 +201,8 @@ app.post("/api/auth/setup", async (c) => {
   // Create empty profile for new user
   await db.insert(userProfile).values({ userId: user.id }).onConflictDoNothing();
   const timeout = await getSessionTimeout(user.id);
-  issueTokens(c, user.id, rememberMe === true, timeout);
-  return c.json({ email: user.email });
+  const refreshToken = issueTokens(c, user.id, rememberMe === true, timeout);
+  return c.json({ email: user.email, ...(rememberMe ? { autoLoginToken: refreshToken } : {}) });
 });
 
 // ─── Invite management ───────────────────────────────────────
@@ -232,8 +239,23 @@ app.post("/api/auth/login", async (c) => {
   if (!user || !user.passwordHash) return c.json({ error: "Ungültige Anmeldedaten" }, 401);
   const ok = await bcrypt.compare(password, user.passwordHash);
   if (!ok) return c.json({ error: "Ungültige Anmeldedaten" }, 401);
-  issueTokens(c, user.id, rememberMe === true, await getSessionTimeout(user.id));
-  return c.json({ email: user.email });
+  const refreshToken = issueTokens(c, user.id, rememberMe === true, await getSessionTimeout(user.id));
+  return c.json({ email: user.email, ...(rememberMe ? { autoLoginToken: refreshToken } : {}) });
+});
+
+// Auto-login: exchange a stored rememberMe refresh token for a new session (no password needed)
+app.post("/api/auth/auto-login", async (c) => {
+  const { token } = await c.req.json<{ token: string }>();
+  if (!token) return c.json({ error: "Token fehlt" }, 400);
+  try {
+    const payload = jwt.verify(token, getJwtSecret()) as { userId: string; rememberMe?: boolean };
+    const timeout = await getSessionTimeout(payload.userId);
+    const newRefresh = issueTokens(c, payload.userId, payload.rememberMe === true, timeout);
+    // Return rotated token so frontend can update localStorage
+    return c.json({ ok: true, autoLoginToken: newRefresh });
+  } catch {
+    return c.json({ error: "Token ungültig oder abgelaufen" }, 401);
+  }
 });
 
 // Logout
@@ -2273,7 +2295,7 @@ Antworte NUR mit diesem JSON:
 app.post("/api/applications/:id/ai/cv-doc", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
+  const { ai, additionalContext, language: bodyLang } = await c.req.json<{ ai: AiConfig; additionalContext?: string; language?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
@@ -2284,7 +2306,7 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
   // Generate highlights to prepend
   let highlightText = "";
   try {
-    const lang_ = (app_ as typeof app_ & { language?: string }).language;
+    const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language;
     const system = `${langPrompt(lang_)} Analysiere den Lebenslauf und die Stellenbeschreibung. Antworte NUR mit JSON:
 {"highlights":["<Erfahrung besonders relevant>"],"keywords":["<Keyword>"]}`;
     const user = `Lebenslauf:\n${profile.masterCv.slice(0, 3000)}\n\nStelle: ${app_.role} bei ${app_.company}\n${app_.description?.slice(0, 1500) ?? ""}`;
@@ -2302,7 +2324,8 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
 
   const docTitle = `CV – ${app_.role} @ ${app_.company}`;
   const docContent = highlightText + profile.masterCv;
-  const cvLang = (app_ as typeof app_ & { language?: string }).language;
+  // Prefer language from request body (avoids race condition when user just switched the toggle)
+  const cvLang = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const templateFileId = getActiveTemplateId(profile?.docTemplates, "cv", cvLang);
 
   try {
@@ -2349,12 +2372,13 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
 app.post("/api/applications/:id/ai/cover-letter", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
+  const { ai, additionalContext, language: bodyLang } = await c.req.json<{ ai: AiConfig; additionalContext?: string; language?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
 
-  const lang = (app_ as typeof app_ & { language?: string }).language ?? "de";
+  // Prefer language from request body (avoids race condition when user just switched the toggle)
+  const lang = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const system = `${langPrompt(lang)} Du bist ein erfahrener HR-Berater. Schreibe ein professionelles, prägnantes Bewerbungsanschreiben (max. 350 Wörter).
 Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Text mit Absätzen durch \\n\\n getrennt>" }`;
   const candidateParts = [];
@@ -2378,29 +2402,21 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
 app.post("/api/applications/:id/ai/cover-letter/export-doc", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { subject, body } = await c.req.json<{ subject: string; body: string }>();
+  const { subject, body, language: bodyLang } = await c.req.json<{ subject: string; body: string; language?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const coverLetterToken = await getDriveAccessToken(userId);
   if (!coverLetterToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
 
-  const lang = (app_ as typeof app_ & { language?: string }).language ?? "de";
+  // Prefer language from request body (avoids race condition when user just switched the toggle)
+  const lang = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const coverDocTitle = lang === "en"
     ? `Cover Letter – ${app_.role} @ ${app_.company}`
     : `Anschreiben – ${app_.role} @ ${app_.company}`;
 
-  // Try template matching language preference
-  const templateConfig = profile?.docTemplates ? JSON.parse(profile.docTemplates) as Record<string, { activeId: string | null; templates: Array<{ id: string; name: string; language?: string }> }> : {};
-  const typeConfig = templateConfig["cover-letter"];
-  let templateFileId: string | null = null;
-  if (typeConfig?.templates?.length) {
-    // Prefer template matching application language, else use active
-    const langMatch = typeConfig.templates.find(t => t.language === lang && t.id === typeConfig.activeId)
-      ?? typeConfig.templates.find(t => t.language === lang)
-      ?? null;
-    templateFileId = langMatch?.id ?? typeConfig.activeId ?? null;
-  }
+  // Use the same getActiveTemplateId helper as all other export endpoints
+  const templateFileId = getActiveTemplateId(profile?.docTemplates, "cover-letter", lang);
 
   try {
     let docUrl: string;

@@ -510,8 +510,7 @@ function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
                 {t("settings.calendarNoScope")}
               </div>
               <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>
-                Dein aktueller Google-Token hat keinen <code style={{ fontSize: 10, background: "var(--surface-2)", borderRadius: 3, padding: "1px 4px" }}>calendar.readonly</code>-Scope.
-                Trenne die Verbindung und verbinde Google erneut, um den Kalender-Zugriff zu aktivieren.
+                {t("settings.calendarNoScopeDesc", { scope: "calendar.readonly" })}
               </div>
             </div>
           </div>
@@ -522,28 +521,23 @@ function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
             background: "var(--surface-2)", border: "1px solid var(--border)",
           }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)", marginBottom: 8 }}>
-              Einmalige Einrichtung (Google Cloud Console)
+              {t("settings.calendarSetupTitle")}
             </div>
             <ol style={{ margin: 0, paddingLeft: 16, display: "flex", flexDirection: "column", gap: 6 }}>
               {[
                 <>
                   <a href="https://console.cloud.google.com/apis/library/calendar-json.googleapis.com" target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
-                    Google Calendar API aktivieren
+                    {t("settings.calendarSetupStep1Link")}
                   </a>{" "}
-                  <span style={{ color: "var(--fg-3)" }}>(APIs &amp; Services → Bibliothek → „Google Calendar API")</span>
+                  <span style={{ color: "var(--fg-3)" }}>{t("settings.calendarSetupStep1Sub")}</span>
                 </>,
                 <>
-                  OAuth-Zustimmungsbildschirm → <strong style={{ color: "var(--fg-2)" }}>Bereiche hinzufügen</strong>:{" "}
-                  <code style={{ fontSize: 10, background: "var(--surface)", borderRadius: 3, padding: "1px 4px" }}>
+                  {t("settings.calendarSetupStep2")}: <code style={{ fontSize: 10, background: "var(--surface)", borderRadius: 3, padding: "1px 4px" }}>
                     .../auth/calendar.readonly
                   </code>
                 </>,
-                <>
-                  Wenn App im <strong style={{ color: "var(--fg-2)" }}>Test-Modus</strong>: Deine E-Mail als Testnutzer eintragen
-                </>,
-                <>
-                  Unten auf <strong style={{ color: "var(--fg-2)" }}>„Google neu verbinden"</strong> klicken → Neu anmelden
-                </>,
+                <>{t("settings.calendarSetupStep3")}</>,
+                <>{t("settings.calendarSetupStep4")}</>,
               ].map((step, i) => (
                 <li key={i} style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.55 }}>{step}</li>
               ))}

@@ -7,6 +7,7 @@ import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
 import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
+import { matchesSearch } from "../lib/search";
 import { Board } from "../components/Board";
 import { ImportDrawer } from "../components/ImportDrawer";
 import { DetailDrawer } from "../components/DetailDrawer";
@@ -210,14 +211,19 @@ const ARCHIVE_COLS = [
   { id: "_none",       color: "#535e6b" },
 ] as const;
 
-function ArchiveCard({ app, onClick }: { app: Application; onClick: () => void }) {
+function ArchiveCard({ app, onClick, isSelected }: { app: Application; onClick: () => void; isSelected?: boolean }) {
   const score = app.matchScore;
   return (
     <div
       onClick={onClick}
-      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", cursor: "pointer", marginBottom: 6, transition: "border-color 0.12s" }}
-      onMouseEnter={e => (e.currentTarget.style.borderColor = "rgba(59,130,246,0.35)")}
-      onMouseLeave={e => (e.currentTarget.style.borderColor = "var(--border)")}
+      style={{
+        padding: "10px 12px", borderRadius: 8, cursor: "pointer", marginBottom: 6, transition: "border-color 0.12s, background 0.12s",
+        border: isSelected ? "1px solid var(--accent)" : "1px solid var(--border)",
+        background: isSelected ? "var(--accent-08)" : "var(--surface)",
+        boxShadow: isSelected ? "0 0 0 1px var(--accent)" : undefined,
+      }}
+      onMouseEnter={e => { if (!isSelected) e.currentTarget.style.borderColor = "rgba(59,130,246,0.35)"; }}
+      onMouseLeave={e => { if (!isSelected) e.currentTarget.style.borderColor = "var(--border)"; }}
     >
       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.role}</div>
       <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 6 }}>{app.company}</div>
@@ -237,7 +243,7 @@ function ArchiveCard({ app, onClick }: { app: Application; onClick: () => void }
   );
 }
 
-function ArchiveKanban({ applications, onCardClick }: { applications: Application[]; onCardClick: (id: string) => void }) {
+function ArchiveKanban({ applications, onCardClick, selectedId }: { applications: Application[]; onCardClick: (id: string) => void; selectedId?: string | null }) {
   const { t } = useTranslation();
   return (
     <div style={{ display: "flex", gap: 12, padding: "16px 20px", overflowX: "auto", alignItems: "flex-start", flex: 1 }}>
@@ -253,7 +259,7 @@ function ArchiveKanban({ applications, onCardClick }: { applications: Applicatio
               <span style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-2)", flex: 1 }}>{label}</span>
               <span style={{ fontSize: 10, color: "var(--fg-4)", fontFamily: "var(--font-mono)" }}>{apps.length}</span>
             </div>
-            {apps.map(app => <ArchiveCard key={app.id} app={app} onClick={() => onCardClick(app.id)} />)}
+            {apps.map(app => <ArchiveCard key={app.id} app={app} onClick={() => onCardClick(app.id)} isSelected={selectedId === app.id} />)}
             {apps.length === 0 && (
               <div style={{ border: "1px dashed var(--border)", borderRadius: 8, padding: "20px 12px", textAlign: "center", fontSize: 11, color: "var(--fg-4)" }}>
                 {t("board.noEntries")}
@@ -268,7 +274,7 @@ function ArchiveKanban({ applications, onCardClick }: { applications: Applicatio
 
 type ArchiveSortKey = "role" | "createdAt" | "company" | "reason" | "score";
 
-function ArchiveTable({ applications, onRowClick }: { applications: Application[]; onRowClick: (id: string) => void }) {
+function ArchiveTable({ applications, onRowClick, selectedId }: { applications: Application[]; onRowClick: (id: string) => void; selectedId?: string | null }) {
   const { t } = useTranslation();
   const [sortKey, setSortKey] = useState<ArchiveSortKey>("createdAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -326,9 +332,14 @@ function ArchiveTable({ applications, onRowClick }: { applications: Application[
         <div
           key={app.id}
           onClick={() => onRowClick(app.id)}
-          style={{ display: "flex", gap: 12, padding: "9px 12px", borderRadius: 6, cursor: "pointer", borderBottom: "1px solid var(--border-2)" }}
-          onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+          style={{
+            display: "flex", gap: 12, padding: "9px 12px", borderRadius: 6, cursor: "pointer",
+            borderBottom: "1px solid var(--border-2)",
+            background: selectedId === app.id ? "var(--accent-08)" : "transparent",
+            boxShadow: selectedId === app.id ? "inset 2px 0 0 var(--accent)" : undefined,
+          }}
+          onMouseEnter={e => { if (selectedId !== app.id) e.currentTarget.style.background = "var(--surface-2)"; }}
+          onMouseLeave={e => { e.currentTarget.style.background = selectedId === app.id ? "var(--accent-08)" : "transparent"; }}
         >
           <div style={{ flex: 3, fontSize: 12, fontWeight: 600, color: "var(--fg-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.role}</div>
           <div style={{ flex: 2, fontSize: 11, color: "var(--fg-3)", fontFamily: "var(--font-mono)" }}>{new Date(app.createdAt).toLocaleDateString("de-CH")}</div>
@@ -361,6 +372,9 @@ export function BoardPage() {
   const navigate = useNavigate();
   const showArchived = searchParams.get("archive") === "true";
   const [archiveView, setArchiveView] = useState<"kanban" | "table">("table");
+
+  // Search
+  const [search, setSearch] = useState("");
 
   // Main board filters
   const [visibleStages, setVisibleStages] = useState<string[]>([]);
@@ -395,6 +409,11 @@ export function BoardPage() {
     }
   });
 
+  // Search filter applied on top of existing filters
+  const displayApplications = search.trim()
+    ? applications.filter(a => matchesSearch(a, search))
+    : applications;
+
   const selectedApp = rawApplications.find((a) => a.id === selectedApplicationId) ?? null;
 
   const isFiltered = showArchived
@@ -412,7 +431,7 @@ export function BoardPage() {
         <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", borderRadius: 6, padding: 2 }}>
           <button
             onClick={() => setArchiveView("kanban")}
-            title="Kanban-Ansicht"
+            title={t("board.kanbanView")}
             style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 4, border: "none", cursor: "pointer",
               background: archiveView === "kanban" ? "var(--surface)" : "transparent",
               color: archiveView === "kanban" ? "var(--fg-1)" : "var(--fg-3)" }}
@@ -421,7 +440,7 @@ export function BoardPage() {
           </button>
           <button
             onClick={() => setArchiveView("table")}
-            title="Tabellen-Ansicht"
+            title={t("board.tableView")}
             style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: 4, border: "none", cursor: "pointer",
               background: archiveView === "table" ? "var(--surface)" : "transparent",
               color: archiveView === "table" ? "var(--fg-1)" : "var(--fg-3)" }}
@@ -436,7 +455,7 @@ export function BoardPage() {
         <select
           value={cardVariant}
           onChange={e => setCardVariant(e.target.value as import("../lib/store").CardVariant)}
-          title="Karten-Stil"
+          title={t("board.cardStyle")}
           style={{
             height: 32, padding: "0 8px", borderRadius: 8, border: "1px solid var(--border)",
             background: "var(--surface)", color: "var(--fg-2)", fontSize: 12,
@@ -503,20 +522,28 @@ export function BoardPage() {
       <Topbar
         title={showArchived ? t("nav.archive") : t("nav.board")}
         sub={showArchived
-          ? `${applications.length} ${t("board.archived")} ${t("applications")}`
-          : `${applications.length} ${t("applications")}`}
+          ? search.trim()
+            ? `${displayApplications.length} ${t("of")} ${applications.length} ${t("board.archived")} ${t("applications")}`
+            : `${applications.length} ${t("board.archived")} ${t("applications")}`
+          : search.trim()
+            ? `${displayApplications.length} ${t("of")} ${applications.length} ${t("applications")}`
+            : `${applications.length} ${t("applications")}`}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchSuggestions={t("search.suggestions", { returnObjects: true }) as string[]}
         actions={headerActions}
       />
       {showArchived ? (
         archiveView === "kanban"
-          ? <ArchiveKanban applications={applications} onCardClick={setSelectedApplicationId} />
-          : <ArchiveTable  applications={applications} onRowClick={setSelectedApplicationId} />
+          ? <ArchiveKanban applications={displayApplications} onCardClick={setSelectedApplicationId} selectedId={selectedApplicationId} />
+          : <ArchiveTable  applications={displayApplications} onRowClick={setSelectedApplicationId} selectedId={selectedApplicationId} />
       ) : (
         <Board
-          applications={applications}
+          applications={displayApplications}
           cardVariant={cardVariant}
           onCardClick={(id) => setSelectedApplicationId(id)}
           visibleStages={visibleStages.length > 0 ? visibleStages : undefined}
+          selectedId={selectedApplicationId}
         />
       )}
       {isImportModalOpen && !showArchived && (
@@ -524,6 +551,7 @@ export function BoardPage() {
       )}
       {selectedApp && (
         <DetailDrawer
+          key={selectedApp.id}
           app={selectedApp}
           onClose={() => setSelectedApplicationId(null)}
           onArchived={() => { setSelectedApplicationId(null); navigate("/?archive=true"); }}

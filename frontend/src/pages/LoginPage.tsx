@@ -6,8 +6,14 @@ import { useAuth } from "../lib/auth";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 
 export function LoginPage() {
-  const { refetch } = useAuth();
+  // LoginPage is deprecated — SetupPage now handles both login and registration.
+  // Redirect immediately to /setup so any bookmarks or direct navigation still works.
   const navigate = useNavigate();
+  useEffect(() => { navigate("/setup", { replace: true }); }, [navigate]);
+  return null;
+
+  /* eslint-disable-next-line no-unreachable */
+  const { refetch } = useAuth();
   const [email, setEmail]     = useState("");
   const [password, setPassword] = useState("");
   const [error, setError]     = useState("");
@@ -16,13 +22,6 @@ export function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
 
   const supportsPasskey = typeof window !== "undefined" && !!window.PublicKeyCredential;
-
-  // If no account exists yet, redirect to setup
-  useEffect(() => {
-    api.get<{ setup: boolean }>("/api/auth/status").then(r => {
-      if (!r.data.setup) navigate("/setup", { replace: true });
-    }).catch(() => {});
-  }, [navigate]);
 
   const login = async (e: React.FormEvent) => {
     e.preventDefault();

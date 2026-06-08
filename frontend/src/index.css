@@ -793,6 +793,14 @@ body {
 .job-card:hover { border-color: var(--accent-35); box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
 [data-theme="light"] .job-card:hover { box-shadow: 0 2px 10px rgba(15,17,22,0.06); }
 .job-card.is-dragging { box-shadow: 0 8px 24px rgba(0,0,0,0.30); border-color: var(--accent); }
+.job-card.is-selected { border-color: var(--accent); background: var(--accent-08); box-shadow: 0 0 0 1px var(--accent); }
+[data-theme="light"] .job-card.is-selected { background: color-mix(in srgb, var(--accent) 6%, #fff); }
+.job-card.is-selected:hover { border-color: var(--accent); }
+
+/* Table row selection */
+tr.is-selected > td { background: var(--accent-08) !important; }
+[data-theme="light"] tr.is-selected > td { background: color-mix(in srgb, var(--accent) 6%, #fff) !important; }
+tr.is-selected > td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
 
 .job-head { display: flex; align-items: flex-start; gap: 8px; }
 .job-title {

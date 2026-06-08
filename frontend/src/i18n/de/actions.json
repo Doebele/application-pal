@@ -1,24 +1,107 @@
 {
-  "match-score":       { "label": "Match Score",            "tooltip": "KI-Match-Score berechnen" },
-  "glassdoor-check":   { "label": "Glassdoor Rating",       "tooltip": "Glassdoor-Bewertung ermitteln" },
-  "kununu-check":      { "label": "Kununu Rating",          "tooltip": "Kununu-Bewertung ermitteln" },
-  "linkedin-profile":  { "label": "LinkedIn Firmenprofil",  "tooltip": "LinkedIn Firmenprofil abrufen" },
-  "salary-check":      { "label": "Gehalts-Check",          "tooltip": "Lohnband für die Schweiz berechnen" },
-  "ats-keywords":      { "label": "ATS-Keywords",           "tooltip": "ATS-Keywords aus Stellenbeschreibung extrahieren" },
-  "cv-highlights":     { "label": "CV-Highlights",          "tooltip": "Relevante CV-Highlights analysieren" },
-  "cv-doc":            { "label": "Google Doc aus Master-CV","tooltip": "Lebenslauf als Google Doc erstellen" },
-  "cover-letter":      { "label": "Anschreiben",            "tooltip": "Anschreiben generieren" },
-  "letter-review":     { "label": "Anschreiben reviewen",   "tooltip": "Anschreiben kritisch analysieren" },
-  "opening-sentences": { "label": "3 Eröffnungssätze",      "tooltip": "Eröffnungssätze für Anschreiben generieren" },
-  "email-app":         { "label": "Bewerbungs-Email",       "tooltip": "Bewerbungs-Email formulieren" },
-  "email-follow":      { "label": "Follow-up-Email",        "tooltip": "Follow-up-Email formulieren" },
-  "email-decline":     { "label": "Absage-Email",           "tooltip": "Absage-Email formulieren" },
-  "email-linkedin":    { "label": "LinkedIn-Vernetzung",    "tooltip": "LinkedIn-Vernetzungsnachricht formulieren" },
-  "email-feedback":    { "label": "Feedback-Email",         "tooltip": "Feedback-Email nach Absage formulieren" },
-  "interview-prep":    { "label": "Interview-Vorbereitung", "tooltip": "Fragen, STAR-Beispiele und Rückfragen generieren" },
-  "salary-tips":       { "label": "Gehaltsverhandlung",     "tooltip": "Verhandlungstipps und Ackermann-Script erstellen" },
-  "company-research":  { "label": "Unternehmensrecherche",  "tooltip": "Unternehmensrecherche erstellen" },
-  "ackermann-script":  { "label": "Ackermann-Script",       "tooltip": "Gehaltsverhandlungs-Script generieren" },
-  "onboarding":        { "label": "Onboarding-Checkliste",  "tooltip": "30/60/90-Tage Onboarding-Plan erstellen" },
-  "cv-doc-folder":     { "label": "Drive-Ordner anlegen",   "tooltip": "Google Drive Bewerbungsordner erstellen" }
+  "match-score": {
+    "label": "Match Score",
+    "tooltip": "KI-Match-Score berechnen",
+    "empty": "Analyse starten"
+  },
+  "glassdoor-check": {
+    "label": "Glassdoor Rating",
+    "tooltip": "Glassdoor-Bewertung ermitteln",
+    "empty": "Bewertung ermitteln"
+  },
+  "kununu-check": {
+    "label": "Kununu Rating",
+    "tooltip": "Kununu-Bewertung ermitteln",
+    "empty": "Bewertung ermitteln"
+  },
+  "linkedin-profile": {
+    "label": "LinkedIn Firmenprofil",
+    "tooltip": "LinkedIn Firmenprofil abrufen",
+    "empty": "Profil ermitteln"
+  },
+  "salary-check": {
+    "label": "Gehalts-Check",
+    "tooltip": "Lohnband für die Schweiz berechnen",
+    "empty": "Lohnband berechnen"
+  },
+  "ats-keywords": {
+    "label": "ATS-Keywords",
+    "tooltip": "ATS-Keywords aus Stellenbeschreibung extrahieren",
+    "empty": "Keywords extrahieren"
+  },
+  "cv-highlights": {
+    "label": "CV-Highlights",
+    "tooltip": "Relevante CV-Highlights analysieren",
+    "empty": "CV analysieren"
+  },
+  "cv-doc": {
+    "label": "Google Doc aus Master-CV",
+    "tooltip": "Lebenslauf als Google Doc erstellen"
+  },
+  "cover-letter": {
+    "label": "Anschreiben",
+    "tooltip": "Anschreiben generieren",
+    "empty": "Anschreiben erstellen"
+  },
+  "letter-review": {
+    "label": "Anschreiben reviewen",
+    "tooltip": "Anschreiben kritisch analysieren",
+    "empty": "Review starten"
+  },
+  "opening-sentences": {
+    "label": "3 Eröffnungssätze",
+    "tooltip": "Eröffnungssätze für Anschreiben generieren",
+    "empty": "Sätze generieren"
+  },
+  "email-app": {
+    "label": "Bewerbungs-Email",
+    "tooltip": "Bewerbungs-Email formulieren"
+  },
+  "email-follow": {
+    "label": "Follow-up-Email",
+    "tooltip": "Follow-up-Email formulieren"
+  },
+  "email-decline": {
+    "label": "Absage-Email",
+    "tooltip": "Absage-Email formulieren"
+  },
+  "email-linkedin": {
+    "label": "LinkedIn-Vernetzung",
+    "tooltip": "LinkedIn-Vernetzungsnachricht formulieren"
+  },
+  "email-feedback": {
+    "label": "Feedback-Email",
+    "tooltip": "Feedback-Email nach Absage formulieren"
+  },
+  "interview-prep": {
+    "label": "Interview-Vorbereitung",
+    "tooltip": "Fragen, STAR-Beispiele und Rückfragen generieren",
+    "empty": "Vorbereitung generieren"
+  },
+  "salary-tips": {
+    "label": "Gehaltsverhandlung",
+    "tooltip": "Verhandlungstipps und Ackermann-Script erstellen",
+    "empty": "Tipps generieren"
+  },
+  "company-research": {
+    "label": "Unternehmensrecherche",
+    "tooltip": "Unternehmensrecherche erstellen",
+    "empty": "Recherche starten"
+  },
+  "ackermann-script": {
+    "label": "Ackermann-Script",
+    "tooltip": "Gehaltsverhandlungs-Script generieren",
+    "empty": "Script generieren"
+  },
+  "onboarding": {
+    "label": "Onboarding-Checkliste",
+    "tooltip": "30/60/90-Tage Onboarding-Plan erstellen",
+    "empty": "Checkliste erstellen"
+  },
+  "cv-doc-folder": {
+    "label": "Drive-Ordner anlegen",
+    "tooltip": "Google Drive Bewerbungsordner erstellen"
+  },
+  "generating": "Wird generiert…",
+  "generateFailed": "Generierung fehlgeschlagen"
 }

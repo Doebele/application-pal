@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   Bag, Building, Database, OpenNewWindow, Page,
   RefreshCircle, Plus, Search, Upload, Xmark
@@ -184,6 +185,7 @@ function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () => void }
 }
 
 export function KnowledgeBasePage() {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [q, setQ] = useState("");
   const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
@@ -214,7 +216,7 @@ export function KnowledgeBasePage() {
 
   return (
     <>
-      <Topbar title="Knowledge Base" sub={`${companies.length} Firmen`} actions={addButton} />
+      <Topbar title="Knowledge Base" sub={t("knowledge.companiesCount", { count: companies.length })} actions={addButton} />
       <main style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "360px 1fr", gap: 0 }}>
         <section style={{ borderRight: "1px solid var(--border)", padding: 18, overflowY: "auto" }}>
           <div className="input-line-wrap" style={{ marginBottom: 14 }}>

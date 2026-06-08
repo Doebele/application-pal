@@ -8,6 +8,6 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
       Laden…
     </div>
   );
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/setup" replace />;
   return <>{children}</>;
 }

@@ -11,6 +11,8 @@ import type { Application } from "@application-pal/shared";
 import { useUiStore } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
+import { useQueryClient } from "@tanstack/react-query";
+import { removeRememberedToken, getRememberedToken, storeRememberedToken } from "../pages/SetupPage";
 // @ts-ignore
 import deFlagUrl from "round-flag-icons/flags/de.svg?url";
 // @ts-ignore
@@ -140,16 +142,20 @@ function UserModal({
   onClose,
   onLogout,
   onSwitch,
+  onAutoSwitch,
 }: {
   email: string;
   applicationCount: number;
   anchorRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
   onLogout: () => void;
-  onSwitch: () => void;
+  onSwitch: (email?: string) => void;
+  onAutoSwitch: (email: string, token: string) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [confirmLogout, setConfirmLogout] = useState(false);
+  const [confirmSwitch, setConfirmSwitch] = useState(false);
+  const [otherUsers, setOtherUsers] = useState<{ email: string; rememberedToken: string | null }[] | null>(null);
   const { t } = useTranslation();
 
   // Close on outside click
@@ -163,6 +169,17 @@ function UserModal({
     document.addEventListener("mousedown", handler, true);
     return () => document.removeEventListener("mousedown", handler, true);
   }, [onClose, anchorRef]);
+
+  // Fetch all users when the switch confirmation panel opens; enrich with remembered tokens
+  useEffect(() => {
+    if (!confirmSwitch) return;
+    api.get<{ email: string }[]>("/api/auth/users").then(r => {
+      const others = r.data
+        .filter(u => u.email !== email)
+        .map(u => ({ email: u.email, rememberedToken: getRememberedToken(u.email) }));
+      setOtherUsers(others);
+    }).catch(() => setOtherUsers([]));
+  }, [confirmSwitch, email]);
 
   // Position: anchored above the trigger element
   const rect = anchorRef.current?.getBoundingClientRect();
@@ -218,23 +235,123 @@ function UserModal({
 
       {/* Actions */}
       <div style={{ padding: "6px 6px 6px" }}>
-        {/* Switch user */}
-        <button
-          onClick={onSwitch}
-          style={{
-            display: "flex", alignItems: "center", gap: 10,
-            width: "100%", padding: "8px 10px", borderRadius: 7,
-            border: "none", background: "transparent", cursor: "pointer",
-            fontFamily: "var(--font-sans)", textAlign: "left",
-            transition: "background 0.1s",
-            color: "var(--fg-2)",
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
-          onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-        >
-          <SwitchOff width={14} height={14} style={{ flexShrink: 0 }} />
-          <span style={{ fontSize: 12, fontWeight: 500 }}>{t("user.switchUser")}</span>
-        </button>
+        {/* Switch user — two-step confirmation */}
+        {!confirmSwitch ? (
+          <button
+            onClick={() => { setConfirmLogout(false); setConfirmSwitch(true); }}
+            style={{
+              display: "flex", alignItems: "center", gap: 10,
+              width: "100%", padding: "8px 10px", borderRadius: 7,
+              border: "none", background: "transparent", cursor: "pointer",
+              fontFamily: "var(--font-sans)", textAlign: "left",
+              transition: "background 0.1s",
+              color: "var(--fg-2)",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = "var(--surface-2)")}
+            onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+          >
+            <SwitchOff width={14} height={14} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: 12, fontWeight: 500 }}>{t("user.switchUser")}</span>
+          </button>
+        ) : (
+          <div style={{
+            borderRadius: 8,
+            background: "rgba(139,92,246,0.07)",
+            border: "1px solid rgba(139,92,246,0.25)",
+            margin: "2px 0",
+            overflow: "hidden",
+          }}>
+            {/* Other users list */}
+            {otherUsers === null ? (
+              <div style={{ padding: "12px 10px", fontSize: 11, color: "var(--fg-3)", textAlign: "center" }}>
+                …
+              </div>
+            ) : otherUsers.length > 0 ? (
+              <div>
+                <div style={{ padding: "8px 10px 4px", fontSize: 10, fontWeight: 700, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                  {t("user.switchUser")}
+                </div>
+                {otherUsers.map(u => {
+                  const initials2 = u.email.slice(0, 2).toUpperCase();
+                  const canAutoSwitch = !!u.rememberedToken;
+                  return (
+                    <div key={u.email} style={{ display: "flex", alignItems: "center", gap: 0 }}>
+                      <button
+                        onClick={() => canAutoSwitch
+                          ? onAutoSwitch(u.email, u.rememberedToken!)
+                          : onSwitch(u.email)}
+                        style={{
+                          flex: 1, display: "flex", alignItems: "center", gap: 9,
+                          padding: "7px 10px",
+                          border: "none", background: "transparent", cursor: "pointer",
+                          fontFamily: "var(--font-sans)", textAlign: "left",
+                          transition: "background 0.1s", borderRadius: 6,
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = "rgba(139,92,246,0.1)")}
+                        onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                      >
+                        <div style={{
+                          width: 26, height: 26, borderRadius: "50%", flexShrink: 0,
+                          background: canAutoSwitch ? "var(--accent)" : "var(--surface-2)",
+                          border: "1px solid var(--border)",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          fontSize: 10, fontWeight: 700,
+                          color: canAutoSwitch ? "#fff" : "var(--fg-2)",
+                        }}>
+                          {initials2}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 12, color: "var(--fg-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {u.email}
+                          </div>
+                          {canAutoSwitch && (
+                            <div style={{ fontSize: 10, color: "var(--accent)", marginTop: 1 }}>
+                              ⚡ Direkt anmelden
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    </div>
+                  );
+                })}
+                <div style={{ borderTop: "1px solid rgba(139,92,246,0.2)", margin: "4px 0" }} />
+              </div>
+            ) : null}
+
+            {/* Register new user or generic switch */}
+            <div style={{ padding: "6px 10px 8px" }}>
+              {otherUsers !== null && otherUsers.length === 0 && (
+                <div style={{ fontSize: 11, color: "var(--fg-3)", lineHeight: 1.4, marginBottom: 8 }}>
+                  {t("user.confirmSwitch")}
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  onClick={() => onSwitch()}
+                  style={{
+                    flex: 1, padding: "5px 0", borderRadius: 6,
+                    border: "none", background: "var(--accent)", color: "#fff",
+                    cursor: "pointer", fontFamily: "var(--font-sans)",
+                    fontSize: 11, fontWeight: 600,
+                  }}
+                >
+                  {t("user.switchConfirmBtn")}
+                </button>
+                <button
+                  onClick={() => { setConfirmSwitch(false); setOtherUsers(null); }}
+                  style={{
+                    flex: 1, padding: "5px 0", borderRadius: 6,
+                    border: "1px solid var(--border)", background: "transparent",
+                    color: "var(--fg-2)", cursor: "pointer",
+                    fontFamily: "var(--font-sans)", fontSize: 11, fontWeight: 500,
+                  }}
+                >
+                  {t("buttons.cancel")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Logout — two-step confirmation */}
         {!confirmLogout ? (
@@ -306,7 +423,8 @@ type Props = { applications: Application[] };
 export function Rail({ applications }: Props) {
   const { railOpen, toggleRail, theme, toggleTheme, density, toggleDensity, uiLanguage, setUiLanguage } = useUiStore();
   const { i18n, t } = useTranslation();
-  const { user, logout } = useAuth();
+  const { user, logout, refetch } = useAuth();
+  const queryClient = useQueryClient();
 
   const changeLanguage = async (lang: "de" | "en") => {
     setUiLanguage(lang);
@@ -324,13 +442,41 @@ export function Rail({ applications }: Props) {
 
   const handleLogout = async () => {
     setUserModalOpen(false);
+    if (user?.email) removeRememberedToken(user.email);
     await logout();
     navigate("/setup");
   };
 
-  const handleSwitchUser = () => {
+  const handleSwitchUser = async (prefillEmail?: string) => {
     setUserModalOpen(false);
-    navigate("/setup");
+    await logout();
+    // Without a specific user: go straight to the Register tab
+    // With a specific user email: go to Login tab with prefilled email
+    navigate(prefillEmail
+      ? `/setup?email=${encodeURIComponent(prefillEmail)}`
+      : "/setup?mode=register");
+  };
+
+  // Direct auto-login: exchange stored rememberMe token without entering a password
+  const handleAutoSwitch = async (targetEmail: string, token: string) => {
+    setUserModalOpen(false);
+    try {
+      const resp = await api.post<{ ok: boolean; autoLoginToken?: string }>(
+        "/api/auth/auto-login", { token }
+      );
+      // Rotate stored token
+      if (resp.data.autoLoginToken) {
+        storeRememberedToken(targetEmail, resp.data.autoLoginToken);
+      }
+    } catch {
+      // Token expired → remove from localStorage, fall back to password login
+      removeRememberedToken(targetEmail);
+      navigate(`/setup?email=${encodeURIComponent(targetEmail)}`);
+      return;
+    }
+    queryClient.clear();
+    await refetch();
+    navigate("/", { replace: true });
   };
 
   // Ordered nav items — labels via i18n
@@ -343,7 +489,7 @@ export function Rail({ applications }: Props) {
     { to: "/documents",  label: t("nav.documents"), icon: <Folder         width={15} height={15} /> },
     { to: "/knowledge",  label: t("nav.knowledge"), icon: <Database       width={15} height={15} /> },
     { to: "/templates",  label: t("nav.templates"), icon: <MultiplePages  width={15} height={15} /> },
-    { to: "/settings",   label: t("nav.settings"),  icon: <Settings       width={15} height={15} /> },
+    { to: "/settings",      label: t("nav.settings"),      icon: <Settings     width={15} height={15} /> },
   ];
 
   const email = user?.email ?? "";
@@ -557,6 +703,7 @@ export function Rail({ applications }: Props) {
           onClose={() => setUserModalOpen(false)}
           onLogout={handleLogout}
           onSwitch={handleSwitchUser}
+          onAutoSwitch={handleAutoSwitch}
         />
       )}
     </>

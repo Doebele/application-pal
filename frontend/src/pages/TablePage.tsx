@@ -22,6 +22,7 @@ import {
 } from "@tanstack/react-table";
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
+import { matchesSearch } from "../lib/search";
 import { useUiStore } from "../lib/store";
 import {
   NavArrowUp, NavArrowDown, Settings, Plus, Check,
@@ -196,8 +197,7 @@ export function TablePage() {
   const filtered = useMemo(() => {
     let data = apps.filter(a => !(a as Application & { archived?: string }).archived || (a as Application & { archived?: string }).archived === "false");
     if (search.trim()) {
-      const q = search.toLowerCase();
-      data = data.filter(a => a.company?.toLowerCase().includes(q) || a.role?.toLowerCase().includes(q) || a.location?.toLowerCase().includes(q));
+      data = data.filter(a => matchesSearch(a, search));
     }
     if (stageFilter.length > 0) {
       data = data.filter(a => stageFilter.includes(a.stage ?? ""));
@@ -594,10 +594,12 @@ export function TablePage() {
     <>
       <Topbar
         title={t("table.title")}
-        sub={`${filtered.length} ${t("applications")}`}
+        sub={search.trim()
+          ? `${filtered.length} ${t("of")} ${apps.filter(a => !(a as Application & { archived?: string }).archived || (a as Application & { archived?: string }).archived === "false").length} ${t("applications")}`
+          : `${filtered.length} ${t("applications")}`}
         searchValue={search}
         onSearchChange={setSearch}
-        searchPlaceholder={t("table.searchPlaceholder")}
+        searchSuggestions={t("search.suggestions", { returnObjects: true }) as string[]}
         actions={actions}
       />
 
@@ -695,18 +697,26 @@ export function TablePage() {
 
           <tbody>
             {table.getRowModel().rows.map((row, ri) => {
-              const rowBg = hoveredRowIndex === ri
+              const isRowSelected = selectedApp?.id === row.original.id;
+              const rowBg = isRowSelected
+                ? "var(--accent-08)"
+                : hoveredRowIndex === ri
                 ? "var(--surface)"
                 : ri % 2 === 0 ? "var(--bg)" : "color-mix(in srgb, var(--bg) 97%, white 3%)";
               return (
                 <tr
                   key={row.id}
                   onClick={() => setSelectedApp(row.original)}
+                  className={isRowSelected ? "is-selected" : undefined}
                   style={{ cursor: "pointer", background: rowBg, borderBottom: "1px solid var(--border)", transition: "background 0.1s" }}
                   onMouseEnter={() => setHoveredRowIndex(ri)}
                   onMouseLeave={() => setHoveredRowIndex(null)}
                 >
-                  {row.getVisibleCells().map(cell => {
+                  {/* Iterate in the SAME column order as thead (getVisibleLeafColumns) so
+                      pinned columns always align with their headers, regardless of columnOrder. */}
+                  {table.getVisibleLeafColumns().map(col => {
+                    const cell = row.getVisibleCells().find(c => c.column.id === col.id);
+                    if (!cell) return null;
                     const tooltip  = cell.column.columnDef.meta?.tooltip?.(row.original);
                     const isPinned = cell.column.getIsPinned();
                     // td: horizontal sticky ONLY
@@ -741,6 +751,7 @@ export function TablePage() {
       {/* Drawer */}
       {selectedApp && (
         <DetailDrawer
+          key={selectedApp.id}
           app={selectedApp}
           onClose={() => setSelectedApp(null)}
           onArchived={() => setSelectedApp(null)}

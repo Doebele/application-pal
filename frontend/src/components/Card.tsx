@@ -27,7 +27,7 @@ function daysInStage(updatedAt: Date | string): number {
   return Math.floor((Date.now() - new Date(updatedAt).getTime()) / 86_400_000);
 }
 
-type CardProps = { app: Application; onClick?: () => void };
+type CardProps = { app: Application; onClick?: () => void; isSelected?: boolean };
 
 function Avatar({ company, logoUrl, size = "sm" }: { company: string; logoUrl?: string | null; size?: "sm" | "lg" }) {
   const [imgOk, setImgOk] = useState(false);
@@ -81,7 +81,7 @@ function PriorityBar({ priority }: { priority: string | null | undefined }) {
 }
 
 
-export function CardRich({ app, onClick }: CardProps) {
+export function CardRich({ app, onClick, isSelected }: CardProps) {
   const tags = parseTags(app.tags);
   const days = daysInStage(app.updatedAt);
 
@@ -91,7 +91,7 @@ export function CardRich({ app, onClick }: CardProps) {
     : null;
 
   return (
-    <div className="job-card" onClick={onClick}>
+    <div className={`job-card${isSelected ? " is-selected" : ""}`} onClick={onClick}>
       <PriorityBar priority={app.priority} />
       {/* Row 1: Avatar + company/role + Match Score (top-right, no stage badge) */}
       <div className="job-head">
@@ -163,10 +163,10 @@ export function CardRich({ app, onClick }: CardProps) {
   );
 }
 
-export function CardCompact({ app, onClick }: CardProps) {
+export function CardCompact({ app, onClick, isSelected }: CardProps) {
   const days = daysInStage(app.updatedAt);
   return (
-    <div className="job-card" onClick={onClick} style={{ padding: 10, gap: 6 }}>
+    <div className={`job-card${isSelected ? " is-selected" : ""}`} onClick={onClick} style={{ padding: 10, gap: 6 }}>
       <PriorityBar priority={app.priority} />
       <div className="job-head" style={{ alignItems: "center" }}>
         <Avatar company={app.company} logoUrl={app.logoUrl} size="sm" />
@@ -180,10 +180,10 @@ export function CardCompact({ app, onClick }: CardProps) {
   );
 }
 
-export function CardMinimal({ app, onClick }: CardProps) {
+export function CardMinimal({ app, onClick, isSelected }: CardProps) {
   return (
     <div
-      className="job-card"
+      className={`job-card${isSelected ? " is-selected" : ""}`}
       onClick={onClick}
       style={{ padding: "10px 12px", gap: 4, flexDirection: "row", alignItems: "center" }}
     >
@@ -213,10 +213,10 @@ export function CardMinimal({ app, onClick }: CardProps) {
   );
 }
 
-export function CardEditorial({ app, onClick }: CardProps) {
+export function CardEditorial({ app, onClick, isSelected }: CardProps) {
   const tags = parseTags(app.tags);
   return (
-    <div className="job-card" onClick={onClick} style={{ padding: 14, gap: 10 }}>
+    <div className={`job-card${isSelected ? " is-selected" : ""}`} onClick={onClick} style={{ padding: 14, gap: 10 }}>
       <PriorityBar priority={app.priority} />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
         <Avatar company={app.company} logoUrl={app.logoUrl} size="lg" />
@@ -252,12 +252,14 @@ const CARD_MAP: Record<string, React.ComponentType<CardProps>> = {
 export function ApplicationCard({
   app,
   variant,
-  onClick
+  onClick,
+  isSelected
 }: {
   app: Application;
   variant: CardVariant;
   onClick?: () => void;
+  isSelected?: boolean;
 }) {
   const CardComponent = CARD_MAP[variant] ?? CardRich;
-  return <CardComponent app={app} onClick={onClick} />;
+  return <CardComponent app={app} onClick={onClick} isSelected={isSelected} />;
 }

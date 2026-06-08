@@ -189,7 +189,7 @@ function DrivePickerModal({
 
   const ct = CONTENT_TYPES.find(c => c.id === type);
   const ctLabel = ct ? t(`templates.${ct.id}.label`) : ct;
-  const langLabel = lang === "de" ? "Deutsch" : "English";
+  const langLabel = lang === "de" ? t("templates.langDe") : t("templates.langEn");
 
   return (
     <div style={{
@@ -277,7 +277,7 @@ function LangSection({
 }) {
   const { t } = useTranslation();
   const [creating, setCreating] = useState(false);
-  const label  = lang === "de" ? "Deutsch" : "English";
+  const label  = lang === "de" ? t("templates.langDe") : t("templates.langEn");
 
   const handleCreate = async () => {
     setCreating(true);

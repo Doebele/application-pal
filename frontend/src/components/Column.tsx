@@ -10,9 +10,10 @@ type Props = {
   applications: Application[];
   cardVariant: CardVariant;
   onCardClick: (id: string) => void;
+  selectedId?: string | null;
 };
 
-export function Column({ stageId, applications, cardVariant, onCardClick }: Props) {
+export function Column({ stageId, applications, cardVariant, onCardClick, selectedId }: Props) {
   const { t } = useTranslation("stages");
   const label = t(stageId, { defaultValue: stageId });
 
@@ -53,6 +54,7 @@ export function Column({ stageId, applications, cardVariant, onCardClick }: Prop
                       app={app}
                       variant={cardVariant}
                       onClick={() => onCardClick(app.id)}
+                      isSelected={selectedId === app.id}
                     />
                   </div>
                 )}

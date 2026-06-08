@@ -82,7 +82,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | Helper | Purpose |
 |---|---|
 | `getUserId(c)` | Extracts `userId` from Hono context — use in every protected route |
-| `issueTokens(c, userId, rememberMe, accessTimeout)` | Sets `access_token` + `refresh_token` as httpOnly cookies; encodes `rememberMe` in refresh JWT |
+| `issueTokens(c, userId, rememberMe, accessTimeout)` | Sets `access_token` + `refresh_token` as httpOnly cookies; encodes `rememberMe` in refresh JWT; **returns the refresh token string** (include as `autoLoginToken` in response body when `rememberMe=true`) |
 | `getSessionTimeout(userId?)` | Reads `user_profile.session_timeout`; call before `issueTokens()` |
 | `getDriveAccessToken(userId?)` | User-specific token first, falls back to shared token (`user_id IS NULL`) |
 | `callAi(system, user, ai)` | Generic AI caller — dispatches to all 6 providers: `lm-studio`, `anthropic`, `openai`, `gemini`, `openrouter`, `ollama` |
@@ -224,6 +224,12 @@ Require `calendar.readonly` scope (in `GOOGLE_SCOPES`). Users must re-connect Go
 
 **DetailDrawer**: Main job detail view. `stage` and `url` are lifted to component state for immediate header updates. Tab type: `"process" | "details" | "documents" | "ki"`. Default tab: `"process"`. Uses `useQuery(["application", app.id], { staleTime: 0, refetchOnMount: true })` to always load fresh AI data from DB on open.
 
+**DetailDrawer — no background overlay**: The drawer has no blocking overlay div. The background (Board, Table, etc.) stays fully visible and interactive so users can switch to another application without closing the drawer. Escape key closes it. Rendered with `key={selectedApp.id}` in all parent pages (BoardPage, TablePage, CalendarPage) — changing the selected app forces a full unmount+remount, resetting all local state (tab, stage, URL, AI results). Two `useEffect` hooks sync local `stage` and `url` when `freshApp` reports external changes (e.g. Board drag-and-drop while drawer is open).
+
+**Selected card/row highlighting**: Cards use `isSelected` prop → adds `"is-selected"` className. Table rows use `className="is-selected"`. CSS in `index.css`: `.job-card.is-selected` gets accent border + tinted background; `tr.is-selected > td` gets accent background + left inset border on first cell. `isSelected` is prop-drilled: `BoardPage` → `Board` → `Column` → `ApplicationCard` → card variant.
+
+**Correspondence language in AI calls**: All AI tile runners pass `language: app.language ?? "de"` in the POST body (via `buildTileRunner`'s optional `language` parameter). Backend prefers body value over DB value (`bodyLang ?? app_.language ?? "de"`). This prevents race conditions when language is changed via the DE/EN toggle just before triggering a generation.
+
 **ProcessTab** (top → bottom): `InterviewDetailsPanel` (interview stages only) → `TaskChecklist` → `StageAiActions` → `GlassdoorPanel` (inbox only) → AI content blocks → activity timeline. `onSave` passed to both `InterviewDetailsPanel` and `StageAiActions`.
 
 **DetailsTab**: `OverviewTab` (all editable fields incl. Pensum/Arbeitsmodell/Vertrag) + `react-markdown`/`remark-gfm` Stellenbeschreibung with Vorschau/Bearbeiten toggle (`descMode` state). Autosave on `onBlur`. Styled via `.md-body`.
@@ -298,6 +304,19 @@ Export endpoints use `getActiveTemplateId(docTemplates, type, lang?)` which chec
 JWT in httpOnly cookies. `GET /api/auth/status` returns `{ setup: bool }`. `GET /api/auth/me` does silent refresh (tries refresh_token if access_token expired). Google Sign-In covers Drive + Calendar in one consent. WebAuthn passkeys via `@simplewebauthn/server` (`requireUserVerification: false`).
 
 **Session timeout**: configurable per user in `user_profile.session_timeout` (15m/1h/6h/24h/7d/30d). **Remember-me**: unchecked = session cookie + 1-day JWT; checked = 90-day persistent cookie.
+
+**Auto-login (user-switch without password)**: `issueTokens()` returns the refresh token string. Login/setup endpoints include `autoLoginToken` in the response body when `rememberMe=true`. Frontend stores `{email, token}` entries in localStorage under key `pal-remembered-users`. `POST /api/auth/auto-login { token }` validates the JWT, issues new session cookies, and returns a rotated `autoLoginToken`. On success the frontend calls `queryClient.clear()` + `refetch()` + `navigate("/")` — no page reload needed. On 401 the stored token is removed and the user falls back to manual login.
+
+**`ProtectedRoute`**: redirects unauthenticated users to `/setup` (NOT `/login`). This is consistent with the global 401 interceptor in `lib/api.ts` which also redirects to `/setup`.
+
+**`LoginPage`** (`/login`): deprecated — immediately redirects to `/setup`. Do not add features here; use `SetupPage` instead.
+
+**`SetupPage` URL params**:
+- `?email=xyz` — pre-fills the email field and opens in Login tab; password field gets `autoFocus`
+- `?mode=register` — opens directly in the Register tab and prevents `useEffect` from switching to Login mode; used by the "Registrieren" button in the user-switch dialog
+- `?invite=TOKEN` — pre-fills the invite token field
+
+**User-switch flow** (Rail `UserModal`): `GET /api/auth/users` (public endpoint) returns all registered emails. Each entry is enriched with a `rememberedToken` from `pal-remembered-users` localStorage. Users with a remembered token show a ⚡ "Direkt anmelden" option → calls `POST /api/auth/auto-login` directly without navigating away. Users without a token navigate to `/setup?email=...` (Login tab) or the generic "Registrieren" button navigates to `/setup?mode=register`.
 
 ### Google OAuth Scopes
 

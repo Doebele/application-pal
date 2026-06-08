@@ -52,7 +52,8 @@
     "documents": "Documents",
     "knowledge": "Knowledge",
     "templates": "Templates",
-    "settings": "Settings"
+    "settings": "Settings",
+    "timelineSub": "Workspace activity — all changes across applications"
   },
   "tabs": {
     "actions": "Actions",
@@ -92,7 +93,9 @@
     "logout": "Sign out",
     "confirmLogout": "Really sign out?",
     "applications_one": "{{count}} application",
-    "applications_other": "{{count}} applications"
+    "applications_other": "{{count}} applications",
+    "confirmSwitch": "You will be signed out and can sign in as another user or create a new account.",
+    "switchConfirmBtn": "Register"
   },
   "theme": {
     "light": "Light",
@@ -103,7 +106,16 @@
     "de": "Deutsch",
     "en": "English"
   },
-  "search": "Search…",
+  "search": {
+    "placeholder": "Search…",
+    "suggestions": [
+      "Search company…",
+      "Search role…",
+      "Search location…",
+      "Search tag…",
+      "e.g. UBS, Remote, Zurich…"
+    ]
+  },
   "noResults": "No results",
   "loading": "Loading…",
   "saved": "Saved.",
@@ -163,7 +175,10 @@
       "company": "Company",
       "rejectionReason": "Rejection reason",
       "match": "Match"
-    }
+    },
+    "kanbanView": "Kanban view",
+    "tableView": "Table view",
+    "cardStyle": "Card style"
   },
   "overview": {
     "company": "Company",
@@ -320,7 +335,53 @@
     "addedAndCopied": "\"{{name}}\" added & copied to Drive",
     "addedToApp": "\"{{name}}\" added",
     "copiedToDrive": "\"{{name}}\" copied to Drive",
-    "linkCopied": "Link copied"
+    "linkCopied": "Link copied",
+    "title": "Documents",
+    "sub": "Certificates, References, Figma Prototypes and more",
+    "loading": "Loading…",
+    "listView": "List view",
+    "tabView": "Tab view",
+    "edit": "Edit",
+    "delete": "Delete",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "openGDoc": "Open Google Doc",
+    "open": "Open",
+    "onDrive": "On Google Drive",
+    "uploadToDrive": "Upload to Drive",
+    "uploading": "Uploading…",
+    "namePlaceholder": "Name / Title *",
+    "descPlaceholder": "Description (optional)",
+    "tagsPlaceholder": "Tags (e.g. 2024, English, Final)",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving…",
+    "uploadingBtn": "Uploading…",
+    "createGDoc": "Create new Google Doc",
+    "creatingGDoc": "Creating Google Doc…",
+    "gdocOpened": "Google Doc opened → edit",
+    "change": "Change",
+    "orLinkExisting": "or link existing document",
+    "orEnterUrl": "or enter URL directly",
+    "pdfUploadHint": "→ will be uploaded to Google Drive on save",
+    "pdfSelectBtn": "📎 Select PDF file",
+    "pdfAutoUpload": "(will be automatically uploaded to Drive)",
+    "editModalTitle": "Edit document",
+    "noNameError": "Please enter a name first",
+    "googleNotConnected": "Google not connected – please connect in Settings",
+    "saveFailed": "Failed to save",
+    "uploadFailed": "Upload failed",
+    "addLabel": "＋ Add {{label}}",
+    "categories": {
+      "lebenslauf": "CV",
+      "motivationsschreiben": "Cover Letter",
+      "zeugnis": "Certificates",
+      "referenz": "References",
+      "zertifikat": "Certificates",
+      "portfolio": "Portfolio",
+      "figma": "Figma",
+      "sonstiges": "Other"
+    }
   },
   "contacts": {
     "label": "Contacts",
@@ -517,7 +578,12 @@
     "recommended": "Recommended",
     "aiOllama": "Ollama (local)",
     "ollamaUrl": "Ollama URL",
-    "ollamaUrlSub": "Default: http://localhost:11434"
+    "ollamaUrlSub": "Default: http://localhost:11434",
+    "calendarSetupStep1Link": "Enable Google Calendar API",
+    "calendarSetupStep1Sub": "(APIs & Services → Library → \"Google Calendar API\")",
+    "calendarSetupStep2": "OAuth Consent Screen → Add scopes",
+    "calendarSetupStep3": "If app is in Test mode: add your email as a test user",
+    "calendarSetupStep4": "Click \"Reconnect Google\" below → Sign in again"
   },
   "templates": {
     "title": "Templates",
@@ -568,7 +634,9 @@
     "onboarding": {
       "label": "Onboarding Checklist",
       "description": "30/60/90-day plan for the new job"
-    }
+    },
+    "langDe": "Deutsch",
+    "langEn": "English"
   },
   "table": {
     "title": "Application List",
@@ -671,6 +739,12 @@
     "noEventsHint": "No events in this period. Add interview dates or deadlines in the Process tab.",
     "clearFilter": "clear",
     "googleCalLink": "Google Calendar ↗",
-    "openAppArrow": "Open application →"
-  }
+    "openAppArrow": "Open application →",
+    "timeUnitSuffix": ""
+  },
+  "knowledge": {
+    "companiesCount_one": "{{count}} company",
+    "companiesCount_other": "{{count}} companies"
+  },
+  "of": "of"
 }

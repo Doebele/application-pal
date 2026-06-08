@@ -22,9 +22,10 @@ type Props = {
   cardVariant: CardVariant;
   onCardClick: (id: string) => void;
   visibleStages?: ReadonlyArray<string>;
+  selectedId?: string | null;
 };
 
-export function Board({ applications, cardVariant, onCardClick, visibleStages }: Props) {
+export function Board({ applications, cardVariant, onCardClick, visibleStages, selectedId }: Props) {
   const stagesToShow = visibleStages && visibleStages.length > 0
     ? STAGES.filter((s) => visibleStages.includes(s))
     : STAGES;
@@ -70,6 +71,7 @@ export function Board({ applications, cardVariant, onCardClick, visibleStages }:
               applications={byStage(stageId)}
               cardVariant={cardVariant}
               onCardClick={onCardClick}
+              selectedId={selectedId}
             />
           ))}
         </div>

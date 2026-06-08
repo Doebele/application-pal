@@ -6,13 +6,13 @@ Personal job application tracker with AI coaching. Runs entirely on your own mac
 
 ## Screenshots
 
-| Board | Table View |
-|-------|-----------|
-| ![Board](docs/screenshots/board.png) | ![Table](docs/screenshots/table.png) |
+| Kanban Board | List View |
+|---|---|
+| ![Kanban](docs/screenshots/kanban.png) | ![List](docs/screenshots/list.png) |
 
-| Profile | Templates |
-|---------|-----------|
-| ![Profile](docs/screenshots/profile.png) | ![Templates](docs/screenshots/templates.png) |
+| AI Coaching | Google Drive |
+|---|---|
+| ![AI Coaching](docs/screenshots/ai-coaching.png) | ![Google Drive](docs/screenshots/google-drive.png) |
 
 ![Calendar](docs/screenshots/calendar.png)
 

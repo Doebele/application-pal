@@ -52,7 +52,8 @@
     "documents": "Dokumente",
     "knowledge": "Knowledge",
     "templates": "Vorlagen",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "timelineSub": "Workspace-Aktivitäten — alle Änderungen im Überblick"
   },
   "tabs": {
     "actions": "Aktionen",
@@ -92,7 +93,9 @@
     "logout": "Abmelden",
     "confirmLogout": "Wirklich abmelden?",
     "applications_one": "{{count}} Bewerbung",
-    "applications_other": "{{count}} Bewerbungen"
+    "applications_other": "{{count}} Bewerbungen",
+    "confirmSwitch": "Du wirst abgemeldet und kannst dich als anderer Nutzer anmelden oder ein neues Konto erstellen.",
+    "switchConfirmBtn": "Registrieren"
   },
   "theme": {
     "light": "Hell",
@@ -103,7 +106,16 @@
     "de": "Deutsch",
     "en": "English"
   },
-  "search": "Suchen…",
+  "search": {
+    "placeholder": "Suchen…",
+    "suggestions": [
+      "Nach Firma suchen…",
+      "Nach Stelle suchen…",
+      "Nach Ort suchen…",
+      "Nach Tag suchen…",
+      "z.B. UBS, Remote, Zürich…"
+    ]
+  },
   "noResults": "Keine Ergebnisse",
   "loading": "Lädt…",
   "saved": "Gespeichert.",
@@ -163,7 +175,10 @@
       "company": "Unternehmen",
       "rejectionReason": "Ablehnungsgrund",
       "match": "Match"
-    }
+    },
+    "kanbanView": "Kanban-Ansicht",
+    "tableView": "Tabellen-Ansicht",
+    "cardStyle": "Karten-Stil"
   },
   "overview": {
     "company": "Firma",
@@ -320,7 +335,53 @@
     "addedAndCopied": "„{{name}}“ hinzugefügt & auf Drive kopiert",
     "addedToApp": "„{{name}}“ hinzugefügt",
     "copiedToDrive": "„{{name}}“ auf Drive kopiert",
-    "linkCopied": "Link kopiert"
+    "linkCopied": "Link kopiert",
+    "title": "Dokumente",
+    "sub": "Zeugnisse, Referenzen, Zertifikate, Figma-Prototypen und mehr",
+    "loading": "Laden…",
+    "listView": "Listenansicht",
+    "tabView": "Tab-Ansicht",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "minimize": "Minimieren",
+    "maximize": "Maximieren",
+    "openGDoc": "Google Doc öffnen",
+    "open": "Öffnen",
+    "onDrive": "Auf Google Drive",
+    "uploadToDrive": "Auf Drive hochladen",
+    "uploading": "Wird hochgeladen…",
+    "namePlaceholder": "Name / Titel *",
+    "descPlaceholder": "Beschreibung (optional)",
+    "tagsPlaceholder": "Tags (z.B. 2024, Deutsch, Final)",
+    "cancel": "Abbrechen",
+    "save": "Speichern",
+    "saving": "Speichern…",
+    "uploadingBtn": "Lade hoch…",
+    "createGDoc": "Neues Google Doc erstellen",
+    "creatingGDoc": "Erstelle Google Doc…",
+    "gdocOpened": "Google Doc geöffnet → bearbeiten",
+    "change": "Ändern",
+    "orLinkExisting": "oder bestehendes Dokument verknüpfen",
+    "orEnterUrl": "oder URL direkt eingeben",
+    "pdfUploadHint": "→ wird beim Speichern auf Google Drive hochgeladen",
+    "pdfSelectBtn": "📎 PDF-Datei auswählen",
+    "pdfAutoUpload": "(wird automatisch auf Drive hochgeladen)",
+    "editModalTitle": "Dokument bearbeiten",
+    "noNameError": "Bitte zuerst einen Namen eingeben",
+    "googleNotConnected": "Google nicht verbunden – bitte in Settings verbinden",
+    "saveFailed": "Fehler beim Speichern",
+    "uploadFailed": "Upload fehlgeschlagen",
+    "addLabel": "＋ {{label}} hinzufügen",
+    "categories": {
+      "lebenslauf": "Lebenslauf",
+      "motivationsschreiben": "Motivationsschreiben",
+      "zeugnis": "Zeugnisse",
+      "referenz": "Referenzen",
+      "zertifikat": "Zertifikate",
+      "portfolio": "Portfolio",
+      "figma": "Figma",
+      "sonstiges": "Sonstiges"
+    }
   },
   "contacts": {
     "label": "Kontakte",
@@ -517,7 +578,12 @@
     "recommended": "Empfohlen",
     "aiOllama": "Ollama (lokal)",
     "ollamaUrl": "Ollama URL",
-    "ollamaUrlSub": "Standard: http://localhost:11434"
+    "ollamaUrlSub": "Standard: http://localhost:11434",
+    "calendarSetupStep1Link": "Google Calendar API aktivieren",
+    "calendarSetupStep1Sub": "(APIs & Services → Bibliothek → „Google Calendar API\")",
+    "calendarSetupStep2": "OAuth-Zustimmungsbildschirm → Bereiche hinzufügen",
+    "calendarSetupStep3": "Wenn App im Test-Modus: Deine E-Mail als Testnutzer eintragen",
+    "calendarSetupStep4": "Unten auf „Google neu verbinden\" klicken → Neu anmelden"
   },
   "templates": {
     "title": "Vorlagen",
@@ -568,7 +634,9 @@
     "onboarding": {
       "label": "Onboarding-Checkliste",
       "description": "30/60/90-Tage-Plan für den neuen Job"
-    }
+    },
+    "langDe": "Deutsch",
+    "langEn": "English"
   },
   "table": {
     "title": "Bewerbungsliste",
@@ -671,6 +739,12 @@
     "noEventsHint": "Keine Events in diesem Zeitraum. Füge Interviewtermine oder Deadlines im Prozess-Tab hinzu.",
     "clearFilter": "löschen",
     "googleCalLink": "Google Kalender ↗",
-    "openAppArrow": "Bewerbung öffnen →"
-  }
+    "openAppArrow": "Bewerbung öffnen →",
+    "timeUnitSuffix": " Uhr"
+  },
+  "knowledge": {
+    "companiesCount_one": "{{count}} Firma",
+    "companiesCount_other": "{{count}} Firmen"
+  },
+  "of": "von"
 }

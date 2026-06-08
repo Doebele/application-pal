@@ -13,6 +13,7 @@ import {
 } from "iconoir-react";
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
+import { matchesSearch } from "../lib/search";
 import { Topbar } from "../components/Topbar";
 import { DetailDrawer } from "../components/DetailDrawer";
 import {
@@ -113,7 +114,7 @@ function FloatingPopup({
             {format(popup.event.start, "EEEE, dd. MMMM yyyy", { locale: de })}
             {popup.event.start.getHours() + popup.event.start.getMinutes() > 0 && (
               <>, {format(popup.event.start, "HH:mm")}
-                {popup.event.end && ` – ${format(popup.event.end, "HH:mm")}`} Uhr</>
+                {popup.event.end && ` – ${format(popup.event.end, "HH:mm")}`}{t("calendar.timeUnitSuffix")}</>
             )}
           </div>
         </div>
@@ -476,10 +477,12 @@ function FilterSection({
 // ─── Main CalendarPage ────────────────────────────────────────
 export function CalendarPage() {
   const { t } = useTranslation();
-  const { data: applications = [] } = useQuery<Application[]>({
+  const { data: allApplications = [] } = useQuery<Application[]>({
     queryKey: ["applications"],
     queryFn: () => api.get("/api/applications").then((r) => r.data),
   });
+  const [search, setSearch] = useState("");
+  const applications = search.trim() ? allApplications.filter(a => matchesSearch(a, search)) : allApplications;
 
   const [displayDate, setDisplayDate]   = useState(new Date());
   const [popup, setPopup]               = useState<PopupState | null>(null);
@@ -584,6 +587,9 @@ export function CalendarPage() {
     <>
       <Topbar
         title={t("calendar.title")}
+        searchValue={search}
+        onSearchChange={setSearch}
+        searchSuggestions={t("search.suggestions", { returnObjects: true }) as string[]}
         actions={
           <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
             {/* Month / Week toggle */}
@@ -688,6 +694,7 @@ export function CalendarPage() {
       {/* DetailDrawer for application events */}
       {selectedApp && (
         <DetailDrawer
+          key={selectedApp.id}
           app={selectedApp}
           onClose={() => setSelectedApp(null)}
         />

@@ -1511,7 +1511,8 @@ function AiResultTile({ id, entry, onExpand, onRun }: {
   onExpand: () => void;
   onRun?: () => Promise<void>;
 }) {
-  const label      = AI_RESULT_LABELS[id] ?? id;
+  const { t: tA } = useTranslation("actions");
+  const label      = tA(`${id}.label`, { defaultValue: AI_RESULT_LABELS[id] ?? id });
   const isDouble   = DOUBLE_WIDTH_IDS.has(id);
   const isTriple   = TRIPLE_WIDTH_IDS.has(id);
   const isDoubleH  = DOUBLE_HEIGHT_IDS.has(id);
@@ -1536,11 +1537,11 @@ function AiResultTile({ id, entry, onExpand, onRun }: {
     e.stopPropagation();
     if (running || !onRun) return;
     setRunning(true);
-    fireTileToast("Generierung wird durchgeführt…");
+    fireTileToast(tA("generating"));
     try {
       await onRun();
     } catch {
-      fireTileToast("Generierung fehlgeschlagen", false);
+      fireTileToast(tA("generateFailed", { defaultValue: "Generierung fehlgeschlagen" }), false);
     } finally {
       setRunning(false);
     }
@@ -1604,7 +1605,7 @@ function AiResultTile({ id, entry, onExpand, onRun }: {
             transition: "all 0.15s",
           }}>
             {running && <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />}
-            {running ? "Wird generiert…" : (TILE_EMPTY_LABELS[id] ?? "Analyse starten")}
+            {running ? tA("generating") : tA(`${id}.empty`, { defaultValue: TILE_EMPTY_LABELS[id] ?? "Analyse starten" })}
           </span>
         )}
       </div>
@@ -1638,12 +1639,14 @@ function buildTileRunner(
   ai: AiConfig,
   queryClient: ReturnType<typeof useQueryClient>,
   onRegister: (id: string, data: unknown) => void,
+  language?: string,
 ): (() => Promise<void>) | undefined {
   const endpoint = ACTION_ENDPOINTS[id];
   if (!endpoint) return undefined;
   return async () => {
     if (ai.provider === "none") throw new Error("Kein KI-Modell konfiguriert");
-    const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+    const aiBody: Record<string, unknown> = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+    if (language) aiBody.language = language;
     const r = await api.post<Record<string, unknown>>(`/api/applications/${appId}${endpoint}`, aiBody);
     onRegister(id, r.data);
     queryClient.invalidateQueries({ queryKey: ["applications"] });
@@ -1793,7 +1796,8 @@ function renderTileContentLarge(id: string, data: unknown): React.ReactNode {
 }
 
 function AiResultTileLarge({ id, entry }: { id: string; entry: { data: unknown } | null }) {
-  const label   = AI_RESULT_LABELS[id] ?? id;
+  const { t: tA } = useTranslation("actions");
+  const label   = tA(`${id}.label`, { defaultValue: AI_RESULT_LABELS[id] ?? id });
   const content = entry ? renderTileContentLarge(id, entry.data) : null;
   return (
     <div style={{
@@ -1807,7 +1811,7 @@ function AiResultTileLarge({ id, entry }: { id: string; entry: { data: unknown }
       <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", width: "100%" }}>
         {content ?? (
           <span style={{ fontSize: 14, color: "var(--fg-3)", fontWeight: 500, textAlign: "center", lineHeight: 1.4 }}>
-            {TILE_EMPTY_LABELS[id] ?? "—"}
+            {tA(`${id}.empty`, { defaultValue: TILE_EMPTY_LABELS[id] ?? "—" })}
           </span>
         )}
       </div>
@@ -1979,14 +1983,16 @@ const ACTION_ENDPOINTS: Record<string, string> = {
   "salary-tips":       "/ai/salary-tips",
 };
 
-function TileExpandView({ id, entry, appId, onClose, onRegister }: {
+function TileExpandView({ id, entry, appId, appLanguage, onClose, onRegister }: {
   id: string;
   entry: { data: unknown; createdAt: Date } | null;
   appId: string;
+  appLanguage?: string;
   onClose: () => void;
   onRegister?: (id: string, data: unknown) => void;
 }) {
   const { t } = useTranslation();
+  const { t: tA } = useTranslation("actions");
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
@@ -2043,6 +2049,7 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
     setExporting(true);
     try {
       const body: Record<string, unknown> = {};
+      if (appLanguage) body.language = appLanguage;
       if (id === "cover-letter")       { const cl = entry.data as { subject: string; body: string }; body.subject = cl.subject; body.body = cl.body; }
       else if (id === "interview-prep")    body.interviewPrep    = entry.data;
       else if (id === "ackermann-script") body.script       = entry.data;
@@ -2065,7 +2072,7 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, flexShrink: 0 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: "var(--fg-1)" }}>
-          {AI_RESULT_LABELS[id] ?? id}
+          {tA(`${id}.label`, { defaultValue: AI_RESULT_LABELS[id] ?? id })}
         </span>
         {ts && <span style={{ fontSize: 10, color: "var(--fg-4)" }}>{ts}</span>}
         <div style={{ flex: 1 }} />
@@ -2173,7 +2180,7 @@ function TileExpandView({ id, entry, appId, onClose, onRegister }: {
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "60%", gap: 12 }}>
               <Expand width={28} height={28} style={{ opacity: 0.3, color: "var(--fg-3)" }} />
               <span style={{ fontSize: 13, fontWeight: 500, color: "var(--fg-2)" }}>
-                {TILE_EMPTY_LABELS[id] ?? "Analyse starten"}
+                {tA(`${id}.empty`, { defaultValue: TILE_EMPTY_LABELS[id] ?? tA("match-score.empty") })}
               </span>
             </div>
           )}
@@ -3635,7 +3642,8 @@ function StageAiActions({ app, onSave, onAiResult }: {
     showToast("iCal heruntergeladen");
   };
 
-  const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+  // Always include current language in AI bodies so backends prefer it over potentially-stale DB value
+  const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel }, language: lang };
   const queryClient = useQueryClient();
 
   const run = async (key: string, fn: () => Promise<void>) => {
@@ -4376,7 +4384,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
               {stageTileIds.map(id => (
                 <AiResultTile key={id} id={id} entry={aiResults?.[id] ?? null}
                   onExpand={() => setExpandedResultId(id)}
-                  onRun={buildTileRunner(id, app.id, ai, queryClient, (tid, data) => onAiResult?.(tid, data))} />
+                  onRun={buildTileRunner(id, app.id, ai, queryClient, (tid, data) => onAiResult?.(tid, data), (app as Application & { language?: string }).language ?? "de")} />
               ))}
             </div>
           </>
@@ -4387,6 +4395,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
           id={expandedResultId}
           entry={aiResults?.[expandedResultId] ?? null}
           appId={app.id}
+          appLanguage={(app as Application & { language?: string }).language ?? "de"}
           onClose={() => setExpandedResultId(null)}
           onRegister={(id, data) => { onAiResult?.(id, data); }}
         />
@@ -4610,7 +4619,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
             ? runAnalysis
             : buildTileRunner(id, app.id, ai, queryClient, (tid, data) => {
                 onAiResultUpdate?.(tid, data);
-              });
+              }, (app as Application & { language?: string }).language ?? "de");
           return (
             <AiResultTile key={id} id={id}
               entry={id === "match-score" && displayResult ? { data: displayResult, createdAt: aiResults?.["match-score"]?.createdAt ?? new Date() } : (aiResults?.[id] ?? null)}
@@ -4624,6 +4633,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
           id={expandedResultId}
           entry={expandedResultId === "match-score" && displayResult ? { data: displayResult, createdAt: aiResults?.["match-score"]?.createdAt ?? new Date() } : (aiResults?.[expandedResultId] ?? null)}
           appId={app.id}
+          appLanguage={(app as Application & { language?: string }).language ?? "de"}
           onClose={() => setExpandedResultId(null)}
           onRegister={(id, data) => { onAiResultUpdate?.(id, data); if (id === "match-score") setResult(data as MatchResult); }}
         />
@@ -4952,6 +4962,13 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
     setAiResultsRegistry(prev => ({ ...prev, [id]: { data, createdAt: new Date() } }));
   }, []);
 
+  // Close on Escape key
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
   // Live-sync: whenever the React Query cache for this application is refreshed
   // (e.g. after an AI call or background refetch), merge fresh DB data into the registry.
   // This ensures results generated in other sessions or while the drawer was closed are shown.
@@ -4962,6 +4979,15 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
     refetchOnMount: true,
     refetchOnWindowFocus: true,
   });
+
+  // Sync local stage/url when freshApp reports an external change
+  // (e.g. Board drag-and-drop while the drawer is open)
+  useEffect(() => {
+    if (freshApp && freshApp.stage !== stage) setStage(freshApp.stage);
+  }, [freshApp?.stage]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (freshApp && (freshApp.url ?? "") !== url) setUrl(freshApp.url ?? "");
+  }, [freshApp?.url]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Merge fresh data into registry whenever the live query or parent prop updates
   useEffect(() => {
@@ -5051,7 +5077,6 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
 
   return (
     <>
-      <div className="drawer-overlay" onClick={onClose} />
       <aside className="drawer" style={{ width: 760 }}>
         {/* Header */}
         <div className="drawer-head" style={{ flexDirection: "column", alignItems: "stretch", gap: 14, paddingBottom: 0, borderBottom: "none" }}>

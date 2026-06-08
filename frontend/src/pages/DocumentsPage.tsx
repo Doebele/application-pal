@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import {
   Page, Link, MediaImage, Plus, Trash, OpenNewWindow,
   Medal, Group, GraduationCap, Bag, Folder, EditPencil, Check, Xmark,
@@ -87,18 +88,19 @@ function CreateGDocButton({ title, onCreated }: {
   title: string;
   onCreated: (url: string) => void;
 }) {
+  const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
 
   const create = async () => {
-    if (!title.trim()) { setError("Bitte zuerst einen Namen eingeben"); return; }
+    if (!title.trim()) { setError(t("documents.noNameError")); return; }
     setLoading(true);
     setError(null);
     try {
       const res = await api.post<{ docUrl: string; docId: string }>("/api/google/docs/create", { title: title.trim() });
       onCreated(res.data.docUrl);
     } catch {
-      setError("Google nicht verbunden – bitte in Settings verbinden");
+      setError(t("documents.googleNotConnected"));
     } finally {
       setLoading(false);
     }
@@ -123,7 +125,7 @@ function CreateGDocButton({ title, onCreated }: {
         {loading
           ? <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} />
           : <GDocIcon size={14} />}
-        {loading ? "Erstelle Google Doc…" : "Neues Google Doc erstellen"}
+        {loading ? t("documents.creatingGDoc") : t("documents.createGDoc")}
       </button>
       {error && <div style={{ fontSize: 11, color: "var(--red, #f43f5e)" }}>{error}</div>}
     </div>
@@ -136,6 +138,7 @@ function AddDocForm({ category, onSave, onCancel }: {
   onSave: (doc: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => Promise<void>;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const driveApplicationsFolderId = useProfileDriveFolder();
   const isGoogleCat = GOOGLE_ENABLED_CATEGORIES.includes(category);
   const [name, setName]         = useState("");
@@ -199,7 +202,7 @@ function AddDocForm({ category, onSave, onCancel }: {
       }
       await onSave({ name: name.trim(), category, fileType, url: finalUrl, description: description.trim() || null, tags: tags.trim() || null });
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Fehler beim Speichern";
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("documents.saveFailed");
       setSaveErr(msg);
     } finally { setSaving(false); }
   };
@@ -225,7 +228,7 @@ function AddDocForm({ category, onSave, onCancel }: {
 
       {/* Name */}
       <input className="input-line" autoFocus value={name} onChange={(e) => setName(e.target.value)}
-        placeholder="Name / Titel *" style={{ fontSize: 14, fontWeight: 600 }}
+        placeholder={t("documents.namePlaceholder")} style={{ fontSize: 14, fontWeight: 600 }}
         onKeyDown={(e) => e.key === "Enter" && submit()} />
 
       {/* Google Doc create button OR PDF file picker OR URL field */}
@@ -238,12 +241,12 @@ function AddDocForm({ category, onSave, onCancel }: {
               background: "rgba(66,133,244,0.08)", color: "#4285f4",
               fontSize: 12, fontWeight: 600, textDecoration: "none"
             }}>
-              <GDocIcon size={13} /> Google Doc geöffnet → bearbeiten
+              <GDocIcon size={13} /> {t("documents.gdocOpened")}
               <OpenNewWindow width={11} height={11} style={{ marginLeft: "auto" }} />
             </a>
-            <button onClick={() => setUrl("")} title="Anderen Link verwenden"
+            <button onClick={() => setUrl("")} title={t("documents.change")}
               style={{ padding: "4px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--fg-3)", cursor: "pointer", fontSize: 11, fontFamily: "var(--font-sans)" }}>
-              Ändern
+              {t("documents.change")}
             </button>
           </div>
         ) : (
@@ -251,7 +254,7 @@ function AddDocForm({ category, onSave, onCancel }: {
             <CreateGDocButton title={name} onCreated={(docUrl) => setUrl(docUrl)} />
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-              <span style={{ fontSize: 10, color: "var(--fg-3)", whiteSpace: "nowrap" }}>oder bestehendes Dokument verknüpfen</span>
+              <span style={{ fontSize: 10, color: "var(--fg-3)", whiteSpace: "nowrap" }}>{t("documents.orLinkExisting")}</span>
               <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
             </div>
             <input className="input-line" value={url} onChange={(e) => setUrl(e.target.value)}
@@ -270,7 +273,7 @@ function AddDocForm({ category, onSave, onCancel }: {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pdfFile.name}</div>
                 {driveConnected && (
-                  <div style={{ fontSize: 10, color: "#34d399" }}>→ wird beim Speichern auf Google Drive hochgeladen (Application-PDF)</div>
+                  <div style={{ fontSize: 10, color: "#34d399" }}>{t("documents.pdfUploadHint")}</div>
                 )}
               </div>
               <button onClick={() => { setPdfFile(null); if (fileInputRef.current) fileInputRef.current.value = ""; }}
@@ -287,14 +290,14 @@ function AddDocForm({ category, onSave, onCancel }: {
             }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--fg-1)"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--fg-2)"; }}>
-              📎 PDF-Datei auswählen
-              {driveConnected && <span style={{ fontSize: 10, color: "var(--fg-3)" }}>(wird automatisch auf Drive hochgeladen)</span>}
+              {t("documents.pdfSelectBtn")}
+              {driveConnected && <span style={{ fontSize: 10, color: "var(--fg-3)" }}>{t("documents.pdfAutoUpload")}</span>}
             </button>
           )}
           {/* Alternative: manual URL */}
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
-            <span style={{ fontSize: 10, color: "var(--fg-3)", whiteSpace: "nowrap" }}>oder URL direkt eingeben</span>
+            <span style={{ fontSize: 10, color: "var(--fg-3)", whiteSpace: "nowrap" }}>{t("documents.orEnterUrl")}</span>
             <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
           </div>
           <input className="input-line" value={url} onChange={(e) => setUrl(e.target.value)}
@@ -307,9 +310,9 @@ function AddDocForm({ category, onSave, onCancel }: {
       )}
 
       <input className="input-line" value={description} onChange={(e) => setDesc(e.target.value)}
-        placeholder="Beschreibung (optional)" style={{ fontSize: 12 }} />
+        placeholder={t("documents.descPlaceholder")} style={{ fontSize: 12 }} />
       <input className="input-line" value={tags} onChange={(e) => setTags(e.target.value)}
-        placeholder="Tags (z.B. 2024, Deutsch, Final)" style={{ fontSize: 12 }} />
+        placeholder={t("documents.tagsPlaceholder")} style={{ fontSize: 12 }} />
 
       {saveErr && (
         <div style={{ fontSize: 11, color: "#f87171", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 7, padding: "6px 10px" }}>
@@ -317,11 +320,11 @@ function AddDocForm({ category, onSave, onCancel }: {
         </div>
       )}
       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-        <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onCancel}><Xmark width={12} height={12} /> Abbrechen</button>
+        <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onCancel}><Xmark width={12} height={12} /> {t("documents.cancel")}</button>
         <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={!name.trim() || saving || uploading} onClick={submit}>
-          {uploading ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> Lade hoch…</>
-           : saving  ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> Speichern…</>
-           : <><Check width={12} height={12} /> Speichern</>}
+          {uploading ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("documents.uploadingBtn")}</>
+           : saving  ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("documents.saving")}</>
+           : <><Check width={12} height={12} /> {t("documents.save")}</>}
         </button>
       </div>
     </div>
@@ -335,6 +338,7 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate }: {
   onEdit: (doc: UserDocument) => void;
   onUrlUpdate?: (id: string, newUrl: string) => void;
 }) {
+  const { t } = useTranslation();
   const [hov, setHov] = useState(false);
   const driveApplicationsFolderId = useProfileDriveFolder();
   const [uploading, setUploading] = useState(false);
@@ -412,11 +416,11 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate }: {
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 2, flexShrink: 0, opacity: hov ? 1 : 0, transition: "opacity 0.12s" }}>
-          <button onClick={() => onEdit(doc)} title="Bearbeiten" style={iconBtnStyle(false)}
+          <button onClick={() => onEdit(doc)} title={t("documents.edit")} style={iconBtnStyle(false)}
             onMouseEnter={e => hoverBtn(e, false)} onMouseLeave={e => leaveBtn(e)}>
             <EditPencil width={11} height={11} />
           </button>
-          <button onClick={() => onDelete(doc.id)} title="Löschen" style={iconBtnStyle(true)}
+          <button onClick={() => onDelete(doc.id)} title={t("documents.delete")} style={iconBtnStyle(true)}
             onMouseEnter={e => hoverBtn(e, true)} onMouseLeave={e => leaveBtn(e)}>
             <Trash width={11} height={11} />
           </button>
@@ -444,7 +448,7 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate }: {
               border: `1px solid ${isGDoc ? "rgba(66,133,244,0.2)" : "var(--accent-15)"}`
             }}>
             {isGDoc ? <GDocIcon size={11} /> : <OpenNewWindow width={11} height={11} />}
-            {isGDoc ? "Google Doc öffnen" : "Öffnen"}
+            {isGDoc ? t("documents.openGDoc") : t("documents.open")}
           </a>
         )}
 
@@ -456,7 +460,7 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate }: {
               color: "#34d399", padding: "3px 8px", borderRadius: 6,
               background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.25)"
             }}>
-              <Check width={10} height={10} /> Auf Google Drive
+              <Check width={10} height={10} /> {t("documents.onDrive")}
             </span>
           ) : doc.url ? (
             <button
@@ -470,10 +474,10 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate }: {
                 fontFamily: "var(--font-sans)", transition: "opacity 0.15s"
               }}>
               {uploading
-                ? <><RefreshCircle width={10} height={10} style={{ animation: "spin 1s linear infinite" }} /> Wird hochgeladen…</>
+                ? <><RefreshCircle width={10} height={10} style={{ animation: "spin 1s linear infinite" }} /> {t("documents.uploading")}</>
                 : <>
                     <svg width="10" height="10" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-                    Auf Drive hochladen
+                    {t("documents.uploadToDrive")}
                   </>}
             </button>
           ) : null
@@ -510,6 +514,7 @@ function EditModal({ doc, onSave, onClose }: {
   onSave: (id: string, patch: Partial<UserDocument>) => Promise<void>;
   onClose: () => void;
 }) {
+  const { t } = useTranslation();
   const isGoogleCat = GOOGLE_ENABLED_CATEGORIES.includes(doc.category as Category);
   const [name, setName]         = useState(doc.name);
   const [url, setUrl]           = useState(doc.url ?? "");
@@ -533,7 +538,7 @@ function EditModal({ doc, onSave, onClose }: {
       });
       onClose();
     } catch (err: unknown) {
-      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? "Speichern fehlgeschlagen";
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("documents.saveFailed");
       setSaveErr(msg);
     } finally {
       setSaving(false);
@@ -543,7 +548,7 @@ function EditModal({ doc, onSave, onClose }: {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
       <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 24, width: 480, display: "flex", flexDirection: "column", gap: 14 }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ fontWeight: 700, fontSize: 15 }}>Dokument bearbeiten</div>
+        <div style={{ fontWeight: 700, fontSize: 15 }}>{t("documents.editModalTitle")}</div>
 
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
           {availableTypes.map((ft) => (
@@ -576,11 +581,11 @@ function EditModal({ doc, onSave, onClose }: {
         )}
 
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><Xmark width={12} height={12} /> Abbrechen</button>
+          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={onClose}><Xmark width={12} height={12} /> {t("documents.cancel")}</button>
           <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={!name.trim() || saving} onClick={submit}>
             {saving
-              ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> Speichern…</>
-              : <><Check width={12} height={12} /> Speichern</>}
+              ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("documents.saving")}</>
+              : <><Check width={12} height={12} /> {t("documents.save")}</>}
           </button>
         </div>
       </div>
@@ -597,6 +602,7 @@ function DocList({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
   onEdit: (doc: UserDocument) => void;
   onUrlUpdate?: (id: string, newUrl: string) => void;
 }) {
+  const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
 
   return (
@@ -612,7 +618,7 @@ function DocList({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
         }}
           onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--border-strong)"; e.currentTarget.style.color = "var(--fg-2)"; }}
           onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--fg-3)"; }}>
-          {cat.googleDocs ? "＋ Google Doc erstellen oder verknüpfen" : `＋ ${cat.label} hinzufügen`}
+          {cat.googleDocs ? t("documents.createWithGoogle") : t("documents.addLabel", { label: t(`documents.categories.${cat.value}`) })}
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
@@ -637,6 +643,7 @@ function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
   onEdit: (doc: UserDocument) => void;
   onUrlUpdate?: (id: string, newUrl: string) => void;
 }) {
+  const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
   return (
@@ -650,7 +657,7 @@ function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
         <span style={{ color: cat.color }}>{cat.icon}</span>
-        <div className="eyebrow" style={{ flex: 1, color: "var(--fg-2)" }}>{cat.label}</div>
+        <div className="eyebrow" style={{ flex: 1, color: "var(--fg-2)" }}>{t(`documents.categories.${cat.value}`)}</div>
         {cat.googleDocs && (
           <span style={{ fontSize: 10, color: "#4285f4", fontWeight: 600, display: "flex", alignItems: "center", gap: 3, marginRight: 4 }}>
             <GDocIcon size={10} /> Google Docs
@@ -660,7 +667,7 @@ function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
           <span style={{ fontSize: 11, color: "var(--fg-3)", fontWeight: 600, marginRight: 4 }}>{docs.length}</span>
         )}
         <button className="btn btn-ghost btn-icon" onClick={() => setExpanded((v) => !v)}
-          title={expanded ? "Minimieren" : "Maximieren"} style={{ padding: 4 }}>
+          title={expanded ? t("documents.minimize") : t("documents.maximize")} style={{ padding: 4 }}>
           {expanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
         </button>
       </div>
@@ -679,6 +686,7 @@ function TabView({ docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
 }) {
+  const { t } = useTranslation();
   const [active, setActive] = useState<Category>("lebenslauf");
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canLeft,  setCanLeft]  = useState(false);
@@ -756,7 +764,7 @@ function TabView({ docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
                 onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = "var(--fg-1)"; }}
                 onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = "var(--fg-3)"; }}>
                 <span style={{ color: isActive ? c.color : "inherit" }}>{c.icon}</span>
-                {c.label}
+                {t(`documents.categories.${c.value}`)}
                 {count > 0 && (
                   <span style={{
                     fontSize: 10, fontWeight: 700, padding: "1px 5px", borderRadius: 999,
@@ -792,6 +800,7 @@ function TabView({ docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export function DocumentsPage() {
+  const { t } = useTranslation();
   const [docs, setDocs]         = useState<UserDocument[]>([]);
   const [loading, setLoading]   = useState(true);
   const [editDoc, setEditDoc]   = useState<UserDocument | null>(null);
@@ -825,16 +834,16 @@ export function DocumentsPage() {
 
   if (loading) return (
     <>
-      <Topbar title="Dokumente" />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--fg-3)", fontSize: 13 }}>Laden…</div>
+      <Topbar title={t("documents.title")} />
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--fg-3)", fontSize: 13 }}>{t("documents.loading")}</div>
     </>
   );
 
   const viewToggle = (
     <div style={{ display: "flex", gap: 2, background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: 2 }}>
       {([
-        { mode: "list" as ViewMode, icon: <List width={13} height={13} />,       title: "Listenansicht" },
-        { mode: "tabs" as ViewMode, icon: <GridPlus width={13} height={13} />, title: "Tab-Ansicht" },
+        { mode: "list" as ViewMode, icon: <List width={13} height={13} />,    title: t("documents.listView") },
+        { mode: "tabs" as ViewMode, icon: <GridPlus width={13} height={13} />, title: t("documents.tabView") },
       ]).map(({ mode, icon, title }) => (
         <button key={mode} onClick={() => setViewMode(mode)} title={title} style={{
           width: 28, height: 24, borderRadius: 6, border: "none", cursor: "pointer",
@@ -851,8 +860,8 @@ export function DocumentsPage() {
   return (
     <>
       <Topbar
-        title="Dokumente"
-        sub="Zeugnisse, Referenzen, Zertifikate, Figma-Prototypen und mehr"
+        title={t("documents.title")}
+        sub={t("documents.sub")}
         actions={viewToggle}
       />
       <div className="page-content" style={{ maxWidth: 760 }}>

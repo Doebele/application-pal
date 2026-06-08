@@ -7,31 +7,65 @@ import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/brow
 
 type Mode = "setup" | "login";
 
+const LS_KEY = "pal-remembered-users";
+type RememberedEntry = { email: string; token: string };
+export function storeRememberedToken(email: string, token: string) {
+  try {
+    const list: RememberedEntry[] = JSON.parse(localStorage.getItem(LS_KEY) ?? "[]");
+    const filtered = list.filter(e => e.email !== email);
+    localStorage.setItem(LS_KEY, JSON.stringify([...filtered, { email, token }]));
+  } catch { /* ignore */ }
+}
+export function removeRememberedToken(email: string) {
+  try {
+    const list: RememberedEntry[] = JSON.parse(localStorage.getItem(LS_KEY) ?? "[]");
+    localStorage.setItem(LS_KEY, JSON.stringify(list.filter(e => e.email !== email)));
+  } catch { /* ignore */ }
+}
+export function getRememberedToken(email: string): string | null {
+  try {
+    const list: RememberedEntry[] = JSON.parse(localStorage.getItem(LS_KEY) ?? "[]");
+    return list.find(e => e.email === email)?.token ?? null;
+  } catch { return null; }
+}
+
 export function SetupPage() {
   const { refetch } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Determine initial mode: if an account already exists → login, else → setup
-  const [mode, setMode] = useState<Mode>("setup");
-  const [hasAccount, setHasAccount] = useState(false);
-
   // Invite token from URL (?invite=TOKEN) — set automatically when using invite link
   const [inviteToken, setInviteToken] = useState(searchParams.get("invite") ?? "");
   const hasInvite = !!inviteToken;
+
+  // Pre-fill email from URL (?email=...) — set when switching to a known user
+  const prefillEmail = searchParams.get("email") ?? "";
+
+  // ?mode=register → open directly on the Register tab (user-switch "Registrieren" button)
+  const forceRegister = searchParams.get("mode") === "register";
+
+  // Determine initial mode:
+  //   forceRegister=true  → setup (Register tab)
+  //   prefillEmail present → login  (Login tab with email prefilled)
+  //   otherwise           → setup, then useEffect may switch to login if account exists
+  const [mode, setMode] = useState<Mode>(
+    forceRegister ? "setup" : prefillEmail ? "login" : "setup"
+  );
+  const [hasAccount, setHasAccount] = useState(false);
 
   useEffect(() => {
     api.get<{ setup: boolean }>("/api/auth/status").then(r => {
       if (r.data.setup) {
         setHasAccount(true);
-        // If we have an invite token, show registration form; otherwise show login
-        setMode(hasInvite ? "setup" : "login");
+        // Only auto-switch to login when we're NOT forcing the register tab
+        if (!forceRegister && !hasInvite) setMode("login");
+        else if (hasInvite) setMode("setup");
       }
     }).catch(() => {});
-  }, [hasInvite]);
+  }, [hasInvite, forceRegister]);
 
   // Shared fields
-  const [email, setEmail]     = useState("");
+  const [email, setEmail]     = useState(prefillEmail);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError]     = useState("");
@@ -49,9 +83,16 @@ export function SetupPage() {
         if (password !== confirm) { setError("Passwörter stimmen nicht überein"); setLoading(false); return; }
         if (password.length < 8)  { setError("Passwort muss mindestens 8 Zeichen haben"); setLoading(false); return; }
         // Send invite token when registering additional users
-        await api.post("/api/auth/setup", { email, password, inviteToken: inviteToken || undefined });
+        const setupRes = await api.post<{ email: string; autoLoginToken?: string }>(
+          "/api/auth/setup", { email, password, inviteToken: inviteToken || undefined }
+        );
+        if (setupRes.data.autoLoginToken) storeRememberedToken(email, setupRes.data.autoLoginToken);
       } else {
-        await api.post("/api/auth/login", { email, password, rememberMe });
+        const loginRes = await api.post<{ email: string; autoLoginToken?: string }>(
+          "/api/auth/login", { email, password, rememberMe }
+        );
+        if (loginRes.data.autoLoginToken) storeRememberedToken(email, loginRes.data.autoLoginToken);
+        else removeRememberedToken(email); // explicit login without rememberMe clears old token
       }
       await refetch();
       navigate("/", { replace: true });
@@ -141,13 +182,13 @@ export function SetupPage() {
           <div className="field">
             <label>E-Mail</label>
             <input className="input-line" type="email" value={email}
-              onChange={e => setEmail(e.target.value)} placeholder="deine@email.de" required autoFocus />
+              onChange={e => setEmail(e.target.value)} placeholder="deine@email.de" required autoFocus={!prefillEmail} />
           </div>
           <div className="field">
             <label>Passwort</label>
             <input className="input-line" type="password" value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder={mode === "setup" ? "Mindestens 8 Zeichen" : "Passwort"} required />
+              placeholder={mode === "setup" ? "Mindestens 8 Zeichen" : "Passwort"} required autoFocus={!!prefillEmail && mode === "login"} />
           </div>
           {mode === "setup" && (
             <>
