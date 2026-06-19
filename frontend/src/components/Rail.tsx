@@ -17,11 +17,15 @@ import { removeRememberedToken, getRememberedToken, storeRememberedToken } from 
 import deFlagUrl from "round-flag-icons/flags/de.svg?url";
 // @ts-ignore
 import gbFlagUrl from "round-flag-icons/flags/gb.svg?url";
+// @ts-ignore
+import frFlagUrl from "round-flag-icons/flags/fr.svg?url";
+
+const FLAG_URLS: Record<string, string> = { de: deFlagUrl, en: gbFlagUrl, fr: frFlagUrl };
 
 function FlagIcon({ lang, size = 15 }: { lang: string; size?: number }) {
   return (
     <img
-      src={lang === "de" ? deFlagUrl : gbFlagUrl}
+      src={FLAG_URLS[lang] ?? deFlagUrl}
       width={size}
       height={size}
       style={{ borderRadius: "50%", display: "block", flexShrink: 0, objectFit: "cover" }}
@@ -426,7 +430,7 @@ export function Rail({ applications }: Props) {
   const { user, logout, refetch } = useAuth();
   const queryClient = useQueryClient();
 
-  const changeLanguage = async (lang: "de" | "en") => {
+  const changeLanguage = async (lang: "de" | "en" | "fr") => {
     setUiLanguage(lang);
     await i18n.changeLanguage(lang);
     try { await api.patch("/api/profile", { uiLanguage: lang }); } catch { /* silent */ }
@@ -616,12 +620,20 @@ export function Rail({ applications }: Props) {
                 <FlagIcon lang="en" size={13} />
                 <span>EN</span>
               </button>
+              <button
+                className={"rail-density-btn" + (uiLanguage === "fr" ? " active" : "")}
+                onClick={() => changeLanguage("fr")}
+                title="Français"
+              >
+                <FlagIcon lang="fr" size={13} />
+                <span>FR</span>
+              </button>
             </div>
           ) : (
             <RailBtn
               icon={<Globe width={15} height={15} />}
               label={uiLanguage.toUpperCase()}
-              onClick={() => changeLanguage(uiLanguage === "de" ? "en" : "de")}
+              onClick={() => changeLanguage(uiLanguage === "de" ? "en" : uiLanguage === "en" ? "fr" : "de")}
               open={false}
             />
           )}

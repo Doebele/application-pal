@@ -6,7 +6,7 @@ export type Accent = "indigo" | "violet" | "emerald" | "amber" | "rose";
 export type Density = "low" | "high";
 export type CardVariant = "rich" | "compact" | "minimal" | "editorial";
 export type AiProvider = "none" | "lm-studio" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama";
-export type UiLanguage = "de" | "en";
+export type UiLanguage = "de" | "en" | "fr";
 
 export type AiConfig = {
   provider: AiProvider;

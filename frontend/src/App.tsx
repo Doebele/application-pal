@@ -34,7 +34,7 @@ function MainApp() {
     queryKey: ["profile-lang"],
     queryFn: async () => {
       const r = await api.get<{ uiLanguage?: string }>("/api/profile");
-      const lang = (r.data.uiLanguage as "de" | "en") ?? uiLanguage;
+      const lang = (r.data.uiLanguage as "de" | "en" | "fr") ?? uiLanguage;
       if (lang !== uiLanguage) setUiLanguage(lang);
       if (lang !== i18n.language) await i18n.changeLanguage(lang);
       return lang;

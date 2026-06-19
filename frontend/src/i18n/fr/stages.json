@@ -1,0 +1,11 @@
+{
+  "import_validating": "Boîte de réception",
+  "preparing_cv": "Préparation du CV",
+  "preparing_letter": "Lettre de motivation",
+  "application_sent": "Candidature envoyée",
+  "pending": "En attente",
+  "interview_1": "1er entretien",
+  "interview_2": "2e entretien",
+  "rejected": "Refusée",
+  "accepted": "Acceptée"
+}

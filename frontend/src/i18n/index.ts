@@ -12,7 +12,12 @@ import enCommon  from "./en/common.json";
 import enStages  from "./en/stages.json";
 import enActions from "./en/actions.json";
 
-export const SUPPORTED_LANGUAGES = ["de", "en"] as const;
+// FR
+import frCommon  from "./fr/common.json";
+import frStages  from "./fr/stages.json";
+import frActions from "./fr/actions.json";
+
+export const SUPPORTED_LANGUAGES = ["de", "en", "fr"] as const;
 export type SupportedLanguage = typeof SUPPORTED_LANGUAGES[number];
 
 i18n
@@ -22,6 +27,7 @@ i18n
     resources: {
       de: { common: deCommon, stages: deStages, actions: deActions },
       en: { common: enCommon, stages: enStages, actions: enActions },
+      fr: { common: frCommon, stages: frStages, actions: frActions },
     },
     fallbackLng: "de",
     defaultNS: "common",

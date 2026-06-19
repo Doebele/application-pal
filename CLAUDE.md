@@ -111,7 +111,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 
 ### Frontend (`frontend/src/`)
 
-- **State**: Zustand `useUiStore` (persisted localStorage, key `app-pal-ui-v2`) — theme, accent, density, cardVariant, AI config (`AiConfig` with all 6 providers: lm-studio/ollama/anthropic/openai/gemini/openrouter), Drive naming rules (`driveNameFolder`, `driveNameDoc`), table column config (`tableColumnOrder`, `tableColumnVisibility`, `tableColumnPinning`, `tableColumnSizing`), `uiLanguage` ("de"|"en"). `driveApplicationsFolderId` is per-user in `user_profile.drive_applications_folder_id` — load via `GET /api/profile`, NOT from Zustand.
+- **State**: Zustand `useUiStore` (persisted localStorage, key `app-pal-ui-v2`) — theme, accent, density, cardVariant, AI config (`AiConfig` with all 6 providers: lm-studio/ollama/anthropic/openai/gemini/openrouter), Drive naming rules (`driveNameFolder`, `driveNameDoc`), table column config (`tableColumnOrder`, `tableColumnVisibility`, `tableColumnPinning`, `tableColumnSizing`), `uiLanguage` ("de"|"en"|"fr"). `driveApplicationsFolderId` is per-user in `user_profile.drive_applications_folder_id` — load via `GET /api/profile`, NOT from Zustand.
 - **Auth**: `AuthProvider` + `useAuth()` in `lib/auth.tsx`. Calls `GET /api/auth/me` on mount (with silent refresh). All routes wrapped in `ProtectedRoute` in `App.tsx`.
 - **API**: `api` from `lib/api.ts` — Axios, `withCredentials: true`, empty `baseURL`, global 401 interceptor → redirects to `/setup`.
 - **Styling**: single `index.css`, CSS custom properties. No Tailwind. `.input-line` = underline input. `.field` = labelled form field. `.md-body` = rendered Markdown.
@@ -269,7 +269,9 @@ Require `calendar.readonly` scope (in `GOOGLE_SCOPES`). Users must re-connect Go
 
 **Board Topbar**: Card-style selector (`<select>` for Rich/Compact/Minimal/Editorial) placed left of Filter button. Only shown on main board, hidden in archive view.
 
-**Topbar component** (`Topbar.tsx`): Accepts `searchValue` + `onSearchChange` for controlled search. `actions` slot for right-side buttons. Used by both Board and Table pages.
+**Topbar component** (`Topbar.tsx`): Accepts `searchValue` + `onSearchChange` for controlled search. `actions` slot for right-side buttons. The search input only renders when `onSearchChange` is passed — non-job pages (Settings, Profile, Templates, Documents, Knowledge) omit it entirely.
+
+**Inline job search** (`lib/search.ts`): `matchesSearch(app, query)` — case-insensitive substring match across `company`, `role`, `location`, `source`, `salary`, `notes`, and parsed `tags`. Used by Board, Table, Calendar, Timeline for real-time client-side filtering (no popover — results filter in place). Each page shows `sub={`${filtered.length} ${t("of")} ${total} ${t("applications")}`}` while searching. `useRotatingPlaceholder(suggestions, paused, intervalMs)` cycles the search placeholder every 3s through `t("search.suggestions", { returnObjects: true })`; paused while focused or non-empty. `Topbar` also registers a global ⌘K/Ctrl+K handler that focuses the search input.
 
 ### Templates Page (`TemplatesPage.tsx`)
 
@@ -326,16 +328,15 @@ JWT in httpOnly cookies. `GET /api/auth/status` returns `{ setup: bool }`. `GET 
 
 ### i18n (react-i18next)
 
-**Setup**: `frontend/src/i18n/index.ts` — initialises i18next with `i18next-browser-languagedetector`. Language preference stored in `useUiStore.uiLanguage` ("de"|"en") and synced with `i18n.changeLanguage()`.
+**Setup**: `frontend/src/i18n/index.ts` — initialises i18next with `i18next-browser-languagedetector`. Supports three UI languages: `SUPPORTED_LANGUAGES = ["de", "en", "fr"]`. Language preference stored in `useUiStore.uiLanguage` and synced with `i18n.changeLanguage()`. This is the **interface language** only — separate from the per-application correspondence language (`applications.language`, DE/EN only, see `langPrompt()`).
 
-**Namespaces** (files in `frontend/src/i18n/{de,en}/`):
+**Namespaces** (files in `frontend/src/i18n/{de,en,fr}/`):
 
 | Namespace | File | Contents |
 |---|---|---|
-| `common` | `common.json` | All UI strings (buttons, labels, settings, drawer, calendar, table, …) |
+| `common` | `common.json` | All UI strings (buttons, labels, settings, drawer, calendar, table, search, …) |
 | `stages` | `stages.json` | Stage display names (9 stages) |
-| `actions` | `actions.json` | AI action labels and tooltips |
-| `ki` | `ki.json` | KI tile labels and status strings |
+| `actions` | `actions.json` | AI action labels, tooltips, and empty-state CTAs |
 
 **Usage in components**:
 ```tsx
@@ -345,7 +346,9 @@ const { t: tStages } = useTranslation("stages");  // explicit namespace
 
 **Critical — TanStack Table + i18n**: Column headers that call `t()` must be plain strings (not render functions) so the column panel's `typeof col.columnDef.header === "string"` check works. Define columns inside `useMemo` and add `[t, tStages]` to the dependency array.
 
-**Adding new strings**: Add keys to both `de/` and `en/` JSON files. Use Python for safe JSON manipulation to avoid encoding issues:
+**Language toggle (`Rail.tsx`)**: `FlagIcon` looks up `round-flag-icons` SVGs via a `FLAG_URLS` map (`de`/`en`→gb/`fr`). Expanded rail shows 3 buttons in `.rail-theme-row`; collapsed rail shows one globe button that cycles `de → en → fr → de`. `changeLanguage(lang)` updates Zustand, calls `i18n.changeLanguage()`, and persists via `PATCH /api/profile { uiLanguage }`.
+
+**Adding new strings**: Add keys to `de/`, `en/`, **and** `fr/` JSON files (3 files per namespace). Use Python for safe JSON manipulation to avoid encoding issues:
 ```bash
 python3 -c "
 import json

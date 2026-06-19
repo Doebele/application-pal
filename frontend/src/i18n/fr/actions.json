@@ -1,0 +1,107 @@
+{
+  "match-score": {
+    "label": "Match Score",
+    "tooltip": "Calculer le score de correspondance IA",
+    "empty": "Démarrer l'analyse"
+  },
+  "glassdoor-check": {
+    "label": "Note Glassdoor",
+    "tooltip": "Déterminer la note Glassdoor",
+    "empty": "Déterminer la note"
+  },
+  "kununu-check": {
+    "label": "Note Kununu",
+    "tooltip": "Déterminer la note Kununu",
+    "empty": "Déterminer la note"
+  },
+  "linkedin-profile": {
+    "label": "Profil LinkedIn de l'entreprise",
+    "tooltip": "Récupérer le profil LinkedIn de l'entreprise",
+    "empty": "Déterminer le profil"
+  },
+  "salary-check": {
+    "label": "Vérification du salaire",
+    "tooltip": "Calculer la fourchette salariale pour la Suisse",
+    "empty": "Calculer la fourchette"
+  },
+  "ats-keywords": {
+    "label": "Mots-clés ATS",
+    "tooltip": "Extraire les mots-clés ATS de l'offre d'emploi",
+    "empty": "Extraire les mots-clés"
+  },
+  "cv-highlights": {
+    "label": "Points forts du CV",
+    "tooltip": "Analyser les points forts pertinents du CV",
+    "empty": "Analyser le CV"
+  },
+  "cv-doc": {
+    "label": "Google Doc à partir du CV principal",
+    "tooltip": "Créer le CV en tant que Google Doc"
+  },
+  "cover-letter": {
+    "label": "Lettre de motivation",
+    "tooltip": "Générer la lettre de motivation",
+    "empty": "Créer la lettre"
+  },
+  "letter-review": {
+    "label": "Revoir la lettre",
+    "tooltip": "Analyser la lettre de motivation de manière critique",
+    "empty": "Démarrer la révision"
+  },
+  "opening-sentences": {
+    "label": "3 phrases d'introduction",
+    "tooltip": "Générer des phrases d'introduction pour la lettre",
+    "empty": "Générer des phrases"
+  },
+  "email-app": {
+    "label": "E-mail de candidature",
+    "tooltip": "Rédiger l'e-mail de candidature"
+  },
+  "email-follow": {
+    "label": "E-mail de relance",
+    "tooltip": "Rédiger l'e-mail de relance"
+  },
+  "email-decline": {
+    "label": "E-mail de refus",
+    "tooltip": "Rédiger l'e-mail de refus"
+  },
+  "email-linkedin": {
+    "label": "Mise en relation LinkedIn",
+    "tooltip": "Rédiger un message de mise en relation LinkedIn"
+  },
+  "email-feedback": {
+    "label": "E-mail de feedback",
+    "tooltip": "Rédiger un e-mail de demande de feedback après refus"
+  },
+  "interview-prep": {
+    "label": "Préparation à l'entretien",
+    "tooltip": "Générer questions, exemples STAR et contre-questions",
+    "empty": "Générer la préparation"
+  },
+  "salary-tips": {
+    "label": "Négociation salariale",
+    "tooltip": "Créer conseils de négociation et script Ackermann",
+    "empty": "Générer des conseils"
+  },
+  "company-research": {
+    "label": "Recherche sur l'entreprise",
+    "tooltip": "Créer une recherche sur l'entreprise",
+    "empty": "Démarrer la recherche"
+  },
+  "ackermann-script": {
+    "label": "Script Ackermann",
+    "tooltip": "Générer le script de négociation salariale",
+    "empty": "Générer le script"
+  },
+  "onboarding": {
+    "label": "Checklist d'intégration",
+    "tooltip": "Créer un plan d'intégration 30/60/90 jours",
+    "empty": "Créer la checklist"
+  },
+  "cv-doc-folder": {
+    "label": "Créer le dossier Drive",
+    "tooltip": "Créer le dossier de candidature Google Drive"
+  },
+  "generating": "Génération en cours…",
+  "generateFailed": "La génération a échoué"
+}
