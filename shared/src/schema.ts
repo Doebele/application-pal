@@ -294,6 +294,7 @@ export const userDocuments = pgTable("user_documents", {
   category: text("category").notNull().default("sonstiges"),
   fileType: text("file_type").notNull().default("link"),
   url: text("url"),
+  extraUrl: text("extra_url"),
   description: text("description"),
   tags: text("tags"),
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)

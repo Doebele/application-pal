@@ -381,7 +381,8 @@
       "portfolio": "Portfolio",
       "figma": "Figma",
       "sonstiges": "Other"
-    }
+    },
+    "extraUrl": "Additional information"
   },
   "contacts": {
     "label": "Contacts",

@@ -200,7 +200,7 @@ function AddDocForm({ category, onSave, onCancel }: {
         }
         // If no Drive or upload failed and no manual URL, warn but still save
       }
-      await onSave({ name: name.trim(), category, fileType, url: finalUrl, description: description.trim() || null, tags: tags.trim() || null });
+      await onSave({ name: name.trim(), category, fileType, url: finalUrl, extraUrl: null, description: description.trim() || null, tags: tags.trim() || null });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("documents.saveFailed");
       setSaveErr(msg);
@@ -518,6 +518,7 @@ function EditModal({ doc, onSave, onClose }: {
   const isGoogleCat = GOOGLE_ENABLED_CATEGORIES.includes(doc.category as Category);
   const [name, setName]         = useState(doc.name);
   const [url, setUrl]           = useState(doc.url ?? "");
+  const [extraUrl, setExtraUrl] = useState(doc.extraUrl ?? "");
   const [description, setDesc]  = useState(doc.description ?? "");
   const [tags, setTags]         = useState(doc.tags ?? "");
   const [fileType, setFileType] = useState<FileType>(doc.fileType as FileType);
@@ -533,6 +534,7 @@ function EditModal({ doc, onSave, onClose }: {
       await onSave(doc.id, {
         name: name.trim(), fileType,
         url: url.trim() || null,
+        extraUrl: extraUrl.trim() || null,
         description: description.trim() || null,
         tags: tags.trim() || null
       });
@@ -547,7 +549,7 @@ function EditModal({ doc, onSave, onClose }: {
 
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 24, width: 480, display: "flex", flexDirection: "column", gap: 14 }} onClick={(e) => e.stopPropagation()}>
+      <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 14, padding: 24, width: 640, maxHeight: "85vh", overflowY: "auto", display: "flex", flexDirection: "column", gap: 14 }} onClick={(e) => e.stopPropagation()}>
         <div style={{ fontWeight: 700, fontSize: 15 }}>{t("documents.editModalTitle")}</div>
 
         <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -562,12 +564,36 @@ function EditModal({ doc, onSave, onClose }: {
           ))}
         </div>
 
-        {([ ["Name *", name, setName, { fontWeight: 600 }], ["URL / Google Docs Link", url, setUrl, { fontFamily: "var(--font-mono)", fontSize: 12 }], ["Beschreibung", description, setDesc, {}], ["Tags", tags, setTags, {}] ] as [string, string, React.Dispatch<React.SetStateAction<string>>, React.CSSProperties][]).map(([label, val, setter, style]) => (
+        {([ ["Name *", name, setName, { fontWeight: 600 }], ["URL / Google Docs Link", url, setUrl, { fontFamily: "var(--font-mono)", fontSize: 12 }] ] as [string, string, React.Dispatch<React.SetStateAction<string>>, React.CSSProperties][]).map(([label, val, setter, style]) => (
           <div key={label}>
             <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
             <input className="input-line" value={val} onChange={(e) => setter(e.target.value)} style={style} />
           </div>
         ))}
+
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>{t("documents.extraUrl")}</div>
+          <input className="input-line" value={extraUrl} onChange={(e) => setExtraUrl(e.target.value)} style={{ fontFamily: "var(--font-mono)", fontSize: 12 }} />
+        </div>
+
+        {/* Preview — images render inline, Figma files render via embed iframe */}
+        {(fileType === "image" || fileType === "figma") && url.trim() && (
+          <div style={{ border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden", background: "var(--surface-2)" }}>
+            {fileType === "image"
+              ? <img key={url} src={url} alt={name} style={{ display: "block", width: "100%", maxHeight: 320, objectFit: "contain" }} onError={(e) => { e.currentTarget.style.display = "none"; }} />
+              : <iframe src={`https://www.figma.com/embed?embed_host=share&url=${encodeURIComponent(url)}`} style={{ width: "100%", height: 320, border: "none" }} />}
+          </div>
+        )}
+
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>Beschreibung</div>
+          <textarea className="input-line" rows={4} value={description} onChange={(e) => setDesc(e.target.value)} style={{ resize: "vertical" }} />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>Tags</div>
+          <input className="input-line" value={tags} onChange={(e) => setTags(e.target.value)} />
+        </div>
 
         {/* Create new Google Doc button in edit mode too */}
         {fileType === "gdoc" && !url && (
