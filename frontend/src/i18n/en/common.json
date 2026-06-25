@@ -382,7 +382,8 @@
       "figma": "Figma",
       "sonstiges": "Other"
     },
-    "extraUrl": "Additional information"
+    "extraUrl": "Link / additional information",
+    "linkBtn": "Link"
   },
   "contacts": {
     "label": "Contacts",

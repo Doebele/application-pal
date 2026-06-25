@@ -132,7 +132,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 |---|---|---|---|
 | `applications` | Jobs: stage, tags, salary, archived, archiveReason, matchScore, interview1/2Details, interview1/2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache, googleFolderId, **jobType** (pensum %), **workModel**, **contractType**, **language** | ✅ `user_id` FK | ✅ |
 | `user_profile` | Per-user profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, driveApplicationsFolderId, sessionTimeout, desiredSalary | ✅ `user_id` FK | ✅ |
-| `user_documents` | Document library (CV, Zeugnisse, Figma, etc.) | ✅ `user_id` FK | ✅ |
+| `user_documents` | Document library (CV, Zeugnisse, Figma, etc.); `extraUrl` = optional secondary link, surfaced as a "Link" button on the tile when set | ✅ `user_id` FK | ✅ |
 | `application_documents` | Per-job docs; `googleDocId`/`googleDocUrl` for Drive | via `application_id` | ✅ |
 | `application_activities` | Timeline events per job | via `application_id` | ✅ |
 | `application_contacts` | Contacts per job | via `application_id` | ✅ |

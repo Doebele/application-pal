@@ -311,8 +311,8 @@ function AddDocForm({ category, onSave, onCancel }: {
 
       <input className="input-line" value={description} onChange={(e) => setDesc(e.target.value)}
         placeholder={t("documents.descPlaceholder")} style={{ fontSize: 12 }} />
-      <input className="input-line" value={tags} onChange={(e) => setTags(e.target.value)}
-        placeholder={t("documents.tagsPlaceholder")} style={{ fontSize: 12 }} />
+      <textarea className="input-line" rows={2} value={tags} onChange={(e) => setTags(e.target.value)}
+        placeholder={t("documents.tagsPlaceholder")} style={{ fontSize: 12, resize: "vertical" }} />
 
       {saveErr && (
         <div style={{ fontSize: 11, color: "#f87171", background: "rgba(248,113,113,0.08)", border: "1px solid rgba(248,113,113,0.2)", borderRadius: 7, padding: "6px 10px" }}>
@@ -452,6 +452,18 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate }: {
           </a>
         )}
 
+        {doc.extraUrl && (
+          <a href={doc.extraUrl} target="_blank" rel="noreferrer"
+            style={{
+              display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, fontWeight: 600,
+              color: "var(--fg-2)", textDecoration: "none", padding: "3px 8px", borderRadius: 6,
+              background: "var(--surface-2)", border: "1px solid var(--border)"
+            }}>
+            <OpenNewWindow width={11} height={11} />
+            {t("documents.linkBtn")}
+          </a>
+        )}
+
         {/* Drive upload section for PDFs */}
         {isPdf && driveConnected && (
           isOnDrive ? (
@@ -573,7 +585,15 @@ function EditModal({ doc, onSave, onClose }: {
 
         <div>
           <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>{t("documents.extraUrl")}</div>
-          <input className="input-line" value={extraUrl} onChange={(e) => setExtraUrl(e.target.value)} style={{ fontFamily: "var(--font-mono)", fontSize: 12 }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <input className="input-line" value={extraUrl} onChange={(e) => setExtraUrl(e.target.value)} style={{ fontFamily: "var(--font-mono)", fontSize: 12, flex: 1 }} />
+            {extraUrl.trim() && (
+              <a href={extraUrl} target="_blank" rel="noreferrer" title={t("documents.open")}
+                style={{ display: "flex", alignItems: "center", color: "var(--fg-3)", flexShrink: 0 }}>
+                <OpenNewWindow width={13} height={13} />
+              </a>
+            )}
+          </div>
         </div>
 
         {/* Preview — images render inline, Figma files render via embed iframe */}
@@ -592,7 +612,7 @@ function EditModal({ doc, onSave, onClose }: {
 
         <div>
           <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>Tags</div>
-          <input className="input-line" value={tags} onChange={(e) => setTags(e.target.value)} />
+          <textarea className="input-line" rows={2} value={tags} onChange={(e) => setTags(e.target.value)} style={{ resize: "vertical" }} />
         </div>
 
         {/* Create new Google Doc button in edit mode too */}
