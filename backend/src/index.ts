@@ -1780,6 +1780,17 @@ app.delete("/api/documents/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// Loads Zeugnisse/Referenzen/Zertifikate/Portfolio from the Documents library as
+// AI prompt context — these characterise the candidate's know-how just as much as
+// the master CV, so every endpoint using masterCv as candidate context should also use this.
+async function loadDocumentsContext(userId: string): Promise<string> {
+  const docs = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.userId, userId), inArray(userDocuments.category, ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"])));
+  if (docs.length === 0) return "";
+  const docTexts = docs.map((d) => `- ${d.name}${d.description ? `: ${d.description}` : ""}${d.tags ? ` [${d.tags}]` : ""}`).join("\n");
+  return `## Zeugnisse / Zertifikate / Referenzen\n${docTexts}`;
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Match Score
 // ─────────────────────────────────────────────────────────────────
@@ -1811,20 +1822,14 @@ app.post("/api/applications/:id/match-score", async (c) => {
   // Load profile
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
 
-  // Load relevant documents (skills/certs/references)
-  const docs = await db.select().from(userDocuments)
-    .where(and(eq(userDocuments.userId, userId), inArray(userDocuments.category, ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"])));
-
   // Build profile context
   const profileParts: string[] = [];
   if (profile?.masterCv?.trim()) profileParts.push(`## Master-Lebenslauf\n${profile.masterCv.slice(0, 3000)}`);
   if (profile?.linkedinBio?.trim()) profileParts.push(`## LinkedIn Bio\n${profile.linkedinBio.slice(0, 800)}`);
   if (profile?.headline?.trim()) profileParts.push(`## Expertise\n${profile.headline}`);
   if (profile?.personalNotes?.trim()) profileParts.push(`## Persönliche Prioritäten & Gesprächspunkte\n${profile.personalNotes.slice(0, 600)}`);
-  if (docs.length > 0) {
-    const docTexts = docs.map((d) => `- ${d.name}${d.description ? `: ${d.description}` : ""}${d.tags ? ` [${d.tags}]` : ""}`).join("\n");
-    profileParts.push(`## Zeugnisse / Zertifikate / Referenzen\n${docTexts}`);
-  }
+  const docsContext = await loadDocumentsContext(userId);
+  if (docsContext) profileParts.push(docsContext);
 
   if (profileParts.length === 0) {
     return c.json({ error: "Profil ist leer. Bitte Master-CV im Profil ausfüllen." }, 400);
@@ -2279,7 +2284,8 @@ Antworte NUR mit diesem JSON:
   "keywords": ["<Keyword aus Stellenbeschreibung das im CV vorkommt>", ...],  // 3-6
   "gaps": ["<Anforderung im Job die nicht oder schwach im CV steht>", ...]  // 2-4
 }`;
-  const user = `## Lebenslauf\n${profile.masterCv.slice(0, 4000)}\n\n## Stellenbeschreibung\nRolle: ${app_.role}\n${app_.description?.slice(0, 2000) ?? ""}`;
+  const docsContext = await loadDocumentsContext(userId);
+  const user = `## Lebenslauf\n${profile.masterCv.slice(0, 4000)}${docsContext ? `\n\n${docsContext}` : ""}\n\n## Stellenbeschreibung\nRolle: ${app_.role}\n${app_.description?.slice(0, 2000) ?? ""}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { highlights: string[]; keywords: string[]; gaps: string[] };
@@ -2309,7 +2315,8 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
     const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language;
     const system = `${langPrompt(lang_)} Analysiere den Lebenslauf und die Stellenbeschreibung. Antworte NUR mit JSON:
 {"highlights":["<Erfahrung besonders relevant>"],"keywords":["<Keyword>"]}`;
-    const user = `Lebenslauf:\n${profile.masterCv.slice(0, 3000)}\n\nStelle: ${app_.role} bei ${app_.company}\n${app_.description?.slice(0, 1500) ?? ""}`;
+    const docsContext = await loadDocumentsContext(userId);
+    const user = `Lebenslauf:\n${profile.masterCv.slice(0, 3000)}${docsContext ? `\n\n${docsContext}` : ""}\n\nStelle: ${app_.role} bei ${app_.company}\n${app_.description?.slice(0, 1500) ?? ""}`;
     const raw = await callAi(system, user, ai, additionalContext);
     const p = extractJson(raw) as { highlights: string[]; keywords: string[] };
     highlightText = `═══ FÜR DIESE STELLE BESONDERS RELEVANT: ${app_.role} @ ${app_.company} ═══\n\n`;
@@ -2385,6 +2392,8 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
   if (profile?.headline) candidateParts.push(`Expertise: ${profile.headline}`);
   if (profile?.masterCv) candidateParts.push(`Lebenslauf:\n${profile.masterCv.slice(0, 3000)}`);
   if (profile?.personalNotes) candidateParts.push(`Persönliche Stichpunkte: ${profile.personalNotes.slice(0, 400)}`);
+  const coverLetterDocsContext = await loadDocumentsContext(userId);
+  if (coverLetterDocsContext) candidateParts.push(coverLetterDocsContext);
   const user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\nOrt: ${app_.location ?? ""}\nGehalt: ${app_.salary ?? ""}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
@@ -2508,7 +2517,8 @@ Regeln:
 - starBeispiele: 3 STAR-Beispiele, nutze konkrete Erfahrungen aus dem Lebenslauf
 - vossFragenWhatHow: 5-6 Fragen die mit "Was" oder "Wie" (oder "What"/"How") beginnen, taktisch intelligent (nach Erwartungen, Entscheidungsprozessen, Erfolgsmetriken fragen)
 - rueckfragen: 5 gute Rückfragen die Interesse und Vorbereitung zeigen`;
-  const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nBeschreibung: ${app_.description?.slice(0, 2000) ?? ""}\n\nKandidatenprofil:\n${profile?.masterCv?.slice(0, 2500) ?? "Kein Profil hinterlegt"}`;
+  const interviewDocsContext = await loadDocumentsContext(userId);
+  const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nBeschreibung: ${app_.description?.slice(0, 2000) ?? ""}\n\nKandidatenprofil:\n${profile?.masterCv?.slice(0, 2500) ?? "Kein Profil hinterlegt"}${interviewDocsContext ? `\n\n${interviewDocsContext}` : ""}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as {
@@ -3026,7 +3036,8 @@ Ackermann-Modell für Bewerber (Verkäufer-Perspektive):
 
 Antworte NUR mit JSON:
 { "zielgehalt": number, "ankergebot": number, "schritte": [{ "runde": number, "angebot": number, "formulierung": "<string>", "taktik": "<string>" }], "nichtmonetaer": ["<string>"], "vossAnker": "<string>" }`;
-  const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nLohnband (falls bekannt): ${app_.salary ?? "nicht angegeben"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1500) ?? ""}\nProfil des Kandidaten: ${profile?.masterCv?.slice(0, 1000) ?? "Kein Profil hinterlegt"}`;
+  const ackerDocsContext = await loadDocumentsContext(userId);
+  const user = `Rolle: ${app_.role}\nUnternehmen: ${app_.company}\nLohnband (falls bekannt): ${app_.salary ?? "nicht angegeben"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1500) ?? ""}\nProfil des Kandidaten: ${profile?.masterCv?.slice(0, 1000) ?? "Kein Profil hinterlegt"}${ackerDocsContext ? `\n\n${ackerDocsContext}` : ""}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { zielgehalt: number; ankergebot: number; schritte: Array<{ runde: number; angebot: number; formulierung: string; taktik: string }>; nichtmonetaer: string[]; vossAnker: string };
@@ -3151,7 +3162,8 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
   const system = `${langPrompt(lang_)} Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend). Antworte NUR mit JSON:
 { "saetze": [{ "satz": "<string>", "ansatz": "<string>", "erklaerung": "<string>" }] }`;
-  const user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
+  const openingDocsContext = await loadDocumentsContext(userId);
+  const user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}${openingDocsContext ? `\n\n${openingDocsContext}` : ""}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { saetze: Array<{ satz: string; ansatz: string; erklaerung: string }> };

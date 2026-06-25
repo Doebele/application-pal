@@ -89,6 +89,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | `extractJson(raw)` | Strips `<think>` blocks + markdown fences, returns parsed JSON |
 | `resolveHostUrl(url)` | Rewrites `localhost` → `host.docker.internal` for Docker networking |
 | `persistAiResult(appId, key, data)` | Upserts into `applications.aiResultsCache` JSON with `_savedAt` timestamp |
+| `loadDocumentsContext(userId)` | Formats `user_documents` rows (categories `zeugnis`/`referenz`/`zertifikat`/`portfolio`/`lebenslauf`) as a `## Zeugnisse / Zertifikate / Referenzen` text block for AI prompts; returns `""` if none |
 | `buildExportPayload(userId)` | Assembles all user-data tables for a specific user |
 | `applyNameRule(rule, vars)` | Replaces `{firma}`, `{rolle}`, `{datum}` etc. in Drive naming rules |
 | `initTasksForStage(appId, stage)` | Inserts `STAGE_TASK_TEMPLATES` entries idempotently |
@@ -167,6 +168,8 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 ### AI Endpoints (all require `{ ai: AiConfig }` body)
 
 All use `callAi()` + `extractJson()` + `resolveHostUrl()` + `max_tokens: 32768` + `langPrompt(app_.language)` prepended to system prompt.
+
+**Documents library in AI prompts**: Every endpoint that puts `profile.masterCv` into the candidate-context portion of a prompt also appends `loadDocumentsContext(userId)` — match-score, cv-highlights, cv-doc (highlight sub-call), cover-letter, interview-prep, ackermann-script, opening-sentences. Certificates/references/portfolio entries in Documents characterise the candidate's know-how just as much as the CV, so they must not be match-score-only. Endpoints that don't use masterCv at all (salary-check, salary-tips, ats-keywords, company-research, glassdoor/kununu/linkedin-checks, email-draft, onboarding, letter-review) are about the job/company/market, not the candidate — don't add it there.
 
 | Endpoint | Returns |
 |---|---|
