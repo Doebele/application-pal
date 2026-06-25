@@ -143,6 +143,7 @@ function AddDocForm({ category, onSave, onCancel }: {
   const isGoogleCat = GOOGLE_ENABLED_CATEGORIES.includes(category);
   const [name, setName]         = useState("");
   const [url, setUrl]           = useState("");
+  const [extraUrl, setExtraUrl] = useState("");
   const [description, setDesc]  = useState("");
   const [tags, setTags]         = useState("");
   const [fileType, setFileType] = useState<FileType>(
@@ -200,7 +201,7 @@ function AddDocForm({ category, onSave, onCancel }: {
         }
         // If no Drive or upload failed and no manual URL, warn but still save
       }
-      await onSave({ name: name.trim(), category, fileType, url: finalUrl, extraUrl: null, description: description.trim() || null, tags: tags.trim() || null });
+      await onSave({ name: name.trim(), category, fileType, url: finalUrl, extraUrl: extraUrl.trim() || null, description: description.trim() || null, tags: tags.trim() || null });
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("documents.saveFailed");
       setSaveErr(msg);
@@ -308,6 +309,17 @@ function AddDocForm({ category, onSave, onCancel }: {
           placeholder={fileType === "figma" ? "https://figma.com/file/…" : "https://…"}
           style={{ fontFamily: "var(--font-mono)", fontSize: 12 }} />
       )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <input className="input-line" value={extraUrl} onChange={(e) => setExtraUrl(e.target.value)}
+          placeholder={t("documents.extraUrl")} style={{ fontFamily: "var(--font-mono)", fontSize: 12, flex: 1 }} />
+        {extraUrl.trim() && (
+          <a href={extraUrl} target="_blank" rel="noreferrer" title={t("documents.open")}
+            style={{ display: "flex", alignItems: "center", color: "var(--fg-3)", flexShrink: 0 }}>
+            <OpenNewWindow width={13} height={13} />
+          </a>
+        )}
+      </div>
 
       <input className="input-line" value={description} onChange={(e) => setDesc(e.target.value)}
         placeholder={t("documents.descPlaceholder")} style={{ fontSize: 12 }} />
