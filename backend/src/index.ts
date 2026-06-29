@@ -2303,6 +2303,29 @@ Antworte NUR mit diesem JSON:
   }
 });
 
+app.post("/api/applications/:id/ai/cv-highlights/export-doc", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const { highlights } = await c.req.json<{ highlights: { highlights: string[]; keywords: string[]; gaps: string[] } }>();
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const token = await getDriveAccessToken(userId);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const sep = "─".repeat(40);
+  let content = `CV-Highlights – ${app_.role} @ ${app_.company}\n${date}\n\n`;
+  content += `${sep}\nRELEVANTE STÄRKEN\n${sep}\n\n` + highlights.highlights.map(h => `• ${h}`).join("\n") + "\n\n";
+  content += `${sep}\nKEYWORDS\n${sep}\n\n` + highlights.keywords.join(", ") + "\n\n";
+  content += `${sep}\nLÜCKEN\n${sep}\n\n` + highlights.gaps.map(g => `• ${g}`).join("\n");
+  try {
+    const { docUrl } = await createBlankDoc(token, `CV-Highlights – ${app_.role} @ ${app_.company}`, content, app_.googleFolderId ?? null);
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("cv-highlights export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
+  }
+});
+
 // CV Google Doc — creates a Google Doc from Master-CV with a "Für diese Stelle relevant" section
 app.post("/api/applications/:id/ai/cv-doc", async (c) => {
   const userId = getUserId(c);
@@ -2659,6 +2682,30 @@ Antworte NUR mit JSON:
   } catch (err) {
     console.error("salary-tips error:", err);
     return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+app.post("/api/applications/:id/ai/salary-tips/export-doc", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const { tips } = await c.req.json<{ tips: { markteinschätzung: string; taktiken: string[]; formulierungen: string[]; vossAnker: string } }>();
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const token = await getDriveAccessToken(userId);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const sep = "─".repeat(40);
+  let content = `Gehaltsverhandlungs-Tipps – ${app_.role} @ ${app_.company}\n${date}\n\n`;
+  content += `Markteinschätzung:\n${tips.markteinschätzung}\n\n`;
+  content += `${sep}\nTAKTIKEN\n${sep}\n\n` + tips.taktiken.map(t => `• ${t}`).join("\n") + "\n\n";
+  content += `${sep}\nFORMULIERUNGEN\n${sep}\n\n` + tips.formulierungen.map(f => `• ${f}`).join("\n") + "\n\n";
+  content += `${sep}\nCHRIS VOSS ANKER\n${sep}\n\n${tips.vossAnker}`;
+  try {
+    const { docUrl } = await createBlankDoc(token, `Gehaltsverhandlung – ${app_.role} @ ${app_.company}`, content, app_.googleFolderId ?? null);
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("salary-tips export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
   }
 });
 
@@ -3157,6 +3204,31 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
   }
 });
 
+app.post("/api/applications/:id/ai/letter-review/export-doc", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const { review } = await c.req.json<{ review: { gesamteindruck: string; staerken: string[]; verbesserungen: string[]; cliches: string[]; tonalitaet: string; laenge: string; personalisierung: string } }>();
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const token = await getDriveAccessToken(userId);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const sep = "─".repeat(40);
+  let content = `Anschreiben-Review – ${app_.role} @ ${app_.company}\n${date}\n\n`;
+  content += `Gesamteindruck:\n${review.gesamteindruck}\n\n`;
+  content += `Tonalität: ${review.tonalitaet}\nLänge: ${review.laenge}\nPersonalisierung: ${review.personalisierung}\n\n`;
+  content += `${sep}\nSTÄRKEN\n${sep}\n\n` + review.staerken.map(s => `• ${s}`).join("\n") + "\n\n";
+  content += `${sep}\nVERBESSERUNGEN\n${sep}\n\n` + review.verbesserungen.map(v => `• ${v}`).join("\n") + "\n\n";
+  content += `${sep}\nCLICHÉS\n${sep}\n\n` + (review.cliches.length > 0 ? review.cliches.map(cl => `• ${cl}`).join("\n") : "Keine gefunden.");
+  try {
+    const { docUrl } = await createBlankDoc(token, `Anschreiben-Review – ${app_.role} @ ${app_.company}`, content, app_.googleFolderId ?? null);
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("letter-review export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
+  }
+});
+
 // Eröffnungssätze (Letter stage)
 app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   const userId = getUserId(c);
@@ -3178,6 +3250,26 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   } catch (err) {
     console.error("opening-sentences error:", err);
     return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
+app.post("/api/applications/:id/ai/opening-sentences/export-doc", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const { sentences } = await c.req.json<{ sentences: { saetze: Array<{ satz: string; ansatz: string; erklaerung: string }> } }>();
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const token = await getDriveAccessToken(userId);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const date = new Date().toLocaleDateString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  let content = `Eröffnungssätze – ${app_.role} @ ${app_.company}\n${date}\n\n`;
+  content += sentences.saetze.map((s, i) => `${i + 1}. ${s.satz}\n   Ansatz: ${s.ansatz}\n   ${s.erklaerung}`).join("\n\n");
+  try {
+    const { docUrl } = await createBlankDoc(token, `Eröffnungssätze – ${app_.role} @ ${app_.company}`, content, app_.googleFolderId ?? null);
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("opening-sentences export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
   }
 });
 
@@ -3504,6 +3596,34 @@ async function createDocFromTemplate(
     });
   }
   return { docId, docUrl: `https://docs.google.com/document/d/${docId}/edit` };
+}
+
+// Creates a plain Google Doc with the given text content, used by export-doc endpoints
+// that have no Templates-page entry (so there's no template to copy/replace placeholders in).
+async function createBlankDoc(
+  accessToken: string,
+  title: string,
+  content: string,
+  parentFolderId?: string | null
+): Promise<{ docId: string; docUrl: string }> {
+  const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ title })
+  });
+  if (!docRes.ok) throw new Error(`Doc creation failed: HTTP ${docRes.status}`);
+  const { documentId } = await docRes.json() as { documentId: string };
+  await fetch(`https://docs.googleapis.com/v1/documents/${documentId}:batchUpdate`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ requests: [{ insertText: { location: { index: 1 }, text: content } }] })
+  });
+  if (parentFolderId) {
+    await fetch(`https://www.googleapis.com/drive/v3/files/${documentId}?addParents=${parentFolderId}&removeParents=root&fields=id`, {
+      method: "PATCH", headers: { "Authorization": `Bearer ${accessToken}` }
+    });
+  }
+  return { docId: documentId, docUrl: `https://docs.google.com/document/d/${documentId}/edit` };
 }
 
 // Drive folder colors per stage — hex values are approximate; Drive snaps to the nearest

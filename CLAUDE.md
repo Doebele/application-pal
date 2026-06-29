@@ -99,6 +99,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | `detectContractType(text)` | Regex: extracts `"Unbefristet"`, `"9 Monate"`, etc. from job text |
 | `normalisePensum(raw)` | Normalises raw % string to nearest standard option (en-dash format) |
 | `getActiveTemplateId(docTemplates, type, lang?)` | Returns active template ID for type+language; prefers `activeIdDe`/`activeIdEn`, falls back to `activeId` |
+| `createBlankDoc(accessToken, title, content, parentFolderId?)` | Plain Google Doc + `insertText`, used by `export-doc` endpoints with no Templates-page entry (cv-highlights, salary-tips, letter-review, opening-sentences) |
 
 **Auth middleware** (`/api/*` except `/api/auth/*`, `/api/google/callback`, `/health`): verifies `access_token` cookie; silently refreshes via `refresh_token` if expired; sets `userId` in context.
 
@@ -175,18 +176,22 @@ All use `callAi()` + `extractJson()` + `resolveHostUrl()` + `max_tokens: 32768` 
 |---|---|
 | `POST /api/applications/:id/match-score` | `{ score, breakdown, staerken, luecken, reasoning }` |
 | `POST /api/applications/:id/ai/cv-highlights` | `{ highlights, keywords, gaps }` — persisted to `aiResultsCache` |
+| `POST /api/applications/:id/ai/cv-highlights/export-doc` | Blank-doc export (no Templates-page entry for this type); body `{ highlights }` |
 | `POST /api/applications/:id/ai/cv-doc` | Creates Google Doc from Master-CV; returns `{ docUrl }` |
 | `POST /api/applications/:id/ai/cover-letter` | `{ subject, body }` — persisted to `aiResultsCache["cover-letter"]` |
 | `POST /api/applications/:id/ai/cover-letter/export-doc` | Creates Google Doc; picks template by `app_.language` via `activeIdDe`/`activeIdEn` |
 | `POST /api/applications/:id/ai/email-draft` | `{ subject, body }` — body: `{ type: "application"|"followup"|"decline"|"feedback"|"linkedin" }` |
 | `POST /api/applications/:id/ai/interview-prep` | `{ rollenFragen, starBeispiele, vossFragenWhatHow, rueckfragen }` — persisted to `interview1/2Prep` |
 | `POST /api/applications/:id/ai/salary-tips` | `{ markteinschätzung, taktiken, formulierungen, vossAnker }` — persisted to `aiResultsCache` |
+| `POST /api/applications/:id/ai/salary-tips/export-doc` | Blank-doc export; body `{ tips }` |
 | `POST /api/applications/:id/ai/salary-check` | `{ lohnband: {min,max,median}, waehrung, basis, begruendung }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/ats-keywords` | `{ mustHave, niceToHave, softSkills, tools }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/company-research` | `{ unternehmensueberblick, … }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/ackermann-script` | `{ zielgehalt, ankergebot, schritte[], … }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/letter-review` | Auto-reads `aiResultsCache["cover-letter"]` if no `coverLetterContent` provided — persisted |
+| `POST /api/applications/:id/ai/letter-review/export-doc` | Blank-doc export; body `{ review }` |
 | `POST /api/applications/:id/ai/opening-sentences` | `{ saetze: [{satz, ansatz, erklaerung}] }` — persisted to `aiResultsCache` |
+| `POST /api/applications/:id/ai/opening-sentences/export-doc` | Blank-doc export; body `{ sentences }` |
 | `POST /api/applications/:id/ai/onboarding` | `{ erste30Tage, erste60Tage, erste90Tage, allgemein }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/glassdoor-check` | `{ rating, reviewCount, ceoApproval, … }` — persisted to `glassdoor_data` |
 | `POST /api/applications/:id/ai/kununu-check` | `{ rating, reviewCount, confidence, … }` — persisted to `kununu_data` |
