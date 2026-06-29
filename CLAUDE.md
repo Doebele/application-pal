@@ -201,6 +201,7 @@ Require `drive` scope (NOT `drive.file`).
 | Endpoint | Function |
 |---|---|
 | `POST /api/applications/:id/drive/init-folder` | Creates Drive folder; body `{ folderRule?, parentFolderId? }` |
+| `POST /api/drive/sync-folder-colors` | Recolors every application's Drive folder via `folderColorRgb` to match current stage (`STAGE_FOLDER_COLORS`) or brown if `archived === "true"` (`ARCHIVED_FOLDER_COLOR`). Also runs automatically inside `PATCH /api/applications/:id` whenever `stage` or `archived` changes. Triggered manually from Settings → Google Drive → "Ordnerfarben aktualisieren" to backfill folders created before this existed. |
 | `GET /api/drive/templates` | Lists files from `GOOGLE_MASTER_FOLDER_ID` (Pal-Templates subfolder) |
 | `POST /api/drive/templates/create` | Creates new template doc; body `{ type, language: "de"|"en" }` — title gets suffix " DE" or " EN" |
 | `POST /api/applications/:id/drive/copy-template` | Copies master-folder file to app folder |

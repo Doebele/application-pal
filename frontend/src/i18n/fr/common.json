@@ -585,7 +585,11 @@
     "calendarSetupStep1Sub": "(APIs & Services → Bibliothèque → « Google Calendar API »)",
     "calendarSetupStep2": "Écran de consentement OAuth → ajouter des champs d'application",
     "calendarSetupStep3": "Si l'app est en mode test : ajoute ton e-mail comme utilisateur de test",
-    "calendarSetupStep4": "Clique en bas sur « Reconnecter Google » → reconnecte-toi"
+    "calendarSetupStep4": "Clique en bas sur « Reconnecter Google » → reconnecte-toi",
+    "folderColorsSync": "Mettre à jour les couleurs des dossiers",
+    "folderColorsSyncing": "Mise à jour…",
+    "folderColorsResult": "{{updated}} dossiers colorés, {{failed}} échecs",
+    "folderColorsError": "Échec de la mise à jour des couleurs des dossiers"
   },
   "templates": {
     "title": "Modèles",

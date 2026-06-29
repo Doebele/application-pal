@@ -585,7 +585,11 @@
     "calendarSetupStep1Sub": "(APIs & Services → Bibliothek → „Google Calendar API\")",
     "calendarSetupStep2": "OAuth-Zustimmungsbildschirm → Bereiche hinzufügen",
     "calendarSetupStep3": "Wenn App im Test-Modus: Deine E-Mail als Testnutzer eintragen",
-    "calendarSetupStep4": "Unten auf „Google neu verbinden\" klicken → Neu anmelden"
+    "calendarSetupStep4": "Unten auf „Google neu verbinden\" klicken → Neu anmelden",
+    "folderColorsSync": "Ordnerfarben aktualisieren",
+    "folderColorsSyncing": "Aktualisiere…",
+    "folderColorsResult": "{{updated}} Ordner gefärbt, {{failed}} fehlgeschlagen",
+    "folderColorsError": "Fehler beim Aktualisieren der Ordnerfarben"
   },
   "templates": {
     "title": "Vorlagen",

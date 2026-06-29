@@ -1418,6 +1418,12 @@ app.patch("/api/applications/:id", zValidator("json", applicationPatchSchema), a
     await initTasksForStage(id, stage);
   }
 
+  // Recolor the Drive folder when stage or archived status changed
+  if (updated.googleFolderId && (payload.stage !== undefined || payload.archived !== undefined)) {
+    const accessToken = await getDriveAccessToken(userId);
+    if (accessToken) await setDriveFolderColor(accessToken, updated.googleFolderId, folderColorForApp(updated));
+  }
+
   return c.json(updated);
 });
 
@@ -3499,6 +3505,53 @@ async function createDocFromTemplate(
   }
   return { docId, docUrl: `https://docs.google.com/document/d/${docId}/edit` };
 }
+
+// Drive folder colors per stage — hex values are approximate; Drive snaps to the nearest
+// swatch in its fixed folder-color palette, so exact codes don't need to match.
+const STAGE_FOLDER_COLORS: Record<string, string> = {
+  import_validating: "#94a3b8",
+  preparing_cv:       "#60a5fa",
+  preparing_letter:   "#22d3ee",
+  application_sent:   "#a78bfa",
+  pending:            "#fbbf24",
+  interview_1:        "#34d399",
+  interview_2:        "#10b981",
+  rejected:           "#f87171",
+  accepted:           "#84cc16"
+};
+const ARCHIVED_FOLDER_COLOR = "#795548"; // brown ("Schokoladeneis")
+
+function folderColorForApp(app_: { stage: string | null; archived: string | null }): string {
+  if (app_.archived === "true") return ARCHIVED_FOLDER_COLOR;
+  return STAGE_FOLDER_COLORS[app_.stage ?? ""] ?? STAGE_FOLDER_COLORS.import_validating;
+}
+
+async function setDriveFolderColor(accessToken: string, folderId: string, colorHex: string): Promise<boolean> {
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${folderId}?fields=id`, {
+    method: "PATCH",
+    headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ folderColorRgb: colorHex })
+  });
+  return res.ok;
+}
+
+// Recolor every Drive folder of the current user's applications to match their current stage/archived status
+app.post("/api/drive/sync-folder-colors", async (c) => {
+  const userId = getUserId(c);
+  const accessToken = await getDriveAccessToken(userId);
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const apps = await db.select({ id: applications.id, stage: applications.stage, archived: applications.archived, googleFolderId: applications.googleFolderId })
+    .from(applications).where(eq(applications.userId, userId));
+
+  let updated = 0, failed = 0;
+  for (const app_ of apps) {
+    if (!app_.googleFolderId) continue;
+    const ok = await setDriveFolderColor(accessToken, app_.googleFolderId, folderColorForApp(app_));
+    if (ok) updated++; else failed++;
+  }
+  return c.json({ updated, failed, skipped: apps.length - updated - failed });
+});
 
 // Create/get Drive folder for an application
 app.post("/api/applications/:id/drive/init-folder", async (c) => {

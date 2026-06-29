@@ -585,7 +585,11 @@
     "calendarSetupStep1Sub": "(APIs & Services → Library → \"Google Calendar API\")",
     "calendarSetupStep2": "OAuth Consent Screen → Add scopes",
     "calendarSetupStep3": "If app is in Test mode: add your email as a test user",
-    "calendarSetupStep4": "Click \"Reconnect Google\" below → Sign in again"
+    "calendarSetupStep4": "Click \"Reconnect Google\" below → Sign in again",
+    "folderColorsSync": "Update folder colors",
+    "folderColorsSyncing": "Updating…",
+    "folderColorsResult": "{{updated}} folders colored, {{failed}} failed",
+    "folderColorsError": "Failed to update folder colors"
   },
   "templates": {
     "title": "Templates",

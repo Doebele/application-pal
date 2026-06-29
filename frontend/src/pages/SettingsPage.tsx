@@ -621,6 +621,8 @@ function GoogleSection() {
   const [folderInfo, setFolderInfo]   = useState<{ id: string; name: string; url: string } | null>(null);
   const [folderErr, setFolderErr]     = useState<string | null>(null);
   const [checkingFolder, setCheckingFolder] = useState(false);
+  const [coloring, setColoring] = useState(false);
+  const [colorMsg, setColorMsg] = useState<string | null>(null);
 
   const check = useCallback(() => {
     api.get<{ connected: boolean }>("/api/google/status")
@@ -688,6 +690,16 @@ function GoogleSection() {
   const disconnect = async () => {
     await api.delete("/api/google/disconnect").catch(() => {});
     setStatus("disconnected");
+  };
+
+  const syncFolderColors = async () => {
+    setColoring(true); setColorMsg(null);
+    try {
+      const r = await api.post<{ updated: number; failed: number; skipped: number }>("/api/drive/sync-folder-colors");
+      setColorMsg(t("settings.folderColorsResult", { updated: r.data.updated, failed: r.data.failed }));
+    } catch {
+      setColorMsg(t("settings.folderColorsError"));
+    } finally { setColoring(false); }
   };
 
   return (
@@ -771,6 +783,15 @@ function GoogleSection() {
               {t("settings.folderDefault")}
             </div>
           )}
+
+          <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10 }}>
+            <button className="btn btn-secondary" style={{ fontSize: 12, gap: 5 }} disabled={coloring} onClick={syncFolderColors}>
+              {coloring
+                ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> {t("settings.folderColorsSyncing")}</>
+                : <>{t("settings.folderColorsSync")}</>}
+            </button>
+            {colorMsg && <span style={{ fontSize: 11, color: "var(--fg-3)" }}>{colorMsg}</span>}
+          </div>
         </div>
       )}
 
