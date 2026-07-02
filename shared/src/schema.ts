@@ -122,6 +122,7 @@ export const userProfile = pgTable("user_profile", {
   googleCalendarId: text("google_calendar_id"),
   driveApplicationsFolderId: text("drive_applications_folder_id"), // per-user Drive folder
   docTemplates: text("doc_templates"),                             // JSON: DocTemplateConfig per content type
+  letterConfig: text("letter_config"),                             // JSON: LetterConfig — persistent cover-letter guidance (structure/values/strengths/phrases/styleRules/noGos/referenceLetter)
   persona: text("persona"),                                        // 'schulabgaenger' | 'berufseinsteiger' | 'berufsumsteiger'
   sessionTimeout: text("session_timeout").default("15m"),
   uiLanguage: text("ui_language").default("de"),    // "de" | "en" — UI display language

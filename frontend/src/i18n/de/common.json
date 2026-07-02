@@ -53,7 +53,8 @@
     "knowledge": "Knowledge",
     "templates": "Vorlagen",
     "settings": "Einstellungen",
-    "timelineSub": "Workspace-Aktivitäten — alle Änderungen im Überblick"
+    "timelineSub": "Workspace-Aktivitäten — alle Änderungen im Überblick",
+    "letterCoach": "Anschreiben"
   },
   "tabs": {
     "actions": "Aktionen",
@@ -752,5 +753,59 @@
     "companiesCount_one": "{{count}} Firma",
     "companiesCount_other": "{{count}} Firmen"
   },
-  "of": "von"
+  "of": "von",
+  "letterCoach": {
+    "title": "Anschreiben",
+    "sub": "Persönliche Vorgaben, die die KI bei jedem generierten Anschreiben berücksichtigt",
+    "infoText": "Diese Vorgaben ergänzen dein Master-CV, die Persönlichen Stichpunkte und die Dokumente-Bibliothek — sie steuern zusätzlich Aufbau, Stil und Werte des Anschreibens.",
+    "linkProfile": "Zum Profil",
+    "linkDocuments": "Zu Dokumenten",
+    "useDefault": "Standard übernehmen",
+    "saved": "Gespeichert",
+    "autosave": "Änderungen werden automatisch gespeichert",
+    "structure": {
+      "label": "Aufbau",
+      "hint": "Welche Bestandteile soll das Anschreiben haben und in welcher Reihenfolge?"
+    },
+    "values": {
+      "label": "Meine Werte & Arbeitsweise",
+      "hint": "Werte, die du in Bewerbungen betonen möchtest (z.B. Nutzerzentrierung, Pragmatismus, Teamführung)."
+    },
+    "strengths": {
+      "label": "Kernstärken (mit Belegen)",
+      "hint": "Wiederkehrende Stärken, die du belegen kannst — mit konkreten Ergebnissen oder Zahlen."
+    },
+    "phrases": {
+      "label": "Bevorzugte Formulierungen",
+      "hint": "Textbausteine oder Formulierungen, die du gerne verwendest."
+    },
+    "styleRules": {
+      "label": "Stil & Ton",
+      "hint": "Wie soll das Anschreiben klingen? (z.B. direkt, förmlich, locker)"
+    },
+    "noGos": {
+      "label": "Zu vermeiden",
+      "hint": "Floskeln, Formulierungen oder Themen, die nicht vorkommen sollen."
+    },
+    "referenceLetter": {
+      "label": "Referenz-Anschreiben",
+      "hint": "Ein früheres Anschreiben, das als Stil-Vorbild dienen soll (wird nicht kopiert, nur als Referenz genutzt)."
+    }
+  },
+  "letterDraft": {
+    "title": "Anschreiben-Entwurf",
+    "suggestBtn": "Bausteine vorschlagen",
+    "regenerateBtn": "Neu vorschlagen",
+    "suggesting": "Analysiere…",
+    "touchpoints": "Berührungspunkte",
+    "valuesMatch": "Werte-Match",
+    "benefits": "Nutzen für die Firma",
+    "jobNotesLabel": "Individuelle Angaben zu dieser Stelle",
+    "jobNotesPlaceholder": "z.B. persönlicher Kontakt, besonderer Anlass, Referenz…",
+    "createDraftBtn": "Entwurf erstellen",
+    "creatingDraft": "Erstelle Entwurf…",
+    "emptyHint": "Lass die KI stellenbezogene Berührungspunkte, Werte-Matches und Nutzenargumente vorschlagen. Wähle passende Bausteine aus, bevor du den Entwurf erstellst — oder erstelle den Entwurf direkt über die Anschreiben-Kachel unten.",
+    "noAiModel": "Kein KI-Modell konfiguriert",
+    "genericError": "KI-Anfrage fehlgeschlagen"
+  }
 }

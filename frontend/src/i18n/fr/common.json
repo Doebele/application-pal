@@ -53,7 +53,8 @@
     "knowledge": "Connaissances",
     "templates": "Modèles",
     "settings": "Paramètres",
-    "timelineSub": "Activités de l'espace de travail — toutes les modifications en un coup d'œil"
+    "timelineSub": "Activités de l'espace de travail — toutes les modifications en un coup d'œil",
+    "letterCoach": "Lettre de motivation"
   },
   "tabs": {
     "actions": "Actions",
@@ -752,5 +753,59 @@
     "companiesCount_one": "{{count}} entreprise",
     "companiesCount_other": "{{count}} entreprises"
   },
-  "of": "sur"
+  "of": "sur",
+  "letterCoach": {
+    "title": "Lettre de motivation",
+    "sub": "Consignes personnelles que l'IA applique à chaque lettre générée",
+    "infoText": "Ces consignes complètent votre CV principal, vos notes personnelles et la bibliothèque de documents — elles définissent en plus la structure, le style et les valeurs de la lettre.",
+    "linkProfile": "Vers le profil",
+    "linkDocuments": "Vers les documents",
+    "useDefault": "Utiliser le standard",
+    "saved": "Enregistré",
+    "autosave": "Les modifications sont enregistrées automatiquement",
+    "structure": {
+      "label": "Structure",
+      "hint": "Quelles sections la lettre doit-elle contenir, et dans quel ordre ?"
+    },
+    "values": {
+      "label": "Mes valeurs et ma façon de travailler",
+      "hint": "Valeurs à mettre en avant dans les candidatures (p. ex. centré utilisateur, pragmatisme, leadership)."
+    },
+    "strengths": {
+      "label": "Forces principales (avec preuves)",
+      "hint": "Forces récurrentes que vous pouvez justifier — avec des résultats ou chiffres concrets."
+    },
+    "phrases": {
+      "label": "Formulations préférées",
+      "hint": "Tournures ou formulations que vous aimez utiliser."
+    },
+    "styleRules": {
+      "label": "Style et ton",
+      "hint": "Quel ton la lettre doit-elle avoir ? (p. ex. direct, formel, décontracté)"
+    },
+    "noGos": {
+      "label": "À éviter",
+      "hint": "Clichés, formulations ou sujets à ne pas mentionner."
+    },
+    "referenceLetter": {
+      "label": "Lettre de référence",
+      "hint": "Une ancienne lettre à utiliser comme référence de style (non copiée, utilisée uniquement comme guide)."
+    }
+  },
+  "letterDraft": {
+    "title": "Brouillon de lettre",
+    "suggestBtn": "Proposer des éléments",
+    "regenerateBtn": "Proposer à nouveau",
+    "suggesting": "Analyse…",
+    "touchpoints": "Points de contact",
+    "valuesMatch": "Correspondance de valeurs",
+    "benefits": "Bénéfice pour l'entreprise",
+    "jobNotesLabel": "Informations spécifiques à ce poste",
+    "jobNotesPlaceholder": "p.ex. contact personnel, occasion particulière, recommandation…",
+    "createDraftBtn": "Créer le brouillon",
+    "creatingDraft": "Création du brouillon…",
+    "emptyHint": "Laissez l'IA proposer des points de contact, des correspondances de valeurs et des arguments spécifiques au poste. Sélectionnez les éléments pertinents avant de créer le brouillon — ou créez-le directement via la tuile lettre de motivation ci-dessous.",
+    "noAiModel": "Aucun modèle d'IA configuré",
+    "genericError": "La requête IA a échoué"
+  }
 }

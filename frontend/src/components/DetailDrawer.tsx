@@ -4310,6 +4310,190 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
   );
 }
 
+// ─── Letter-Draft Panel (preparing_letter stage) ────────────────
+// KI-suggested building blocks (touchpoints / value-match / benefit arguments) the user
+// can select and edit before generating the actual cover-letter body via the existing
+// cover-letter endpoint. Selection is persisted server-side (letter-inputs) so it survives
+// tab switches and drawer re-opens.
+type LetterAngles = {
+  beruehrungspunkte: { titel: string; text: string }[];
+  werteMatch: { wert: string; bezug: string }[];
+  nutzenArgumente: { argument: string; beleg: string }[];
+};
+type LetterInputs = { selectedAngles?: string[]; jobNotes?: string };
+
+function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand }: {
+  app: Application;
+  aiResults?: Record<string, { data: unknown; createdAt: Date }>;
+  onAiResult?: (id: string, data: unknown) => void;
+  expanded?: boolean;
+  onToggleExpand?: () => void;
+}) {
+  const { t } = useTranslation();
+  const { ai } = useUiStore();
+  const queryClient = useQueryClient();
+  const [generatingAngles, setGeneratingAngles] = useState(false);
+  const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const angles = aiResults?.["letter-angles"]?.data as LetterAngles | undefined;
+  const savedInputs = aiResults?.["letter-inputs"]?.data as LetterInputs | undefined;
+
+  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [jobNotes, setJobNotes] = useState("");
+  const hydrated = useRef(false);
+
+  const items = useMemo(() => angles ? [
+    ...angles.beruehrungspunkte.map((it, i) => ({ id: `bp-${i}`, group: t("letterDraft.touchpoints"), text: `${it.titel}: ${it.text}` })),
+    ...angles.werteMatch.map((it, i) => ({ id: `wm-${i}`, group: t("letterDraft.valuesMatch"), text: `${it.wert} – ${it.bezug}` })),
+    ...angles.nutzenArgumente.map((it, i) => ({ id: `na-${i}`, group: t("letterDraft.benefits"), text: `${it.argument} (${it.beleg})` })),
+  ] : [], [angles, t]);
+
+  // Hydrate selection from persisted letter-inputs once angles are available
+  useEffect(() => {
+    if (hydrated.current || items.length === 0) return;
+    hydrated.current = true;
+    if (savedInputs) {
+      setJobNotes(savedInputs.jobNotes ?? "");
+      const savedTexts = new Set(savedInputs.selectedAngles ?? []);
+      const seed: Record<string, string> = {};
+      for (const item of items) if (savedTexts.has(item.text)) seed[item.id] = item.text;
+      setSelected(seed);
+    }
+  }, [items, savedInputs]);
+
+  const persistInputs = (nextSelected: Record<string, string>, nextJobNotes: string) => {
+    const body: LetterInputs = { selectedAngles: Object.values(nextSelected), jobNotes: nextJobNotes };
+    onAiResult?.("letter-inputs", body);
+    api.patch(`/api/applications/${app.id}/letter-inputs`, body).catch(() => {});
+  };
+
+  const toggle = (id: string, text: string) => {
+    setSelected(prev => {
+      const next = { ...prev };
+      if (next[id]) delete next[id]; else next[id] = text;
+      persistInputs(next, jobNotes);
+      return next;
+    });
+  };
+
+  const editSelected = (id: string, text: string) => {
+    setSelected(prev => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev, [id]: text };
+      persistInputs(next, jobNotes);
+      return next;
+    });
+  };
+
+  const aiBody = () => ({ provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel });
+
+  const generateAngles = async () => {
+    if (ai.provider === "none") { setErr(t("letterDraft.noAiModel")); return; }
+    setGeneratingAngles(true); setErr(null);
+    try {
+      const r = await api.post<LetterAngles>(`/api/applications/${app.id}/ai/letter-angles`, { ai: aiBody() });
+      hydrated.current = true; // freshly generated → don't overwrite with stale saved selection
+      onAiResult?.("letter-angles", r.data);
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["application", app.id] });
+    } catch (e: unknown) {
+      setErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("letterDraft.genericError"));
+    } finally { setGeneratingAngles(false); }
+  };
+
+  const generateDraft = async () => {
+    if (ai.provider === "none") { setErr(t("letterDraft.noAiModel")); return; }
+    setGeneratingDraft(true); setErr(null);
+    try {
+      const body = {
+        ai: aiBody(),
+        language: (app as Application & { language?: string }).language ?? "de",
+        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined },
+      };
+      const r = await api.post(`/api/applications/${app.id}/ai/cover-letter`, body);
+      onAiResult?.("cover-letter", r.data);
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["application", app.id] });
+    } catch (e: unknown) {
+      setErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("letterDraft.genericError"));
+    } finally { setGeneratingDraft(false); }
+  };
+
+  const groupIcon: Record<string, React.ReactNode> = {
+    [t("letterDraft.touchpoints")]: <Spark width={11} height={11} />,
+    [t("letterDraft.valuesMatch")]: <Star width={11} height={11} />,
+    [t("letterDraft.benefits")]:    <CheckCircle width={11} height={11} />,
+  };
+
+  return (
+    <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16, ...(expanded ? { flex: 1, overflow: "auto" } : {}) }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          {t("letterDraft.title")}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <button className="btn btn-secondary" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} disabled={generatingAngles} onClick={generateAngles}>
+            {generatingAngles
+              ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.suggesting")}</>
+              : <><Sparks width={11} height={11} /> {items.length > 0 ? t("letterDraft.regenerateBtn") : t("letterDraft.suggestBtn")}</>}
+          </button>
+          {onToggleExpand && (
+            <button onClick={onToggleExpand} title={expanded ? t("interview.minimize") : t("interview.maximize")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
+              {expanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 10 }}>{err}</div>}
+
+      {items.length === 0 ? (
+        <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>{t("letterDraft.emptyHint")}</div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
+          {[t("letterDraft.touchpoints"), t("letterDraft.valuesMatch"), t("letterDraft.benefits")].map(group => (
+            <div key={group}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, fontWeight: 700, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+                {groupIcon[group]} {group}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                {items.filter(it => it.group === group).map(item => {
+                  const isSelected = item.id in selected;
+                  return (
+                    <label key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 6px", borderRadius: 6, cursor: "pointer", background: isSelected ? "var(--accent-08)" : "transparent" }}>
+                      <input type="checkbox" checked={isSelected} onChange={() => toggle(item.id, item.text)} style={{ marginTop: 3, flexShrink: 0, cursor: "pointer" }} />
+                      {isSelected ? (
+                        <textarea value={selected[item.id]} onChange={e => setSelected(prev => ({ ...prev, [item.id]: e.target.value }))} onBlur={e => editSelected(item.id, e.target.value)}
+                          rows={2} style={{ flex: 1, resize: "vertical", background: "none", border: "none", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", lineHeight: 1.5, outline: "none" }} />
+                      ) : (
+                        <span style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.5 }}>{item.text}</span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{t("letterDraft.jobNotesLabel")}</div>
+        <textarea value={jobNotes} onChange={e => setJobNotes(e.target.value)} onBlur={() => persistInputs(selected, jobNotes)}
+          placeholder={t("letterDraft.jobNotesPlaceholder")} rows={2}
+          style={{ width: "100%", resize: "vertical", background: "none", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 8px", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", lineHeight: 1.5, outline: "none" }} />
+      </div>
+
+      <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} disabled={generatingDraft} onClick={generateDraft}>
+        {generatingDraft
+          ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.creatingDraft")}</>
+          : <><PageEdit width={12} height={12} /> {t("letterDraft.createDraftBtn")}</>}
+      </button>
+    </div>
+  );
+}
+
 function ProcessTab({ app, onSave, onAiResult, aiResults }: {
   app: Application;
   onSave?: (patch: Partial<Application>) => void;
@@ -4331,6 +4515,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
 
   // Expand-Logik for the content blocks
   const [interviewExpanded, setInterviewExpanded] = useState(false);
+  const [letterDraftExpanded, setLetterDraftExpanded] = useState(false);
   const [activitiesExpanded,setActivitiesExpanded]= useState(false);
 
   const expandStyle: React.CSSProperties = {
@@ -4369,6 +4554,19 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
             onSave={onSave}
             expanded={interviewExpanded}
             onToggleExpand={() => setInterviewExpanded(v => !v)}
+          />
+        </div>
+      )}
+
+      {/* 1b. Letter-Draft-Assistent (Anschreiben-Phase) */}
+      {app.stage === "preparing_letter" && (
+        <div style={letterDraftExpanded ? expandStyle : {}}>
+          <LetterDraftPanel
+            app={app}
+            aiResults={aiResults}
+            onAiResult={onAiResult}
+            expanded={letterDraftExpanded}
+            onToggleExpand={() => setLetterDraftExpanded(v => !v)}
           />
         </div>
       )}

@@ -132,7 +132,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | Table | Purpose | User-isolated | Exported |
 |---|---|---|---|
 | `applications` | Jobs: stage, tags, salary, archived, archiveReason, matchScore, interview1/2Details, interview1/2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache, googleFolderId, **jobType** (pensum %), **workModel**, **contractType**, **language** | ✅ `user_id` FK | ✅ |
-| `user_profile` | Per-user profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, driveApplicationsFolderId, sessionTimeout, desiredSalary | ✅ `user_id` FK | ✅ |
+| `user_profile` | Per-user profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, driveApplicationsFolderId, sessionTimeout, desiredSalary, **letterConfig** (JSON: persistent cover-letter guidance, see `LetterCoachPage`) | ✅ `user_id` FK | ✅ |
 | `user_documents` | Document library (CV, Zeugnisse, Figma, etc.); `extraUrl` = optional secondary link, surfaced as a "Link" button on the tile when set | ✅ `user_id` FK | ✅ |
 | `application_documents` | Per-job docs; `googleDocId`/`googleDocUrl` for Drive | via `application_id` | ✅ |
 | `application_activities` | Timeline events per job | via `application_id` | ✅ |
@@ -178,8 +178,10 @@ All use `callAi()` + `extractJson()` + `resolveHostUrl()` + `max_tokens: 32768` 
 | `POST /api/applications/:id/ai/cv-highlights` | `{ highlights, keywords, gaps }` — persisted to `aiResultsCache` |
 | `POST /api/applications/:id/ai/cv-highlights/export-doc` | Blank-doc export (no Templates-page entry for this type); body `{ highlights }` |
 | `POST /api/applications/:id/ai/cv-doc` | Creates Google Doc from Master-CV; returns `{ docUrl }` |
-| `POST /api/applications/:id/ai/cover-letter` | `{ subject, body }` — persisted to `aiResultsCache["cover-letter"]` |
+| `POST /api/applications/:id/ai/cover-letter` | `{ subject, body }` — persisted to `aiResultsCache["cover-letter"]`. Accepts optional `letterInputs: { angles?: string[], jobNotes?: string }` (from `LetterDraftPanel`) appended to the prompt as must-use talking points |
 | `POST /api/applications/:id/ai/cover-letter/export-doc` | Creates Google Doc; picks template by `app_.language` via `activeIdDe`/`activeIdEn` |
+| `POST /api/applications/:id/ai/letter-angles` | `{ beruehrungspunkte, werteMatch, nutzenArgumente }` — job-specific cover-letter building-block suggestions; persisted to `aiResultsCache["letter-angles"]` |
+| `PATCH /api/applications/:id/letter-inputs` | Persists the user's selection/edits from `LetterDraftPanel` (not AI-generated) into `aiResultsCache["letter-inputs"]`; body `{ selectedAngles?: string[], jobNotes?: string }` |
 | `POST /api/applications/:id/ai/email-draft` | `{ subject, body }` — body: `{ type: "application"|"followup"|"decline"|"feedback"|"linkedin" }` |
 | `POST /api/applications/:id/ai/interview-prep` | `{ rollenFragen, starBeispiele, vossFragenWhatHow, rueckfragen }` — persisted to `interview1/2Prep` |
 | `POST /api/applications/:id/ai/salary-tips` | `{ markteinschätzung, taktiken, formulierungen, vossAnker }` — persisted to `aiResultsCache` |
@@ -239,7 +241,11 @@ Require `calendar.readonly` scope (in `GOOGLE_SCOPES`). Users must re-connect Go
 
 **Correspondence language in AI calls**: All AI tile runners pass `language: app.language ?? "de"` in the POST body (via `buildTileRunner`'s optional `language` parameter). Backend prefers body value over DB value (`bodyLang ?? app_.language ?? "de"`). This prevents race conditions when language is changed via the DE/EN toggle just before triggering a generation.
 
-**ProcessTab** (top → bottom): `InterviewDetailsPanel` (interview stages only) → `TaskChecklist` → `StageAiActions` → `GlassdoorPanel` (inbox only) → AI content blocks → activity timeline. `onSave` passed to both `InterviewDetailsPanel` and `StageAiActions`.
+**ProcessTab** (top → bottom): `InterviewDetailsPanel` (interview stages only) → `LetterDraftPanel` (`preparing_letter` stage only) → `TaskChecklist` → `StageAiActions` → `GlassdoorPanel` (inbox only) → AI content blocks → activity timeline. `onSave` passed to both `InterviewDetailsPanel` and `StageAiActions`.
+
+**LetterDraftPanel** (`DetailDrawer.tsx`, `preparing_letter` stage): KI-assisted cover-letter drafting flow. „Bausteine vorschlagen" calls `POST .../ai/letter-angles` → 3 groups of job-specific suggestions (Berührungspunkte / Werte-Match / Nutzenargumente), persisted to `aiResultsCache["letter-angles"]`. User checks/edits items; selection auto-persists via `PATCH .../letter-inputs` into `aiResultsCache["letter-inputs"]` so it survives tab switches (mirrors `aiResultsRegistry` pattern, not local-only state). „Entwurf erstellen" calls the existing `cover-letter` endpoint with `letterInputs: { angles, jobNotes }` in the body. Direct generation via the plain cover-letter tile (no bausteine) still works — this panel is an optional assist, not a gate.
+
+**Letter-Coach page** (`/letter-coach`, `LetterCoachPage.tsx`): standalone Rail nav item where the user configures persistent, reusable cover-letter guidance — 7 free-text fields (structure, values, strengths, phrases, styleRules, noGos, referenceLetter) stored as one JSON blob in `user_profile.letter_config`. Autosaves per-field via `PATCH /api/profile { letterConfig }` (not `PUT` — avoids full-profile validation for a single-field edit). Backend helper `buildLetterGuidance(letterConfigRaw)` formats the non-empty fields into a `## Verbindliche Vorgaben des Kandidaten` prompt block, appended in `cover-letter`, `letter-review`, and `opening-sentences`. Empty fields are never silently defaulted — each has a "Standard übernehmen" button that copies a recommended template into the field on click.
 
 **DetailsTab**: `OverviewTab` (all editable fields incl. Pensum/Arbeitsmodell/Vertrag) + `react-markdown`/`remark-gfm` Stellenbeschreibung with Vorschau/Bearbeiten toggle (`descMode` state). Autosave on `onBlur`. Styled via `.md-body`.
 
@@ -270,7 +276,7 @@ Require `calendar.readonly` scope (in `GOOGLE_SCOPES`). Users must re-connect Go
 
 **`DriveFolderBtn`** (in `DetailDrawer.tsx`): Button shown in CV phase `StageAiActions`. Calls `POST /api/applications/:id/drive/init-folder`. Shows "Drive-Ordner anlegen" when no folder exists, "Drive-Ordner öffnen ↗" (green) when folder exists. Uses same `btn btn-secondary` style as `AiBtn`.
 
-**Navigation Rail** (`Rail.tsx`): Board → Liste → Kalender → Timeline → Archiv → Profil → Dokumente → Knowledge → Templates → Einstellungen. User section at bottom is clickable → opens `UserModal` (portal, anchored above trigger). Modal has: email + app count, „Nutzer wechseln" → `/setup`, „Abmelden" with two-step confirmation.
+**Navigation Rail** (`Rail.tsx`): Board → Liste → Kalender → Timeline → Archiv → Profil → Dokumente → Anschreiben → Knowledge → Templates → Einstellungen. User section at bottom is clickable → opens `UserModal` (portal, anchored above trigger). Modal has: email + app count, „Nutzer wechseln" → `/setup`, „Abmelden" with two-step confirmation.
 
 **Board Card** (`Card.tsx` `CardRich`): Stage badge removed — cards are already in their stage column. Match score badge only (top-right). Colors use CSS vars `--score-high/mid/low` (WCAG AA compliant in both themes).
 

@@ -53,7 +53,8 @@
     "knowledge": "Knowledge",
     "templates": "Templates",
     "settings": "Settings",
-    "timelineSub": "Workspace activity — all changes across applications"
+    "timelineSub": "Workspace activity — all changes across applications",
+    "letterCoach": "Cover Letter"
   },
   "tabs": {
     "actions": "Actions",
@@ -752,5 +753,59 @@
     "companiesCount_one": "{{count}} company",
     "companiesCount_other": "{{count}} companies"
   },
-  "of": "of"
+  "of": "of",
+  "letterCoach": {
+    "title": "Cover Letter",
+    "sub": "Personal guidance the AI applies to every generated cover letter",
+    "infoText": "This guidance supplements your Master CV, Personal Notes, and Documents library — it additionally controls the structure, style, and values of the cover letter.",
+    "linkProfile": "Go to Profile",
+    "linkDocuments": "Go to Documents",
+    "useDefault": "Use default",
+    "saved": "Saved",
+    "autosave": "Changes are saved automatically",
+    "structure": {
+      "label": "Structure",
+      "hint": "Which sections should the cover letter have, and in what order?"
+    },
+    "values": {
+      "label": "My values & way of working",
+      "hint": "Values you want to emphasize in applications (e.g. user-centricity, pragmatism, team leadership)."
+    },
+    "strengths": {
+      "label": "Core strengths (with evidence)",
+      "hint": "Recurring strengths you can back up — with concrete results or numbers."
+    },
+    "phrases": {
+      "label": "Preferred phrasing",
+      "hint": "Text snippets or phrasing you like to use."
+    },
+    "styleRules": {
+      "label": "Style & tone",
+      "hint": "How should the letter sound? (e.g. direct, formal, casual)"
+    },
+    "noGos": {
+      "label": "To avoid",
+      "hint": "Clichés, phrases, or topics that should not appear."
+    },
+    "referenceLetter": {
+      "label": "Reference letter",
+      "hint": "An earlier cover letter to use as a style reference (not copied, used only as a guide)."
+    }
+  },
+  "letterDraft": {
+    "title": "Cover Letter Draft",
+    "suggestBtn": "Suggest building blocks",
+    "regenerateBtn": "Suggest again",
+    "suggesting": "Analyzing…",
+    "touchpoints": "Touchpoints",
+    "valuesMatch": "Values match",
+    "benefits": "Benefit to the company",
+    "jobNotesLabel": "Job-specific notes",
+    "jobNotesPlaceholder": "e.g. personal contact, special occasion, referral…",
+    "createDraftBtn": "Create draft",
+    "creatingDraft": "Creating draft…",
+    "emptyHint": "Let the AI suggest job-specific touchpoints, value matches, and benefit arguments. Pick the ones that fit before creating the draft — or create the draft directly via the cover-letter tile below.",
+    "noAiModel": "No AI model configured",
+    "genericError": "AI request failed"
+  }
 }

@@ -15,6 +15,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { TimelinePage } from "./pages/TimelinePage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { DocumentsPage } from "./pages/DocumentsPage";
+import { LetterCoachPage } from "./pages/LetterCoachPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 import { TablePage } from "./pages/TablePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -62,6 +63,7 @@ function MainApp() {
           <Route path="/timeline"  element={<TimelinePage />} />
           <Route path="/profile"   element={<ProfilePage />} />
           <Route path="/documents" element={<DocumentsPage />} />
+          <Route path="/letter-coach"  element={<LetterCoachPage />} />
           <Route path="/knowledge"     element={<KnowledgeBasePage />} />
           <Route path="*"              element={<Navigate to="/" replace />} />
         </Routes>

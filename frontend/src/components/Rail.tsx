@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import {
   DashboardDots, Calendar, List, MultiplePages, Settings, Table2Columns,
   SidebarCollapse, SunLight, HalfMoon, DashboardSpeed, Sofa, ProfileCircle, Folder, Database, Archive,
-  LogOut, SwitchOff, WarningCircle, Globe,
+  LogOut, SwitchOff, WarningCircle, Globe, SendMail,
 } from "iconoir-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -491,6 +491,7 @@ export function Rail({ applications }: Props) {
     { to: "/timeline",   label: t("nav.timeline"),  icon: <List           width={15} height={15} /> },
     { to: "/profile",    label: t("nav.profile"),   icon: <ProfileCircle  width={15} height={15} /> },
     { to: "/documents",  label: t("nav.documents"), icon: <Folder         width={15} height={15} /> },
+    { to: "/letter-coach", label: t("nav.letterCoach"), icon: <SendMail   width={15} height={15} /> },
     { to: "/knowledge",  label: t("nav.knowledge"), icon: <Database       width={15} height={15} /> },
     { to: "/templates",  label: t("nav.templates"), icon: <MultiplePages  width={15} height={15} /> },
     { to: "/settings",      label: t("nav.settings"),      icon: <Settings     width={15} height={15} /> },
