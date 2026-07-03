@@ -806,6 +806,26 @@
     "creatingDraft": "Création du brouillon…",
     "emptyHint": "Laissez l'IA proposer des points de contact, des correspondances de valeurs et des arguments spécifiques au poste. Sélectionnez les éléments pertinents avant de créer le brouillon — ou créez-le directement via la tuile lettre de motivation ci-dessous.",
     "noAiModel": "Aucun modèle d'IA configuré",
-    "genericError": "La requête IA a échoué"
+    "genericError": "La requête IA a échoué",
+    "step1": "Informations spécifiques au poste",
+    "step2": "Choisir les éléments",
+    "step3": "Choisir la phrase d'accroche",
+    "step4": "Créer la lettre",
+    "step5": "Résultat et révision",
+    "suggestOpenings": "Proposer des phrases d'accroche",
+    "regenerateOpenings": "Proposer à nouveau",
+    "openingsHint": "Obtenez 3 phrases d'accroche — elles s'appuient sur vos éléments et informations sélectionnés.",
+    "reason": "Justification",
+    "recommendation": "Recommandation",
+    "recreateDraftBtn": "Recréer la lettre",
+    "asGoogleDoc": "En Google Doc",
+    "reviewBtn": "Révision",
+    "reviewTitle": "Révision",
+    "adjustBtn": "Ajuster",
+    "adjustPlaceholder": "Que faut-il changer ? p.ex. plus court, moins formel, accent sur le leadership…",
+    "regenerate": "Régénérer",
+    "versionsTitle": "Versions",
+    "version": "Version",
+    "versionCount": "{{count}} versions"
   }
 }

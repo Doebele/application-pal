@@ -806,6 +806,26 @@
     "creatingDraft": "Creating draft…",
     "emptyHint": "Let the AI suggest job-specific touchpoints, value matches, and benefit arguments. Pick the ones that fit before creating the draft — or create the draft directly via the cover-letter tile below.",
     "noAiModel": "No AI model configured",
-    "genericError": "AI request failed"
+    "genericError": "AI request failed",
+    "step1": "Job-specific notes",
+    "step2": "Choose building blocks",
+    "step3": "Choose opening sentence",
+    "step4": "Create cover letter",
+    "step5": "Result & review",
+    "suggestOpenings": "Suggest opening sentences",
+    "regenerateOpenings": "Suggest again",
+    "openingsHint": "Get 3 opening sentences — they build on your selected blocks and notes.",
+    "reason": "Why",
+    "recommendation": "Recommendation",
+    "recreateDraftBtn": "Recreate cover letter",
+    "asGoogleDoc": "As Google Doc",
+    "reviewBtn": "Review",
+    "reviewTitle": "Review",
+    "adjustBtn": "Adjust",
+    "adjustPlaceholder": "What should change? e.g. shorter, less formal, emphasize leadership…",
+    "regenerate": "Regenerate",
+    "versionsTitle": "Versions",
+    "version": "Version",
+    "versionCount": "{{count}} versions"
   }
 }

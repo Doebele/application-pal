@@ -625,7 +625,9 @@ const PENSUM_OPTIONS = ["100%", "80–100%", "80%", "60–80%", "60%", "50%", "4
 /** Normalise a raw percentage string to the nearest standard pensum option */
 /** Returns a language instruction to prepend/append to AI system prompts. */
 function langPrompt(lang: string | null | undefined): string {
-  return lang === "en" ? "Always respond in English." : "Antworte immer auf Deutsch.";
+  return lang === "en"
+    ? "IMPORTANT: Write ALL output strictly in English, regardless of the language of the instructions below."
+    : "WICHTIG: Verfasse die GESAMTE Ausgabe ausschliesslich auf Deutsch, unabhängig von der Sprache der nachfolgenden Anweisungen.";
 }
 
 function normalisePensum(raw: string): string {
@@ -2447,7 +2449,7 @@ app.post("/api/applications/:id/ai/cover-letter", async (c) => {
   const id = c.req.param("id");
   const { ai, additionalContext, language: bodyLang, letterInputs } = await c.req.json<{
     ai: AiConfig; additionalContext?: string; language?: string;
-    letterInputs?: { angles?: string[]; jobNotes?: string };
+    letterInputs?: { angles?: string[]; jobNotes?: string; openingSentence?: string };
   }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
@@ -2472,6 +2474,9 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
   if (letterInputs?.jobNotes?.trim()) {
     user += `\n\n## Individuelle Angaben zu dieser Stelle\n${letterInputs.jobNotes.trim().slice(0, 800)}`;
   }
+  if (letterInputs?.openingSentence?.trim()) {
+    user += `\n\n## Gewählter Eröffnungssatz (beginne das Anschreiben mit diesem Satz — leichte Anpassungen erlaubt)\n${letterInputs.openingSentence.trim().slice(0, 500)}`;
+  }
   try {
     const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { subject: string; body: string };
@@ -2490,11 +2495,11 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
 app.post("/api/applications/:id/ai/letter-angles", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
+  const { ai, additionalContext, language: bodyLang } = await c.req.json<{ ai: AiConfig; additionalContext?: string; language?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const letterGuidance = buildLetterGuidance(profile?.letterConfig);
   const system = `${langPrompt(lang_)} Du bist ein Karriere-Coach. Analysiere das Kandidatenprofil und die Stellenbeschreibung und schlage konkrete Bausteine für ein individuelles Anschreiben vor.
 Antworte NUR mit diesem JSON:
@@ -2530,11 +2535,40 @@ Antworte NUR mit diesem JSON:
 app.patch("/api/applications/:id/letter-inputs", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const body = await c.req.json<{ selectedAngles?: string[]; jobNotes?: string }>();
+  const body = await c.req.json<{ selectedAngles?: string[]; jobNotes?: string; openingSentence?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   await persistAiResult(id, "letter-inputs", body as unknown as Record<string, unknown>);
   return c.json({ ok: true });
+});
+
+// Append the freshly-generated cover letter as a version, and restore a chosen version.
+// Versions live in aiResultsCache["letter-versions"] = { versions: [{ subject, body, createdAt }] }.
+app.post("/api/applications/:id/ai/letter-versions/save", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const { subject, body } = await c.req.json<{ subject: string; body: string }>();
+  const [app_] = await db.select({ c: applications.aiResultsCache }).from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  let versions: Array<{ subject: string; body: string; createdAt: string }> = [];
+  try { versions = (JSON.parse(app_.c ?? "{}")["letter-versions"]?.versions ?? []) as typeof versions; } catch { /* ignore */ }
+  versions.push({ subject, body, createdAt: new Date().toISOString() });
+  await persistAiResult(id, "letter-versions", { versions });
+  return c.json({ versions });
+});
+
+app.post("/api/applications/:id/ai/letter-versions/restore", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const { index } = await c.req.json<{ index: number }>();
+  const [app_] = await db.select({ c: applications.aiResultsCache }).from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  let versions: Array<{ subject: string; body: string; createdAt: string }> = [];
+  try { versions = (JSON.parse(app_.c ?? "{}")["letter-versions"]?.versions ?? []) as typeof versions; } catch { /* ignore */ }
+  const v = versions[index];
+  if (!v) return c.json({ error: "Version nicht gefunden" }, 404);
+  await persistAiResult(id, "cover-letter", { subject: v.subject, body: v.body });
+  return c.json({ subject: v.subject, body: v.body });
 });
 
 // Cover-letter export to Google Doc
@@ -3276,11 +3310,11 @@ app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
 app.post("/api/applications/:id/ai/letter-review", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, coverLetterContent, additionalContext } = await c.req.json<{ ai: AiConfig; coverLetterContent?: string; additionalContext?: string }>();
+  const { ai, coverLetterContent, additionalContext, language: bodyLang } = await c.req.json<{ ai: AiConfig; coverLetterContent?: string; additionalContext?: string; language?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [reviewProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const reviewGuidance = buildLetterGuidance(reviewProfile?.letterConfig);
   const system = `${langPrompt(lang_)} Du bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch.${reviewGuidance ? ` Prüfe zusätzlich, ob es die folgenden Vorgaben des Kandidaten erfüllt, und nenne Abweichungen in "verbesserungen":\n\n${reviewGuidance}` : ""} Antworte NUR mit JSON:
 { "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "zu lang | angemessen | zu kurz", "personalisierung": "schwach | mittel | stark" }`;
@@ -3336,19 +3370,27 @@ app.post("/api/applications/:id/ai/letter-review/export-doc", async (c) => {
 app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, additionalContext } = await c.req.json<{ ai: AiConfig; additionalContext?: string }>();
+  const { ai, additionalContext, language: bodyLang, letterInputs } = await c.req.json<{
+    ai: AiConfig; additionalContext?: string; language?: string;
+    letterInputs?: { angles?: string[]; jobNotes?: string };
+  }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const openingGuidance = buildLetterGuidance(profile?.letterConfig);
   const system = `${langPrompt(lang_)} Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend).${openingGuidance ? `\n\n${openingGuidance}` : ""} Antworte NUR mit JSON:
-{ "saetze": [{ "satz": "<string>", "ansatz": "<string>", "erklaerung": "<string>" }] }`;
+{ "saetze": [{ "satz": "<der Eröffnungssatz>", "ansatz": "<kurzes Ansatz-Label>", "erklaerung": "<was diesen Satz in genau diesem Fall speziell/stark macht>", "empfehlung": "<konkrete Empfehlung, wann/wofür man diesen Satz wählen sollte>" }] }`;
   const openingDocsContext = await loadDocumentsContext(userId);
-  const user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}${openingDocsContext ? `\n\n${openingDocsContext}` : ""}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
+  let user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}${openingDocsContext ? `\n\n${openingDocsContext}` : ""}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
+  if (letterInputs?.angles?.length || letterInputs?.jobNotes?.trim()) {
+    user += `\n\n## Vom Kandidaten gewählte Kernaussagen & individuelle Angaben — die Eröffnungssätze sollen hierauf konkret Bezug nehmen`;
+    if (letterInputs.angles?.length) user += `\n${letterInputs.angles.map(a => `- ${a}`).join("\n")}`;
+    if (letterInputs.jobNotes?.trim()) user += `\nIndividuelle Angaben: ${letterInputs.jobNotes.trim().slice(0, 800)}`;
+  }
   try {
     const raw = await callAi(system, user, ai, additionalContext);
-    const parsed = extractJson(raw) as { saetze: Array<{ satz: string; ansatz: string; erklaerung: string }> };
+    const parsed = extractJson(raw) as { saetze: Array<{ satz: string; ansatz: string; erklaerung: string; empfehlung?: string }> };
     await persistAiResult(id, "opening-sentences", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {

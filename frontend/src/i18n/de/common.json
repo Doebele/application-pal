@@ -806,6 +806,26 @@
     "creatingDraft": "Erstelle Entwurf…",
     "emptyHint": "Lass die KI stellenbezogene Berührungspunkte, Werte-Matches und Nutzenargumente vorschlagen. Wähle passende Bausteine aus, bevor du den Entwurf erstellst — oder erstelle den Entwurf direkt über die Anschreiben-Kachel unten.",
     "noAiModel": "Kein KI-Modell konfiguriert",
-    "genericError": "KI-Anfrage fehlgeschlagen"
+    "genericError": "KI-Anfrage fehlgeschlagen",
+    "step1": "Individuelle Angaben zu dieser Stelle",
+    "step2": "Bausteine wählen",
+    "step3": "Eröffnungssatz wählen",
+    "step4": "Anschreiben erstellen",
+    "step5": "Ergebnis & Review",
+    "suggestOpenings": "Eröffnungssätze vorschlagen",
+    "regenerateOpenings": "Neu vorschlagen",
+    "openingsHint": "Lass 3 Eröffnungssätze vorschlagen — sie nehmen Bezug auf deine gewählten Bausteine und Angaben.",
+    "reason": "Begründung",
+    "recommendation": "Empfehlung",
+    "recreateDraftBtn": "Anschreiben neu erstellen",
+    "asGoogleDoc": "Als Google Doc",
+    "reviewBtn": "Review",
+    "reviewTitle": "Review",
+    "adjustBtn": "Anpassen",
+    "adjustPlaceholder": "Was soll angepasst werden? z.B. kürzer, weniger förmlich, Fokus auf Führungserfahrung…",
+    "regenerate": "Neu generieren",
+    "versionsTitle": "Versionen",
+    "version": "Version",
+    "versionCount": "{{count}} Versionen"
   }
 }

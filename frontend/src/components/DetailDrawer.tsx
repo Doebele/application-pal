@@ -74,7 +74,7 @@ export const ARCHIVE_REASON_LABELS: Record<string, string> = {
 const STAGE_TILES: Record<string, string[]> = {
   import_validating: ["glassdoor-check","kununu-check","linkedin-profile","salary-check","ats-keywords"],
   preparing_cv:      ["cv-highlights"],
-  preparing_letter:  ["cover-letter","letter-review","opening-sentences"],
+  preparing_letter:  [],  // fully handled by the guided LetterDraftPanel
   application_sent:  ["company-research","salary-tips"],
   pending:           ["company-research","ackermann-script","salary-tips"],
   interview_1:       ["interview-prep","salary-tips"],
@@ -3766,14 +3766,14 @@ function StageAiActions({ app, onSave, onAiResult }: {
   };
 
   const showCv       = ["preparing_cv"].includes(stage);
-  const showLetter   = ["preparing_letter"].includes(stage);
+  // preparing_letter is fully handled by the guided LetterDraftPanel — no StageAiActions tiles
   const showEmail    = ["application_sent", "pending", "accepted"].includes(stage);
   const showIv       = ["interview_1", "interview_2"].includes(stage);
   const showSalary   = ["interview_2", "accepted"].includes(stage);
   const showInbox    = stage === "import_validating";
   const showRejected = stage === "rejected";
 
-  if (!showCv && !showLetter && !showEmail && !showIv && !showSalary && !showInbox && !showRejected) return null;
+  if (!showCv && !showEmail && !showIv && !showSalary && !showInbox && !showRejected) return null;
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -3824,13 +3824,6 @@ function StageAiActions({ app, onSave, onAiResult }: {
       )}
 
       {/* Letter Phase — cover-letter is now a tile; only supplementary actions remain */}
-      {showLetter && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
-          <AiBtn id="letter-review"    icon={<ChatBubbleCheck width={12} height={12} />} label={t("letter-review.label")} />
-          <AiBtn id="opening-sentences" icon={<Spark width={12} height={12} />}          label={t("opening-sentences.label")} />
-        </div>
-      )}
-
       {/* Email Phase */}
       {showEmail && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
@@ -4320,7 +4313,18 @@ type LetterAngles = {
   werteMatch: { wert: string; bezug: string }[];
   nutzenArgumente: { argument: string; beleg: string }[];
 };
-type LetterInputs = { selectedAngles?: string[]; jobNotes?: string };
+type LetterInputs = { selectedAngles?: string[]; jobNotes?: string; openingSentence?: string };
+type OpeningSentence = { satz: string; ansatz: string; erklaerung: string; empfehlung?: string };
+type LetterVersion = { subject: string; body: string; createdAt: string };
+
+function StepHeader({ n, label }: { n: number; label: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+      <span style={{ width: 18, height: 18, flexShrink: 0, borderRadius: "50%", background: "var(--accent)", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{n}</span>
+      <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-2)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</div>
+    </div>
+  );
+}
 
 function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand }: {
   app: Application;
@@ -4332,15 +4336,28 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const { t } = useTranslation();
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
+  const appLang = (app as Application & { language?: string }).language ?? "de";
   const [generatingAngles, setGeneratingAngles] = useState(false);
+  const [generatingOpenings, setGeneratingOpenings] = useState(false);
   const [generatingDraft, setGeneratingDraft] = useState(false);
+  const [generatingReview, setGeneratingReview] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const angles = aiResults?.["letter-angles"]?.data as LetterAngles | undefined;
+  const angles      = aiResults?.["letter-angles"]?.data as LetterAngles | undefined;
+  const openings    = (aiResults?.["opening-sentences"]?.data as { saetze?: OpeningSentence[] } | undefined)?.saetze;
   const savedInputs = aiResults?.["letter-inputs"]?.data as LetterInputs | undefined;
+  const letter      = aiResults?.["cover-letter"]?.data as { subject?: string; body?: string } | undefined;
+  const review      = aiResults?.["letter-review"]?.data as { gesamteindruck?: string; verbesserungen?: string[]; staerken?: string[] } | undefined;
+  const versions    = ((aiResults?.["letter-versions"]?.data as { versions?: LetterVersion[] } | undefined)?.versions) ?? [];
 
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [jobNotes, setJobNotes] = useState("");
+  const [openingSentence, setOpeningSentence] = useState("");
+  const [showAdjust, setShowAdjust] = useState(false);
+  const [adjustPrompt, setAdjustPrompt] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [exportUrl, setExportUrl] = useState<string | null>(null);
   const hydrated = useRef(false);
 
   const items = useMemo(() => angles ? [
@@ -4349,21 +4366,24 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     ...angles.nutzenArgumente.map((it, i) => ({ id: `na-${i}`, group: t("letterDraft.benefits"), text: `${it.argument} (${it.beleg})` })),
   ] : [], [angles, t]);
 
-  // Hydrate selection from persisted letter-inputs once angles are available
+  // Hydrate selection + job notes + opening sentence from persisted letter-inputs
   useEffect(() => {
-    if (hydrated.current || items.length === 0) return;
+    if (hydrated.current) return;
     hydrated.current = true;
     if (savedInputs) {
       setJobNotes(savedInputs.jobNotes ?? "");
-      const savedTexts = new Set(savedInputs.selectedAngles ?? []);
-      const seed: Record<string, string> = {};
-      for (const item of items) if (savedTexts.has(item.text)) seed[item.id] = item.text;
-      setSelected(seed);
+      setOpeningSentence(savedInputs.openingSentence ?? "");
+      if (items.length > 0) {
+        const savedTexts = new Set(savedInputs.selectedAngles ?? []);
+        const seed: Record<string, string> = {};
+        for (const item of items) if (savedTexts.has(item.text)) seed[item.id] = item.text;
+        setSelected(seed);
+      }
     }
   }, [items, savedInputs]);
 
-  const persistInputs = (nextSelected: Record<string, string>, nextJobNotes: string) => {
-    const body: LetterInputs = { selectedAngles: Object.values(nextSelected), jobNotes: nextJobNotes };
+  const persistInputs = (nextSelected: Record<string, string>, nextJobNotes: string, nextOpening: string) => {
+    const body: LetterInputs = { selectedAngles: Object.values(nextSelected), jobNotes: nextJobNotes, openingSentence: nextOpening };
     onAiResult?.("letter-inputs", body);
     api.patch(`/api/applications/${app.id}/letter-inputs`, body).catch(() => {});
   };
@@ -4372,52 +4392,97 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     setSelected(prev => {
       const next = { ...prev };
       if (next[id]) delete next[id]; else next[id] = text;
-      persistInputs(next, jobNotes);
+      persistInputs(next, jobNotes, openingSentence);
       return next;
     });
   };
-
   const editSelected = (id: string, text: string) => {
     setSelected(prev => {
       if (!(id in prev)) return prev;
       const next = { ...prev, [id]: text };
-      persistInputs(next, jobNotes);
+      persistInputs(next, jobNotes, openingSentence);
       return next;
     });
   };
+  const pickOpening = (text: string) => {
+    const next = openingSentence === text ? "" : text;
+    setOpeningSentence(next);
+    persistInputs(selected, jobNotes, next);
+  };
 
   const aiBody = () => ({ provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["applications"] });
+    queryClient.invalidateQueries({ queryKey: ["application", app.id] });
+  };
+  const errMsg = (e: unknown) => (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("letterDraft.genericError");
 
   const generateAngles = async () => {
     if (ai.provider === "none") { setErr(t("letterDraft.noAiModel")); return; }
     setGeneratingAngles(true); setErr(null);
     try {
-      const r = await api.post<LetterAngles>(`/api/applications/${app.id}/ai/letter-angles`, { ai: aiBody() });
-      hydrated.current = true; // freshly generated → don't overwrite with stale saved selection
-      onAiResult?.("letter-angles", r.data);
-      queryClient.invalidateQueries({ queryKey: ["applications"] });
-      queryClient.invalidateQueries({ queryKey: ["application", app.id] });
-    } catch (e: unknown) {
-      setErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("letterDraft.genericError"));
-    } finally { setGeneratingAngles(false); }
+      const r = await api.post<LetterAngles>(`/api/applications/${app.id}/ai/letter-angles`, { ai: aiBody(), language: appLang });
+      onAiResult?.("letter-angles", r.data); invalidate();
+    } catch (e) { setErr(errMsg(e)); } finally { setGeneratingAngles(false); }
   };
 
-  const generateDraft = async () => {
+  const generateOpenings = async () => {
+    if (ai.provider === "none") { setErr(t("letterDraft.noAiModel")); return; }
+    setGeneratingOpenings(true); setErr(null);
+    try {
+      const r = await api.post<{ saetze: OpeningSentence[] }>(`/api/applications/${app.id}/ai/opening-sentences`, {
+        ai: aiBody(), language: appLang,
+        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined },
+      });
+      onAiResult?.("opening-sentences", r.data); invalidate();
+    } catch (e) { setErr(errMsg(e)); } finally { setGeneratingOpenings(false); }
+  };
+
+  const generateDraft = async (hint?: string) => {
     if (ai.provider === "none") { setErr(t("letterDraft.noAiModel")); return; }
     setGeneratingDraft(true); setErr(null);
     try {
-      const body = {
-        ai: aiBody(),
-        language: (app as Application & { language?: string }).language ?? "de",
-        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined },
-      };
-      const r = await api.post(`/api/applications/${app.id}/ai/cover-letter`, body);
+      const r = await api.post<{ subject: string; body: string }>(`/api/applications/${app.id}/ai/cover-letter`, {
+        ai: aiBody(), language: appLang,
+        ...(hint?.trim() ? { additionalContext: hint.trim() } : {}),
+        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined, openingSentence: openingSentence.trim() || undefined },
+      });
       onAiResult?.("cover-letter", r.data);
-      queryClient.invalidateQueries({ queryKey: ["applications"] });
-      queryClient.invalidateQueries({ queryKey: ["application", app.id] });
-    } catch (e: unknown) {
-      setErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("letterDraft.genericError"));
-    } finally { setGeneratingDraft(false); }
+      setExportUrl(null);
+      const vr = await api.post<{ versions: LetterVersion[] }>(`/api/applications/${app.id}/ai/letter-versions/save`, { subject: r.data.subject, body: r.data.body });
+      onAiResult?.("letter-versions", { versions: vr.data.versions });
+      setShowAdjust(false); setAdjustPrompt("");
+      invalidate();
+    } catch (e) { setErr(errMsg(e)); } finally { setGeneratingDraft(false); }
+  };
+
+  const runReview = async () => {
+    if (ai.provider === "none") { setErr(t("letterDraft.noAiModel")); return; }
+    setGeneratingReview(true); setErr(null);
+    try {
+      const r = await api.post(`/api/applications/${app.id}/ai/letter-review`, { ai: aiBody(), language: appLang });
+      onAiResult?.("letter-review", r.data); invalidate();
+    } catch (e) { setErr(errMsg(e)); } finally { setGeneratingReview(false); }
+  };
+
+  const restoreVersion = async (index: number) => {
+    try {
+      const r = await api.post<{ subject: string; body: string }>(`/api/applications/${app.id}/ai/letter-versions/restore`, { index });
+      onAiResult?.("cover-letter", r.data); setExportUrl(null); invalidate();
+    } catch (e) { setErr(errMsg(e)); }
+  };
+
+  const copyLetter = () => {
+    if (!letter?.body) return;
+    copyText(`${letter.subject ?? ""}\n\n${letter.body}`).then(() => { setCopied(true); setTimeout(() => setCopied(false), 2000); }).catch(() => {});
+  };
+  const exportLetter = async () => {
+    if (!letter?.body) return;
+    setExporting(true);
+    try {
+      const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/cover-letter/export-doc`, { subject: letter.subject, body: letter.body, language: appLang });
+      setExportUrl(r.data.docUrl);
+    } catch (e) { setErr(errMsg(e)); } finally { setExporting(false); }
   };
 
   const groupIcon: Record<string, React.ReactNode> = {
@@ -4425,19 +4490,187 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     [t("letterDraft.valuesMatch")]: <Star width={11} height={11} />,
     [t("letterDraft.benefits")]:    <CheckCircle width={11} height={11} />,
   };
+  const inputStyle: React.CSSProperties = { width: "100%", resize: "vertical", background: "none", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 8px", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", lineHeight: 1.5, outline: "none" };
 
-  return (
-    <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16, ...(expanded ? { flex: 1, overflow: "auto" } : {}) }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
-          {t("letterDraft.title")}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+  const mainFlow = (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 10 }}>{err}</div>}
+
+      {/* Step 1 — Individuelle Angaben (also feeds the opening sentence) */}
+      <div style={{ marginBottom: 18 }}>
+        <StepHeader n={1} label={t("letterDraft.step1")} />
+        <textarea value={jobNotes} onChange={e => setJobNotes(e.target.value)} onBlur={() => persistInputs(selected, jobNotes, openingSentence)}
+          placeholder={t("letterDraft.jobNotesPlaceholder")} rows={2} style={inputStyle} />
+      </div>
+
+      {/* Step 2 — Bausteine */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+          <StepHeader n={2} label={t("letterDraft.step2")} />
           <button className="btn btn-secondary" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} disabled={generatingAngles} onClick={generateAngles}>
             {generatingAngles
               ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.suggesting")}</>
               : <><Sparks width={11} height={11} /> {items.length > 0 ? t("letterDraft.regenerateBtn") : t("letterDraft.suggestBtn")}</>}
           </button>
+        </div>
+        {items.length === 0 ? (
+          <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>{t("letterDraft.emptyHint")}</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {[t("letterDraft.touchpoints"), t("letterDraft.valuesMatch"), t("letterDraft.benefits")].map(group => (
+              <div key={group}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, fontWeight: 700, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
+                  {groupIcon[group]} {group}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {items.filter(it => it.group === group).map(item => {
+                    const isSelected = item.id in selected;
+                    return (
+                      <label key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 6px", borderRadius: 6, cursor: "pointer", background: isSelected ? "var(--accent-08)" : "transparent" }}>
+                        <input type="checkbox" checked={isSelected} onChange={() => toggle(item.id, item.text)} style={{ marginTop: 3, flexShrink: 0, cursor: "pointer" }} />
+                        {isSelected ? (
+                          <textarea value={selected[item.id]} onChange={e => setSelected(prev => ({ ...prev, [item.id]: e.target.value }))} onBlur={e => editSelected(item.id, e.target.value)}
+                            rows={2} style={{ flex: 1, resize: "vertical", background: "none", border: "none", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", lineHeight: 1.5, outline: "none" }} />
+                        ) : (
+                          <span style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.5 }}>{item.text}</span>
+                        )}
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Step 3 — Eröffnungssatz */}
+      <div style={{ marginBottom: 18 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
+          <StepHeader n={3} label={t("letterDraft.step3")} />
+          <button className="btn btn-secondary" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} disabled={generatingOpenings} onClick={generateOpenings}>
+            {generatingOpenings
+              ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.suggesting")}</>
+              : <><Sparks width={11} height={11} /> {openings?.length ? t("letterDraft.regenerateOpenings") : t("letterDraft.suggestOpenings")}</>}
+          </button>
+        </div>
+        {!openings?.length ? (
+          <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>{t("letterDraft.openingsHint")}</div>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {openings.map((s, i) => {
+              const isSel = openingSentence === s.satz;
+              return (
+                <label key={i} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 10px", borderRadius: 8, cursor: "pointer", border: `1px solid ${isSel ? "var(--accent)" : "var(--border)"}`, background: isSel ? "var(--accent-08)" : "transparent" }}>
+                  <input type="radio" name="opening" checked={isSel} onChange={() => pickOpening(s.satz)} style={{ marginTop: 3, flexShrink: 0, cursor: "pointer" }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, color: "var(--fg-1)", lineHeight: 1.5, fontWeight: 500 }}>{s.satz}</div>
+                    {s.ansatz && <div style={{ fontSize: 9, fontWeight: 700, color: "var(--accent)", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 5 }}>{s.ansatz}</div>}
+                    {s.erklaerung && <div style={{ fontSize: 11, color: "var(--fg-3)", lineHeight: 1.5, marginTop: 3 }}><span style={{ fontWeight: 600 }}>{t("letterDraft.reason")}: </span>{s.erklaerung}</div>}
+                    {s.empfehlung && <div style={{ fontSize: 11, color: "var(--fg-3)", lineHeight: 1.5, marginTop: 2 }}><span style={{ fontWeight: 600 }}>{t("letterDraft.recommendation")}: </span>{s.empfehlung}</div>}
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Step 4 — Anschreiben erstellen */}
+      <div style={{ marginBottom: letter?.body ? 18 : 0 }}>
+        <StepHeader n={4} label={t("letterDraft.step4")} />
+        <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} disabled={generatingDraft} onClick={() => generateDraft()}>
+          {generatingDraft
+            ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.creatingDraft")}</>
+            : <><PageEdit width={12} height={12} /> {letter?.body ? t("letterDraft.recreateDraftBtn") : t("letterDraft.createDraftBtn")}</>}
+        </button>
+      </div>
+
+      {/* Step 5 — Ergebnis & Review (only after a letter exists) */}
+      {letter?.body && (
+        <div>
+          <StepHeader n={5} label={t("letterDraft.step5")} />
+          <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", padding: 12, marginBottom: 10 }}>
+            {letter.subject && <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 8 }}>{letter.subject}</div>}
+            <div style={{ fontSize: 12.5, color: "var(--fg-1)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{letter.body}</div>
+          </div>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+            <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={copyLetter}>
+              <IcCopy width={11} height={11} /> {copied ? t("tileExpand.copied") : t("buttons.copy")}
+            </button>
+            {exportUrl ? (
+              <a href={exportUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
+                <Page width={11} height={11} /> Google Doc ↗
+              </a>
+            ) : (
+              <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={exporting} onClick={exportLetter}>
+                {exporting ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />} {t("letterDraft.asGoogleDoc")}
+              </button>
+            )}
+            <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={generatingReview} onClick={runReview}>
+              {generatingReview ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <ChatBubbleCheck width={11} height={11} />} {t("letterDraft.reviewBtn")}
+            </button>
+            <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={() => setShowAdjust(v => !v)}>
+              <EditPencil width={11} height={11} /> {t("letterDraft.adjustBtn")}
+            </button>
+          </div>
+
+          {showAdjust && (
+            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
+              <textarea value={adjustPrompt} onChange={e => setAdjustPrompt(e.target.value)} placeholder={t("letterDraft.adjustPlaceholder")} rows={2} style={inputStyle} />
+              <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, whiteSpace: "nowrap", alignSelf: "flex-start" }} disabled={generatingDraft || !adjustPrompt.trim()} onClick={() => generateDraft(adjustPrompt)}>
+                {generatingDraft ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Refresh width={11} height={11} />} {t("letterDraft.regenerate")}
+              </button>
+            </div>
+          )}
+
+          {review && (
+            <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", padding: 12 }}>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{t("letterDraft.reviewTitle")}</div>
+              {review.gesamteindruck && <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.5, marginBottom: 8 }}>{review.gesamteindruck}</div>}
+              {(review.verbesserungen?.length ?? 0) > 0 && (
+                <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11.5, color: "var(--fg-3)", lineHeight: 1.6 }}>
+                  {review.verbesserungen!.map((v, i) => <li key={i}>{v}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const versionSidebar = versions.length > 0 && (
+    <div style={{ width: 190, flexShrink: 0, borderLeft: "1px solid var(--border)", paddingLeft: 12 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>{t("letterDraft.versionsTitle")}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        {versions.map((v, i) => {
+          const isActive = letter?.body === v.body;
+          return (
+            <button key={i} onClick={() => restoreVersion(i)} style={{
+              textAlign: "left", padding: "7px 9px", borderRadius: 7, cursor: "pointer", fontFamily: "var(--font-sans)",
+              border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`, background: isActive ? "var(--accent-08)" : "transparent",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 3 }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: isActive ? "var(--accent)" : "var(--fg-2)" }}>{t("letterDraft.version")} {i + 1}</span>
+                <span style={{ fontSize: 9, color: "var(--fg-4)" }}>{new Date(v.createdAt).toLocaleString("de-CH", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}</span>
+              </div>
+              <div style={{ fontSize: 10.5, color: "var(--fg-3)", lineHeight: 1.4, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" as const }}>{v.body}</div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ borderRadius: 10, border: "1px solid var(--border)", background: "var(--surface-2)", padding: 14, marginBottom: 16, ...(expanded ? { flex: 1, overflow: "auto" } : {}) }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>
+          {t("letterDraft.title")}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {!expanded && versions.length > 0 && <span style={{ fontSize: 10, color: "var(--fg-4)" }}>{t("letterDraft.versionCount", { count: versions.length })}</span>}
           {onToggleExpand && (
             <button onClick={onToggleExpand} title={expanded ? t("interview.minimize") : t("interview.maximize")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", display: "flex", padding: 2 }}>
               {expanded ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
@@ -4446,50 +4679,10 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
         </div>
       </div>
 
-      {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 10 }}>{err}</div>}
-
-      {items.length === 0 ? (
-        <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>{t("letterDraft.emptyHint")}</div>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
-          {[t("letterDraft.touchpoints"), t("letterDraft.valuesMatch"), t("letterDraft.benefits")].map(group => (
-            <div key={group}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, fontWeight: 700, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
-                {groupIcon[group]} {group}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {items.filter(it => it.group === group).map(item => {
-                  const isSelected = item.id in selected;
-                  return (
-                    <label key={item.id} style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: "5px 6px", borderRadius: 6, cursor: "pointer", background: isSelected ? "var(--accent-08)" : "transparent" }}>
-                      <input type="checkbox" checked={isSelected} onChange={() => toggle(item.id, item.text)} style={{ marginTop: 3, flexShrink: 0, cursor: "pointer" }} />
-                      {isSelected ? (
-                        <textarea value={selected[item.id]} onChange={e => setSelected(prev => ({ ...prev, [item.id]: e.target.value }))} onBlur={e => editSelected(item.id, e.target.value)}
-                          rows={2} style={{ flex: 1, resize: "vertical", background: "none", border: "none", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", lineHeight: 1.5, outline: "none" }} />
-                      ) : (
-                        <span style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.5 }}>{item.text}</span>
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      <div style={{ marginBottom: 12 }}>
-        <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{t("letterDraft.jobNotesLabel")}</div>
-        <textarea value={jobNotes} onChange={e => setJobNotes(e.target.value)} onBlur={() => persistInputs(selected, jobNotes)}
-          placeholder={t("letterDraft.jobNotesPlaceholder")} rows={2}
-          style={{ width: "100%", resize: "vertical", background: "none", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 8px", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", lineHeight: 1.5, outline: "none" }} />
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+        {mainFlow}
+        {expanded && versionSidebar}
       </div>
-
-      <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} disabled={generatingDraft} onClick={generateDraft}>
-        {generatingDraft
-          ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.creatingDraft")}</>
-          : <><PageEdit width={12} height={12} /> {t("letterDraft.createDraftBtn")}</>}
-      </button>
     </div>
   );
 }
@@ -4536,8 +4729,8 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
 
   return (
     <>
-      {/* Two-column: Aufgaben (left) | Aktionen (right) */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, alignItems: "start", marginBottom: 4 }}>
+      {/* Two-column: Aufgaben (left) | Aktionen (right) — single column when StageAiActions is empty (preparing_letter) */}
+      <div style={{ display: "grid", gridTemplateColumns: app.stage === "preparing_letter" ? "1fr" : "1fr 1fr", gap: 12, alignItems: "start", marginBottom: 4 }}>
         <TaskChecklist app={app} />
         <StageAiActions
           app={app} onSave={onSave}
