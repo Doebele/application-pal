@@ -91,6 +91,9 @@ Month and week view with interview, deadline, and follow-up events. Filter by st
 - Desired salary as a reference line in the salary chart
 - Markdown preview for Master CV and notes
 
+### Cover Letter `/letter-coach`
+Personal, reusable cover-letter guidance the AI applies to **every** generated letter: structure, values, core strengths, preferred phrasing, style & tone, no-gos, and a reference letter. Configure once, refine over time. → Full guide: [docs/cover-letter.md](docs/cover-letter.md)
+
 ### Templates `/templates`
 Google Doc template manager: any number of templates per AI content type, one active at a time. Create a new template → a fully formatted Google Doc with `{{PLACEHOLDER}}` variables is created in Drive.
 
@@ -115,7 +118,7 @@ Compact tiles in a grid. Each tile shows the most important metric; click opens 
 |-------|-------|
 | Inbox | Glassdoor ★ · Kununu ★ · LinkedIn · Salary Check · ATS Keywords |
 | CV | CV Highlights |
-| Cover Letter | Cover Letter Review · Opening Sentences |
+| Cover Letter | *(no tiles — the stage uses the guided [Cover Letter panel](docs/cover-letter.md) instead)* |
 | Sent / Pending | Company Research · Salary Negotiation · Ackermann Script |
 | Interview | Interview Preparation · Salary Negotiation |
 | Accepted | Onboarding Checklist |
@@ -166,10 +169,13 @@ All AI results are saved with a timestamp to the database and restored the next 
 - CV highlights (relevant strengths, keywords, gaps)
 - Google Doc from Master CV
 
-**Cover letter stage:**
-- Generate cover letter / export as Google Doc
-- Review cover letter (tone, length, personalisation, clichés)
-- 3 alternative opening sentences
+**Cover letter stage** — a guided 3-tab workspace (see [docs/cover-letter.md](docs/cover-letter.md)):
+- *Prepare*: AI-suggested building blocks (touchpoints / values match / benefit to the company) + job-specific notes
+- *Draft*: 3 opening sentences that reference your selected building blocks → generate the letter
+- *Result*: the letter inline with Copy / Google Doc / Review / Adjust — available only after a letter exists
+- Review with strengths / improvements / clichés + ready-to-paste adjustment suggestions; a banner shows whether it refers to the current draft
+- Version history in a side panel — every generation is saved and restorable
+- Driven by your personal guidance from **Cover Letter `/letter-coach`**
 
 **Applied / Pending:**
 - Application email / follow-up email / LinkedIn connection message
@@ -231,6 +237,9 @@ All larger AI outputs can be exported as Google Docs. With an active template fr
 - Master CV with Markdown preview
 - LinkedIn bio, personal notes
 - Desired salary (reference line in salary chart)
+
+### Cover Letter guidance (`/letter-coach`)
+Seven reusable, autosaved fields the AI applies to every cover letter — structure, values, core strengths, preferred phrasing, style & tone, no-gos, reference letter. → [docs/cover-letter.md](docs/cover-letter.md)
 
 ### Settings
 - AI provider: LM Studio · Ollama · Anthropic · OpenAI · Google Gemini · OpenRouter
@@ -296,6 +305,7 @@ Data is preserved (the PostgreSQL volume is not deleted).
 |---------|-------|
 | Google Drive & Sign-In | [docs/google-setup.md](docs/google-setup.md) |
 | AI (LM Studio / Ollama / Anthropic / …) | [docs/ai-setup.md](docs/ai-setup.md) |
+| Cover Letter Coach & personal guidance | [docs/cover-letter.md](docs/cover-letter.md) |
 | Data backup & migration | [docs/backup.md](docs/backup.md) |
 
 ---
