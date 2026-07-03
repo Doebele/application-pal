@@ -826,6 +826,13 @@
     "regenerate": "Regenerate",
     "versionsTitle": "Versions",
     "version": "Version",
-    "versionCount": "{{count}} versions"
+    "versionCount": "{{count}} versions",
+    "noLetterYet": "No cover letter created yet.",
+    "goToStep2": "Go to step 2",
+    "reviewing": "Creating review…",
+    "promptSuggestions": "Adjustment suggestions — click to use",
+    "tab1": "Prepare",
+    "tab2": "Draft",
+    "tab3": "Result"
   }
 }

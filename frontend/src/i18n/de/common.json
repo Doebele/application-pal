@@ -826,6 +826,13 @@
     "regenerate": "Neu generieren",
     "versionsTitle": "Versionen",
     "version": "Version",
-    "versionCount": "{{count}} Versionen"
+    "versionCount": "{{count}} Versionen",
+    "noLetterYet": "Noch kein Anschreiben erstellt.",
+    "goToStep2": "Zu Schritt 2",
+    "reviewing": "Review wird erstellt…",
+    "promptSuggestions": "Anpassungs-Vorschläge — anklicken zum Übernehmen",
+    "tab1": "Vorbereitung",
+    "tab2": "Entwurf",
+    "tab3": "Ergebnis"
   }
 }

@@ -4317,14 +4317,7 @@ type LetterInputs = { selectedAngles?: string[]; jobNotes?: string; openingSente
 type OpeningSentence = { satz: string; ansatz: string; erklaerung: string; empfehlung?: string };
 type LetterVersion = { subject: string; body: string; createdAt: string };
 
-function StepHeader({ n, label }: { n: number; label: string }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-      <span style={{ width: 18, height: 18, flexShrink: 0, borderRadius: "50%", background: "var(--accent)", color: "#fff", fontSize: 10, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{n}</span>
-      <div style={{ fontSize: 10, fontWeight: 700, color: "var(--fg-2)", letterSpacing: "0.06em", textTransform: "uppercase" }}>{label}</div>
-    </div>
-  );
-}
+type LetterDraftTab = "prep" | "draft" | "result";
 
 function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand }: {
   app: Application;
@@ -4347,8 +4340,13 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const openings    = (aiResults?.["opening-sentences"]?.data as { saetze?: OpeningSentence[] } | undefined)?.saetze;
   const savedInputs = aiResults?.["letter-inputs"]?.data as LetterInputs | undefined;
   const letter      = aiResults?.["cover-letter"]?.data as { subject?: string; body?: string } | undefined;
-  const review      = aiResults?.["letter-review"]?.data as { gesamteindruck?: string; verbesserungen?: string[]; staerken?: string[] } | undefined;
+  const review      = aiResults?.["letter-review"]?.data as {
+    gesamteindruck?: string; staerken?: string[]; verbesserungen?: string[]; cliches?: string[];
+    tonalitaet?: string; laenge?: string; personalisierung?: string; promptVorschlaege?: string[];
+  } | undefined;
   const versions    = ((aiResults?.["letter-versions"]?.data as { versions?: LetterVersion[] } | undefined)?.versions) ?? [];
+
+  const [activeTab, setActiveTab] = useState<LetterDraftTab>(() => letter?.body ? "result" : "prep");
 
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [jobNotes, setJobNotes] = useState("");
@@ -4440,6 +4438,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
 
   const generateDraft = async (hint?: string) => {
     if (ai.provider === "none") { setErr(t("letterDraft.noAiModel")); return; }
+    setActiveTab("result"); // jump to the result tab immediately — it shows the spinner while this runs
     setGeneratingDraft(true); setErr(null);
     try {
       const r = await api.post<{ subject: string; body: string }>(`/api/applications/${app.id}/ai/cover-letter`, {
@@ -4484,6 +4483,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
       setExportUrl(r.data.docUrl);
     } catch (e) { setErr(errMsg(e)); } finally { setExporting(false); }
   };
+  const applySuggestedPrompt = (text: string) => { setAdjustPrompt(text); setShowAdjust(true); };
 
   const groupIcon: Record<string, React.ReactNode> = {
     [t("letterDraft.touchpoints")]: <Spark width={11} height={11} />,
@@ -4492,21 +4492,38 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   };
   const inputStyle: React.CSSProperties = { width: "100%", resize: "vertical", background: "none", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 8px", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", lineHeight: 1.5, outline: "none" };
 
-  const mainFlow = (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 10 }}>{err}</div>}
+  const sectionLabel: React.CSSProperties = { fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 };
 
-      {/* Step 1 — Individuelle Angaben (also feeds the opening sentence) */}
-      <div style={{ marginBottom: 18 }}>
-        <StepHeader n={1} label={t("letterDraft.step1")} />
+  const tabDefs: { id: LetterDraftTab; label: string; done: boolean }[] = [
+    { id: "prep",   label: t("letterDraft.tab1"), done: items.length > 0 || !!jobNotes.trim() },
+    { id: "draft",  label: t("letterDraft.tab2"), done: !!openings?.length },
+    { id: "result", label: t("letterDraft.tab3"), done: !!letter?.body },
+  ];
+
+  const tabBar = (
+    <div className="hide-scrollbar" style={{ display: "flex", borderBottom: "1px solid var(--border)", marginBottom: 14, overflowX: "auto" }}>
+      {tabDefs.map((tb, i) => (
+        <button key={tb.id} className={"tab" + (activeTab === tb.id ? " active" : "")}
+          style={{ padding: "6px 12px", fontSize: 11.5, display: "flex", alignItems: "center", gap: 5, whiteSpace: "nowrap" }}
+          onClick={() => setActiveTab(tb.id)}>
+          <span style={{ opacity: 0.55 }}>{i + 1}</span> {tb.label}
+          {tb.done && <Check width={10} height={10} style={{ color: "#4ade80" }} />}
+        </button>
+      ))}
+    </div>
+  );
+
+  const prepTab = (
+    <div>
+      <div style={{ marginBottom: 20 }}>
+        <div style={sectionLabel}>{t("letterDraft.step1")}</div>
         <textarea value={jobNotes} onChange={e => setJobNotes(e.target.value)} onBlur={() => persistInputs(selected, jobNotes, openingSentence)}
           placeholder={t("letterDraft.jobNotesPlaceholder")} rows={2} style={inputStyle} />
       </div>
 
-      {/* Step 2 — Bausteine */}
-      <div style={{ marginBottom: 18 }}>
+      <div>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-          <StepHeader n={2} label={t("letterDraft.step2")} />
+          <div style={sectionLabel}>{t("letterDraft.step2")}</div>
           <button className="btn btn-secondary" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} disabled={generatingAngles} onClick={generateAngles}>
             {generatingAngles
               ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.suggesting")}</>
@@ -4543,11 +4560,14 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
           </div>
         )}
       </div>
+    </div>
+  );
 
-      {/* Step 3 — Eröffnungssatz */}
-      <div style={{ marginBottom: 18 }}>
+  const draftTab = (
+    <div>
+      <div style={{ marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 }}>
-          <StepHeader n={3} label={t("letterDraft.step3")} />
+          <div style={sectionLabel}>{t("letterDraft.step3")}</div>
           <button className="btn btn-secondary" style={{ fontSize: 11, gap: 4, padding: "4px 8px" }} disabled={generatingOpenings} onClick={generateOpenings}>
             {generatingOpenings
               ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.suggesting")}</>
@@ -4576,67 +4596,118 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
         )}
       </div>
 
-      {/* Step 4 — Anschreiben erstellen */}
-      <div style={{ marginBottom: letter?.body ? 18 : 0 }}>
-        <StepHeader n={4} label={t("letterDraft.step4")} />
+      <div>
+        <div style={sectionLabel}>{t("letterDraft.step4")}</div>
         <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} disabled={generatingDraft} onClick={() => generateDraft()}>
           {generatingDraft
             ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.creatingDraft")}</>
             : <><PageEdit width={12} height={12} /> {letter?.body ? t("letterDraft.recreateDraftBtn") : t("letterDraft.createDraftBtn")}</>}
         </button>
       </div>
+    </div>
+  );
 
-      {/* Step 5 — Ergebnis & Review (only after a letter exists) */}
-      {letter?.body && (
-        <div>
-          <StepHeader n={5} label={t("letterDraft.step5")} />
-          <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", padding: 12, marginBottom: 10 }}>
-            {letter.subject && <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 8 }}>{letter.subject}</div>}
-            <div style={{ fontSize: 12.5, color: "var(--fg-1)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{letter.body}</div>
+  const resultTab = generatingDraft && !letter?.body ? (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--fg-3)" }}>
+      <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.creatingDraft")}
+    </div>
+  ) : !letter?.body ? (
+    <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>
+      {t("letterDraft.noLetterYet")}{" "}
+      <button className="btn btn-ghost" style={{ fontSize: 12, padding: "2px 6px", display: "inline-flex" }} onClick={() => setActiveTab("draft")}>
+        {t("letterDraft.goToStep2")}
+      </button>
+    </div>
+  ) : (
+    <div>
+      <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", padding: 12, marginBottom: 10, position: "relative" }}>
+        {generatingDraft && (
+          <div style={{ position: "absolute", inset: 0, background: "var(--bg)", opacity: 0.85, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
+            <RefreshCircle width={16} height={16} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />
           </div>
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
-            <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={copyLetter}>
-              <IcCopy width={11} height={11} /> {copied ? t("tileExpand.copied") : t("buttons.copy")}
-            </button>
-            {exportUrl ? (
-              <a href={exportUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
-                <Page width={11} height={11} /> Google Doc ↗
-              </a>
-            ) : (
-              <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={exporting} onClick={exportLetter}>
-                {exporting ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />} {t("letterDraft.asGoogleDoc")}
-              </button>
-            )}
-            <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={generatingReview} onClick={runReview}>
-              {generatingReview ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <ChatBubbleCheck width={11} height={11} />} {t("letterDraft.reviewBtn")}
-            </button>
-            <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={() => setShowAdjust(v => !v)}>
-              <EditPencil width={11} height={11} /> {t("letterDraft.adjustBtn")}
-            </button>
-          </div>
+        )}
+        {letter.subject && <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 8 }}>{letter.subject}</div>}
+        <div style={{ fontSize: 12.5, color: "var(--fg-1)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{letter.body}</div>
+      </div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={copyLetter}>
+          <IcCopy width={11} height={11} /> {copied ? t("tileExpand.copied") : t("buttons.copy")}
+        </button>
+        {exportUrl ? (
+          <a href={exportUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
+            <Page width={11} height={11} /> Google Doc ↗
+          </a>
+        ) : (
+          <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={exporting} onClick={exportLetter}>
+            {exporting ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />} {t("letterDraft.asGoogleDoc")}
+          </button>
+        )}
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={generatingReview} onClick={runReview}>
+          {generatingReview ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <ChatBubbleCheck width={11} height={11} />} {review ? t("letterDraft.reviewBtn") + " ↻" : t("letterDraft.reviewBtn")}
+        </button>
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={() => setShowAdjust(v => !v)}>
+          <EditPencil width={11} height={11} /> {t("letterDraft.adjustBtn")}
+        </button>
+      </div>
 
-          {showAdjust && (
-            <div style={{ display: "flex", gap: 6, marginBottom: 10 }}>
-              <textarea value={adjustPrompt} onChange={e => setAdjustPrompt(e.target.value)} placeholder={t("letterDraft.adjustPlaceholder")} rows={2} style={inputStyle} />
-              <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, whiteSpace: "nowrap", alignSelf: "flex-start" }} disabled={generatingDraft || !adjustPrompt.trim()} onClick={() => generateDraft(adjustPrompt)}>
-                {generatingDraft ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Refresh width={11} height={11} />} {t("letterDraft.regenerate")}
-              </button>
-            </div>
+      {showAdjust && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+          <textarea value={adjustPrompt} onChange={e => setAdjustPrompt(e.target.value)} placeholder={t("letterDraft.adjustPlaceholder")} rows={2} style={inputStyle} />
+          <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, whiteSpace: "nowrap", alignSelf: "flex-start" }} disabled={generatingDraft || !adjustPrompt.trim()} onClick={() => generateDraft(adjustPrompt)}>
+            {generatingDraft ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Refresh width={11} height={11} />} {t("letterDraft.regenerate")}
+          </button>
+        </div>
+      )}
+
+      {generatingReview && !review && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--fg-3)" }}>
+          <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.reviewing")}
+        </div>
+      )}
+
+      {review && (
+        <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", padding: 12 }}>
+          {review.gesamteindruck && <AiSection title={t("aiResult.overallImpression")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{review.gesamteindruck}</div></AiSection>}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+            {(review.staerken?.length ?? 0) > 0 && <AiSection title={t("aiResult.relevantStrengths")}><BulletList items={review.staerken!} accent="#34d399" /></AiSection>}
+            {(review.verbesserungen?.length ?? 0) > 0 && <AiSection title={t("aiResult.improvements")}><BulletList items={review.verbesserungen!} accent="#fbbf24" /></AiSection>}
+          </div>
+          {(review.cliches?.length ?? 0) > 0 && (
+            <AiSection title={t("aiResult.cliches")}><div>{review.cliches!.map((c, i) => <TagBadge key={i} text={c} color="#f87171" />)}</div></AiSection>
           )}
-
-          {review && (
-            <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", padding: 12 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>{t("letterDraft.reviewTitle")}</div>
-              {review.gesamteindruck && <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.5, marginBottom: 8 }}>{review.gesamteindruck}</div>}
-              {(review.verbesserungen?.length ?? 0) > 0 && (
-                <ul style={{ margin: 0, paddingLeft: 16, fontSize: 11.5, color: "var(--fg-3)", lineHeight: 1.6 }}>
-                  {review.verbesserungen!.map((v, i) => <li key={i}>{v}</li>)}
-                </ul>
-              )}
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 10, color: "var(--fg-3)", marginBottom: (review.promptVorschlaege?.length ?? 0) > 0 ? 12 : 0 }}>
+            {review.tonalitaet && <span>{t("aiResult.tone")}: <strong style={{ color: "var(--fg-2)" }}>{review.tonalitaet}</strong></span>}
+            {review.laenge && <span>· {t("aiResult.length")}: <strong style={{ color: "var(--fg-2)" }}>{review.laenge}</strong></span>}
+            {review.personalisierung && <span>· {t("aiResult.personalization")}: <strong style={{ color: "var(--fg-2)" }}>{review.personalisierung}</strong></span>}
+          </div>
+          {(review.promptVorschlaege?.length ?? 0) > 0 && (
+            <div>
+              <div style={sectionLabel}>{t("letterDraft.promptSuggestions")}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                {review.promptVorschlaege!.map((p, i) => (
+                  <button key={i} onClick={() => applySuggestedPrompt(p)} style={{
+                    textAlign: "left", fontSize: 11, lineHeight: 1.5, color: "var(--fg-2)", cursor: "pointer",
+                    padding: "6px 9px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)",
+                    fontFamily: "var(--font-sans)",
+                  }}>
+                    {p}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
       )}
+    </div>
+  );
+
+  const mainFlow = (
+    <div style={{ flex: 1, minWidth: 0 }}>
+      {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 10 }}>{err}</div>}
+      {tabBar}
+      {activeTab === "prep" && prepTab}
+      {activeTab === "draft" && draftTab}
+      {activeTab === "result" && resultTab}
     </div>
   );
 

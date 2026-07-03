@@ -3317,7 +3317,8 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const reviewGuidance = buildLetterGuidance(reviewProfile?.letterConfig);
   const system = `${langPrompt(lang_)} Du bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch.${reviewGuidance ? ` Prüfe zusätzlich, ob es die folgenden Vorgaben des Kandidaten erfüllt, und nenne Abweichungen in "verbesserungen":\n\n${reviewGuidance}` : ""} Antworte NUR mit JSON:
-{ "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "zu lang | angemessen | zu kurz", "personalisierung": "schwach | mittel | stark" }`;
+{ "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "zu lang | angemessen | zu kurz", "personalisierung": "schwach | mittel | stark", "promptVorschlaege": ["<string>"] }
+"promptVorschlaege": 2-4 fertig formulierte, direkt einsetzbare Anweisungen, mit denen der Kandidat das Anschreiben gezielt anpassen lassen kann (z.B. "Kürze den zweiten Absatz auf zwei Sätze und entferne Wiederholungen." oder "Ersetze das Klischee '…' durch einen konkreten Beleg aus dem Lebenslauf."). Jede Anweisung muss eigenständig verständlich sein, ohne den Review-Text zu kennen.`;
   // Auto-source cover letter: explicit content > cached generated letter > error hint
   let letterText = coverLetterContent?.trim() ?? "";
   if (!letterText) {
@@ -3332,7 +3333,7 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
   const user = `Stelle: ${app_.role} bei ${app_.company}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}\n\nAnschreiben:\n${letterText}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
-    const parsed = extractJson(raw) as { gesamteindruck: string; staerken: string[]; verbesserungen: string[]; cliches: string[]; tonalitaet: string; laenge: string; personalisierung: string };
+    const parsed = extractJson(raw) as { gesamteindruck: string; staerken: string[]; verbesserungen: string[]; cliches: string[]; tonalitaet: string; laenge: string; personalisierung: string; promptVorschlaege?: string[] };
     await persistAiResult(id, "letter-review", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {

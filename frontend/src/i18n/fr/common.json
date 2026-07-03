@@ -826,6 +826,13 @@
     "regenerate": "Régénérer",
     "versionsTitle": "Versions",
     "version": "Version",
-    "versionCount": "{{count}} versions"
+    "versionCount": "{{count}} versions",
+    "noLetterYet": "Aucune lettre créée pour l'instant.",
+    "goToStep2": "Aller à l'étape 2",
+    "reviewing": "Création de la révision…",
+    "promptSuggestions": "Suggestions d'ajustement — cliquez pour utiliser",
+    "tab1": "Préparation",
+    "tab2": "Brouillon",
+    "tab3": "Résultat"
   }
 }
