@@ -833,6 +833,12 @@
     "promptSuggestions": "Anpassungs-Vorschläge — anklicken zum Übernehmen",
     "tab1": "Vorbereitung",
     "tab2": "Entwurf",
-    "tab3": "Ergebnis"
+    "tab3": "Ergebnis",
+    "versionLabel": "Anschreiben — Version {{n}} / {{m}}",
+    "reviewCurrentHint": "Bezieht sich auf den aktuellen Entwurf (Version {{version}})",
+    "reviewStaleHint": "Bezieht sich auf einen früheren Entwurf — bitte neu prüfen",
+    "reviewUpToDate": "Review ist aktuell",
+    "reviewBtnRefresh": "Review aktualisieren",
+    "reviewCurrentHintNoVer": "Bezieht sich auf den aktuellen Entwurf"
   }
 }

@@ -9,7 +9,7 @@ import {
   Copy as IcCopy, MailOut, Brain,
   MapPin, VideoCamera, Expand, Collapse,
   Search, Spark, Building, CheckCircle, Linkedin, ChatBubbleCheck, Star,
-  FolderPlus,
+  FolderPlus, WarningTriangle,
 } from "iconoir-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
@@ -4339,12 +4339,21 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const angles      = aiResults?.["letter-angles"]?.data as LetterAngles | undefined;
   const openings    = (aiResults?.["opening-sentences"]?.data as { saetze?: OpeningSentence[] } | undefined)?.saetze;
   const savedInputs = aiResults?.["letter-inputs"]?.data as LetterInputs | undefined;
-  const letter      = aiResults?.["cover-letter"]?.data as { subject?: string; body?: string } | undefined;
-  const review      = aiResults?.["letter-review"]?.data as {
+  const letterEntry = aiResults?.["cover-letter"];
+  const reviewEntry = aiResults?.["letter-review"];
+  const letter      = letterEntry?.data as { subject?: string; body?: string } | undefined;
+  const review      = reviewEntry?.data as {
     gesamteindruck?: string; staerken?: string[]; verbesserungen?: string[]; cliches?: string[];
     tonalitaet?: string; laenge?: string; personalisierung?: string; promptVorschlaege?: string[];
   } | undefined;
   const versions    = ((aiResults?.["letter-versions"]?.data as { versions?: LetterVersion[] } | undefined)?.versions) ?? [];
+
+  // Which stored version the currently-shown letter matches (for the "Version N / M" label)
+  const currentVersionIdx = letter?.body ? versions.findIndex(v => v.body === letter.body) : -1;
+  // A review is only meaningful for the exact letter it was run against: fresh ⟺ its timestamp
+  // is not older than the current letter's. Both timestamps survive reload (rebuilt from _savedAt).
+  const reviewCurrent = !!review && !!letterEntry && !!reviewEntry &&
+    reviewEntry.createdAt.getTime() >= letterEntry.createdAt.getTime();
 
   const [activeTab, setActiveTab] = useState<LetterDraftTab>(() => letter?.body ? "result" : "prep");
 
@@ -4620,6 +4629,11 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     </div>
   ) : (
     <div>
+      {currentVersionIdx >= 0 && versions.length > 0 && (
+        <div style={{ fontSize: 10, color: "var(--fg-3)", marginBottom: 6 }}>
+          {t("letterDraft.versionLabel", { n: currentVersionIdx + 1, m: versions.length })}
+        </div>
+      )}
       <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", padding: 12, marginBottom: 10, position: "relative" }}>
         {generatingDraft && (
           <div style={{ position: "absolute", inset: 0, background: "var(--bg)", opacity: 0.85, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
@@ -4642,8 +4656,9 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
             {exporting ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />} {t("letterDraft.asGoogleDoc")}
           </button>
         )}
-        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={generatingReview} onClick={runReview}>
-          {generatingReview ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <ChatBubbleCheck width={11} height={11} />} {review ? t("letterDraft.reviewBtn") + " ↻" : t("letterDraft.reviewBtn")}
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={generatingReview || reviewCurrent}
+          title={reviewCurrent ? t("letterDraft.reviewUpToDate") : undefined} onClick={runReview}>
+          {generatingReview ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <ChatBubbleCheck width={11} height={11} />} {review && !reviewCurrent ? t("letterDraft.reviewBtnRefresh") : t("letterDraft.reviewBtn")}
         </button>
         <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={() => setShowAdjust(v => !v)}>
           <EditPencil width={11} height={11} /> {t("letterDraft.adjustBtn")}
@@ -4667,6 +4682,14 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
 
       {review && (
         <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", padding: 12 }}>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, marginBottom: 10,
+            color: reviewCurrent ? "#34d399" : "#fbbf24",
+          }}>
+            {reviewCurrent
+              ? <><Check width={11} height={11} /> {currentVersionIdx >= 0 ? t("letterDraft.reviewCurrentHint", { version: currentVersionIdx + 1 }) : t("letterDraft.reviewCurrentHintNoVer")}</>
+              : <><WarningTriangle width={11} height={11} /> {t("letterDraft.reviewStaleHint")}</>}
+          </div>
           {review.gesamteindruck && <AiSection title={t("aiResult.overallImpression")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{review.gesamteindruck}</div></AiSection>}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {(review.staerken?.length ?? 0) > 0 && <AiSection title={t("aiResult.relevantStrengths")}><BulletList items={review.staerken!} accent="#34d399" /></AiSection>}

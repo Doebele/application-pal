@@ -833,6 +833,12 @@
     "promptSuggestions": "Suggestions d'ajustement — cliquez pour utiliser",
     "tab1": "Préparation",
     "tab2": "Brouillon",
-    "tab3": "Résultat"
+    "tab3": "Résultat",
+    "versionLabel": "Lettre — version {{n}} / {{m}}",
+    "reviewCurrentHint": "Se réfère au brouillon actuel (version {{version}})",
+    "reviewStaleHint": "Se réfère à un brouillon antérieur — veuillez relancer",
+    "reviewUpToDate": "La révision est à jour",
+    "reviewBtnRefresh": "Actualiser la révision",
+    "reviewCurrentHintNoVer": "Se réfère au brouillon actuel"
   }
 }

@@ -833,6 +833,12 @@
     "promptSuggestions": "Adjustment suggestions — click to use",
     "tab1": "Prepare",
     "tab2": "Draft",
-    "tab3": "Result"
+    "tab3": "Result",
+    "versionLabel": "Cover letter — version {{n}} / {{m}}",
+    "reviewCurrentHint": "Refers to the current draft (version {{version}})",
+    "reviewStaleHint": "Refers to an earlier draft — please re-run",
+    "reviewUpToDate": "Review is up to date",
+    "reviewBtnRefresh": "Refresh review",
+    "reviewCurrentHintNoVer": "Refers to the current draft"
   }
 }
