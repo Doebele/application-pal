@@ -2557,6 +2557,26 @@ app.post("/api/applications/:id/ai/letter-versions/save", async (c) => {
   return c.json({ versions });
 });
 
+// Update the CURRENT version in place (manual inline edits of the letter). Unlike
+// /save this does NOT append a new version — it overwrites versions[index] (keeping
+// its original createdAt) and keeps the shown cover-letter in sync. A new version is
+// only ever created by the AI "adjust" flow (/save).
+app.post("/api/applications/:id/ai/letter-versions/update", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const { index, subject, body } = await c.req.json<{ index: number; subject: string; body: string }>();
+  const [app_] = await db.select({ c: applications.aiResultsCache }).from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  let versions: Array<{ subject: string; body: string; createdAt: string }> = [];
+  try { versions = (JSON.parse(app_.c ?? "{}")["letter-versions"]?.versions ?? []) as typeof versions; } catch { /* ignore */ }
+  if (index >= 0 && index < versions.length) {
+    versions[index] = { subject, body, createdAt: versions[index].createdAt };
+    await persistAiResult(id, "letter-versions", { versions });
+  }
+  await persistAiResult(id, "cover-letter", { subject, body });
+  return c.json({ versions });
+});
+
 app.post("/api/applications/:id/ai/letter-versions/restore", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");

@@ -163,17 +163,18 @@ function getCompanyColor(company: string): string {
   return colors[Math.abs(hash) % colors.length];
 }
 
-function AutoTextarea({ value, onChange, onBlur, placeholder, minRows = 3 }: {
+function AutoTextarea({ value, onChange, onBlur, placeholder, minRows = 3, disabled, style }: {
   value: string; onChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
-  onBlur?: () => void; placeholder?: string; minRows?: number;
+  onBlur?: () => void; placeholder?: string; minRows?: number; disabled?: boolean;
+  style?: React.CSSProperties;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     const el = ref.current; if (!el) return;
     el.style.height = "auto"; el.style.height = el.scrollHeight + "px";
   }, [value]);
-  return <textarea ref={ref} value={value} onChange={onChange} onBlur={onBlur}
-    placeholder={placeholder} rows={minRows} style={{ resize: "none", overflow: "hidden", background: "transparent", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none" }} />;
+  return <textarea ref={ref} value={value} onChange={onChange} onBlur={onBlur} disabled={disabled}
+    placeholder={placeholder} rows={minRows} style={{ resize: "none", overflow: "hidden", background: "transparent", color: "var(--fg-1)", fontFamily: "var(--font-sans)", fontSize: 13, outline: "none", ...style }} />;
 }
 
 function AgentStep({ done, active, label, meta }: { done: boolean; active: boolean; label: string; meta?: string }) {
@@ -4328,6 +4329,11 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
 }) {
   const { t } = useTranslation();
   const { ai } = useUiStore();
+  const startAiJob = useUiStore(s => s.startAiJob);
+  const finishAiJob = useUiStore(s => s.finishAiJob);
+  const markAiJobsSeen = useUiStore(s => s.markAiJobsSeen);
+  const jobCoverLetter = useUiStore(s => s.aiJobs[app.id]?.["cover-letter"]);
+  const jobReview = useUiStore(s => s.aiJobs[app.id]?.["letter-review"]);
   const queryClient = useQueryClient();
   const appLang = (app as Application & { language?: string }).language ?? "de";
   const [generatingAngles, setGeneratingAngles] = useState(false);
@@ -4363,6 +4369,9 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const [showAdjust, setShowAdjust] = useState(false);
   const [adjustPrompt, setAdjustPrompt] = useState("");
   const [copied, setCopied] = useState(false);
+  // Editable letter draft — mirrors the saved letter but lets the user edit it inline.
+  const [draftSubject, setDraftSubject] = useState(letter?.subject ?? "");
+  const [draftBody, setDraftBody] = useState(letter?.body ?? "");
   const [exporting, setExporting] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
   const hydrated = useRef(false);
@@ -4388,6 +4397,27 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
       }
     }
   }, [items, savedInputs]);
+
+  // Keep the editable draft in sync whenever the saved letter changes
+  // (generate, restore, reload) — but NOT while the user is typing (we only write
+  // back on blur, so letter?.body stays put during edits).
+  useEffect(() => {
+    setDraftSubject(letter?.subject ?? "");
+    setDraftBody(letter?.body ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [letter?.subject, letter?.body]);
+
+  // "Is generating" that survives switching tiles: the local flag OR the persisted
+  // per-app job (so re-opening this app's drawer still shows the spinner).
+  const draftRunning  = generatingDraft  || jobCoverLetter?.status === "running";
+  const reviewRunning = generatingReview || jobReview?.status === "running";
+
+  // While the user is viewing this app's letter panel, mark its AI jobs seen so the
+  // tile's "new result" marker clears (also fires when a job finishes with the
+  // drawer open on this app).
+  useEffect(() => {
+    markAiJobsSeen(app.id);
+  }, [app.id, jobCoverLetter?.at, jobReview?.at, markAiJobsSeen]);
 
   const persistInputs = (nextSelected: Record<string, string>, nextJobNotes: string, nextOpening: string) => {
     const body: LetterInputs = { selectedAngles: Object.values(nextSelected), jobNotes: nextJobNotes, openingSentence: nextOpening };
@@ -4449,6 +4479,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     if (ai.provider === "none") { setErr(t("letterDraft.noAiModel")); return; }
     setActiveTab("result"); // jump to the result tab immediately — it shows the spinner while this runs
     setGeneratingDraft(true); setErr(null);
+    startAiJob(app.id, "cover-letter"); // survives switching tiles while it runs
     try {
       const r = await api.post<{ subject: string; body: string }>(`/api/applications/${app.id}/ai/cover-letter`, {
         ai: aiBody(), language: appLang,
@@ -4461,16 +4492,17 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
       onAiResult?.("letter-versions", { versions: vr.data.versions });
       setShowAdjust(false); setAdjustPrompt("");
       invalidate();
-    } catch (e) { setErr(errMsg(e)); } finally { setGeneratingDraft(false); }
+    } catch (e) { setErr(errMsg(e)); } finally { setGeneratingDraft(false); finishAiJob(app.id, "cover-letter"); }
   };
 
   const runReview = async () => {
     if (ai.provider === "none") { setErr(t("letterDraft.noAiModel")); return; }
     setGeneratingReview(true); setErr(null);
+    startAiJob(app.id, "letter-review"); // survives switching tiles while it runs
     try {
       const r = await api.post(`/api/applications/${app.id}/ai/letter-review`, { ai: aiBody(), language: appLang });
       onAiResult?.("letter-review", r.data); invalidate();
-    } catch (e) { setErr(errMsg(e)); } finally { setGeneratingReview(false); }
+    } catch (e) { setErr(errMsg(e)); } finally { setGeneratingReview(false); finishAiJob(app.id, "letter-review"); }
   };
 
   const restoreVersion = async (index: number) => {
@@ -4492,7 +4524,35 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
       setExportUrl(r.data.docUrl);
     } catch (e) { setErr(errMsg(e)); } finally { setExporting(false); }
   };
-  const applySuggestedPrompt = (text: string) => { setAdjustPrompt(text); setShowAdjust(true); };
+  // Persist an inline edit to the CURRENT version (implicit save on blur). Does NOT
+  // create a new version — that only happens via the AI "adjust" flow (generateDraft).
+  const saveCurrentEdit = () => {
+    if (!letter) return;
+    const subject = draftSubject, body = draftBody;
+    if (subject === (letter.subject ?? "") && body === (letter.body ?? "")) return; // unchanged
+    const idx = currentVersionIdx;
+    // Optimistic local update: patch the current version in place + the shown letter,
+    // so the "Version N / M" label + version list stay stable while we save.
+    if (idx >= 0) {
+      const nextVersions = versions.map((v, i) => i === idx ? { ...v, subject, body } : v);
+      onAiResult?.("letter-versions", { versions: nextVersions });
+    }
+    onAiResult?.("cover-letter", { subject, body });
+    api.post(`/api/applications/${app.id}/ai/letter-versions/update`, { index: idx, subject, body }).catch(() => {});
+  };
+
+  // Adjustment suggestions accumulate in the prompt (one per line) — clicking a
+  // suggestion adds it, clicking it again removes it. Marking is derived from the
+  // prompt text so it stays correct even if the user edits it by hand.
+  const isSuggestionApplied = (p: string) => adjustPrompt.split("\n").some(l => l.trim() === p.trim());
+  const toggleSuggestion = (p: string) => {
+    setShowAdjust(true);
+    setAdjustPrompt(prev => {
+      const lines = prev.split("\n").filter(l => l.trim().length > 0);
+      if (lines.some(l => l.trim() === p.trim())) return lines.filter(l => l.trim() !== p.trim()).join("\n");
+      return [...lines, p].join("\n");
+    });
+  };
 
   const groupIcon: Record<string, React.ReactNode> = {
     [t("letterDraft.touchpoints")]: <Spark width={11} height={11} />,
@@ -4607,8 +4667,8 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
 
       <div>
         <div style={sectionLabel}>{t("letterDraft.step4")}</div>
-        <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} disabled={generatingDraft} onClick={() => generateDraft()}>
-          {generatingDraft
+        <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} disabled={draftRunning} onClick={() => generateDraft()}>
+          {draftRunning
             ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.creatingDraft")}</>
             : <><PageEdit width={12} height={12} /> {letter?.body ? t("letterDraft.recreateDraftBtn") : t("letterDraft.createDraftBtn")}</>}
         </button>
@@ -4616,7 +4676,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     </div>
   );
 
-  const resultTab = generatingDraft && !letter?.body ? (
+  const resultTab = draftRunning && !letter?.body ? (
     <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--fg-3)" }}>
       <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.creatingDraft")}
     </div>
@@ -4635,13 +4695,19 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
         </div>
       )}
       <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", padding: 12, marginBottom: 10, position: "relative" }}>
-        {generatingDraft && (
-          <div style={{ position: "absolute", inset: 0, background: "var(--bg)", opacity: 0.85, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8 }}>
+        {draftRunning && (
+          <div style={{ position: "absolute", inset: 0, background: "var(--bg)", opacity: 0.85, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 8, zIndex: 1 }}>
             <RefreshCircle width={16} height={16} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />
           </div>
         )}
-        {letter.subject && <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 8 }}>{letter.subject}</div>}
-        <div style={{ fontSize: 12.5, color: "var(--fg-1)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{letter.body}</div>
+        <input value={draftSubject} onChange={e => setDraftSubject(e.target.value)} onBlur={saveCurrentEdit} disabled={draftRunning}
+          placeholder={t("letterDraft.subjectPlaceholder")}
+          style={{ width: "100%", fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 8, background: "transparent", border: "none", outline: "none", fontFamily: "var(--font-sans)", padding: 0 }} />
+        <AutoTextarea value={draftBody} onChange={e => setDraftBody(e.target.value)} onBlur={saveCurrentEdit} disabled={draftRunning}
+          minRows={6} style={{ width: "100%", fontSize: 12.5, lineHeight: 1.6, border: "none", padding: 0 }} />
+      </div>
+      <div style={{ fontSize: 10, color: "var(--fg-4)", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}>
+        <EditPencil width={9} height={9} /> {t("letterDraft.editHint")}
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
         <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={copyLetter}>
@@ -4656,9 +4722,9 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
             {exporting ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Page width={11} height={11} />} {t("letterDraft.asGoogleDoc")}
           </button>
         )}
-        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={generatingReview || reviewCurrent}
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={reviewRunning || reviewCurrent}
           title={reviewCurrent ? t("letterDraft.reviewUpToDate") : undefined} onClick={runReview}>
-          {generatingReview ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <ChatBubbleCheck width={11} height={11} />} {review && !reviewCurrent ? t("letterDraft.reviewBtnRefresh") : t("letterDraft.reviewBtn")}
+          {reviewRunning ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <ChatBubbleCheck width={11} height={11} />} {review && !reviewCurrent ? t("letterDraft.reviewBtnRefresh") : t("letterDraft.reviewBtn")}
         </button>
         <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={() => setShowAdjust(v => !v)}>
           <EditPencil width={11} height={11} /> {t("letterDraft.adjustBtn")}
@@ -4668,13 +4734,13 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
       {showAdjust && (
         <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
           <textarea value={adjustPrompt} onChange={e => setAdjustPrompt(e.target.value)} placeholder={t("letterDraft.adjustPlaceholder")} rows={2} style={inputStyle} />
-          <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, whiteSpace: "nowrap", alignSelf: "flex-start" }} disabled={generatingDraft || !adjustPrompt.trim()} onClick={() => generateDraft(adjustPrompt)}>
-            {generatingDraft ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Refresh width={11} height={11} />} {t("letterDraft.regenerate")}
+          <button className="btn btn-primary" style={{ fontSize: 11, gap: 4, whiteSpace: "nowrap", alignSelf: "flex-start" }} disabled={draftRunning || !adjustPrompt.trim()} onClick={() => generateDraft(adjustPrompt)}>
+            {draftRunning ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Refresh width={11} height={11} />} {t("letterDraft.regenerate")}
           </button>
         </div>
       )}
 
-      {generatingReview && !review && (
+      {reviewRunning && !review && (
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "var(--fg-3)" }}>
           <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.reviewing")}
         </div>
@@ -4684,9 +4750,11 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
         <div style={{ borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface)", padding: 12 }}>
           <div style={{
             display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, marginBottom: 10,
-            color: reviewCurrent ? "#34d399" : "#fbbf24",
+            color: reviewRunning ? "var(--accent)" : reviewCurrent ? "#34d399" : "#fbbf24",
           }}>
-            {reviewCurrent
+            {reviewRunning
+              ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> {t("letterDraft.reviewRunningHint")}</>
+              : reviewCurrent
               ? <><Check width={11} height={11} /> {currentVersionIdx >= 0 ? t("letterDraft.reviewCurrentHint", { version: currentVersionIdx + 1 }) : t("letterDraft.reviewCurrentHintNoVer")}</>
               : <><WarningTriangle width={11} height={11} /> {t("letterDraft.reviewStaleHint")}</>}
           </div>
@@ -4707,15 +4775,24 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
             <div>
               <div style={sectionLabel}>{t("letterDraft.promptSuggestions")}</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                {review.promptVorschlaege!.map((p, i) => (
-                  <button key={i} onClick={() => applySuggestedPrompt(p)} style={{
-                    textAlign: "left", fontSize: 11, lineHeight: 1.5, color: "var(--fg-2)", cursor: "pointer",
-                    padding: "6px 9px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)",
-                    fontFamily: "var(--font-sans)",
-                  }}>
-                    {p}
-                  </button>
-                ))}
+                {review.promptVorschlaege!.map((p, i) => {
+                  const applied = isSuggestionApplied(p);
+                  return (
+                    <button key={i} onClick={() => toggleSuggestion(p)} title={applied ? t("letterDraft.suggestionRemove") : t("letterDraft.suggestionAdd")} style={{
+                      textAlign: "left", fontSize: 11, lineHeight: 1.5, cursor: "pointer",
+                      padding: "6px 9px", borderRadius: 6, fontFamily: "var(--font-sans)",
+                      display: "flex", alignItems: "flex-start", gap: 6,
+                      color: applied ? "var(--accent)" : "var(--fg-2)",
+                      border: `1px solid ${applied ? "var(--accent)" : "var(--border)"}`,
+                      background: applied ? "var(--accent-08)" : "var(--surface-2)",
+                    }}>
+                      <span style={{ flexShrink: 0, marginTop: 1, opacity: applied ? 1 : 0.5 }}>
+                        {applied ? <Check width={11} height={11} /> : <Plus width={11} height={11} />}
+                      </span>
+                      <span style={{ flex: 1 }}>{p}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

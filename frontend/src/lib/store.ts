@@ -32,6 +32,14 @@ export type AiConfig = {
 export const DEFAULT_FOLDER_RULE = "{firma} – {rolle} – {datum}";
 export const DEFAULT_DOC_RULE    = "{doc} – {name} – {firma} – {datum}";
 
+// In-flight / freshly-finished AI generations, tracked per application so the
+// state survives switching tiles (drawer unmount/remount). NOT persisted — a
+// "running" job can't survive a full page reload, and finished results live in
+// the DB anyway.
+export type AiJobKind = "cover-letter" | "letter-review";
+export type AiJob = { status: "running" | "done"; seen: boolean; at: number };
+export type AiJobsMap = Record<string, Partial<Record<AiJobKind, AiJob>>>;
+
 type UiState = {
   theme: Theme;
   accent: Accent;
@@ -70,6 +78,11 @@ type UiState = {
   setAi: (ai: Partial<AiConfig>) => void;
   setDriveNameFolder: (rule: string) => void;
   setDriveNameDoc: (rule: string) => void;
+  // Per-application AI generation tracking (survives tile switches, not reloads)
+  aiJobs: AiJobsMap;
+  startAiJob: (appId: string, kind: AiJobKind) => void;
+  finishAiJob: (appId: string, kind: AiJobKind) => void;
+  markAiJobsSeen: (appId: string) => void;
 };
 
 export const useUiStore = create<UiState>()(
@@ -121,9 +134,30 @@ export const useUiStore = create<UiState>()(
       setAi: (patch) => set((s) => ({ ai: { ...s.ai, ...patch } })),
       setDriveNameFolder: (driveNameFolder) => set({ driveNameFolder }),
       setDriveNameDoc:    (driveNameDoc)    => set({ driveNameDoc }),
+      aiJobs: {},
+      startAiJob: (appId, kind) => set((s) => ({
+        aiJobs: { ...s.aiJobs, [appId]: { ...s.aiJobs[appId], [kind]: { status: "running", seen: true, at: Date.now() } } },
+      })),
+      finishAiJob: (appId, kind) => set((s) => ({
+        // seen:false → the tile shows a "new result" marker until the user opens this app
+        aiJobs: { ...s.aiJobs, [appId]: { ...s.aiJobs[appId], [kind]: { status: "done", seen: false, at: Date.now() } } },
+      })),
+      markAiJobsSeen: (appId) => set((s) => {
+        const cur = s.aiJobs[appId];
+        if (!cur) return {} as Partial<UiState>;
+        const next: Partial<Record<AiJobKind, AiJob>> = {};
+        for (const k of Object.keys(cur) as AiJobKind[]) next[k] = { ...cur[k]!, seen: true };
+        return { aiJobs: { ...s.aiJobs, [appId]: next } };
+      }),
     }),
     {
       name: "app-pal-ui-v2",
+      // aiJobs is in-memory only (see type comment) — never persist it.
+      partialize: (state) => {
+        const rest = { ...state } as Partial<UiState>;
+        delete rest.aiJobs;
+        return rest;
+      },
       migrate: (persisted: unknown) => {
         const s = persisted as Record<string, unknown>;
         if (s?.density === "compact") s.density = "high";

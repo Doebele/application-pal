@@ -1,8 +1,32 @@
 import { useState } from "react";
-import { Clock, MapPin, MoreHoriz, OpenNewWindow, Archive } from "iconoir-react";
+import { Clock, MapPin, MoreHoriz, OpenNewWindow, Archive, RefreshCircle, Sparks } from "iconoir-react";
 import type { Application } from "@application-pal/shared";
-import type { CardVariant } from "../lib/store";
+import { type CardVariant, useUiStore } from "../lib/store";
 import { ARCHIVE_REASON_LABELS } from "./DetailDrawer";
+
+// Corner indicator: shows a spinner while the AI is generating a letter/review for
+// this application, or an accent "new result" mark once one finished but the user
+// hasn't opened this app since. Survives switching tiles (state lives in the store).
+function AiJobIndicator({ appId }: { appId: string }) {
+  const jobs = useUiStore(s => s.aiJobs[appId]);
+  if (!jobs) return null;
+  const entries = Object.values(jobs);
+  const running = entries.some(j => j?.status === "running");
+  const unseen  = entries.some(j => j?.status === "done" && !j.seen);
+  if (!running && !unseen) return null;
+  return (
+    <div style={{
+      position: "absolute", top: 6, right: 6, zIndex: 2, pointerEvents: "none",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      width: 20, height: 20, borderRadius: 999,
+      background: "var(--accent-08)", border: "1px solid var(--accent)", color: "var(--accent)",
+    }}>
+      {running
+        ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} />
+        : <Sparks width={12} height={12} />}
+    </div>
+  );
+}
 
 function getInitials(company: string): string {
   return company.slice(0, 2).toUpperCase();
@@ -261,5 +285,10 @@ export function ApplicationCard({
   isSelected?: boolean;
 }) {
   const CardComponent = CARD_MAP[variant] ?? CardRich;
-  return <CardComponent app={app} onClick={onClick} isSelected={isSelected} />;
+  return (
+    <div style={{ position: "relative" }}>
+      <CardComponent app={app} onClick={onClick} isSelected={isSelected} />
+      <AiJobIndicator appId={app.id} />
+    </div>
+  );
 }
