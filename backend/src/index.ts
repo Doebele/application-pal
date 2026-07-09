@@ -713,11 +713,12 @@ const pickLocation = (text: string): string | null => text.match(locationPattern
 
 // ─── LLM extraction ───────────────────────────────────────────
 const EXTRACTION_PROMPT = `Extract job posting fields. Return ONLY this JSON object, nothing else:
-{"company":"<employer name>","role":"<exact job title>","location":"<city or region>","salary":"<range or null>","tags":["<skill1>","<skill2>"],"description":"<2 sentence English summary of responsibilities>","jobType":"<fulltime|parttime|freelance|internship|temporary|null>","workModel":"<onsite|hybrid|remote|null>","contractType":"<Unbefristet|6 Monate|9 Monate|12 Monate|<duration>|null>"}
+{"company":"<employer name>","role":"<exact job title>","contactPerson":"<contact/recruiter full name or null>","location":"<city or region>","salary":"<range or null>","tags":["<skill1>","<skill2>"],"description":"<2 sentence English summary of responsibilities>","jobType":"<fulltime|parttime|freelance|internship|temporary|null>","workModel":"<onsite|hybrid|remote|null>","contractType":"<Unbefristet|6 Monate|9 Monate|12 Monate|<duration>|null>"}
 
 Rules:
 - company: employer name only, e.g. "St. Galler Kantonalbank"
 - role: job title only, e.g. "Digital Experience Designer 80-100%"
+- contactPerson: the named contact person / recruiter for the application if explicitly stated (e.g. "Ihre Ansprechpartnerin: Frau Maria Muster", "Bei Fragen wenden Sie sich an Herrn Hans Meier"). Full name only, without salutation/title; null if no person is named
 - location: city only, e.g. "Sankt Gallen"
 - salary: numeric range only or null
 - tags: 4-6 skills from the requirements, e.g. ["Figma","UX/UI","Wireframing","Agile"]. Also include work-time if mentioned ("80-100%", "80%", "Fulltime", etc.)
@@ -732,6 +733,7 @@ const EXTRACTION_PROMPT_USER_PREFIX = `Extract fields from this job posting:\n\n
 type LlmExtracted = {
   company: string | null;
   role: string | null;
+  contactPerson: string | null;
   location: string | null;
   salary: string | null;
   tags: string[];
@@ -846,6 +848,7 @@ function parseJsonResponse(raw: string): LlmExtracted | null {
     return {
       company:      typeof parsed.company === "string" ? parsed.company : null,
       role:         typeof parsed.role === "string" ? parsed.role : null,
+      contactPerson: typeof parsed.contactPerson === "string" && parsed.contactPerson.trim() ? parsed.contactPerson.trim() : null,
       location:     typeof parsed.location === "string" ? parsed.location : null,
       salary:       typeof parsed.salary === "string" ? parsed.salary : null,
       tags:         Array.isArray(parsed.tags) ? parsed.tags.filter((tag): tag is string => typeof tag === "string").slice(0, 6) : [],
@@ -1499,6 +1502,7 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
         return c.json({
           company:      llm.company,
           role:         llm.role,
+          contactPerson: llm.contactPerson,
           location:     llm.location,
           description:  llm.description || normalized.slice(0, 500),
           salary:       llm.salary,
@@ -1521,6 +1525,7 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
   return c.json({
     company,
     role:         pickRole(normalized),
+    contactPerson: null,
     location:     pickLocation(normalized),
     description:  normalized.slice(0, 1000),
     salary:       null,
@@ -2459,7 +2464,7 @@ app.post("/api/applications/:id/ai/cover-letter", async (c) => {
   const lang = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const letterGuidance = buildLetterGuidance(profile?.letterConfig);
   const system = `${langPrompt(lang)} Du bist ein erfahrener HR-Berater und Karriere-Texter. Schreibe ein professionelles, individuelles Bewerbungsanschreiben (max. 350 Wörter).
-Vermeide generische Floskeln wie "Hiermit bewerbe ich mich" — starte mit einem konkreten, aufmerksamkeitsstarken Bezug zur Firma oder Rolle. Belege Stärken mit konkreten Ergebnissen/Zahlen aus dem Lebenslauf statt unbelegter Adjektive. Spiegle die Schlüsselbegriffe der Stellenbeschreibung. Aktive Sprache, kurze Sätze, kein Superlativ-Marketing.${letterGuidance ? `\n\n${letterGuidance}\n\nDiese Vorgaben des Kandidaten sind verbindlich — respektiere Struktur, Stil und No-Gos.` : ""}
+Vermeide generische Floskeln wie "Hiermit bewerbe ich mich" — starte mit einem konkreten, aufmerksamkeitsstarken Bezug zur Firma oder Rolle. Belege Stärken mit konkreten Ergebnissen/Zahlen aus dem Lebenslauf statt unbelegter Adjektive. Spiegle die Schlüsselbegriffe der Stellenbeschreibung. Aktive Sprache, kurze Sätze, kein Superlativ-Marketing.${app_.contactPerson ? `\nIst ein Ansprechpartner genannt, sprich diese Person in der Anrede persönlich an (z.B. "Sehr geehrte Frau …" / "Sehr geehrter Herr …"); sonst nutze "Sehr geehrte Damen und Herren".` : ""}${letterGuidance ? `\n\n${letterGuidance}\n\nDiese Vorgaben des Kandidaten sind verbindlich — respektiere Struktur, Stil und No-Gos.` : ""}
 Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Text mit Absätzen durch \\n\\n getrennt>" }`;
   const candidateParts = [];
   if (profile?.headline) candidateParts.push(`Expertise: ${profile.headline}`);
@@ -2467,7 +2472,7 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
   if (profile?.personalNotes) candidateParts.push(`Persönliche Stichpunkte: ${profile.personalNotes.slice(0, 400)}`);
   const coverLetterDocsContext = await loadDocumentsContext(userId);
   if (coverLetterDocsContext) candidateParts.push(coverLetterDocsContext);
-  let user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\nOrt: ${app_.location ?? ""}\nGehalt: ${app_.salary ?? ""}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
+  let user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\nAnsprechpartner: ${app_.contactPerson ?? ""}\nOrt: ${app_.location ?? ""}\nGehalt: ${app_.salary ?? ""}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
   if (letterInputs?.angles?.length) {
     user += `\n\n## Vom Kandidaten ausgewählte Kernaussagen für dieses Anschreiben (unbedingt verwenden)\n${letterInputs.angles.map(a => `- ${a}`).join("\n")}`;
   }

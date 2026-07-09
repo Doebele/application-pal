@@ -326,6 +326,7 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
   const { t } = useTranslation();
   const [company, setCompany]       = useState(app.company);
   const [role, setRole]             = useState(app.role);
+  const [contactPerson, setContactPerson] = useState((app as Application & { contactPerson?: string }).contactPerson ?? "");
   const [location, setLocation]     = useState(app.location ?? "");
   const [salary, setSalary]         = useState(app.salary ?? "");
   const [jobType, setJobType]           = useState((app as Application & { jobType?: string }).jobType ?? "");
@@ -364,10 +365,17 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
         </div>
       </div>
 
-      {/* Row 2: Rolle (full width) */}
-      <div className="field">
-        <label>{t("overview.role")}</label>
-        <input value={role} onChange={(e) => setRole(e.target.value)} onBlur={() => save({ role })} />
+      {/* Row 2: Rolle + Ansprechpartner */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div className="field">
+          <label>{t("overview.role")}</label>
+          <input value={role} onChange={(e) => setRole(e.target.value)} onBlur={() => save({ role })} />
+        </div>
+        <div className="field">
+          <label>{t("overview.contactPerson")}</label>
+          <input value={contactPerson} onChange={(e) => setContactPerson(e.target.value)} onBlur={() => save({ contactPerson: contactPerson || null } as Partial<Application>)}
+            placeholder={t("overview.contactPersonPlaceholder")} />
+        </div>
       </div>
 
       {/* Row 3: Original URL + Bewerbungsportal */}

@@ -185,6 +185,8 @@
     "company": "Firma",
     "location": "Ort",
     "role": "Rolle",
+    "contactPerson": "Ansprechpartner",
+    "contactPersonPlaceholder": "z.B. Frau Maria Muster",
     "originalUrl": "Original URL",
     "portal": "Bewerbungsportal",
     "salary": "Salary",

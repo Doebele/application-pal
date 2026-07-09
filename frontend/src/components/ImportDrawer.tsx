@@ -127,6 +127,7 @@ function StagePicker({ value, onChange }: { value: string; onChange: (v: string)
 type ExtractedRaw = {
   company: string | null;
   role: string | null;
+  contactPerson?: string | null;
   location: string | null;
   description: string;
   salary?: string | null;
@@ -139,7 +140,7 @@ type ExtractedRaw = {
 };
 
 type FormState = {
-  company: string; role: string; location: string;
+  company: string; role: string; contactPerson: string; location: string;
   salary: string; description: string; tags: string[]; source: string;
   jobType: string; workModel: string; contractType: string;
 };
@@ -230,7 +231,7 @@ export function ImportDrawer({ onClose }: Props) {
   const [descExpanded, setDescExpanded] = useState(false);
 
   const [form, setForm] = useState<FormState>({
-    company: "", role: "", location: "", salary: "", description: "", tags: [], source: "",
+    company: "", role: "", contactPerson: "", location: "", salary: "", description: "", tags: [], source: "",
     jobType: "", workModel: "", contractType: "",
   });
 
@@ -253,6 +254,7 @@ export function ImportDrawer({ onClose }: Props) {
       api.post("/api/applications", {
         company:      form.company      || "Unknown",
         role:         form.role         || "Unknown",
+        contactPerson: form.contactPerson || null,
         location:     form.location     || null,
         salary:       form.salary       || null,
         description:  form.description  || null,
@@ -270,7 +272,7 @@ export function ImportDrawer({ onClose }: Props) {
 
   const runExtraction = async () => {
     setPhase("reading"); setStep(0); setLogoUrl(null); setLogoOk(false); setDescExpanded(false);
-    setForm({ company: "", role: "", location: "", salary: "", description: "", tags: [], source: "", jobType: "", workModel: "", contractType: "" });
+    setForm({ company: "", role: "", contactPerson: "", location: "", salary: "", description: "", tags: [], source: "", jobType: "", workModel: "", contractType: "" });
     const advance = (n: number, p: ExtractionPhase) => setTimeout(() => { setStep(n); setPhase(p); }, n * 600);
     advance(1, "reading"); advance(2, "extracting"); advance(3, "extracting");
     try {
@@ -281,6 +283,7 @@ export function ImportDrawer({ onClose }: Props) {
         setForm({
           company:      result.company      ?? "",
           role:         result.role         ?? "",
+          contactPerson: result.contactPerson ?? "",
           location:     result.location     ?? "",
           salary:       result.salary       ?? "",
           description:  result.description  ?? "",
@@ -433,10 +436,11 @@ export function ImportDrawer({ onClose }: Props) {
             {/* Fields grid — Notion style */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 20px" }}>
               {([
-                { key: "company",  label: "Firma *" },
-                { key: "role",     label: "Rolle *" },
-                { key: "location", label: "Ort" },
-                { key: "salary",   label: "Salary" },
+                { key: "company",       label: "Firma *" },
+                { key: "role",          label: "Rolle *" },
+                { key: "contactPerson", label: "Ansprechpartner" },
+                { key: "location",      label: "Ort" },
+                { key: "salary",        label: "Salary" },
               ] as { key: keyof FormState; label: string }[]).map(({ key, label }) => (
                 <div key={key} style={{ marginBottom: 10 }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 1 }}>{label}</div>

@@ -68,6 +68,7 @@ export const applications = pgTable("applications", {
   id: uuid("id").defaultRandom().primaryKey(),
   company: text("company").notNull(),
   role: text("role").notNull(),
+  contactPerson: text("contact_person"),   // named contact / recruiter, extracted from the posting
   location: text("location"),
   url: text("url"),
   description: text("description"),

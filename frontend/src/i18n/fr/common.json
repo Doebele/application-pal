@@ -185,6 +185,8 @@
     "company": "Entreprise",
     "location": "Lieu",
     "role": "Poste",
+    "contactPerson": "Personne de contact",
+    "contactPersonPlaceholder": "p. ex. Mme Maria Muster",
     "originalUrl": "URL d'origine",
     "portal": "Portail de candidature",
     "salary": "Salaire",
