@@ -13,11 +13,14 @@ type LetterConfig = {
   styleRules?: string;
   noGos?: string;
   referenceLetter?: string;
+  humanize?: boolean; // undefined = on
 };
 
-const FIELD_KEYS: (keyof LetterConfig)[] = ["structure", "values", "strengths", "phrases", "styleRules", "noGos", "referenceLetter"];
+// String (free-text) fields only — excludes the boolean `humanize` toggle
+type StrKey = Exclude<keyof LetterConfig, "humanize">;
+const FIELD_KEYS: StrKey[] = ["structure", "values", "strengths", "phrases", "styleRules", "noGos", "referenceLetter"];
 
-const DEFAULTS: Record<Exclude<keyof LetterConfig, "referenceLetter">, string> = {
+const DEFAULTS: Record<Exclude<StrKey, "referenceLetter">, string> = {
   structure:
     "1. Betreff: Rolle + ggf. Referenznummer\n" +
     "2. Einstieg (2–3 Sätze): aufmerksamkeitsstarker Hook mit konkretem Firmen-/Produktbezug — kein \"Hiermit bewerbe ich mich\"\n" +
@@ -63,7 +66,7 @@ function AutoResizeTextarea({ value, onChange, onBlur, placeholder, minRows = 3 
 }
 
 function Section({ fieldKey, label, hint, value, onChange, onBlur, minRows }: {
-  fieldKey: keyof LetterConfig;
+  fieldKey: StrKey;
   label: string;
   hint: string;
   value: string;
@@ -81,7 +84,7 @@ function Section({ fieldKey, label, hint, value, onChange, onBlur, minRows }: {
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: "3px 8px" }}
-            onClick={() => { onChange(DEFAULTS[fieldKey as Exclude<keyof LetterConfig, "referenceLetter">]); onBlur(); }}
+            onClick={() => { onChange(DEFAULTS[fieldKey as Exclude<StrKey, "referenceLetter">]); onBlur(); }}
           >
             {t("letterCoach.useDefault")}
           </button>
@@ -117,8 +120,8 @@ export function LetterCoachPage() {
       .catch(() => {});
   }, [config]);
 
-  const fieldProps = (key: keyof LetterConfig) => ({
-    value: config[key] ?? "",
+  const fieldProps = (key: StrKey) => ({
+    value: (config[key] as string) ?? "",
     onChange: (v: string) => setConfig(c => ({ ...c, [key]: v })),
     onBlur: () => save({ [key]: config[key] ?? "" }),
   });
@@ -155,6 +158,29 @@ export function LetterCoachPage() {
               </Link>
             </div>
           </div>
+        </div>
+
+        {/* Humanizer toggle — global, applies to all AI-generated prose in the correspondence language */}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 14px", borderRadius: 8, border: "1px solid var(--border)", marginBottom: 28 }}>
+          <div style={{ flex: 1 }}>
+            <div className="eyebrow" style={{ marginBottom: 4 }}>{t("letterCoach.humanize.label")}</div>
+            <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>{t("letterCoach.humanize.hint")}</div>
+          </div>
+          <button
+            role="switch"
+            aria-checked={config.humanize !== false}
+            onClick={() => save({ humanize: config.humanize === false })}
+            style={{
+              flexShrink: 0, marginTop: 2, width: 38, height: 22, borderRadius: 999, border: "none", cursor: "pointer",
+              background: config.humanize !== false ? "var(--accent)" : "var(--surface-2)",
+              position: "relative", transition: "background 0.15s",
+            }}
+          >
+            <span style={{
+              position: "absolute", top: 2, left: config.humanize !== false ? 18 : 2,
+              width: 18, height: 18, borderRadius: "50%", background: "#fff", transition: "left 0.15s",
+            }} />
+          </button>
         </div>
 
         <Section fieldKey="structure" label={t("letterCoach.structure.label")} hint={t("letterCoach.structure.hint")} minRows={6} {...fieldProps("structure")} />

@@ -1814,9 +1814,10 @@ type LetterConfig = {
   styleRules?: string;
   noGos?: string;
   referenceLetter?: string;
+  humanize?: boolean; // undefined = on (opt-out); false = off
 };
 
-const LETTER_GUIDANCE_LABELS: Record<Exclude<keyof LetterConfig, "referenceLetter">, string> = {
+const LETTER_GUIDANCE_LABELS: Record<Exclude<keyof LetterConfig, "referenceLetter" | "humanize">, string> = {
   structure: "Aufbau",
   values: "Meine Werte & Arbeitsweise",
   strengths: "Kernstärken (mit Belegen)",
@@ -1839,6 +1840,44 @@ function buildLetterGuidance(letterConfigRaw: string | null | undefined): string
   }
   if (parts.length === 0) return "";
   return `## Verbindliche Vorgaben des Kandidaten\n${parts.join("\n\n")}`;
+}
+
+// Language-specific "human writing" guidance for AI-generated prose (cover letter, opening
+// sentences, CV highlights). Condensed rulesets informed by the open-source humanizer skills:
+//   DE — github.com/LOGIN-TB/claude-skills (vermenschlichen, MIT)
+//   EN — github.com/blader/humanizer (Wikipedia "Signs of AI writing")
+//   FR — github.com/samber/cc-skills (humaniseur-fr)
+// Note: applied ONLY to AI-generated text, never to the user's own Master CV (facts stay intact).
+const HUMANIZER_GUIDELINES: Record<"de" | "en" | "fr", string> = {
+  de: `Schreibe wie ein Mensch, nicht wie eine KI. Vermeide typische KI-Merkmale:
+- keine aufgeblähten Floskeln/Marketing-Superlative ("maßgeblich", "wegweisend", "hochmotiviert", "leidenschaftlich") ohne Beleg
+- keine mechanischen Konnektoren in jedem Absatz ("darüber hinaus", "zudem", "des Weiteren")
+- keine unbelegten Verallgemeinerungen ("Studien zeigen", "bekanntlich")
+- keine erzwungenen Dreier-Aufzählungen, keine Gedankenstrich-Häufung, keine Synonym-Rotation
+- variiere Satzlängen und -anfänge; sei konkret statt abstrakt
+Kein Fehler (nicht "korrigieren"): korrekte Grammatik, förmliche Sie-Form, Schweizer Rechtschreibung. Erfinde keine Fakten.`,
+  en: `Write like a human, not like AI. Avoid the usual AI tells:
+- no filler buzzwords ("delve", "leverage", "tapestry", "underscore", "robust", "seamless")
+- no "It's not just X, it's Y" constructions, no forced rule-of-three lists, no em-dash overuse
+- no vague attributions ("studies show", "it's well known"), no empty promotional adjectives
+- vary sentence length and openings; be concrete and specific
+Do not "fix" what isn't a problem: correct grammar and a formal tone are fine. Never invent facts.`,
+  fr: `Écris comme un humain, pas comme une IA. Évite les marqueurs typiques de l'IA :
+- pas de formules creuses ni de superlatifs marketing ("passionné", "dynamique", "incontournable") sans preuve
+- pas d'ouvertures mécaniques répétées ("En effet", "Il convient de noter", "Force est de constater")
+- pas d'énumérations en trois temps forcées, pas d'abus de tirets cadratins
+- varie la longueur et le début des phrases ; sois concret
+À NE PAS "corriger" : les connecteurs formels « néanmoins », « toutefois », « par ailleurs » sont légitimes en français professionnel ; une grammaire correcte et un ton formel ne sont pas des signes d'IA. N'invente aucun fait.`,
+};
+
+function humanizerPrompt(lang: string | null | undefined, letterConfigRaw: string | null | undefined): string {
+  let on = true; // opt-out: on unless explicitly disabled
+  if (letterConfigRaw) {
+    try { on = (JSON.parse(letterConfigRaw) as LetterConfig).humanize !== false; } catch { /* keep default */ }
+  }
+  if (!on) return "";
+  const key = (lang === "en" || lang === "fr") ? lang : "de";
+  return `## Natürlicher, menschlicher Schreibstil\n${HUMANIZER_GUIDELINES[key]}`;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -2327,7 +2366,8 @@ app.post("/api/applications/:id/ai/cv-highlights", async (c) => {
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   if (!profile?.masterCv?.trim()) return c.json({ error: "Kein Master-CV im Profil hinterlegt" }, 400);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
-  const system = `${langPrompt(lang_)} Du bist ein Karriere-Coach. Analysiere den Lebenslauf des Kandidaten und die Stellenbeschreibung.
+  const cvHumanize = humanizerPrompt(lang_, profile?.letterConfig);
+  const system = `${langPrompt(lang_)} Du bist ein Karriere-Coach. Analysiere den Lebenslauf des Kandidaten und die Stellenbeschreibung.${cvHumanize ? `\n\n${cvHumanize}` : ""}
 Antworte NUR mit diesem JSON:
 {
   "highlights": ["<Erfahrung/Skill besonders relevant>", ...],  // 5-8 Punkte
@@ -2386,7 +2426,8 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
   let highlightText = "";
   try {
     const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language;
-    const system = `${langPrompt(lang_)} Analysiere den Lebenslauf und die Stellenbeschreibung. Antworte NUR mit JSON:
+    const cvDocHumanize = humanizerPrompt(lang_, profile?.letterConfig);
+    const system = `${langPrompt(lang_)} Analysiere den Lebenslauf und die Stellenbeschreibung.${cvDocHumanize ? `\n\n${cvDocHumanize}` : ""} Antworte NUR mit JSON:
 {"highlights":["<Erfahrung besonders relevant>"],"keywords":["<Keyword>"]}`;
     const docsContext = await loadDocumentsContext(userId);
     const user = `Lebenslauf:\n${profile.masterCv.slice(0, 3000)}${docsContext ? `\n\n${docsContext}` : ""}\n\nStelle: ${app_.role} bei ${app_.company}\n${app_.description?.slice(0, 1500) ?? ""}`;
@@ -2463,8 +2504,9 @@ app.post("/api/applications/:id/ai/cover-letter", async (c) => {
   // Prefer language from request body (avoids race condition when user just switched the toggle)
   const lang = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const letterGuidance = buildLetterGuidance(profile?.letterConfig);
+  const humanize = humanizerPrompt(lang, profile?.letterConfig);
   const system = `${langPrompt(lang)} Du bist ein erfahrener HR-Berater und Karriere-Texter. Schreibe ein professionelles, individuelles Bewerbungsanschreiben (max. 350 Wörter).
-Vermeide generische Floskeln wie "Hiermit bewerbe ich mich" — starte mit einem konkreten, aufmerksamkeitsstarken Bezug zur Firma oder Rolle. Belege Stärken mit konkreten Ergebnissen/Zahlen aus dem Lebenslauf statt unbelegter Adjektive. Spiegle die Schlüsselbegriffe der Stellenbeschreibung. Aktive Sprache, kurze Sätze, kein Superlativ-Marketing.${app_.contactPerson ? `\nIst ein Ansprechpartner genannt, sprich diese Person in der Anrede persönlich an (z.B. "Sehr geehrte Frau …" / "Sehr geehrter Herr …"); sonst nutze "Sehr geehrte Damen und Herren".` : ""}${letterGuidance ? `\n\n${letterGuidance}\n\nDiese Vorgaben des Kandidaten sind verbindlich — respektiere Struktur, Stil und No-Gos.` : ""}
+Vermeide generische Floskeln wie "Hiermit bewerbe ich mich" — starte mit einem konkreten, aufmerksamkeitsstarken Bezug zur Firma oder Rolle. Belege Stärken mit konkreten Ergebnissen/Zahlen aus dem Lebenslauf statt unbelegter Adjektive. Spiegle die Schlüsselbegriffe der Stellenbeschreibung. Aktive Sprache, kurze Sätze, kein Superlativ-Marketing.${app_.contactPerson ? `\nIst ein Ansprechpartner genannt, sprich diese Person in der Anrede persönlich an (z.B. "Sehr geehrte Frau …" / "Sehr geehrter Herr …"); sonst nutze "Sehr geehrte Damen und Herren".` : ""}${letterGuidance ? `\n\n${letterGuidance}\n\nDiese Vorgaben des Kandidaten sind verbindlich — respektiere Struktur, Stil und No-Gos.` : ""}${humanize ? `\n\n${humanize}` : ""}
 Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Text mit Absätzen durch \\n\\n getrennt>" }`;
   const candidateParts = [];
   if (profile?.headline) candidateParts.push(`Expertise: ${profile.headline}`);
@@ -2506,7 +2548,8 @@ app.post("/api/applications/:id/ai/letter-angles", async (c) => {
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const letterGuidance = buildLetterGuidance(profile?.letterConfig);
-  const system = `${langPrompt(lang_)} Du bist ein Karriere-Coach. Analysiere das Kandidatenprofil und die Stellenbeschreibung und schlage konkrete Bausteine für ein individuelles Anschreiben vor.
+  const anglesHumanize = humanizerPrompt(lang_, profile?.letterConfig);
+  const system = `${langPrompt(lang_)} Du bist ein Karriere-Coach. Analysiere das Kandidatenprofil und die Stellenbeschreibung und schlage konkrete Bausteine für ein individuelles Anschreiben vor.${anglesHumanize ? `\n\n${anglesHumanize}` : ""}
 Antworte NUR mit diesem JSON:
 {
   "beruehrungspunkte": [{ "titel": "<kurzer Titel>", "text": "<1-2 Sätze konkreter Anknüpfungspunkt Kandidat↔Firma/Rolle, geeignet für die Einleitung>" }],  // 3-4
@@ -3405,7 +3448,8 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const openingGuidance = buildLetterGuidance(profile?.letterConfig);
-  const system = `${langPrompt(lang_)} Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend).${openingGuidance ? `\n\n${openingGuidance}` : ""} Antworte NUR mit JSON:
+  const openingHumanize = humanizerPrompt(lang_, profile?.letterConfig);
+  const system = `${langPrompt(lang_)} Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend).${openingGuidance ? `\n\n${openingGuidance}` : ""}${openingHumanize ? `\n\n${openingHumanize}` : ""} Antworte NUR mit JSON:
 { "saetze": [{ "satz": "<der Eröffnungssatz>", "ansatz": "<kurzes Ansatz-Label>", "erklaerung": "<was diesen Satz in genau diesem Fall speziell/stark macht>", "empfehlung": "<konkrete Empfehlung, wann/wofür man diesen Satz wählen sollte>" }] }`;
   const openingDocsContext = await loadDocumentsContext(userId);
   let user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}${openingDocsContext ? `\n\n${openingDocsContext}` : ""}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;

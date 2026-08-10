@@ -792,6 +792,10 @@
     "referenceLetter": {
       "label": "Lettre de référence",
       "hint": "Une ancienne lettre à utiliser comme référence de style (non copiée, utilisée uniquement comme guide)."
+    },
+    "humanize": {
+      "label": "Style d'écriture naturel (humanisation)",
+      "hint": "Demande à l'IA d'écrire de façon humaine dans la langue de correspondance et d'éviter les marqueurs typiques de l'IA — pour les lettres, phrases d'accroche et points forts du CV. N'invente aucun fait et ne modifie pas votre CV principal."
     }
   },
   "letterDraft": {

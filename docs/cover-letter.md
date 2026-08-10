@@ -61,6 +61,18 @@ Under the hood, the non-empty fields are compiled into a **"Binding candidate gu
 - **Cover letter review** — additionally checks whether the draft *complies with your guidance* and flags deviations.
 - **Opening sentences** — style and values feed into the three suggestions.
 
+### Natural writing style (humanizer)
+
+A toggle at the top of the page (**on by default**) tells the AI to write like a human and avoid the usual "AI tells", using a ruleset tailored to the **correspondence language** (DE / EN / FR). It is applied to every AI-generated piece of prose — the cover letter, opening sentences, building blocks, and the AI-generated **CV highlights** — but **never** to your own Master CV text, and it never invents facts.
+
+Each language has its own rules, because AI tells differ by language:
+
+- **DE** — no inflated marketing phrasing or unproven superlatives ("hochmotiviert", "leidenschaftlich"), no mechanical connectors in every paragraph ("darüber hinaus", "zudem"), no vague citations ("Studien zeigen"), no forced rule-of-three, varied sentence length. Correct grammar and formal *Sie* are **not** treated as AI tells.
+- **EN** — no filler buzzwords ("delve", "leverage", "tapestry"), no "It's not just X, it's Y", no em-dash overuse, no vague attributions.
+- **FR** — French professional writing is formal by default: connectors like « néanmoins » and « toutefois » are legitimate and are **not** over-corrected; it targets repeated "En effet"/"Il convient de noter" openings, forced triads, and empty superlatives.
+
+The rulesets are condensed, original guidance informed by the open-source humanizer skills [blader/humanizer](https://github.com/blader/humanizer) (EN, Wikipedia "Signs of AI writing"), [samber/cc-skills · humaniseur-fr](https://github.com/samber/cc-skills) (FR), and [LOGIN-TB/claude-skills · vermenschlichen](https://github.com/LOGIN-TB/claude-skills) (DE, MIT). Turn the toggle off if you prefer the model's default voice.
+
 ---
 
 ## 2. The guided draft panel (Cover Letter stage)

@@ -792,6 +792,10 @@
     "referenceLetter": {
       "label": "Reference letter",
       "hint": "An earlier cover letter to use as a style reference (not copied, used only as a guide)."
+    },
+    "humanize": {
+      "label": "Natural writing style (humanizer)",
+      "hint": "Tells the AI to write like a human in the correspondence language and avoid typical AI patterns — for cover letters, opening sentences, and CV highlights. Never invents facts and does not change your Master CV."
     }
   },
   "letterDraft": {

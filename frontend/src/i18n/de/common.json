@@ -792,6 +792,10 @@
     "referenceLetter": {
       "label": "Referenz-Anschreiben",
       "hint": "Ein früheres Anschreiben, das als Stil-Vorbild dienen soll (wird nicht kopiert, nur als Referenz genutzt)."
+    },
+    "humanize": {
+      "label": "Natürlicher Schreibstil (Vermenschlichung)",
+      "hint": "Weist die KI an, in der Korrespondenzsprache menschlich zu schreiben und typische KI-Muster zu vermeiden — bei Anschreiben, Eröffnungssätzen und CV-Highlights. Erfindet keine Fakten und ändert deinen Master-CV nicht."
     }
   },
   "letterDraft": {
