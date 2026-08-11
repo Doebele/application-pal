@@ -4513,6 +4513,26 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     } catch (e) { setErr(errMsg(e)); } finally { setGeneratingReview(false); finishAiJob(app.id, "letter-review"); }
   };
 
+  // Humanizer post-pass: rewrite the CURRENT letter to sound more human (applies the
+  // language ruleset regardless of the /letter-coach toggle) and save it as a new version.
+  const humanizeLetter = async () => {
+    if (ai.provider === "none") { setErr(t("letterDraft.noAiModel")); return; }
+    const subject = draftSubject || letter?.subject || "";
+    const body = draftBody || letter?.body || "";
+    if (!body.trim()) return;
+    setActiveTab("result");
+    setGeneratingDraft(true); setErr(null);
+    startAiJob(app.id, "cover-letter");
+    try {
+      const r = await api.post<{ subject: string; body: string }>(`/api/applications/${app.id}/ai/cover-letter/humanize`, { ai: aiBody(), language: appLang, subject, body });
+      onAiResult?.("cover-letter", r.data);
+      setExportUrl(null);
+      const vr = await api.post<{ versions: LetterVersion[] }>(`/api/applications/${app.id}/ai/letter-versions/save`, { subject: r.data.subject, body: r.data.body });
+      onAiResult?.("letter-versions", { versions: vr.data.versions });
+      invalidate();
+    } catch (e) { setErr(errMsg(e)); } finally { setGeneratingDraft(false); finishAiJob(app.id, "cover-letter"); }
+  };
+
   const restoreVersion = async (index: number) => {
     try {
       const r = await api.post<{ subject: string; body: string }>(`/api/applications/${app.id}/ai/letter-versions/restore`, { index });
@@ -4736,6 +4756,10 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
         </button>
         <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={() => setShowAdjust(v => !v)}>
           <EditPencil width={11} height={11} /> {t("letterDraft.adjustBtn")}
+        </button>
+        <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} disabled={draftRunning}
+          title={t("letterDraft.humanizeHint")} onClick={humanizeLetter}>
+          {draftRunning ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : <Sparks width={11} height={11} />} {t("letterDraft.humanizeBtn")}
         </button>
       </div>
 

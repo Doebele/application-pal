@@ -850,6 +850,8 @@
     "reviewRunningHint": "Creating a new review…",
     "reviewUpToDate": "Review is up to date",
     "reviewBtnRefresh": "Refresh review",
-    "reviewCurrentHintNoVer": "Refers to the current draft"
+    "reviewCurrentHintNoVer": "Refers to the current draft",
+    "humanizeBtn": "Humanize",
+    "humanizeHint": "Rewrites the current letter to sound more human (style only, no facts changed) and saves it as a new version"
   }
 }

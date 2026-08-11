@@ -850,6 +850,8 @@
     "reviewRunningHint": "Nouvelle analyse en cours…",
     "reviewUpToDate": "La révision est à jour",
     "reviewBtnRefresh": "Actualiser la révision",
-    "reviewCurrentHintNoVer": "Se réfère au brouillon actuel"
+    "reviewCurrentHintNoVer": "Se réfère au brouillon actuel",
+    "humanizeBtn": "Humaniser",
+    "humanizeHint": "Réécrit la lettre actuelle de façon plus humaine (style uniquement, sans changer les faits) et l'enregistre comme nouvelle version"
   }
 }

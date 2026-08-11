@@ -2536,6 +2536,45 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
   }
 });
 
+// Humanizer post-pass: rewrite an EXISTING cover letter to sound more human, applying
+// only the language-specific humanizer ruleset (no fact/structure/length changes). This
+// is an explicit user action (button) → always applies the rules, independent of the
+// letterConfig `humanize` toggle. Does not persist — the frontend saves it as a new version.
+app.post("/api/applications/:id/ai/cover-letter/humanize", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const { ai, language: bodyLang, subject, body, additionalContext } = await c.req.json<{
+    ai: AiConfig; language?: string; subject?: string; body?: string; additionalContext?: string;
+  }>();
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  let subj = subject ?? "";
+  let bod = body ?? "";
+  if (!bod.trim()) {
+    try {
+      const cache = JSON.parse(app_.aiResultsCache ?? "{}") as Record<string, { subject?: string; body?: string }>;
+      const cl = cache["cover-letter"];
+      if (cl?.body) { subj = subj || (cl.subject ?? ""); bod = cl.body; }
+    } catch { /* ignore */ }
+  }
+  if (!bod.trim()) return c.json({ error: "Kein Anschreiben vorhanden" }, 400);
+  const lang = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
+  const key: "de" | "en" | "fr" = (lang === "en" || lang === "fr") ? lang : "de";
+  const system = `${langPrompt(lang)} Du bist ein erfahrener Lektor. Überarbeite das folgende Bewerbungsanschreiben so, dass es natürlicher und menschlicher klingt. Wende dabei NUR die folgenden Regeln an. Ändere KEINE Fakten, Namen, Zahlen, Firmen oder Ergebnisse; behalte die Kernaussagen, die Absatzstruktur und die ungefähre Länge bei. Erfinde nichts.
+
+${HUMANIZER_GUIDELINES[key]}
+Antworte NUR mit JSON: { "subject": "<Betreff>", "body": "<überarbeiteter Text, Absätze durch \\n\\n getrennt>" }`;
+  const user = `Betreff: ${subj}\n\nAnschreiben:\n${bod}`;
+  try {
+    const raw = await callAi(system, user, ai, additionalContext);
+    const parsed = extractJson(raw) as { subject: string; body: string };
+    return c.json(parsed);
+  } catch (err) {
+    console.error("cover-letter humanize error:", err);
+    return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+  }
+});
+
 // AI-suggested building blocks for the cover letter — touchpoints, value-match, and
 // benefit arguments tailored to this job, based on the candidate's global letter config
 // (Rail → /letter-coach) plus CV/documents/job description.

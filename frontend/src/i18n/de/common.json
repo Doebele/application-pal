@@ -850,6 +850,8 @@
     "reviewRunningHint": "Neuer Review wird erstellt…",
     "reviewUpToDate": "Review ist aktuell",
     "reviewBtnRefresh": "Review aktualisieren",
-    "reviewCurrentHintNoVer": "Bezieht sich auf den aktuellen Entwurf"
+    "reviewCurrentHintNoVer": "Bezieht sich auf den aktuellen Entwurf",
+    "humanizeBtn": "Vermenschlichen",
+    "humanizeHint": "Schreibt das aktuelle Anschreiben natürlicher/menschlicher um (nur Stil, keine Fakten) und speichert es als neue Version"
   }
 }

@@ -73,6 +73,8 @@ Each language has its own rules, because AI tells differ by language:
 
 The rulesets are condensed, original guidance informed by the open-source humanizer skills [blader/humanizer](https://github.com/blader/humanizer) (EN, Wikipedia "Signs of AI writing"), [samber/cc-skills · humaniseur-fr](https://github.com/samber/cc-skills) (FR), and [LOGIN-TB/claude-skills · vermenschlichen](https://github.com/LOGIN-TB/claude-skills) (DE, MIT). Turn the toggle off if you prefer the model's default voice.
 
+**On-demand "Humanize" button.** Separately from the always-on inline guidance, the result tab has a **Vermenschlichen / Humanize** button that runs a dedicated second pass over the *current* letter: it rewrites only the wording to sound more human (applying the language ruleset), keeps all facts, structure, and length, and saves the result as a **new version** so you can compare or restore. This works regardless of the toggle — the button is itself the opt-in — and mirrors how the source skills natively operate (editing existing text).
+
 ---
 
 ## 2. The guided draft panel (Cover Letter stage)
