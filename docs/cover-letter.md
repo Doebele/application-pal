@@ -63,7 +63,7 @@ Under the hood, the non-empty fields are compiled into a **"Binding candidate gu
 
 ### Natural writing style (humanizer)
 
-A toggle at the top of the page (**on by default**) tells the AI to write like a human and avoid the usual "AI tells", using a ruleset tailored to the **correspondence language** (DE / EN / FR). It is applied to every AI-generated piece of prose — the cover letter, opening sentences, building blocks, and the AI-generated **CV highlights** — but **never** to your own Master CV text, and it never invents facts.
+A toggle at the top of the page (**on by default**) tells the AI to write like a human and avoid the usual "AI tells", using a ruleset tailored to the **correspondence language** (DE / EN / FR). It is applied to every AI-generated piece of prose — the cover letter, opening sentences, building blocks, the AI-generated **CV highlights**, and the **review** (which additionally checks the letter against these rules and flags violations) — but **never** to your own Master CV text, and it never invents facts.
 
 Each language has its own rules, because AI tells differ by language:
 
