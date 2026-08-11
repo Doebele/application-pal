@@ -5621,7 +5621,13 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
   const patchMutation = useMutation({
     mutationFn: (patch: Partial<Application>) =>
       api.patch(`/api/applications/${app.id}`, patch).then((r) => r.data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["applications"] })
+    // Invalidate BOTH the board list AND this application's detail query, otherwise
+    // freshApp/effectiveApp keeps the stale value and patched fields (e.g. the
+    // correspondence language) revert on the next tab/view switch.
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["application", app.id] });
+    }
   });
 
   const deleteMutation = useMutation({
