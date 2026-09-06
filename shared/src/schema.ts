@@ -100,6 +100,8 @@ export const applications = pgTable("applications", {
   workModel: text("work_model"),      // 'onsite' | 'hybrid' | 'remote'
   contractType: text("contract_type"), // 'Unbefristet' | '6 Monate' | '9 Monate' | '12 Monate' | free text
   language: text("language"),         // 'de' | 'en' — application language (default 'de')
+  ravApplicationType: text("rav_application_type"), // RAV proof: 'online' | 'recruiter' | 'meeting_confirmed' | 'meeting_unconfirmed' — null = derive
+  ravProof: text("rav_proof"),                     // RAV proof: 'email' | 'linkedin' | 'other' — null = derive
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -122,6 +124,7 @@ export const userProfile = pgTable("user_profile", {
   desiredSalary: text("desired_salary"),
   googleCalendarId: text("google_calendar_id"),
   driveApplicationsFolderId: text("drive_applications_folder_id"), // per-user Drive folder
+  ravSheetId: text("rav_sheet_id"),                                 // per-user RAV proof spreadsheet (target of the RAV export)
   docTemplates: text("doc_templates"),                             // JSON: DocTemplateConfig per content type
   letterConfig: text("letter_config"),                             // JSON: LetterConfig — persistent cover-letter guidance (structure/values/strengths/phrases/styleRules/noGos/referenceLetter)
   persona: text("persona"),                                        // 'schulabgaenger' | 'berufseinsteiger' | 'berufsumsteiger'

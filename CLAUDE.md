@@ -132,7 +132,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | Table | Purpose | User-isolated | Exported |
 |---|---|---|---|
 | `applications` | Jobs: stage, tags, salary, archived, archiveReason, matchScore, interview1/2Details, interview1/2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache, googleFolderId, **jobType** (pensum %), **workModel**, **contractType**, **language** | ✅ `user_id` FK | ✅ |
-| `user_profile` | Per-user profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, driveApplicationsFolderId, sessionTimeout, desiredSalary, **letterConfig** (JSON: persistent cover-letter guidance, see `LetterCoachPage`) | ✅ `user_id` FK | ✅ |
+| `user_profile` | Per-user profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, driveApplicationsFolderId, **ravSheetId** (RAV proof spreadsheet), sessionTimeout, desiredSalary, **letterConfig** (JSON: persistent cover-letter guidance, see `LetterCoachPage`) | ✅ `user_id` FK | ✅ |
 | `user_documents` | Document library (CV, Zeugnisse, Figma, etc.); `extraUrl` = optional secondary link, surfaced as a "Link" button on the tile when set | ✅ `user_id` FK | ✅ |
 | `application_documents` | Per-job docs; `googleDocId`/`googleDocUrl` for Drive | via `application_id` | ✅ |
 | `application_activities` | Timeline events per job | via `application_id` | ✅ |
@@ -151,6 +151,8 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 - `work_model` — `"onsite"` | `"hybrid"` | `"remote"`. Auto-detected on import.
 - `contract_type` — `"Unbefristet"` | `"6 Monate"` | `"9 Monate"` | `"12 Monate"` | custom string. Auto-detected on import.
 - `language` — `"de"` | `"en"`. Set manually in CV phase. All AI prompts use this. Default `"de"`.
+- `rav_application_type` — RAV proof column F override: `"online"` | `"recruiter"` | `"meeting_confirmed"` | `"meeting_unconfirmed"`. `null` = derive.
+- `rav_proof` — RAV proof column L override: `"email"` | `"linkedin"` | `"other"`. `null` = derive (`email`).
 
 ### Export/Import
 
@@ -234,6 +236,31 @@ Require `calendar.readonly` scope (in `GOOGLE_SCOPES`). Users must re-connect Go
 | `GET /api/google/calendar/list` | Lists all user calendars |
 | `GET /api/google/calendar/events?calendarId=&from=&to=` | Fetches events for a date range |
 | `GET /api/calendar/events?from=&to=` | Aggregated app activities JOIN applications, filtered by `userId` |
+
+### RAV / ORP Proof Sheet Export
+
+Swiss unemployment offices require a monthly proof of job-search efforts. `backend/src/rav.ts` holds the column spec (12 columns, 4 dropdown lists), the DE/FR/EN translations and the pure row/append logic; the routes live in `index.ts` as usual. `backend/src/rav.check.ts` is an assert-based self-check against the real sheet as a fixture — run it with `npx tsx backend/src/rav.check.ts` after touching any mapping.
+
+**One target sheet per user** (`user_profile.rav_sheet_id`). The export always writes into it; there is no "create a file on the fly" path.
+
+| Endpoint | Function |
+|---|---|
+| `GET /api/rav/sheet-info?spreadsheetId=` | Accepts URL or ID; returns `{ id, title, url, lang, entries }`. `lang` is **detected from the header row** |
+| `POST /api/rav/create-sheet` | Body `{ lang, title?, parentFolderId? }` — creates an empty formatted sheet (bold frozen header, template column widths, all four data validations over rows 2–200), moves it to the chosen folder, stores it as `ravSheetId` |
+| `POST /api/export/rav-csv` | Same body plus `lang` — returns `text/csv` (BOM + CRLF for Excel). Needs no Google and no linked file: numbering starts fresh per month, no dedupe |
+| `POST /api/export/rav-sheet` | Body `{ applicationIds?, month?, from?, to?, includeArchived?, target?, lang?, title?, parentFolderId? }` — `applicationIds` wins (single export from the drawer, bulk export from the table); otherwise a period, default the current month. `target: "new"` creates a standalone file via `createRavSheet()` and **leaves `ravSheetId` untouched**; default `"linked"` writes into the configured sheet. Returns `{ added, updated, skipped, target }` |
+
+**Two semantic rules taken from the real sheet — don't "fix" them:**
+- Column J (`Résultat / Statut`) holds the **effort**, not the outcome: every sent application keeps "Candidature envoyée" there. The outcome (refusée / pas de réponse / entretien) lives in column K. `ravStatus()` therefore maps every stage from `application_sent` onward to `sent`.
+- Column H (`Coordonnées`) is **who the application went through**, not where the posting was found (column I). A job spotted on LinkedIn is normally submitted to the employer → `company`. Only a recruiter contact changes it.
+
+**Idempotency**: `planRavWrite()` keys existing rows by `datum|firma|rolle` (normalised). A known row is updated **in place, keeping its running number**; an unknown one claims a placeholder row (`-` cells) inside its own month block, else trailing free space, else a new row. Numbering restarts at 1 per calendar month. Nothing is ever deleted. Re-running the same month is a no-op.
+
+**Frontend entry point**: `RavReportDialog` (`frontend/src/components/RavReportDialog.tsx`), opened from the table's "RAV-Report" button with the currently visible row ids. It offers sync into the configured sheet, a one-off Google Sheet, and CSV — and can link or create the target inline when none is configured, so the feature works before anyone visits Settings. The drawer's `RavExportBtn` stays a direct one-application sync.
+
+**Language**: the sheet export never uses the UI language — it uses the language detected from the target sheet's header row, otherwise the written values would violate the sheet's existing data validation.
+
+**Validation refresh**: the original template validates only down to row 25. Every export re-applies `setDataValidation` down to `lastRow + 15`, so appended rows get working dropdowns.
 
 ### Key Frontend Patterns
 
@@ -354,9 +381,11 @@ JWT in httpOnly cookies. `GET /api/auth/status` returns `{ setup: bool }`. `GET 
 
 ### Google OAuth Scopes
 
-`openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly`
+`openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets`
 
 `drive` scope (not `drive.file`) is required to copy user-owned template files.
+
+`spreadsheets` was added for the RAV export, but it is **not required**: the Sheets API accepts the full `drive` scope for reading, writing and creating spreadsheets, so tokens issued before the RAV feature work unchanged. `GET /api/google/status` returns `hasSheetsScope`, which is true when the token carries **either** scope — do not narrow it back to a `"spreadsheets"` substring check, that falsely warns on every older token.
 
 ### i18n (react-i18next)
 

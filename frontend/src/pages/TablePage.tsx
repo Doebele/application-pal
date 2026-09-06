@@ -26,10 +26,11 @@ import { matchesSearch } from "../lib/search";
 import { useUiStore } from "../lib/store";
 import {
   NavArrowUp, NavArrowDown, Settings, Plus, Check,
-  Drag, Sparks, Refresh, RefreshCircle, Pin, PinSlash,
+  Drag, Sparks, Refresh, RefreshCircle, Pin, PinSlash, Table2Columns,
 } from "iconoir-react";
 import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
+import { RavReportDialog } from "../components/RavReportDialog";
 import { DetailDrawer } from "../components/DetailDrawer";
 import { ImportDrawer } from "../components/ImportDrawer";
 import { STAGE_COLORS, ALL_STAGES } from "../lib/stages";
@@ -495,8 +496,17 @@ export function TablePage() {
 
   const isFiltered = stageFilter.length > 0;
 
+  // RAV report — the dialog owns sync / one-off sheet / CSV; the page only supplies the rows.
+  const [ravOpen, setRavOpen] = useState(false);
+
   const actions = (
     <>
+      {/* RAV report — opens the dialog with the currently visible rows */}
+      <button onClick={() => setRavOpen(true)} className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}
+        disabled={filtered.length === 0} title={t("rav.exportViewHint")}>
+        <Table2Columns width={12} height={12} /> {t("rav.reportBtn")}
+      </button>
+
       {/* Column settings — left of filter */}
       <div style={{ position: "relative" }} ref={colPanelRef}>
         <button onClick={() => setColPanelOpen(v => !v)} className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
@@ -749,6 +759,14 @@ export function TablePage() {
       </div>
 
       {/* Drawer */}
+      {ravOpen && (
+        <RavReportDialog
+          applicationIds={filtered.map(a => a.id)}
+          count={filtered.length}
+          onClose={() => setRavOpen(false)}
+        />
+      )}
+
       {selectedApp && (
         <DetailDrawer
           key={selectedApp.id}
