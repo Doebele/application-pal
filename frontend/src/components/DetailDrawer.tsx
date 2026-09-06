@@ -9,7 +9,7 @@ import {
   Copy as IcCopy, MailOut, Brain,
   MapPin, VideoCamera, Expand, Collapse,
   Search, Spark, Building, CheckCircle, Linkedin, ChatBubbleCheck, Star,
-  FolderPlus, WarningTriangle,
+  FolderPlus, WarningTriangle, Table2Columns,
 } from "iconoir-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
@@ -331,6 +331,8 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
   const [salary, setSalary]         = useState(app.salary ?? "");
   const [jobType, setJobType]           = useState((app as Application & { jobType?: string }).jobType ?? "");
   const [workModel, setWorkModel]       = useState((app as Application & { workModel?: string }).workModel ?? "");
+  const [ravType, setRavType]           = useState((app as Application & { ravApplicationType?: string }).ravApplicationType ?? "");
+  const [ravProof, setRavProof]         = useState((app as Application & { ravProof?: string }).ravProof ?? "");
   const [contractType, setContractType] = useState((app as Application & { contractType?: string }).contractType ?? "");
   const [tags, setTags]             = useState<string[]>(parseTags(app.tags));
   const [newTag, setNewTag]         = useState("");
@@ -440,6 +442,34 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
             value={contractType}
             onChange={v => { setContractType(v); save({ contractType: v || null } as Partial<Application>); }}
           />
+        </div>
+        {/* RAV proof overrides — empty means the export derives the value */}
+        <div className="field">
+          <label>{t("rav.type")}</label>
+          <select
+            value={ravType}
+            onChange={e => { setRavType(e.target.value); save({ ravApplicationType: e.target.value || null } as Partial<Application>); }}
+            style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontSize: 12, fontFamily: "var(--font-sans)", outline: "none" }}
+          >
+            <option value="">{t("rav.auto")}</option>
+            <option value="online">{t("rav.typeOnline")}</option>
+            <option value="recruiter">{t("rav.typeRecruiter")}</option>
+            <option value="meeting_confirmed">{t("rav.typeMeetingConfirmed")}</option>
+            <option value="meeting_unconfirmed">{t("rav.typeMeetingUnconfirmed")}</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>{t("rav.proof")}</label>
+          <select
+            value={ravProof}
+            onChange={e => { setRavProof(e.target.value); save({ ravProof: e.target.value || null } as Partial<Application>); }}
+            style={{ width: "100%", padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontSize: 12, fontFamily: "var(--font-sans)", outline: "none" }}
+          >
+            <option value="">{t("rav.auto")}</option>
+            <option value="email">{t("rav.proofEmail")}</option>
+            <option value="linkedin">{t("rav.proofLinkedin")}</option>
+            <option value="other">{t("rav.proofOther")}</option>
+          </select>
         </div>
       </div>
 
@@ -3411,6 +3441,40 @@ function EmailModal({ draft, onClose }: { draft: EmailDraft; onClose: () => void
 
 // ── Stage AI Actions ──
 // ─── Drive Folder Button (CV Phase) ──────────────────────────────────────────
+/** Writes this one application into the linked RAV proof sheet (append or update in place). */
+function RavExportBtn({ app }: { app: Application }) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg]   = useState<{ ok: boolean; text: string; url?: string } | null>(null);
+
+  const run = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await api.post<{ url: string; added: number; updated: number; skipped: number }>(
+        "/api/export/rav-sheet", { applicationIds: [app.id] });
+      const key = r.data.added ? "rav.oneAdded" : r.data.updated ? "rav.oneUpdated" : "rav.oneUnchanged";
+      setMsg({ ok: true, text: t(key), url: r.data.url });
+    } catch (e: unknown) {
+      setMsg({ ok: false, text: (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("rav.exportFailed") });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+      <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={run} disabled={busy}>
+        {busy ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> : <Table2Columns width={12} height={12} />}
+        {t("rav.exportOne")}
+      </button>
+      {msg && (
+        <span style={{ fontSize: 11, color: msg.ok ? "var(--green)" : "#f87171", display: "flex", alignItems: "center", gap: 5 }}>
+          {msg.text}
+          {msg.url && <a href={msg.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", display: "flex" }}><OpenNewWindow width={11} height={11} /></a>}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function DriveFolderBtn({ app, onSave }: { app: Application; onSave: (patch: Partial<Application>) => void }) {
   const { t } = useTranslation();
   const { driveNameFolder } = useUiStore();
@@ -4940,6 +5004,9 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
           onAiResult={onAiResult}
         />
       </div>
+
+      {/* RAV proof sheet — available in every stage, the sheet tracks pre-application states too */}
+      <RavExportBtn app={app} />
 
       {/* 1. Prozess-spezifische Inhalte (Interview-Termin) */}
       {(app.stage === "interview_1" || app.stage === "interview_2") && onSave && (

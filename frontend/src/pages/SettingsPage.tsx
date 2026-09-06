@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Download, Upload, Database, Shield, Key, LogOut, Trash, Folder, OpenNewWindow, Calendar, InfoCircle } from "iconoir-react";
+import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Download, Upload, Database, Shield, Key, LogOut, Trash, Folder, OpenNewWindow, Calendar, InfoCircle, Table2Columns } from "iconoir-react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
@@ -611,6 +611,153 @@ function CalendarSubSection({ onReconnect }: { onReconnect: () => void }) {
   );
 }
 
+// ─── RAV proof sheet — link an existing one or create a fresh one ─────────────
+type RavSheet = { id: string; title: string; url: string; lang: string; entries: number };
+
+function RavSheetSubSection({ onReconnect }: { onReconnect: () => void }) {
+  const { t } = useTranslation();
+  const uiLanguage = useUiStore(s => s.uiLanguage);
+  const [sheet, setSheet]       = useState<RavSheet | null>(null);
+  const [input, setInput]       = useState("");
+  const [err, setErr]           = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+  const [newLang, setNewLang]     = useState(uiLanguage);
+  const [newTitle, setNewTitle]   = useState("");
+  const [newFolder, setNewFolder] = useState("");
+  const [hasScope, setHasScope]   = useState(true);
+
+  useEffect(() => {
+    api.get<{ hasSheetsScope?: boolean }>("/api/google/status")
+      .then(r => setHasScope(r.data.hasSheetsScope !== false)).catch(() => {});
+    api.get<{ ravSheetId?: string | null }>("/api/profile")
+      .then(r => {
+        const id = r.data.ravSheetId;
+        if (!id) return;
+        api.get<RavSheet>(`/api/rav/sheet-info?spreadsheetId=${id}`)
+          .then(res => setSheet(res.data)).catch(() => {});
+      }).catch(() => {});
+  }, []);
+
+  const link = async () => {
+    if (!input.trim()) return;
+    setChecking(true); setErr(null);
+    try {
+      const r = await api.get<RavSheet>(`/api/rav/sheet-info?spreadsheetId=${encodeURIComponent(input.trim())}`);
+      await api.patch("/api/profile", { ravSheetId: r.data.id });
+      setSheet(r.data); setInput("");
+    } catch (e: unknown) {
+      setErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("rav.notFound"));
+    } finally { setChecking(false); }
+  };
+
+  const create = async () => {
+    setCreating(true); setErr(null);
+    try {
+      const r = await api.post<RavSheet>("/api/rav/create-sheet", {
+        lang: newLang, title: newTitle.trim() || undefined, parentFolderId: newFolder.trim() || undefined
+      });
+      setSheet(r.data); setShowCreate(false); setNewTitle(""); setNewFolder("");
+    } catch (e: unknown) {
+      setErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("rav.createFailed"));
+    } finally { setCreating(false); }
+  };
+
+  const unlink = async () => {
+    await api.patch("/api/profile", { ravSheetId: null }).catch(() => {});
+    setSheet(null); setErr(null);
+  };
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+        {t("rav.section")}
+      </div>
+      <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 10, lineHeight: 1.5 }}>{t("rav.hint")}</div>
+
+      {!hasScope && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, padding: "8px 12px", borderRadius: 8, background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.3)" }}>
+          <WarningCircle width={14} height={14} style={{ color: "var(--amber, #fbbf24)", flexShrink: 0 }} />
+          <div style={{ flex: 1, fontSize: 12, color: "var(--fg-2)" }}>{t("rav.scopeMissing")}</div>
+          <button className="btn btn-secondary" style={{ fontSize: 11, whiteSpace: "nowrap" }} onClick={onReconnect}>{t("rav.reconnect")}</button>
+        </div>
+      )}
+
+      {sheet ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: "rgba(52,211,153,0.07)", border: "1px solid rgba(52,211,153,0.25)" }}>
+          <Table2Columns width={15} height={15} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)" }}>{sheet.title}</div>
+            <div style={{ fontSize: 10, color: "var(--fg-3)", fontFamily: "var(--font-mono)" }}>
+              {sheet.lang.toUpperCase()} · {t("rav.entries", { count: sheet.entries })}
+            </div>
+          </div>
+          <a href={sheet.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", display: "flex", flexShrink: 0 }}>
+            <OpenNewWindow width={12} height={12} />
+          </a>
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={unlink}>{t("rav.change")}</button>
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={() => setShowCreate(v => !v)}>{t("rav.create")}</button>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "flex", gap: 8 }}>
+            <div className="field" style={{ flex: 1, margin: 0 }}>
+              <input value={input} onChange={e => setInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && link()}
+                placeholder={t("rav.placeholder")} style={{ fontSize: 12 }} />
+            </div>
+            <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
+              disabled={checking || !input.trim()} onClick={link}>
+              {checking ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : t("rav.confirm")}
+            </button>
+            <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
+              onClick={() => setShowCreate(v => !v)}>{t("rav.create")}</button>
+          </div>
+        </>
+      )}
+
+      {showCreate && (
+        <div style={{ marginTop: 10, padding: 12, borderRadius: 8, border: "1px solid var(--border)", background: "var(--surface-2)", display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <div className="field" style={{ margin: 0 }}>
+              <label>{t("rav.newLang")}</label>
+              <select value={newLang} onChange={e => setNewLang(e.target.value as typeof newLang)}
+                style={{ padding: "6px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-1)", color: "var(--fg-1)", fontSize: 12, fontFamily: "var(--font-sans)" }}>
+                <option value="de">Deutsch</option>
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
+            </div>
+            <div className="field" style={{ flex: 1, margin: 0 }}>
+              <label>{t("rav.newTitle")}</label>
+              <input value={newTitle} onChange={e => setNewTitle(e.target.value)}
+                placeholder={t("rav.titlePlaceholder")} style={{ fontSize: 12 }} />
+            </div>
+          </div>
+          <div className="field" style={{ margin: 0 }}>
+            <label>{t("rav.newFolder")}</label>
+            <input value={newFolder} onChange={e => setNewFolder(e.target.value)}
+              placeholder={t("rav.folderPlaceholder")} style={{ fontSize: 12 }} />
+          </div>
+          {sheet && <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{t("rav.createReplaces")}</div>}
+          <button className="btn btn-primary" style={{ fontSize: 12, alignSelf: "flex-start", gap: 5 }}
+            disabled={creating} onClick={create}>
+            {creating
+              ? <><RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> {t("rav.creating")}</>
+              : t("rav.createBtn")}
+          </button>
+        </div>
+      )}
+
+      <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 8, lineHeight: 1.5 }}>
+        {t("rav.langHint")}
+      </div>
+      {err && <div style={{ fontSize: 11, color: "#f87171", marginTop: 6 }}>{err}</div>}
+    </div>
+  );
+}
+
 // ─── Google OAuth section ─────────────────────────────────────
 function GoogleSection() {
   const { t } = useTranslation();
@@ -794,6 +941,9 @@ function GoogleSection() {
           </div>
         </div>
       )}
+
+      {/* RAV proof sheet — only when connected */}
+      {status === "connected" && <RavSheetSubSection onReconnect={connect} />}
 
       {/* Google Calendar — only when connected */}
       {status === "connected" && (
@@ -1404,10 +1554,18 @@ function BackupSection() {
   const [confirm, setConfirm]         = useState(false);
   const [googleConnected, setGoogleConnected] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  const [ravMonth, setRavMonth]   = useState(() => new Date().toISOString().slice(0, 7));
+  const [ravArchived, setRavArchived] = useState(true);
+  const [ravBusy, setRavBusy]     = useState(false);
+  const [ravMsg, setRavMsg]       = useState<{ ok: boolean; text: string; url?: string } | null>(null);
+  const [ravNewLang, setRavNewLang] = useState(useUiStore.getState().uiLanguage);  // only applies to a fresh file
+  const [ravLinked, setRavLinked]   = useState<boolean | null>(null);
 
   useEffect(() => {
     api.get<{ connected: boolean }>("/api/google/status")
       .then(r => setGoogleConnected(r.data.connected)).catch(() => {});
+    api.get<{ ravSheetId?: string | null }>("/api/profile")
+      .then(r => setRavLinked(!!r.data.ravSheetId)).catch(() => setRavLinked(false));
   }, []);
 
   const doExport = async () => {
@@ -1439,6 +1597,19 @@ function BackupSection() {
     } finally {
       setExportingDrive(false);
     }
+  };
+
+  const doRavExport = async (target: "linked" | "new") => {
+    setRavBusy(true); setRavMsg(null);
+    try {
+      const r = await api.post<{ url: string; added: number; updated: number; skipped: number }>(
+        "/api/export/rav-sheet", { month: ravMonth, includeArchived: ravArchived, target, lang: ravNewLang });
+      setRavMsg({ ok: true, url: r.data.url, text: t("rav.result", r.data) });
+      if (target === "new") window.open(r.data.url, "_blank");
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("rav.exportFailed");
+      setRavMsg({ ok: false, text: msg });
+    } finally { setRavBusy(false); }
   };
 
   const doImport = async () => {
@@ -1496,6 +1667,45 @@ function BackupSection() {
             )}
           </div>
         </div>
+
+        {/* RAV proof sheet export */}
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">{t("rav.export")}</div>
+            <div className="settings-row-sub">{t("rav.exportSub")}</div>
+          </div>
+          <div className="settings-row-right" style={{ gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--fg-3)" }}>
+              <input type="checkbox" checked={ravArchived} onChange={e => setRavArchived(e.target.checked)} />
+              {t("rav.includeArchived")}
+            </label>
+            <input type="month" value={ravMonth} onChange={e => setRavMonth(e.target.value)}
+              style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontSize: 12, fontFamily: "var(--font-sans)" }} />
+            <button className="btn btn-secondary" style={{ fontSize: 12, gap: 6 }} onClick={() => doRavExport("linked")}
+              disabled={ravBusy || ravLinked === false} title={ravLinked === false ? t("rav.menuLinkedNone") : undefined}>
+              {ravBusy ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> : <Table2Columns width={12} height={12} />}
+              {t("rav.exportBtn")}
+            </button>
+            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <select value={ravNewLang} onChange={e => setRavNewLang(e.target.value as typeof ravNewLang)}
+                style={{ padding: "5px 7px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontSize: 11, fontFamily: "var(--font-sans)" }}>
+                <option value="de">Deutsch</option>
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+              </select>
+              <button className="btn btn-ghost" style={{ fontSize: 12, gap: 6 }} onClick={() => doRavExport("new")} disabled={ravBusy}
+                title={t("rav.menuNewSub")}>
+                {t("rav.exportNewBtn")}
+              </button>
+            </span>
+          </div>
+        </div>
+        {ravMsg && (
+          <div style={{ padding: "8px 12px", fontSize: 12, color: ravMsg.ok ? "var(--green)" : "#f87171", display: "flex", gap: 8, alignItems: "center" }}>
+            <span>{ravMsg.text}</span>
+            {ravMsg.url && <a href={ravMsg.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", display: "flex" }}><OpenNewWindow width={12} height={12} /></a>}
+          </div>
+        )}
 
         {/* Import */}
         <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 12 }}>

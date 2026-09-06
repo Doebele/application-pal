@@ -52,6 +52,11 @@ import {
   type AiConfig
 } from "@application-pal/shared";
 import { PDFParse } from "pdf-parse";
+import {
+  RAV_SHEET, RAV_COL_WIDTHS_PX, RAV_VALIDATION_COLUMNS, RAV_LANGS,
+  detectSheetLang, planRavWrite, isRavPlaceholderRow, sortRavApplications, ravRow, ravDate, ravMonthKey,
+  type RavLang, type RavApplication, type RavContact
+} from "./rav.js";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
@@ -3627,7 +3632,7 @@ const GOOGLE_REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI ?? "http://localhos
 const GOOGLE_FRONTEND_URL  = process.env.GOOGLE_FRONTEND_URL ?? "http://localhost";
 // Scopes include openid+email so Google Sign-In + Drive work in one consent
 const GOOGLE_SCOPES = (process.env.GOOGLE_SCOPES ?? "") ||
-  "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly";
+  "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets";
 
 app.get("/api/google/auth-url", (c) => {
   if (!GOOGLE_CLIENT_ID) return c.json({ error: "Google credentials not configured" }, 503);
@@ -3719,7 +3724,15 @@ app.get("/api/google/status", async (c) => {
   // Connected as long as we have a refresh token (can always renew) OR a non-expired access token
   const hasRefreshToken = !!token.refreshToken;
   const expired = token.expiresAt ? new Date(token.expiresAt) < new Date() : false;
-  return c.json({ connected: hasRefreshToken || !expired, expiresAt: token.expiresAt });
+  return c.json({
+    connected: hasRefreshToken || !expired,
+    expiresAt: token.expiresAt,
+    // The Sheets API accepts the full `drive` scope for read, write and create —
+    // `spreadsheets` is only the narrower, explicit alternative. Checking for the
+    // latter alone falsely fails every token issued before it was requested.
+    hasSheetsScope: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+      .some(scope => (token.scope ?? "").split(/\s+/).includes(scope))
+  });
 });
 
 app.post("/api/google/docs/create", async (c) => {
@@ -4719,6 +4732,309 @@ app.post("/api/applications/:id/drive/copy-doc", async (c) => {
   if (!newFileId) return c.json({ error: "Kopieren fehlgeschlagen. Prüfe Kopierberechtigung im Originaldokument." }, 502);
   const driveUrl = `https://docs.google.com/document/d/${newFileId}/edit`;
   return c.json({ ok: true, fileId: newFileId, driveUrl, name: newName });
+});
+
+// --- RAV / ORP proof sheet ----------------------------------------------------
+// One target spreadsheet per user (user_profile.rav_sheet_id). The export always
+// writes into it: new applications are appended into their month block, known
+// ones are updated in place. See backend/src/rav.ts for the mapping.
+
+const SHEETS_API = "https://sheets.googleapis.com/v4/spreadsheets";
+const RAV_VALIDATION_SLACK = 15;   // keep this many spare validated rows below the data
+
+const sheetsHeaders = (token: string) => ({ Authorization: `Bearer ${token}`, "Content-Type": "application/json" });
+
+async function sheetsFetch<T>(token: string, url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, { ...init, headers: sheetsHeaders(token) });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { error?: { message?: string; status?: string } };
+    if (err.error?.status === "PERMISSION_DENIED" || res.status === 403) {
+      throw new Error("SHEETS_SCOPE_MISSING");
+    }
+    throw new Error(err.error?.message ?? `Sheets API: HTTP ${res.status}`);
+  }
+  return res.json() as Promise<T>;
+}
+
+/** Accepts a full spreadsheet URL or a bare ID. */
+const parseSpreadsheetId = (raw: string): string => {
+  const m = /\/d\/([a-zA-Z0-9_-]+)/.exec(raw ?? "");
+  return (m ? m[1] : (raw ?? "")).trim();
+};
+
+const a1 = (col: number) => String.fromCharCode(65 + col);
+
+/** Data-validation requests covering rows 2..lastRow for one sheet tab. */
+function ravValidationRequests(sheetId: number, lang: RavLang, lastRow: number) {
+  return RAV_VALIDATION_COLUMNS.map(({ from, to, field }) => ({
+    setDataValidation: {
+      range: { sheetId, startRowIndex: 1, endRowIndex: lastRow, startColumnIndex: from, endColumnIndex: to },
+      rule: {
+        condition: {
+          type: "ONE_OF_LIST",
+          values: Object.values(RAV_SHEET[lang][field]).map(v => ({ userEnteredValue: v }))
+        },
+        showCustomUi: true,
+        strict: true
+      }
+    }
+  }));
+}
+
+const cellRow = (values: string[]) => ({
+  values: values.map(v => ({ userEnteredValue: { stringValue: v } }))
+});
+
+/** Loads the target sheet: id, tab, language and current contents. */
+async function loadRavSheet(token: string, spreadsheetId: string) {
+  const meta = await sheetsFetch<{
+    properties: { title: string };
+    sheets: { properties: { sheetId: number; title: string; gridProperties?: { rowCount?: number } } }[];
+  }>(token, `${SHEETS_API}/${spreadsheetId}?fields=properties.title,sheets.properties`);
+  const tab = meta.sheets[0]?.properties;
+  if (!tab) throw new Error("Die Tabelle enthält kein Blatt.");
+  const range = encodeURIComponent(`${tab.title}!A1:L`);
+  const data = await sheetsFetch<{ values?: string[][] }>(
+    token, `${SHEETS_API}/${spreadsheetId}/values/${range}?majorDimension=ROWS`);
+  const rows = data.values ?? [];
+  return {
+    title: meta.properties.title, tab, rows,
+    rowCount: tab.gridProperties?.rowCount ?? rows.length,
+    lang: detectSheetLang(rows[0] ?? [])
+  };
+}
+
+type RavSelection = { applicationIds?: string[]; month?: string; from?: string; to?: string; includeArchived?: boolean };
+
+/** Explicit ids (single/bulk export) or a period (monthly run), plus one contact per application. */
+async function selectRavRows(userId: string, sel: RavSelection) {
+  const ids = sel.applicationIds?.filter(Boolean) ?? [];
+  const where: SQL[] = [eq(applications.userId, userId)];
+  if (ids.length > 0) where.push(inArray(applications.id, ids));
+  if (sel.includeArchived === false) where.push(ne(applications.archived, "true"));
+  let rows = await db.select().from(applications).where(and(...where));
+
+  if (ids.length === 0) {
+    const month = sel.month ?? new Date().toISOString().slice(0, 7);
+    const from = sel.from ? new Date(sel.from) : new Date(`${month}-01T00:00:00`);
+    const to = sel.to ? new Date(sel.to) : new Date(from.getFullYear(), from.getMonth() + 1, 1);
+    rows = rows.filter(r => {
+      const d = new Date(r.appliedAt ?? r.createdAt);
+      return d >= from && d < to;
+    });
+  }
+
+  const contactsByApp = new Map<string, RavContact>();
+  if (rows.length > 0) {
+    const contactRows = await db.select().from(applicationContacts)
+      .where(inArray(applicationContacts.applicationId, rows.map(r => r.id)))
+      .orderBy(applicationContacts.createdAt);
+    for (const ct of contactRows) if (!contactsByApp.has(ct.applicationId)) contactsByApp.set(ct.applicationId, ct);
+  }
+  return { rows, contactsByApp };
+}
+
+app.get("/api/rav/sheet-info", async (c) => {
+  const spreadsheetId = parseSpreadsheetId(c.req.query("spreadsheetId") ?? "");
+  if (!spreadsheetId) return c.json({ error: "spreadsheetId required" }, 400);
+  const token = await getDriveAccessToken(getUserId(c));
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  try {
+    const { title, rows, lang } = await loadRavSheet(token, spreadsheetId);
+    if (!lang) return c.json({ error: "Kein RAV-Blatt erkannt — die Kopfzeile passt zu keiner Sprache." }, 400);
+    const entries = rows.slice(1).filter(r => !isRavPlaceholderRow(r)).length;
+    return c.json({ id: spreadsheetId, title, url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`, lang, entries });
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg === "SHEETS_SCOPE_MISSING") return c.json({ error: "Google-Verbindung ohne Tabellen-Zugriff — bitte Google neu verbinden." }, 403);
+    return c.json({ error: "Tabelle nicht gefunden oder kein Zugriff" }, 404);
+  }
+});
+
+/** Creates an empty, fully formatted RAV sheet (header, widths, all four dropdowns). */
+async function createRavSheet(
+  token: string, lang: RavLang, title: string, parentId: string | null
+): Promise<{ spreadsheetId: string; sheetId: number; title: string }> {
+  const created = await sheetsFetch<{ spreadsheetId: string; sheets: { properties: { sheetId: number } }[] }>(
+    token, SHEETS_API, {
+      method: "POST",
+      body: JSON.stringify({
+        properties: { title },
+        sheets: [{ properties: { title: "Sheet1", gridProperties: { frozenRowCount: 1, rowCount: 200, columnCount: 12 } } }]
+      })
+    });
+  const spreadsheetId = created.spreadsheetId;
+  const sheetId = created.sheets[0].properties.sheetId;
+
+  await sheetsFetch(token, `${SHEETS_API}/${spreadsheetId}:batchUpdate`, {
+    method: "POST",
+    body: JSON.stringify({
+      requests: [
+        { updateCells: { rows: [cellRow(RAV_SHEET[lang].headers)], fields: "userEnteredValue", start: { sheetId, rowIndex: 0, columnIndex: 0 } } },
+        { repeatCell: {
+            range: { sheetId, startRowIndex: 0, endRowIndex: 1 },
+            cell: { userEnteredFormat: { textFormat: { bold: true }, verticalAlignment: "MIDDLE", wrapStrategy: "WRAP" } },
+            fields: "userEnteredFormat(textFormat,verticalAlignment,wrapStrategy)"
+        } },
+        ...RAV_COL_WIDTHS_PX.map((px, i) => ({
+          updateDimensionProperties: {
+            range: { sheetId, dimension: "COLUMNS", startIndex: i, endIndex: i + 1 },
+            properties: { pixelSize: px },
+            fields: "pixelSize"
+          }
+        })),
+        ...ravValidationRequests(sheetId, lang, 200)
+      ]
+    })
+  });
+
+  if (parentId) {
+    await fetch(`https://www.googleapis.com/drive/v3/files/${spreadsheetId}?addParents=${parentId}&removeParents=root&fields=id`, {
+      method: "PATCH", headers: sheetsHeaders(token)
+    }).catch(() => {});   // wrong folder is not worth failing the whole creation over
+  }
+  return { spreadsheetId, sheetId, title };
+}
+
+/** Folder id from a Drive URL or a bare id, falling back to the user's applications folder. */
+const ravParentFolder = (raw: string | undefined, fallback: string | null | undefined): string | null => {
+  const v = (raw ?? "").trim();
+  const m = /\/folders\/([a-zA-Z0-9_-]+)/.exec(v);
+  return (m ? m[1] : v) || fallback || null;
+};
+
+const defaultRavTitle = (lang: RavLang) =>
+  `${lang === "fr" ? "Recherches d\u2019emploi" : lang === "en" ? "Job search log" : "RAV Arbeitsbem\u00fchungen"} ${new Date().getFullYear()}`;
+
+app.post("/api/rav/create-sheet", async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json<{ lang?: string; title?: string; parentFolderId?: string }>();
+  const lang = (RAV_LANGS as string[]).includes(body.lang ?? "") ? body.lang as RavLang : "de";
+  const token = await getDriveAccessToken(userId);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  try {
+    const { spreadsheetId, title } = await createRavSheet(
+      token, lang,
+      (body.title ?? "").trim() || defaultRavTitle(lang),
+      ravParentFolder(body.parentFolderId, profile?.driveApplicationsFolderId)
+    );
+    await db.update(userProfile).set({ ravSheetId: spreadsheetId, updatedAt: new Date() })
+      .where(eq(userProfile.userId, userId));
+    return c.json({ id: spreadsheetId, title, lang, entries: 0, url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit` });
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg === "SHEETS_SCOPE_MISSING") return c.json({ error: "Google-Verbindung ohne Tabellen-Zugriff — bitte Google neu verbinden." }, 403);
+    return c.json({ error: msg }, 502);
+  }
+});
+
+/** RFC 4180 quoting; Excel needs CRLF and a BOM to read UTF-8 correctly. */
+const csvCell = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
+
+// CSV needs no Google at all — no linked file, no dedupe, numbering starts fresh per month.
+app.post("/api/export/rav-csv", async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json<RavSelection & { lang?: string }>()
+    .catch(() => ({} as RavSelection & { lang?: string }));
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const lang = (RAV_LANGS as string[]).includes(body.lang ?? "")
+    ? body.lang as RavLang
+    : (RAV_LANGS as string[]).includes(profile?.uiLanguage ?? "") ? profile!.uiLanguage as RavLang : "de";
+
+  const { rows, contactsByApp } = await selectRavRows(userId, body);
+  if (rows.length === 0) return c.json({ error: "Keine Bewerbungen im gewählten Zeitraum." }, 400);
+
+  const numByMonth = new Map<string, number>();
+  const lines = [RAV_SHEET[lang].headers.map(csvCell).join(",")];
+  for (const app_ of sortRavApplications(rows as RavApplication[])) {
+    const month = ravMonthKey(ravDate(app_ as RavApplication));
+    const num = (numByMonth.get(month) ?? 0) + 1;
+    numByMonth.set(month, num);
+    lines.push(ravRow(app_ as RavApplication, contactsByApp.get(app_.id) ?? null, lang, num).map(csvCell).join(","));
+  }
+
+  const date = new Date().toISOString().slice(0, 10);
+  c.header("Content-Type", "text/csv; charset=utf-8");
+  c.header("Content-Disposition", `attachment; filename="rav-${date}.csv"`);
+  return c.body("\uFEFF" + lines.join("\r\n") + "\r\n");
+});
+
+app.post("/api/export/rav-sheet", async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json<{
+    applicationIds?: string[]; month?: string; from?: string; to?: string; includeArchived?: boolean;
+    target?: "linked" | "new"; lang?: string; title?: string; parentFolderId?: string;
+  }>().catch(() => ({} as Record<string, never>));
+
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const toNewSheet = body.target === "new";
+  if (!toNewSheet && !profile?.ravSheetId) {
+    return c.json({ error: "Kein RAV-Blatt verknüpft — bitte in den Einstellungen eines anlegen oder verlinken." }, 400);
+  }
+
+  const token = await getDriveAccessToken(userId);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+
+  const { rows, contactsByApp } = await selectRavRows(userId, body);
+  if (rows.length === 0) return c.json({ error: "Keine Bewerbungen im gewählten Zeitraum." }, 400);
+
+  try {
+    // "new" produces a standalone file and deliberately leaves the linked target alone.
+    let spreadsheetId = profile?.ravSheetId as string;
+    if (toNewSheet) {
+      const newLang = (RAV_LANGS as string[]).includes(body.lang ?? "")
+        ? body.lang as RavLang
+        : (RAV_LANGS as string[]).includes(profile?.uiLanguage ?? "") ? profile!.uiLanguage as RavLang : "de";
+      const created = await createRavSheet(
+        token, newLang,
+        (body.title ?? "").trim() || defaultRavTitle(newLang),
+        ravParentFolder(body.parentFolderId, profile?.driveApplicationsFolderId)
+      );
+      spreadsheetId = created.spreadsheetId;
+    }
+
+    const { tab, rows: existing, rowCount, lang } = await loadRavSheet(token, spreadsheetId);
+    if (!lang) return c.json({ error: "Kein RAV-Blatt erkannt — die Kopfzeile passt zu keiner Sprache." }, 400);
+
+    const plan = planRavWrite(existing, rows as RavApplication[], contactsByApp, lang);
+
+    const writes = [...plan.updates, ...plan.appends];
+    if (writes.length > 0) {
+      // The original template is only 25 rows tall; writing or validating past the
+      // grid is rejected outright, so grow it first.
+      const needRows = plan.lastRow + RAV_VALIDATION_SLACK;
+      if (needRows > rowCount) {
+        await sheetsFetch(token, `${SHEETS_API}/${spreadsheetId}:batchUpdate`, {
+          method: "POST",
+          body: JSON.stringify({ requests: [{ appendDimension: { sheetId: tab.sheetId, dimension: "ROWS", length: needRows - rowCount } }] })
+        });
+      }
+      await sheetsFetch(token, `${SHEETS_API}/${spreadsheetId}/values:batchUpdate`, {
+        method: "POST",
+        body: JSON.stringify({
+          valueInputOption: "RAW",
+          data: writes.map(w => ({ range: `${tab.title}!A${w.row}:L${w.row}`, values: [w.values] }))
+        })
+      });
+      // The template only validates down to row 25 - extend it over the new rows.
+      await sheetsFetch(token, `${SHEETS_API}/${spreadsheetId}:batchUpdate`, {
+        method: "POST",
+        body: JSON.stringify({ requests: ravValidationRequests(tab.sheetId, lang, plan.lastRow + RAV_VALIDATION_SLACK) })
+      });
+    }
+
+    return c.json({
+      ok: true, spreadsheetId, lang, target: toNewSheet ? "new" : "linked",
+      url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}/edit`,
+      added: plan.added, updated: plan.updated, skipped: plan.skipped
+    });
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg === "SHEETS_SCOPE_MISSING") return c.json({ error: "Google-Verbindung ohne Tabellen-Zugriff — bitte Google neu verbinden." }, 403);
+    return c.json({ error: msg }, 502);
+  }
 });
 
 app.get("/api/export", async (c) => {
