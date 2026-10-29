@@ -49,7 +49,8 @@ import {
   webauthnCredentials,
   passwordResetTokens,
   invites,
-  type AiConfig
+  type AiConfig,
+  type UserDocument
 } from "@application-pal/shared";
 import { PDFParse } from "pdf-parse";
 import {
@@ -1784,8 +1785,11 @@ app.post("/api/documents", zValidator("json", userDocumentInsertSchema), async (
 app.patch("/api/documents/:id", zValidator("json", userDocumentPatchSchema), async (c) => {
   const id = c.req.param("id");
   const payload = c.req.valid("json");
+  // A new file URL invalidates the cached content summary (the client re-summarizes).
+  const [prev] = await db.select({ url: userDocuments.url }).from(userDocuments).where(eq(userDocuments.id, id)).limit(1);
+  const urlChanged = payload.url !== undefined && payload.url !== prev?.url;
   const [doc] = await db.update(userDocuments)
-    .set({ ...payload, updatedAt: new Date() })
+    .set({ ...payload, ...(urlChanged ? { contentSummary: null, summarizedAt: null } : {}), updatedAt: new Date() })
     .where(eq(userDocuments.id, id))
     .returning();
   if (!doc) return c.json({ error: "Not found" }, 404);
@@ -1801,13 +1805,99 @@ app.delete("/api/documents/:id", async (c) => {
 // Loads Zeugnisse/Referenzen/Zertifikate/Portfolio from the Documents library as
 // AI prompt context — these characterise the candidate's know-how just as much as
 // the master CV, so every endpoint using masterCv as candidate context should also use this.
+const CONTEXT_DOC_CATEGORIES = ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"];
+
 async function loadDocumentsContext(userId: string): Promise<string> {
   const docs = await db.select().from(userDocuments)
-    .where(and(eq(userDocuments.userId, userId), inArray(userDocuments.category, ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"])));
+    .where(and(eq(userDocuments.userId, userId), inArray(userDocuments.category, CONTEXT_DOC_CATEGORIES)));
   if (docs.length === 0) return "";
-  const docTexts = docs.map((d) => `- ${d.name}${d.description ? `: ${d.description}` : ""}${d.tags ? ` [${d.tags}]` : ""}`).join("\n");
-  return `## Zeugnisse / Zertifikate / Referenzen\n${docTexts}`;
+  // Uses the cached content summaries (see summarizeDocument) — no file is read here.
+  const docTexts = docs.map((d) => {
+    const head = `- ${d.name}${d.description ? `: ${d.description}` : ""}${d.tags ? ` [${d.tags}]` : ""}`;
+    return d.contentSummary ? `${head}\n  Inhalt:\n${d.contentSummary.slice(0, 1200).replace(/^/gm, "  ")}` : head;
+  }).join("\n");
+  return `## Zeugnisse / Zertifikate / Referenzen\n${docTexts.slice(0, 7000)}`;
 }
+
+// Reads the document's file (Drive PDF, Google Doc, or a public PDF link) as plain text.
+// Returns null for document types without readable content (Figma, images, plain links).
+async function fetchDocumentText(doc: UserDocument, userId: string): Promise<string | null> {
+  if (!doc.url || !/^https?:\/\//.test(doc.url) || !["pdf", "gdoc"].includes(doc.fileType)) return null;
+  if (doc.url.includes("/folders/")) return null; // a Drive folder link, not a file
+  const driveId = doc.url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ?? doc.url.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+  let res: Response;
+  if (driveId) {
+    const token = await getDriveAccessToken(userId);
+    if (!token) throw new Error("Google Drive nicht verbunden");
+    const isGDoc = doc.fileType === "gdoc" || doc.url.includes("docs.google.com/document");
+    const url = isGDoc
+      ? `https://www.googleapis.com/drive/v3/files/${driveId}/export?mimeType=text/plain`
+      : `https://www.googleapis.com/drive/v3/files/${driveId}?alt=media`;
+    res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
+    if (!res.ok) throw new Error(`Drive Download: HTTP ${res.status}`);
+    if (isGDoc) return (await res.text()).trim();
+  } else {
+    res = await fetch(doc.url, { signal: AbortSignal.timeout(60_000) });
+    if (!res.ok) throw new Error(`Download: HTTP ${res.status}`);
+  }
+  const parser = new PDFParse({ data: Buffer.from(await res.arrayBuffer()) });
+  try { return (await parser.getText()).text.trim(); } finally { await parser.destroy(); }
+}
+
+// Builds and stores the content summary for one document. Returns the updated row,
+// or the unchanged row when the type has no readable content.
+async function summarizeDocument(doc: UserDocument, userId: string, ai: AiConfig): Promise<UserDocument> {
+  const text = await fetchDocumentText(doc, userId);
+  if (!text) return doc;
+  const system = `Du fasst ein Bewerbungsdokument (Arbeitszeugnis, Referenz, Zertifikat, Portfolio oder Lebenslauf) für spätere Anschreiben und CV-Anpassungen zusammen.
+Gib 4–8 knappe Stichpunkte (je eine Zeile, beginnend mit "- ") in der Sprache des Dokuments zurück: Aussteller/Arbeitgeber, Zeitraum, Rolle, konkrete Aufgaben und Ergebnisse (mit Zahlen), Bewertungen/Zitate und belegte Kompetenzen.
+Nur Fakten aus dem Dokument — nichts erfinden, keine Einleitung, kein Markdown ausser den Stichpunkten.`;
+  const raw = await callAi(system, `Dokument: ${doc.name}\n\n${text.slice(0, 12000)}`, ai);
+  const summary = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  if (!summary) throw new Error("Leere KI-Antwort");
+  const [updated] = await db.update(userDocuments)
+    .set({ contentSummary: summary.slice(0, 2000), summarizedAt: new Date() })
+    .where(eq(userDocuments.id, doc.id))
+    .returning();
+  return updated;
+}
+
+app.post("/api/documents/:id/summarize", async (c) => {
+  const userId = getUserId(c);
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Provider konfiguriert" }, 400);
+  const [doc] = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.id, c.req.param("id")), eq(userDocuments.userId, userId))).limit(1);
+  if (!doc) return c.json({ error: "Not found" }, 404);
+  try {
+    return c.json(await summarizeDocument(doc, userId, ai));
+  } catch (e) {
+    return c.json({ error: (e as Error).message }, 502);
+  }
+});
+
+// Summarizes every prompt-relevant document that has no summary yet (force: all of them).
+// ponytail: sequential loop — fine for a personal library of a few dozen files.
+app.post("/api/documents/summarize", async (c) => {
+  const userId = getUserId(c);
+  const { ai, force } = await c.req.json<{ ai: AiConfig; force?: boolean }>();
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Provider konfiguriert" }, 400);
+  const docs = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.userId, userId), inArray(userDocuments.category, CONTEXT_DOC_CATEGORIES)));
+  const errors: { name: string; error: string }[] = [];
+  let done = 0;
+  for (const doc of docs) {
+    if (!force && doc.contentSummary) continue;
+    try {
+      const updated = await summarizeDocument(doc, userId, ai);
+      if (updated.contentSummary) done++;
+    } catch (e) {
+      errors.push({ name: doc.name, error: (e as Error).message });
+    }
+  }
+  const rows = await db.select().from(userDocuments).where(eq(userDocuments.userId, userId)).orderBy(desc(userDocuments.createdAt));
+  return c.json({ done, errors, docs: rows });
+});
 
 // Persistent cover-letter guidance the user configures once on the "Anschreiben" page
 // (Rail → /letter-coach), stored as JSON in user_profile.letter_config.

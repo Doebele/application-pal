@@ -386,7 +386,20 @@
       "sonstiges": "Other"
     },
     "extraUrl": "Link / additional information",
-    "linkBtn": "Link"
+    "linkBtn": "Link",
+    "summary": "Content",
+    "summarize": "Summarize",
+    "resummarize": "Rebuild summary",
+    "summarizing": "Summarizing…",
+    "summaryHint": "AI summary of the content — used for cover letters and CV tailoring",
+    "summaryFailed": "Summary failed",
+    "summarizedAt": "Summarized on {{date}}",
+    "summarizeAll": "Refresh summaries",
+    "summarizeAllPending": "Summarize {{count}}",
+    "summarizeAllHint": "Reads every reference, certificate, portfolio and CV (PDF / Google Doc) without a summary and stores an AI summary",
+    "summarizeAllResult": "{{count}} document(s) summarized",
+    "summarizeAllErrors": "Failed: {{names}}",
+    "summaryNoAi": "Choose an AI provider in Settings first"
   },
   "contacts": {
     "label": "Contacts",

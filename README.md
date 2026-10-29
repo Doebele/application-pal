@@ -217,6 +217,7 @@ All larger AI outputs can be exported as Google Docs. With an active template fr
 - **Global library** — CV, references, certificates, Figma links, portfolio (categorised)
 - Assign library docs to an application → automatically copied to Drive (Docs) or uploaded (PDFs)
 - `Drive ✓` badge after a successful copy
+- **Content summaries** — PDFs / Google Docs (CV, references, certificates, portfolio) are read once and stored as a short AI summary; cover letters, reviews and CV tailoring reuse it instead of re-reading files. Auto-built on add / re-link, refreshable via *Refresh summaries* → [docs/cover-letter.md](docs/cover-letter.md#document-summaries)
 
 ---
 

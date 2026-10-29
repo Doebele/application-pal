@@ -302,6 +302,10 @@ export const userDocuments = pgTable("user_documents", {
   extraUrl: text("extra_url"),
   description: text("description"),
   tags: text("tags"),
+  // AI digest of the file's content (PDF / Google Doc), built once and reused as
+  // prompt context so generation never re-downloads the documents.
+  contentSummary: text("content_summary"),
+  summarizedAt: timestamp("summarized_at", { withTimezone: true }),
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -323,7 +327,7 @@ export const userDocumentInsertSchema = createInsertSchema(userDocuments, {
   name: z.string().trim().min(1),
   category: z.enum(["lebenslauf", "motivationsschreiben", "zeugnis", "referenz", "zertifikat", "figma", "portfolio", "sonstiges"]).default("sonstiges"),
   fileType: z.enum(["pdf", "link", "figma", "image", "gdoc"]).default("link"),
-}).omit({ id: true, createdAt: true, updatedAt: true, userId: true });
+}).omit({ id: true, createdAt: true, updatedAt: true, userId: true, contentSummary: true, summarizedAt: true });
 export const userDocumentPatchSchema = userDocumentInsertSchema.partial();
 export type UserDocument = z.infer<typeof userDocumentSelectSchema>;
 

@@ -27,6 +27,9 @@ docker exec application-pal-db psql -U postgres -d application_pal -c "ALTER TAB
 docker exec application-pal-frontend grep -r "SomeNewString" /usr/share/nginx/html/assets/
 ```
 
+## Document summaries
+`user_documents.content_summary` caches an AI digest of each PDF / Google Doc (`summarizeDocument` → `fetchDocumentText` in `backend/src/index.ts`). `loadDocumentsContext` puts these summaries into every candidate-context prompt; it never reads files itself. The frontend triggers summaries on add/re-link and via `POST /api/documents/summarize` (AI config comes from the client, like every AI endpoint). A PATCH that changes `url` clears the summary.
+
 ## Critical Pitfalls
 
 **Docker working directory**: Always `cd /Users/clausmedvesek/Developer/projects/application-pal` before any Docker command. The CWD persists between Bash calls and may drift to a worktree. Building from a worktree compiles the wrong source with no error.

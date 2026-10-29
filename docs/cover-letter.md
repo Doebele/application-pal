@@ -158,10 +158,19 @@ The toggle takes effect immediately: the language is sent with every AI request,
 |--------|-------------------|------|
 | Master CV | Profile (`/profile`) | Primary factual basis |
 | Personal notes | Profile (`/profile`) | Extra context, priorities |
-| Documents library | Documents (`/documents`) | Certificates, references, portfolio — characterise your know-how |
+| Documents library | Documents (`/documents`) | Certificates, references, portfolio — name, description, tags **plus a cached AI summary of the file content** (see below) |
 | Cover-letter guidance | **Cover Letter (`/letter-coach`)** | Structure, values, strengths, style, no-gos, reference letter |
 | Building blocks + opening sentence + job notes | Draft panel (per application) | Job-specific selection for this one letter |
 | Correspondence language | CV-stage toggle | Output language |
+
+### Document summaries
+
+PDFs and Google Docs in the categories *CV, references, certificates, portfolio* are read **once** and stored as a short AI summary (4–8 facts: issuer, period, role, results, ratings, proven skills). Every cover letter, opening sentence, review and CV tailoring uses these stored summaries, so no files are downloaded during generation.
+
+- A new document, or one whose link changes (including the Drive upload), is summarized automatically in the background.
+- **Refresh summaries** in the Documents header summarizes everything that's still missing, e.g. older entries. The ↻ button on a card rebuilds a single summary, for example after you edited the file directly in Drive.
+- **Content** on a card shows the stored summary and when it was created.
+- Figma, images, plain links and Drive *folder* links have no readable content and only contribute name, description and tags.
 
 ---
 

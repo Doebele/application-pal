@@ -386,7 +386,20 @@
       "sonstiges": "Autres"
     },
     "extraUrl": "Lien / informations complémentaires",
-    "linkBtn": "Lien"
+    "linkBtn": "Lien",
+    "summary": "Contenu",
+    "summarize": "Résumer",
+    "resummarize": "Recréer le résumé",
+    "summarizing": "Résumé en cours…",
+    "summaryHint": "Résumé IA du contenu — utilisé pour les lettres de motivation et l'adaptation du CV",
+    "summaryFailed": "Échec du résumé",
+    "summarizedAt": "Résumé le {{date}}",
+    "summarizeAll": "Actualiser les résumés",
+    "summarizeAllPending": "Résumer {{count}}",
+    "summarizeAllHint": "Lit tous les certificats, références, portfolios et CV (PDF / Google Doc) sans résumé et enregistre un résumé IA",
+    "summarizeAllResult": "{{count}} document(s) résumé(s)",
+    "summarizeAllErrors": "Échec : {{names}}",
+    "summaryNoAi": "Choisissez d'abord un fournisseur IA dans les paramètres"
   },
   "contacts": {
     "label": "Contacts",

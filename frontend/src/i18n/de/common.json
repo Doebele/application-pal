@@ -386,7 +386,20 @@
       "sonstiges": "Sonstiges"
     },
     "extraUrl": "Link / weitere Informationen",
-    "linkBtn": "Link"
+    "linkBtn": "Link",
+    "summary": "Inhalt",
+    "summarize": "Zusammenfassen",
+    "resummarize": "Zusammenfassung neu erstellen",
+    "summarizing": "Fasse zusammen…",
+    "summaryHint": "KI-Zusammenfassung des Inhalts — wird für Anschreiben und CV-Anpassungen verwendet",
+    "summaryFailed": "Zusammenfassung fehlgeschlagen",
+    "summarizedAt": "Zusammengefasst am {{date}}",
+    "summarizeAll": "Zusammenfassungen aktualisieren",
+    "summarizeAllPending": "{{count}} zusammenfassen",
+    "summarizeAllHint": "Liest alle Zeugnisse, Referenzen, Zertifikate, Portfolios und Lebensläufe (PDF / Google Doc) ohne Zusammenfassung und speichert eine KI-Zusammenfassung",
+    "summarizeAllResult": "{{count}} Dokument(e) zusammengefasst",
+    "summarizeAllErrors": "Fehler bei: {{names}}",
+    "summaryNoAi": "Zuerst einen KI-Provider in den Einstellungen wählen"
   },
   "contacts": {
     "label": "Kontakte",

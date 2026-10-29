@@ -3,10 +3,16 @@ import { useTranslation } from "react-i18next";
 import {
   Page, Link, MediaImage, Plus, Trash, OpenNewWindow,
   Medal, Group, GraduationCap, Bag, Folder, EditPencil, Check, Xmark,
-  List, GridPlus, Expand, Collapse, RefreshCircle, PageEdit
+  List, GridPlus, Expand, Collapse, RefreshCircle, PageEdit, Sparks
 } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
+import { useUiStore } from "../lib/store";
+
+// Categories whose content feeds AI prompts (mirrors CONTEXT_DOC_CATEGORIES in the backend)
+const SUMMARY_CATEGORIES = ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"];
+const isSummarizable = (d: UserDocument) =>
+  SUMMARY_CATEGORIES.includes(d.category) && !!d.url && !d.url.includes("/folders/") && (d.fileType === "pdf" || d.fileType === "gdoc");
 
 
 // ─── Hook: drive folder ID from user profile (per-user, server-side) ─────────
@@ -135,7 +141,7 @@ function CreateGDocButton({ title, onCreated }: {
 // ─── Add Form ─────────────────────────────────────────────────────────────────
 function AddDocForm({ category, onSave, onCancel }: {
   category: Category;
-  onSave: (doc: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => Promise<void>;
+  onSave: (doc: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId" | "contentSummary" | "summarizedAt">) => Promise<void>;
   onCancel: () => void;
 }) {
   const { t } = useTranslation();
@@ -344,14 +350,25 @@ function AddDocForm({ category, onSave, onCancel }: {
 }
 
 // ─── Document Card — full card with icon, name, description, tags ─────────────
-function DocCard({ doc, onDelete, onEdit, onUrlUpdate }: {
+function DocCard({ doc, onDelete, onEdit, onUrlUpdate, onSummarize }: {
   doc: UserDocument;
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
   onUrlUpdate?: (id: string, newUrl: string) => void;
+  onSummarize?: (id: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [hov, setHov] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [summarizing, setSummarizing] = useState(false);
+  const [summaryErr, setSummaryErr] = useState<string | null>(null);
+  const runSummarize = async () => {
+    if (!onSummarize) return;
+    setSummarizing(true); setSummaryErr(null);
+    try { await onSummarize(doc.id); setShowSummary(true); }
+    catch (e: unknown) { setSummaryErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("documents.summaryFailed")); }
+    finally { setSummarizing(false); }
+  };
   const driveApplicationsFolderId = useProfileDriveFolder();
   const [uploading, setUploading] = useState(false);
   const [uploadErr, setUploadErr] = useState<string | null>(null);
@@ -510,10 +527,50 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate }: {
         {uploadErr && (
           <span style={{ fontSize: 10, color: "#f87171" }}>{uploadErr}</span>
         )}
+
+        {/* Content summary used as AI context */}
+        {isSummarizable(doc) && onSummarize && (
+          <span style={{ display: "inline-flex", gap: 4, marginLeft: "auto" }}>
+            {doc.contentSummary && (
+              <button onClick={() => setShowSummary(v => !v)} title={t("documents.summaryHint")} style={summaryBtnStyle(true)}>
+                <Sparks width={10} height={10} /> {t("documents.summary")}
+              </button>
+            )}
+            <button disabled={summarizing} onClick={runSummarize}
+              title={doc.contentSummary ? t("documents.resummarize") : t("documents.summaryHint")}
+              style={summaryBtnStyle(false)}>
+              {summarizing
+                ? <><RefreshCircle width={10} height={10} style={{ animation: "spin 1s linear infinite" }} /> {t("documents.summarizing")}</>
+                : doc.contentSummary
+                ? <RefreshCircle width={10} height={10} />
+                : <><Sparks width={10} height={10} /> {t("documents.summarize")}</>}
+            </button>
+          </span>
+        )}
+        {summaryErr && <span style={{ fontSize: 10, color: "#f87171" }}>{summaryErr}</span>}
       </div>
+
+      {showSummary && doc.contentSummary && (
+        <div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.55, whiteSpace: "pre-wrap", background: "var(--surface-2)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 10px" }}>
+          {doc.contentSummary}
+          {doc.summarizedAt && (
+            <div style={{ fontSize: 9.5, color: "var(--fg-4)", marginTop: 6 }}>
+              {t("documents.summarizedAt", { date: new Date(doc.summarizedAt).toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
+
+const summaryBtnStyle = (active: boolean): React.CSSProperties => ({
+  display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600,
+  padding: "3px 8px", borderRadius: 6, cursor: "pointer", fontFamily: "var(--font-sans)",
+  color: active ? "var(--accent)" : "var(--fg-3)",
+  background: active ? "var(--accent-08)" : "transparent",
+  border: `1px solid ${active ? "var(--accent-15)" : "var(--border)"}`,
+});
 
 const iconBtnStyle = (danger: boolean): React.CSSProperties => ({
   width: 26, height: 26, borderRadius: 6, border: "1px solid transparent",
@@ -652,13 +709,14 @@ function EditModal({ doc, onSave, onClose }: {
 }
 
 // ─── Doc List (reused in list + tab view) ─────────────────────────────────────
-function DocList({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
+function DocList({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate, onSummarize }: {
   cat: typeof CATEGORIES[number];
   docs: UserDocument[];
-  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => Promise<void>;
+  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId" | "contentSummary" | "summarizedAt">) => Promise<void>;
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
   onUrlUpdate?: (id: string, newUrl: string) => void;
+  onSummarize?: (id: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [adding, setAdding] = useState(false);
@@ -680,7 +738,7 @@ function DocList({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-          {docs.map((doc) => <DocCard key={doc.id} doc={doc} onDelete={onDelete} onEdit={onEdit} onUrlUpdate={onUrlUpdate} />)}
+          {docs.map((doc) => <DocCard key={doc.id} doc={doc} onDelete={onDelete} onEdit={onEdit} onUrlUpdate={onUrlUpdate} onSummarize={onSummarize} />)}
         </div>
       )}
       {docs.length > 0 && !adding && (
@@ -693,13 +751,14 @@ function DocList({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
 }
 
 // ─── List Section with Expand-Logik ──────────────────────────────────────────
-function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
+function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate, onSummarize }: {
   cat: typeof CATEGORIES[number];
   docs: UserDocument[];
-  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => Promise<void>;
+  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId" | "contentSummary" | "summarizedAt">) => Promise<void>;
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
   onUrlUpdate?: (id: string, newUrl: string) => void;
+  onSummarize?: (id: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -730,17 +789,18 @@ function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
         </button>
       </div>
       <div style={expanded ? { flex: 1, overflow: "auto" } : {}}>
-        <DocList cat={cat} docs={docs} onAdd={onAdd} onDelete={onDelete} onEdit={onEdit} onUrlUpdate={onUrlUpdate} />
+        <DocList cat={cat} docs={docs} onAdd={onAdd} onDelete={onDelete} onEdit={onEdit} onUrlUpdate={onUrlUpdate} onSummarize={onSummarize} />
       </div>
     </div>
   );
 }
 
 // ─── Tab View ─────────────────────────────────────────────────────────────────
-function TabView({ docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
+function TabView({ docs, onAdd, onDelete, onEdit, onUrlUpdate, onSummarize }: {
   docs: UserDocument[];
   onUrlUpdate?: (id: string, newUrl: string) => void;
-  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => Promise<void>;
+  onSummarize?: (id: string) => Promise<void>;
+  onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId" | "contentSummary" | "summarizedAt">) => Promise<void>;
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
 }) {
@@ -851,7 +911,7 @@ function TabView({ docs, onAdd, onDelete, onEdit, onUrlUpdate }: {
         )}
       </div>
 
-      <DocList cat={cat} docs={catDocs} onAdd={onAdd} onDelete={onDelete} onEdit={onEdit} onUrlUpdate={onUrlUpdate} />
+      <DocList cat={cat} docs={catDocs} onAdd={onAdd} onDelete={onDelete} onEdit={onEdit} onUrlUpdate={onUrlUpdate} onSummarize={onSummarize} />
     </div>
   );
 }
@@ -863,6 +923,10 @@ export function DocumentsPage() {
   const [loading, setLoading]   = useState(true);
   const [editDoc, setEditDoc]   = useState<UserDocument | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const { ai } = useUiStore();
+  const aiReady = ai.provider !== "none";
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkMsg, setBulkMsg]   = useState<string | null>(null);
 
   useEffect(() => {
     api.get<UserDocument[]>("/api/documents")
@@ -871,10 +935,36 @@ export function DocumentsPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const handleAdd = useCallback(async (payload: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId">) => {
+  const aiPayload = ai;
+
+  // Builds the cached content summary that cover letters / CV tailoring use as context.
+  const summarizeDoc = useCallback(async (id: string) => {
+    const res = await api.post<UserDocument>(`/api/documents/${id}/summarize`, { ai: aiPayload });
+    setDocs((prev) => prev.map((d) => (d.id === id ? res.data : d)));
+  }, [ai]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // New or re-linked documents are summarized right away, in the background.
+  const autoSummarize = (d: UserDocument) => {
+    if (aiReady && isSummarizable(d) && !d.contentSummary) summarizeDoc(d.id).catch(() => {});
+  };
+
+  const summarizeAll = async () => {
+    setBulkBusy(true); setBulkMsg(null);
+    try {
+      const r = await api.post<{ done: number; errors: { name: string; error: string }[]; docs: UserDocument[] }>("/api/documents/summarize", { ai: aiPayload });
+      setDocs(r.data.docs);
+      setBulkMsg(t("documents.summarizeAllResult", { count: r.data.done })
+        + (r.data.errors.length ? ` · ${t("documents.summarizeAllErrors", { names: r.data.errors.map(e => e.name).join(", ") })}` : ""));
+    } catch (e: unknown) {
+      setBulkMsg((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("documents.summaryFailed"));
+    } finally { setBulkBusy(false); }
+  };
+
+  const handleAdd = useCallback(async (payload: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId" | "contentSummary" | "summarizedAt">) => {
     const res = await api.post<UserDocument>("/api/documents", payload);
     setDocs((prev) => [res.data, ...prev]);
-  }, []);
+    autoSummarize(res.data);
+  }, [ai]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDelete = useCallback(async (id: string) => {
     await api.delete(`/api/documents/${id}`).catch(() => {});
@@ -884,11 +974,14 @@ export function DocumentsPage() {
   const handleEdit = useCallback(async (id: string, patch: Partial<UserDocument>) => {
     const res = await api.patch<UserDocument>(`/api/documents/${id}`, patch);
     setDocs((prev) => prev.map((d) => (d.id === id ? res.data : d)));
-  }, []);  // throws on error — EditModal catches it
+    autoSummarize(res.data);
+  }, [ai]);  // eslint-disable-line react-hooks/exhaustive-deps -- throws on error — EditModal catches it
 
+  // Drive upload re-links the file — the backend dropped the old summary, so rebuild it.
   const handleUrlUpdate = useCallback((id: string, newUrl: string) => {
-    setDocs((prev) => prev.map((d) => d.id === id ? { ...d, url: newUrl } : d));
-  }, []);
+    setDocs((prev) => prev.map((d) => d.id === id ? { ...d, url: newUrl, contentSummary: null, summarizedAt: null } : d));
+    if (aiReady) summarizeDoc(id).catch(() => {});
+  }, [ai]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) return (
     <>
@@ -915,16 +1008,34 @@ export function DocumentsPage() {
     </div>
   );
 
+  const pending = docs.filter((d) => isSummarizable(d) && !d.contentSummary).length;
+  const summarizeAllBtn = (
+    <button onClick={summarizeAll} disabled={bulkBusy || !aiReady}
+      title={aiReady ? t("documents.summarizeAllHint") : t("documents.summaryNoAi")}
+      style={{
+        display: "inline-flex", alignItems: "center", gap: 5, height: 28, padding: "0 10px", borderRadius: 8,
+        fontSize: 11, fontWeight: 600, fontFamily: "var(--font-sans)", cursor: bulkBusy ? "wait" : aiReady ? "pointer" : "not-allowed",
+        color: pending > 0 ? "var(--accent)" : "var(--fg-2)", opacity: aiReady ? 1 : 0.5,
+        background: pending > 0 ? "var(--accent-08)" : "var(--surface-2)",
+        border: `1px solid ${pending > 0 ? "var(--accent-15)" : "var(--border)"}`,
+      }}>
+      {bulkBusy
+        ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("documents.summarizing")}</>
+        : <><Sparks width={12} height={12} /> {pending > 0 ? t("documents.summarizeAllPending", { count: pending }) : t("documents.summarizeAll")}</>}
+    </button>
+  );
+
   return (
     <>
       <Topbar
         title={t("documents.title")}
         sub={t("documents.sub")}
-        actions={viewToggle}
+        actions={<div style={{ display: "flex", gap: 8, alignItems: "center" }}>{summarizeAllBtn}{viewToggle}</div>}
       />
       <div className="page-content" style={{ maxWidth: 760 }}>
+        {bulkMsg && <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 12 }}>{bulkMsg}</div>}
         {viewMode === "tabs" ? (
-          <TabView docs={docs} onAdd={handleAdd} onDelete={handleDelete} onEdit={setEditDoc} onUrlUpdate={handleUrlUpdate} />
+          <TabView docs={docs} onAdd={handleAdd} onDelete={handleDelete} onEdit={setEditDoc} onUrlUpdate={handleUrlUpdate} onSummarize={summarizeDoc} />
         ) : (
           CATEGORIES.map((cat) => (
             <ListSection
@@ -935,6 +1046,7 @@ export function DocumentsPage() {
               onDelete={handleDelete}
               onEdit={setEditDoc}
               onUrlUpdate={handleUrlUpdate}
+              onSummarize={summarizeDoc}
             />
           ))
         )}
