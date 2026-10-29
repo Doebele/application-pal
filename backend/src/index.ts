@@ -1783,22 +1783,26 @@ app.post("/api/documents", zValidator("json", userDocumentInsertSchema), async (
 });
 
 app.patch("/api/documents/:id", zValidator("json", userDocumentPatchSchema), async (c) => {
-  const id = c.req.param("id");
+  const userId = getUserId(c);
+  const owned = and(eq(userDocuments.id, c.req.param("id")), eq(userDocuments.userId, userId));
   const payload = c.req.valid("json");
+  const [prev] = await db.select({ url: userDocuments.url }).from(userDocuments).where(owned).limit(1);
+  if (!prev) return c.json({ error: "Not found" }, 404);
   // A new file URL invalidates the cached content summary (the client re-summarizes).
-  const [prev] = await db.select({ url: userDocuments.url }).from(userDocuments).where(eq(userDocuments.id, id)).limit(1);
-  const urlChanged = payload.url !== undefined && payload.url !== prev?.url;
+  const urlChanged = payload.url !== undefined && payload.url !== prev.url;
   const [doc] = await db.update(userDocuments)
     .set({ ...payload, ...(urlChanged ? { contentSummary: null, summarizedAt: null } : {}), updatedAt: new Date() })
-    .where(eq(userDocuments.id, id))
+    .where(owned)
     .returning();
-  if (!doc) return c.json({ error: "Not found" }, 404);
   return c.json(doc);
 });
 
 app.delete("/api/documents/:id", async (c) => {
-  const id = c.req.param("id");
-  await db.delete(userDocuments).where(eq(userDocuments.id, id));
+  const userId = getUserId(c);
+  const [doc] = await db.delete(userDocuments)
+    .where(and(eq(userDocuments.id, c.req.param("id")), eq(userDocuments.userId, userId)))
+    .returning({ id: userDocuments.id });
+  if (!doc) return c.json({ error: "Not found" }, 404);
   return c.json({ ok: true });
 });
 
