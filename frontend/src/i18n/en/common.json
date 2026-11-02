@@ -438,7 +438,8 @@
   },
   "moreMenu": {
     "archive": "Archive",
-    "remove": "Remove"
+    "remove": "Remove",
+    "unarchive": "Back to board"
   },
   "settings": {
     "title": "Settings",

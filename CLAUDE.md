@@ -28,7 +28,7 @@ docker exec application-pal-frontend grep -r "SomeNewString" /usr/share/nginx/ht
 ```
 
 ## Document summaries
-`user_documents.content_summary` caches an AI digest of each PDF / Google Doc (`summarizeDocument` → `fetchDocumentText` in `backend/src/index.ts`). `loadDocumentsContext` puts these summaries into every candidate-context prompt; it never reads files itself. The frontend triggers summaries on add/re-link, via `POST /api/documents/summarize` (button), and once per day on app start (`App.tsx`, throttled by `localStorage.docSummaryRunDate`). AI config comes from the client, like every AI endpoint, so this can't run server-side. The bulk route also re-summarizes docs whose Drive `modifiedTime` is newer than `summarizedAt`. A PATCH that changes `url` clears the summary.
+`user_documents.content_summary` caches an AI digest of each PDF / Google Doc (`summarizeDocument` → `fetchDocumentText` in `backend/src/index.ts`). `loadDocumentsContext` puts these summaries into every candidate-context prompt; it never reads files itself. The frontend triggers summaries on add/re-link, via `POST /api/documents/summarize` (button), and once per day on app start (`App.tsx` sends `daily: true`; the server skips if `user_profile.doc_summary_run_at` is today and claims the day before running, so it runs once per user across devices). AI config comes from the client, like every AI endpoint, so this can't run server-side. The bulk route also re-summarizes docs whose Drive `modifiedTime` is newer than `summarizedAt`. A PATCH that changes `url` clears the summary.
 
 ## Critical Pitfalls
 

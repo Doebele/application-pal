@@ -1921,12 +1921,20 @@ app.post("/api/documents/:id/summarize", async (c) => {
 });
 
 // Summarizes every prompt-relevant document that has no summary yet or whose Drive file
-// changed since (force: all of them). Run by the button and once a day on app start.
+// changed since (force: all of them). Run by the button and once a day on app start
+// (daily: skipped when the profile records a run today — shared across all devices).
 // ponytail: sequential loop — fine for a personal library of a few dozen files.
 app.post("/api/documents/summarize", async (c) => {
   const userId = getUserId(c);
-  const { ai, force } = await c.req.json<{ ai: AiConfig; force?: boolean }>();
+  const { ai, force, daily } = await c.req.json<{ ai: AiConfig; force?: boolean; daily?: boolean }>();
   if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Provider konfiguriert" }, 400);
+  if (daily) {
+    const today = new Date().toISOString().slice(0, 10);
+    const [profile] = await db.select({ runAt: userProfile.docSummaryRunAt }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+    if (profile?.runAt?.toISOString().slice(0, 10) === today) return c.json({ skipped: true });
+    // Claim the day before running, so a second tab/device opening at the same time doesn't double-run.
+    await db.update(userProfile).set({ docSummaryRunAt: new Date() }).where(eq(userProfile.userId, userId));
+  }
   const docs = await db.select().from(userDocuments)
     .where(and(eq(userDocuments.userId, userId), inArray(userDocuments.category, CONTEXT_DOC_CATEGORIES)));
   const errors: { name: string; error: string }[] = [];

@@ -168,7 +168,7 @@ The toggle takes effect immediately: the language is sent with every AI request,
 PDFs and Google Docs in the categories *CV, references, certificates, portfolio* are read **once** and stored as a short AI summary (4–8 facts: issuer, period, role, results, ratings, proven skills). Every cover letter, opening sentence, review and CV tailoring uses these stored summaries, so no files are downloaded during generation.
 
 - A new document, or one whose link changes (including the Drive upload), is summarized automatically in the background.
-- **Once a day**, the first time you open the app, a background run summarizes anything still missing and re-summarizes files that were **edited directly in Drive** since their last summary (detected via Drive's modification time). It needs an AI provider in Settings; it runs in the browser because the AI config lives there.
+- **Once a day**, the first time you open the app, a background run summarizes anything still missing and re-summarizes files that were **edited directly in Drive** since their last summary (detected via Drive's modification time). It needs an AI provider in Settings. The browser starts it because the AI config lives there, but the run date is stored in your profile, so it happens once a day per account, not once per device.
 - **Refresh summaries** in the Documents header does the same on demand. The ↻ button on a card rebuilds a single summary.
 - **Content** on a card shows the stored summary and when it was created.
 - Figma, images, plain links and Drive *folder* links have no readable content and only contribute name, description and tags.

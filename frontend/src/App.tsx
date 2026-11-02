@@ -51,16 +51,12 @@ function MainApp() {
   }, [theme, accent, density]);
 
   // Once a day on app start: summarize new documents and re-summarize ones changed in Drive.
-  // Runs here (not on the server) because the AI config only lives in the browser.
-  // ponytail: per-browser localStorage throttle — move to the profile if several devices double-run.
+  // Triggered here because the AI config only lives in the browser; the server skips the run
+  // if the profile already records one today (docSummaryRunAt), across all devices.
   const { ai } = useUiStore();
   useEffect(() => {
     if (ai.provider === "none") return;
-    const today = new Date().toISOString().slice(0, 10);
-    try { if (localStorage.getItem("docSummaryRunDate") === today) return; } catch { /* storage blocked */ }
-    api.post("/api/documents/summarize", { ai })
-      .then(() => { try { localStorage.setItem("docSummaryRunDate", today); } catch { /* storage blocked */ } })
-      .catch(() => {});
+    api.post("/api/documents/summarize", { ai, daily: true }).catch(() => {});
   }, [ai.provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (

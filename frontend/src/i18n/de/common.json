@@ -438,7 +438,8 @@
   },
   "moreMenu": {
     "archive": "Archivieren",
-    "remove": "Entfernen"
+    "remove": "Entfernen",
+    "unarchive": "Zurück ins Board"
   },
   "settings": {
     "title": "Einstellungen",

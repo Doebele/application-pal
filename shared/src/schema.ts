@@ -125,6 +125,7 @@ export const userProfile = pgTable("user_profile", {
   googleCalendarId: text("google_calendar_id"),
   driveApplicationsFolderId: text("drive_applications_folder_id"), // per-user Drive folder
   ravSheetId: text("rav_sheet_id"),                                 // per-user RAV proof spreadsheet (target of the RAV export)
+  docSummaryRunAt: timestamp("doc_summary_run_at", { withTimezone: true }), // last daily document-summary run (shared across devices)
   docTemplates: text("doc_templates"),                             // JSON: DocTemplateConfig per content type
   letterConfig: text("letter_config"),                             // JSON: LetterConfig — persistent cover-letter guidance (structure/values/strengths/phrases/styleRules/noGos/referenceLetter)
   persona: text("persona"),                                        // 'schulabgaenger' | 'berufseinsteiger' | 'berufsumsteiger'
@@ -249,7 +250,7 @@ export const applicationPatchSchema = applicationInsertSchema
   .partial();
 
 export const userProfileSelectSchema = createSelectSchema(userProfile);
-export const userProfileInsertSchema = createInsertSchema(userProfile).omit({ id: true, createdAt: true, updatedAt: true }).partial();
+export const userProfileInsertSchema = createInsertSchema(userProfile).omit({ id: true, createdAt: true, updatedAt: true, docSummaryRunAt: true }).partial();
 
 export const applicationDocumentSelectSchema = createSelectSchema(applicationDocuments);
 export const applicationDocumentInsertSchema = createInsertSchema(applicationDocuments, {

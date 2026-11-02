@@ -438,7 +438,8 @@
   },
   "moreMenu": {
     "archive": "Archiver",
-    "remove": "Retirer"
+    "remove": "Retirer",
+    "unarchive": "Retour au tableau"
   },
   "settings": {
     "title": "Paramètres",

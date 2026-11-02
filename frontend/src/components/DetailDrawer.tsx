@@ -3,7 +3,7 @@ import cloud from "d3-cloud";
 import {
   Xmark, OpenNewWindow, MoreHoriz, Check, Sparks, Refresh,
   NavArrowRight, Link, Plus, Mail, Phone, Calendar, Page,
-  RefreshCircle, Trash, EditPencil, ChatBubbleEmpty, Clock, NavArrowDown, Archive, Copy,
+  RefreshCircle, Trash, EditPencil, ChatBubbleEmpty, Clock, NavArrowDown, Archive, Undo, Copy,
   BrainElectricity, PageEdit, SendMail, Coins,
   Calendar as IcCalendar, CalendarArrowDown,
   Copy as IcCopy, MailOut, Brain,
@@ -5517,7 +5517,7 @@ function ArchiveReasonModal({
 }
 
 // ─── More Menu ────────────────────────────────────────────────
-function MoreMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: () => void }) {
+function MoreMenu({ archived, onArchive, onUnarchive, onDelete }: { archived: boolean; onArchive: () => void; onUnarchive: () => void; onDelete: () => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -5557,7 +5557,9 @@ function MoreMenu({ onArchive, onDelete }: { onArchive: () => void; onDelete: ()
           borderRadius: 10, padding: 4, minWidth: 200,
           boxShadow: "0 8px 24px rgba(0,0,0,0.18)"
         }}>
-          {menuItem(t("moreMenu.archive"), <Archive width={13} height={13} style={{ color: "var(--fg-3)" }} />, onArchive)}
+          {archived
+            ? menuItem(t("moreMenu.unarchive"), <Undo width={13} height={13} style={{ color: "var(--fg-3)" }} />, onUnarchive)
+            : menuItem(t("moreMenu.archive"), <Archive width={13} height={13} style={{ color: "var(--fg-3)" }} />, onArchive)}
           <div style={{ height: 1, background: "var(--border)", margin: "4px 0" }} />
           {menuItem(t("moreMenu.remove"), <Trash width={13} height={13} />, onDelete, true)}
         </div>
@@ -5742,6 +5744,13 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
     onClose();
   };
 
+  // Back from the archive into the board/list — the Drive folder is recolored server-side.
+  const handleUnarchive = () => {
+    patchMutation.mutate({ archived: "false", archiveReason: null } as Partial<Application>);
+    queryClient.invalidateQueries({ queryKey: ["applications"] });
+    onClose();
+  };
+
   return (
     <>
       <aside className="drawer" style={{ width: 760 }}>
@@ -5786,7 +5795,7 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
               <StagePicker value={stage} onChange={handleStageChange} />
               {url && <a href={url} target="_blank" rel="noreferrer" className="btn btn-secondary"><OpenNewWindow width={13} height={13} /> Job</a>}
-              <MoreMenu onArchive={() => setShowArchiveModal(true)} onDelete={() => setShowDeleteModal(true)} />
+              <MoreMenu archived={(freshApp ?? app).archived === "true"} onArchive={() => setShowArchiveModal(true)} onUnarchive={handleUnarchive} onDelete={() => setShowDeleteModal(true)} />
               <button className="btn btn-ghost btn-icon" onClick={onClose}><Xmark width={16} height={16} /></button>
             </div>
           </div>
