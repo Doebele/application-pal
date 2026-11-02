@@ -50,6 +50,19 @@ function MainApp() {
     document.body.setAttribute("data-density", density);
   }, [theme, accent, density]);
 
+  // Once a day on app start: summarize new documents and re-summarize ones changed in Drive.
+  // Runs here (not on the server) because the AI config only lives in the browser.
+  // ponytail: per-browser localStorage throttle — move to the profile if several devices double-run.
+  const { ai } = useUiStore();
+  useEffect(() => {
+    if (ai.provider === "none") return;
+    const today = new Date().toISOString().slice(0, 10);
+    try { if (localStorage.getItem("docSummaryRunDate") === today) return; } catch { /* storage blocked */ }
+    api.post("/api/documents/summarize", { ai })
+      .then(() => { try { localStorage.setItem("docSummaryRunDate", today); } catch { /* storage blocked */ } })
+      .catch(() => {});
+  }, [ai.provider]); // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="app-shell">
       <Rail applications={applications} />

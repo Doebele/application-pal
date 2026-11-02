@@ -28,7 +28,7 @@ docker exec application-pal-frontend grep -r "SomeNewString" /usr/share/nginx/ht
 ```
 
 ## Document summaries
-`user_documents.content_summary` caches an AI digest of each PDF / Google Doc (`summarizeDocument` → `fetchDocumentText` in `backend/src/index.ts`). `loadDocumentsContext` puts these summaries into every candidate-context prompt; it never reads files itself. The frontend triggers summaries on add/re-link and via `POST /api/documents/summarize` (AI config comes from the client, like every AI endpoint). A PATCH that changes `url` clears the summary.
+`user_documents.content_summary` caches an AI digest of each PDF / Google Doc (`summarizeDocument` → `fetchDocumentText` in `backend/src/index.ts`). `loadDocumentsContext` puts these summaries into every candidate-context prompt; it never reads files itself. The frontend triggers summaries on add/re-link, via `POST /api/documents/summarize` (button), and once per day on app start (`App.tsx`, throttled by `localStorage.docSummaryRunDate`). AI config comes from the client, like every AI endpoint, so this can't run server-side. The bulk route also re-summarizes docs whose Drive `modifiedTime` is newer than `summarizedAt`. A PATCH that changes `url` clears the summary.
 
 ## Critical Pitfalls
 
@@ -48,7 +48,7 @@ docker exec application-pal-frontend grep -r "SomeNewString" /usr/share/nginx/ht
 
 **Clipboard in overlays**: Use `copyText()` helper (defined in `DetailDrawer.tsx`) instead of `navigator.clipboard.writeText()`. Drawer/overlay UIs lose focus, causing `writeText()` to silently fail.
 
-**Local AI providers in Docker**: `resolveHostUrl()` rewrites `localhost` → `host.docker.internal`. Applies to both LM Studio and Ollama URLs. Never hardcode `localhost` for either.
+**Local AI providers in Docker**: `await resolveHostUrl()` rewrites `localhost` → `host.docker.internal`. A private LAN IP / `.local` host that the container can't reach (probe, 3 s) falls back to `host.docker.internal` on the same port; the result is cached 5 min. Applies to both LM Studio and Ollama URLs. Never hardcode `localhost` for either.
 
 **Qwen3 max_tokens**: Always set `max_tokens: 32768`. Qwen3 emits a long `<think>…</think>` block first. `extractJson()` strips it before parsing.
 
@@ -90,7 +90,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | `getDriveAccessToken(userId?)` | User-specific token first, falls back to shared token (`user_id IS NULL`) |
 | `callAi(system, user, ai)` | Generic AI caller — dispatches to all 6 providers: `lm-studio`, `anthropic`, `openai`, `gemini`, `openrouter`, `ollama` |
 | `extractJson(raw)` | Strips `<think>` blocks + markdown fences, returns parsed JSON |
-| `resolveHostUrl(url)` | Rewrites `localhost` → `host.docker.internal` for Docker networking |
+| `resolveHostUrl(url)` (async) | Rewrites `localhost` → `host.docker.internal`; unreachable LAN IP → `host.docker.internal` fallback |
 | `persistAiResult(appId, key, data)` | Upserts into `applications.aiResultsCache` JSON with `_savedAt` timestamp |
 | `loadDocumentsContext(userId)` | Formats `user_documents` rows (categories `zeugnis`/`referenz`/`zertifikat`/`portfolio`/`lebenslauf`) as a `## Zeugnisse / Zertifikate / Referenzen` text block for AI prompts; returns `""` if none |
 | `buildExportPayload(userId)` | Assembles all user-data tables for a specific user |

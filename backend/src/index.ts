@@ -750,12 +750,37 @@ type LlmExtracted = {
 };
 
 /** In Docker, localhost points to the container itself. Rewrite to host.docker.internal so LM Studio on the host is reachable. */
-function resolveHostUrl(url: string): string {
-  return url.replace(/^(https?:\/\/)localhost(:\d+)?/, "$1host.docker.internal$2");
+// Maps a local-model URL (LM Studio / Ollama) to one reachable from inside the container:
+// localhost → host.docker.internal, and a LAN IP (e.g. the Mac's own 192.168.x.x) that the
+// container can't reach falls back to host.docker.internal on the same port.
+const hostUrlCache = new Map<string, { url: string; at: number }>();
+const PRIVATE_HOST = /^(https?:\/\/)(10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|[\w-]+\.local)(:\d+)?/;
+
+async function isReachable(url: string): Promise<boolean> {
+  try { await fetch(url, { signal: AbortSignal.timeout(3_000) }); return true; } catch { return false; }
+}
+
+async function resolveHostUrl(url: string): Promise<string> {
+  const direct = url.replace(/^(https?:\/\/)localhost(:\d+)?/, "$1host.docker.internal$2");
+  const m = direct.match(PRIVATE_HOST);
+  if (!m) return direct;
+  // ponytail: 5-min cache so a dead LAN IP costs one 3s probe, not one per AI call
+  const hit = hostUrlCache.get(direct);
+  if (hit && Date.now() - hit.at < 5 * 60_000) return hit.url;
+  let resolved = direct;
+  if (!(await isReachable(direct))) {
+    const fallback = direct.replace(PRIVATE_HOST, `$1host.docker.internal${m[4] ?? ""}`);
+    if (await isReachable(fallback)) {
+      console.warn(`[local-ai] ${direct} unreachable from container — using ${fallback}`);
+      resolved = fallback;
+    }
+  }
+  hostUrlCache.set(direct, { url: resolved, at: Date.now() });
+  return resolved;
 }
 
 async function extractWithLmStudio(text: string, ai: AiConfig): Promise<LlmExtracted | null> {
-  const baseUrl = resolveHostUrl((ai.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
+  const baseUrl = await resolveHostUrl((ai.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
   const model = ai.lmStudioModel || undefined;
 
   const body = {
@@ -947,7 +972,7 @@ async function extractWithAi(text: string, ai: AiConfig): Promise<LlmExtracted |
     return extractWithOpenAiCompat(cleaned, ai, "https://openrouter.ai/api", ai.openrouterApiKey, model, { "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" });
   }
   if (ai.provider === "ollama") {
-    const baseUrl = resolveHostUrl((ai.ollamaUrl ?? "http://localhost:11434").replace(/\/$/, ""));
+    const baseUrl = await resolveHostUrl((ai.ollamaUrl ?? "http://localhost:11434").replace(/\/$/, ""));
     const model = ai.ollamaModel || "";
     return extractWithOpenAiCompat(cleaned, ai, baseUrl, "", model);
   }
@@ -1676,7 +1701,7 @@ app.get("/api/kb/roles/:id", async (c) => {
 
 // Proxy LM Studio model list to avoid CORS issues from the browser
 app.get("/api/lm-studio/models", async (c) => {
-  const baseUrl = resolveHostUrl((c.req.query("url") ?? "http://localhost:1234").replace(/\/$/, ""));
+  const baseUrl = await resolveHostUrl((c.req.query("url") ?? "http://localhost:1234").replace(/\/$/, ""));
   try {
     const res = await fetch(`${baseUrl}/v1/models`, {
       signal: AbortSignal.timeout(5_000)
@@ -1691,7 +1716,7 @@ app.get("/api/lm-studio/models", async (c) => {
 });
 
 app.get("/api/ollama/models", async (c) => {
-  const baseUrl = resolveHostUrl((c.req.query("url") ?? "http://localhost:11434").replace(/\/$/, ""));
+  const baseUrl = await resolveHostUrl((c.req.query("url") ?? "http://localhost:11434").replace(/\/$/, ""));
   try {
     // Try OpenAI-compatible endpoint first, fall back to Ollama native /api/tags
     const res = await fetch(`${baseUrl}/v1/models`, { signal: AbortSignal.timeout(5_000) });
@@ -1823,12 +1848,27 @@ async function loadDocumentsContext(userId: string): Promise<string> {
   return `## Zeugnisse / Zertifikate / Referenzen\n${docTexts.slice(0, 7000)}`;
 }
 
+const driveFileId = (url: string) =>
+  url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ?? url.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+
+// True when the Drive file was edited after its summary was built (cheap metadata call).
+async function isSummaryStale(doc: UserDocument, token: string | null): Promise<boolean> {
+  const id = doc.url && driveFileId(doc.url);
+  if (!id || !token || !doc.summarizedAt) return false;
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=modifiedTime`, {
+    headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000)
+  });
+  if (!res.ok) return false;
+  const { modifiedTime } = await res.json() as { modifiedTime?: string };
+  return !!modifiedTime && new Date(modifiedTime) > new Date(doc.summarizedAt);
+}
+
 // Reads the document's file (Drive PDF, Google Doc, or a public PDF link) as plain text.
 // Returns null for document types without readable content (Figma, images, plain links).
 async function fetchDocumentText(doc: UserDocument, userId: string): Promise<string | null> {
   if (!doc.url || !/^https?:\/\//.test(doc.url) || !["pdf", "gdoc"].includes(doc.fileType)) return null;
   if (doc.url.includes("/folders/")) return null; // a Drive folder link, not a file
-  const driveId = doc.url.match(/\/d\/([a-zA-Z0-9_-]+)/)?.[1] ?? doc.url.match(/[?&]id=([a-zA-Z0-9_-]+)/)?.[1];
+  const driveId = driveFileId(doc.url);
   let res: Response;
   if (driveId) {
     const token = await getDriveAccessToken(userId);
@@ -1880,7 +1920,8 @@ app.post("/api/documents/:id/summarize", async (c) => {
   }
 });
 
-// Summarizes every prompt-relevant document that has no summary yet (force: all of them).
+// Summarizes every prompt-relevant document that has no summary yet or whose Drive file
+// changed since (force: all of them). Run by the button and once a day on app start.
 // ponytail: sequential loop — fine for a personal library of a few dozen files.
 app.post("/api/documents/summarize", async (c) => {
   const userId = getUserId(c);
@@ -1890,8 +1931,9 @@ app.post("/api/documents/summarize", async (c) => {
     .where(and(eq(userDocuments.userId, userId), inArray(userDocuments.category, CONTEXT_DOC_CATEGORIES)));
   const errors: { name: string; error: string }[] = [];
   let done = 0;
+  const token = await getDriveAccessToken(userId);
   for (const doc of docs) {
-    if (!force && doc.contentSummary) continue;
+    if (!force && doc.contentSummary && !(await isSummaryStale(doc, token).catch(() => false))) continue;
     try {
       const updated = await summarizeDocument(doc, userId, ai);
       if (updated.contentSummary) done++;
@@ -2030,7 +2072,7 @@ app.post("/api/applications/:id/match-score", async (c) => {
   let raw = "";
   try {
     if (aiConfig.provider === "lm-studio") {
-      const baseUrl = resolveHostUrl((aiConfig.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
+      const baseUrl = await resolveHostUrl((aiConfig.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
       const res = await fetch(`${baseUrl}/v1/chat/completions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2351,7 +2393,7 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
     ? `${user}\n\n---\nZusätzliche Hinweise des Nutzers:\n${additionalContext.trim()}`
     : user;
   if (ai.provider === "lm-studio") {
-    const baseUrl = resolveHostUrl((ai.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
+    const baseUrl = await resolveHostUrl((ai.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -2418,7 +2460,7 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
     const json = await res.json() as { choices?: { message?: { content?: string } }[] };
     return json.choices?.[0]?.message?.content ?? "";
   } else if (ai.provider === "ollama") {
-    const baseUrl = resolveHostUrl((ai.ollamaUrl ?? "http://localhost:11434").replace(/\/$/, ""));
+    const baseUrl = await resolveHostUrl((ai.ollamaUrl ?? "http://localhost:11434").replace(/\/$/, ""));
     const model = (ai as AiConfig & { ollamaModel?: string }).ollamaModel || "";
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {
       method: "POST",
