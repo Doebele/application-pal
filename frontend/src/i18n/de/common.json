@@ -1084,6 +1084,15 @@
       "rewriteOutcome": "Vorschlag · Ergebnis",
       "acceptAction": "Einstieg akzeptieren",
       "acceptSpecifics": "Ohne Zahl akzeptieren"
+    },
+    "pdf": {
+      "pages_one": "{{count}} Seite",
+      "pages_other": "{{count}} Seiten",
+      "marked": "{{found}} von {{total}} Fundstellen markiert",
+      "zoomIn": "Vergrössern",
+      "zoomOut": "Verkleinern",
+      "fit": "Auf Breite einpassen",
+      "error": "PDF konnte nicht geladen werden"
     }
   }
 }

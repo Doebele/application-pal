@@ -276,7 +276,7 @@ VMock-style CV scoring. CVs are the `user_documents` rows with category `lebensl
 | `backend/src/cv-criteria.ts` | weights, thresholds, word lists, check definitions (de/en/fr labels) — `version: "vmock-1"` |
 | `backend/src/cv-layout.ts` | `analyzePdfLayout()` via `pdfjs-dist/legacy` — lines (size/bold/italic from font names), margins, fill, coloured text, images |
 | `backend/src/cv-rules.ts` | pure `runCvCheck()` + LLM judge prompt/normaliser; self-check `npx tsx backend/src/cv-rules.check.ts` |
-| `frontend/src/components/check/` | shared check UI (tokens + classes, no inline colours) — reused by the LinkedIn-Check |
+| `frontend/src/components/check/` | shared check UI (tokens + classes, no inline colours) — reused by the LinkedIn-Check. `PdfViewer` = pdf.js canvas pages + highlight overlay, highlights located by normalised text match |
 
 Rules — don't "fix" them:
 - A check without its input is `"na"`, never passed; unverified hygiene never earns the bonus.
@@ -284,6 +284,8 @@ Rules — don't "fix" them:
 - Rewrites use `[X]` placeholders, never invented numbers; competency quotes not found in the CV are dropped.
 - Waivers (`"format.colour"`, `"action:<bulletId>"`, `"specifics:<bulletId>"`) turn a fail into `"accepted"` with full points; `rawTotal` + `acceptedGain` = `total`.
 - `GET /api/cv/check` re-scores from stored inputs on every read — accepting a point or switching UI language needs no AI call.
+- The pdf.js worker is a `.mjs` file: `frontend/nginx.conf` serves `*.mjs` as `application/javascript` — without it the viewer fails with "Setting up fake worker failed".
+- Never run two smooth scrolls at once (Chrome cancels the first): `BulletCard` scrolls itself instantly, `PdfViewer` scrolls its container with `scrollTo`.
 - Import and check run as in-memory background jobs (local models exceed the nginx 600 s limit); LM Studio/Ollama calls stream with a 20-minute timeout.
 
 ### Key Frontend Patterns

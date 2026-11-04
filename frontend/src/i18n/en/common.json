@@ -1084,6 +1084,15 @@
       "rewriteOutcome": "Suggestion · outcome",
       "acceptAction": "Accept opener",
       "acceptSpecifics": "Accept without number"
+    },
+    "pdf": {
+      "pages_one": "{{count}} page",
+      "pages_other": "{{count}} pages",
+      "marked": "{{found}} of {{total}} findings marked",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fit": "Fit to width",
+      "error": "Could not load the PDF"
     }
   }
 }

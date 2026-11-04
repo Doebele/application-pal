@@ -1,7 +1,7 @@
 // Shared, presentation-only building blocks for score-based checks (CV-Check now,
 // LinkedIn-Check next). Styling lives in check.css (tokens + classes, no inline
 // colours) so each component maps to a Figma component with variants.
-import { useState, type ReactNode } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckCircle, XmarkCircle, HelpCircle, NavArrowDown, NavArrowRight, ThumbsUp, Copy, Check } from "iconoir-react";
 import type { AreaStatus, BulletOutcome, CheckOutcome, CheckStatus, ImproveStep, Recommendation } from "./types";
@@ -157,14 +157,21 @@ function Rewrite({ label, text }: { label: string; text: string }) {
 }
 
 /** A bullet with its issues, two rewrites (scope / outcome) and per-criterion waivers. */
-export function BulletCard({ bullet, onAccept, busyKey }: { bullet: BulletOutcome; onAccept?: (key: string, v: boolean) => void; busyKey?: string | null }) {
+export function BulletCard({ bullet, onAccept, busyKey, active, onSelect }: {
+  bullet: BulletOutcome; onAccept?: (key: string, v: boolean) => void; busyKey?: string | null;
+  active?: boolean; onSelect?: (id: string) => void;
+}) {
   const { t } = useTranslation();
+  const ref = useRef<HTMLDivElement>(null);
+  // Instant on purpose: a smooth scrollIntoView here cancels the PDF viewer's smooth scroll in Chrome.
+  useEffect(() => { if (active) ref.current?.scrollIntoView({ behavior: "auto", block: "nearest" }); }, [active]);
   const actionKey = `action:${bullet.id}`, specKey = `specifics:${bullet.id}`;
   const actionFail = !bullet.action.ok || bullet.action.accepted;
   const specFail = (!bullet.scope && !bullet.outcome) || bullet.specificsAccepted;
   const done = bullet.action.ok && (!!bullet.scope || !!bullet.outcome || bullet.specificsAccepted); // action.ok includes accepted
   return (
-    <div className="chk-bullet" data-done={done}>
+    <div ref={ref} className="chk-bullet" data-done={done} data-active={!!active} data-bullet-id={bullet.id}
+      onClick={e => { if (!(e.target as HTMLElement).closest("button")) onSelect?.(bullet.id); }}>
       {bullet.position && <div className="chk-bullet-pos">{bullet.position}</div>}
       <div className="chk-bullet-text">{bullet.text}</div>
       <div className="chk-tags">

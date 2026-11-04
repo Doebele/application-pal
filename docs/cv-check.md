@@ -66,7 +66,10 @@ the opener or the missing number — can be marked **Akzeptiert**:
 
 ## UI
 
-- **Content area:** the CV as PDF in the selected language (live export of the Google Doc).
+- **Content area:** the CV as PDF in the selected language (live export of the Google Doc), rendered with
+  pdf.js. Bullets with open points are highlighted red, accepted ones in the accent colour, language
+  findings amber. Clicking a highlight opens that bullet under *Verbesserungen*; clicking a bullet there
+  scrolls the PDF to it. Highlights are located by text, so the viewer needs no coordinates from the backend.
 - **Sidebar tabs:** *Bewertung* (total, steps to improve with point gains, areas, all checks,
   recommendations) · *Verbesserungen* (open bullets with rewrites, language issues, competency
   evidence) · *Struktur* (import, master language) · *Versionen*.
@@ -96,7 +99,6 @@ still too generous.
 
 ## Planned
 
-- PDF viewer (pdfjs) with findings highlighted in the CV
 - Optimisation loop like the cover letter: pick suggestions → new version → check again
 - Language sync (master + translations), Doc/PDF output into the source folder
 - Tailored CV per application

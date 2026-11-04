@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import {
@@ -9,7 +9,8 @@ import type { CvDocument, CvLanguage } from "@application-pal/shared";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
-import { useCvCheck, ScoreTab, ImproveTab } from "./CvCheckTabs";
+import { useCvCheck, ScoreTab, ImproveTab, cvHighlights } from "./CvCheckTabs";
+import { PdfViewer } from "../components/check/PdfViewer";
 
 const LANGS: CvLanguage[] = ["de", "en", "fr"];
 const SIDEBAR_WIDTH = "clamp(300px, 36%, 480px)";
@@ -130,6 +131,10 @@ export function CvCheckPage() {
     ?? sources?.languages.find(l => l.documentId)?.lang
     ?? current?.masterLang ?? "en";
   const check = useCvCheck(activeLang);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const checkResult = check.data?.result;
+  const highlights = useMemo(() => cvHighlights(checkResult), [checkResult]);
+  useEffect(() => { setActiveId(null); }, [activeLang]);
 
   if (!sources || !current) {
     return (
@@ -197,9 +202,9 @@ export function CvCheckPage() {
           />
           <div style={{ flex: 1, minHeight: 0, borderRadius: 10, border: "1px solid var(--border)", overflow: "hidden", background: "var(--surface-2)" }}>
             {src && src.reachable ? (
-              <iframe key={`${src.documentId}-${pdfNonce}`} title={src.name}
-                src={`/api/cv/pdf?documentId=${encodeURIComponent(src.documentId)}#view=FitH&navpanes=0`}
-                style={{ width: "100%", height: "100%", border: 0, display: "block" }} />
+              <PdfViewer url={`/api/cv/pdf?documentId=${encodeURIComponent(src.documentId)}`} reloadKey={pdfNonce}
+                highlights={highlights} activeId={activeId}
+                onPick={id => { setActiveId(id); if (sidebarOpen && !id.includes(":")) setTab("improve"); }} />
             ) : (
               <EmptyState icon={<Page width={22} height={22} />} text={src ? t("cvCheck.unreachable") : t("cvCheck.noSourceHint", { lang: activeLang.toUpperCase() })}>
                 <Link to="/documents" className="btn btn-secondary" style={{ fontSize: 12, gap: 5, textDecoration: "none" }}><Folder width={12} height={12} /> {t("cvCheck.linkDocuments")}</Link>
@@ -235,7 +240,7 @@ export function CvCheckPage() {
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: large === "side" ? "16px 0" : 14 }}>
               <div style={large === "side" ? { maxWidth: 860, margin: "0 auto" } : undefined}>
                 {tab === "score" && <ScoreTab s={check} hasVersion={!!ver} fmt={fmt} />}
-                {tab === "improve" && <ImproveTab s={check} hasVersion={!!ver} fmt={fmt} />}
+                {tab === "improve" && <ImproveTab s={check} hasVersion={!!ver} fmt={fmt} activeId={activeId} onSelect={setActiveId} />}
                 {tab === "structure" && (
                   <StructureTab
                     lang={activeLang} src={src} status={status.status} ver={ver} job={job} now={now}

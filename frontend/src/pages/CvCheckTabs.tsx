@@ -9,6 +9,7 @@ import {
   TotalScore, AreaBars, StepList, CheckGroup, CheckRow, BulletCard, RecommendationList,
 } from "../components/check/CheckComponents";
 import type { CheckResult } from "../components/check/types";
+import type { PdfHighlight } from "../components/check/PdfViewer";
 
 type CheckJob = { id: string; lang: CvLanguage; status: "running" | "done" | "error"; step: "pdf" | "llm" | "score"; startedAt: string; finishedAt?: string; error?: string };
 type CheckResponse = { result: CheckResult | null; versionId: string | null; stale: boolean; inputErrors?: { layout: string | null; llm: string | null } };
@@ -147,14 +148,30 @@ export function ScoreTab({ s, hasVersion, fmt }: { s: CvCheckState; hasVersion: 
   );
 }
 
-export function ImproveTab({ s, hasVersion, fmt }: { s: CvCheckState; hasVersion: boolean; fmt: (iso: string | null) => string }) {
+export const isBulletDone = (b: CheckResult["bullets"][number]) => b.action.ok && (!!b.scope || !!b.outcome || b.specificsAccepted);
+
+/** Highlights for the PDF viewer: bullets with open points (red) or accepted ones (accent), plus language findings. */
+export function cvHighlights(res: CheckResult | null | undefined): PdfHighlight[] {
+  if (!res) return [];
+  const out: PdfHighlight[] = res.bullets
+    .filter(b => !isBulletDone(b) || b.action.accepted || b.specificsAccepted)
+    .map(b => ({ id: b.id, text: b.text, tone: isBulletDone(b) ? "accepted" : "fail", title: b.issues.join(" · ") || b.text }));
+  for (const c of res.checks) {
+    if (c.group !== "language" || c.status === "pass") continue;
+    c.findings.forEach((f, i) => { if (f.where) out.push({ id: `${c.id}:${i}`, text: f.where, tone: c.status === "accepted" ? "accepted" : "info", title: `${c.label}: ${f.text}` }); });
+  }
+  return out;
+}
+
+export function ImproveTab({ s, hasVersion, fmt, activeId, onSelect }: {
+  s: CvCheckState; hasVersion: boolean; fmt: (iso: string | null) => string; activeId?: string | null; onSelect?: (id: string) => void;
+}) {
   const { t } = useTranslation();
   const [showDone, setShowDone] = useState(false);
   const res = s.data?.result;
   if (!res) return <div className="chk-card"><RunBar s={s} hasVersion={hasVersion} fmt={fmt} /></div>;
-  const isDone = (b: CheckResult["bullets"][number]) => b.action.ok && (!!b.scope || !!b.outcome || b.specificsAccepted);
-  const open = res.bullets.filter(b => !isDone(b));
-  const shown = showDone ? res.bullets : open;
+  const open = res.bullets.filter(b => !isBulletDone(b));
+  const shown = showDone ? res.bullets : res.bullets.filter(b => !isBulletDone(b) || b.id === activeId);
   const lang = res.checks.filter(c => c.group === "language" && c.status !== "pass");
   return (
     <div className="chk-stack">
@@ -172,7 +189,7 @@ export function ImproveTab({ s, hasVersion, fmt }: { s: CvCheckState; hasVersion
         </div>
         <div className="chk-muted" style={{ marginBottom: 8 }}>{res.inputs.llm ? t("cvCheck.check.placeholderHint") : t("cvCheck.check.noRewrites")}</div>
         <div className="chk-stack" style={{ gap: 8 }}>
-          {shown.map(b => <BulletCard key={b.id} bullet={b} onAccept={s.toggleWaiver} busyKey={s.busyKey} />)}
+          {shown.map(b => <BulletCard key={b.id} bullet={b} onAccept={s.toggleWaiver} busyKey={s.busyKey} active={activeId === b.id} onSelect={onSelect} />)}
         </div>
       </div>
 
