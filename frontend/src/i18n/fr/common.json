@@ -1093,6 +1093,12 @@
       "zoomOut": "Réduire",
       "fit": "Ajuster à la largeur",
       "error": "Impossible de charger le PDF"
+    },
+    "shell": {
+      "hideSidebar": "Masquer le panneau",
+      "showSidebar": "Afficher le panneau",
+      "minimize": "Réduire",
+      "maximize": "Agrandir"
     }
   }
 }

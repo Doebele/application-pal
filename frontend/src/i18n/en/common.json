@@ -1093,6 +1093,12 @@
       "zoomOut": "Zoom out",
       "fit": "Fit to width",
       "error": "Could not load the PDF"
+    },
+    "shell": {
+      "hideSidebar": "Hide sidebar",
+      "showSidebar": "Show sidebar",
+      "minimize": "Minimise",
+      "maximize": "Maximise"
     }
   }
 }

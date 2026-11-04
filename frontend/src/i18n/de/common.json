@@ -1093,6 +1093,12 @@
       "zoomOut": "Verkleinern",
       "fit": "Auf Breite einpassen",
       "error": "PDF konnte nicht geladen werden"
+    },
+    "shell": {
+      "hideSidebar": "Seitenleiste ausblenden",
+      "showSidebar": "Seitenleiste einblenden",
+      "minimize": "Minimieren",
+      "maximize": "Maximieren"
     }
   }
 }

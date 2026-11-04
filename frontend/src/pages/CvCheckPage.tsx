@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import {
   RefreshCircle, InfoCircle, Folder, OpenNewWindow, CheckCircle, WarningCircle, Download,
-  Expand, Collapse, SidebarCollapse, SidebarExpand, StatsReport, Sparks, Page, Clock,
+  StatsReport, Sparks, Page, Clock,
 } from "iconoir-react";
 import type { CvDocument, CvLanguage } from "@application-pal/shared";
 import { Topbar } from "../components/Topbar";
@@ -11,9 +11,12 @@ import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
 import { useCvCheck, ScoreTab, ImproveTab, cvHighlights } from "./CvCheckTabs";
 import { PdfViewer } from "../components/check/PdfViewer";
+import {
+  useCheckShell, readStored, writeStored, SidebarToggle, CheckBody, CheckMain, CheckFrame, CheckSide,
+  PanelHeader, EmptyState, CheckLoading,
+} from "../components/check/CheckLayout";
 
 const LANGS: CvLanguage[] = ["de", "en", "fr"];
-const SIDEBAR_WIDTH = "clamp(300px, 36%, 480px)";
 
 type PdfStatus = "missing" | "ok" | "noPdf" | "pdfStale" | "pdfOnly";
 type CvSource = {
@@ -34,19 +37,8 @@ const STATUS_COLOR: Record<PdfStatus, string> = {
   ok: "var(--green)", noPdf: "var(--fg-3)", pdfStale: "var(--score-mid)", pdfOnly: "var(--score-mid)", missing: "var(--fg-3)",
 };
 
-// "Large" view (Expand-Logik): the section fills app-main below the topbar.
-const LARGE_STYLE: React.CSSProperties = {
-  position: "absolute", top: 57, left: 0, right: 0, bottom: 0, zIndex: 10,
-  background: "var(--bg)", padding: "16px 24px", display: "flex", flexDirection: "column",
-};
-
 const errMsg = (e: unknown, fallback: string) =>
   (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
-
-const readStored = <T,>(key: string, fallback: T): T => {
-  try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v) as T; } catch { return fallback; }
-};
-const writeStored = (key: string, v: unknown) => { try { localStorage.setItem(key, JSON.stringify(v)); } catch { /* ignore */ } };
 
 export function CvCheckPage() {
   const { t, i18n } = useTranslation();
@@ -58,14 +50,10 @@ export function CvCheckPage() {
   const [now, setNow] = useState(Date.now());
   const [importErr, setImportErr] = useState<Partial<Record<CvLanguage, string>>>({});
   const [lang, setLangState] = useState<CvLanguage | null>(() => readStored<CvLanguage | null>("cvcheck-lang", null));
-  const [sidebarOpen, setSidebarOpenState] = useState(() => readStored("cvcheck-sidebar", true));
-  const [tab, setTabState] = useState<SideTab>(() => readStored<SideTab>("cvcheck-tab", "structure"));
-  const [large, setLarge] = useState<"pdf" | "side" | null>(null);
+  const { sidebarOpen, setSidebarOpen, tab, setTab, large, toggleLarge } = useCheckShell<SideTab>("cvcheck", "structure");
   const [pdfNonce, setPdfNonce] = useState(0);
 
   const setLang = (l: CvLanguage) => { setLangState(l); writeStored("cvcheck-lang", l); };
-  const setSidebarOpen = (v: boolean) => { setSidebarOpenState(v); writeStored("cvcheck-sidebar", v); if (!v && large === "side") setLarge(null); };
-  const setTab = (v: SideTab) => { setTabState(v); writeStored("cvcheck-tab", v); };
 
   const load = useCallback(async () => {
     try {
@@ -96,14 +84,6 @@ export function CvCheckPage() {
     }, 3000);
     return () => clearInterval(iv);
   }, [anyRunning, loadJobs, load]);
-
-  // Escape leaves the large view
-  useEffect(() => {
-    if (!large) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLarge(null); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [large]);
 
   const setMaster = async (l: CvLanguage) => {
     setCurrent(c => c ? { ...c, masterLang: l } : c);
@@ -140,11 +120,7 @@ export function CvCheckPage() {
     return (
       <>
         <Topbar title={t("cvCheck.title")} />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1 }}>
-          {loadErr
-            ? <div style={{ fontSize: 13, color: "#f87171" }}>{loadErr}</div>
-            : <RefreshCircle width={20} height={20} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />}
-        </div>
+        <CheckLoading error={loadErr} />
       </>
     );
   }
@@ -175,16 +151,13 @@ export function CvCheckPage() {
       <Topbar title={t("cvCheck.title")} sub={t("cvCheck.sub")} actions={
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           {langSwitch}
-          <button className="btn btn-ghost btn-icon" onClick={() => setSidebarOpen(!sidebarOpen)}
-            title={sidebarOpen ? t("cvCheck.hideSidebar") : t("cvCheck.showSidebar")} aria-pressed={sidebarOpen} style={{ padding: 6 }}>
-            {sidebarOpen ? <SidebarCollapse width={15} height={15} style={{ transform: "scaleX(-1)" }} /> : <SidebarExpand width={15} height={15} style={{ transform: "scaleX(-1)" }} />}
-          </button>
+          <SidebarToggle open={sidebarOpen} onToggle={setSidebarOpen} />
         </div>
       } />
 
-      <div style={{ flex: 1, minHeight: 0, display: "flex" }}>
+      <CheckBody>
         {/* ── Content: CV as PDF ───────────────────────────────── */}
-        <section style={large === "pdf" ? LARGE_STYLE : { flex: 1, minWidth: 280, display: "flex", flexDirection: "column", padding: "16px 20px" }}>
+        <CheckMain large={large === "main"}>
           <PanelHeader
             title={src ? src.name : t("cvCheck.noSource")}
             meta={src ? <>
@@ -194,13 +167,13 @@ export function CvCheckPage() {
                 {t(`cvCheck.pdfStatus.${status.status}`)}
               </span>
             </> : null}
-            large={large === "pdf"} onLarge={() => setLarge(large === "pdf" ? null : "pdf")}
+            large={large === "main"} onLarge={() => toggleLarge("main")}
             extra={src && <>
-              <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} onClick={() => setPdfNonce(n => n + 1)} title={t("cvCheck.reloadPdf")}><RefreshCircle width={13} height={13} /></button>
-              {src.url && <a className="btn btn-ghost btn-icon" style={{ padding: 4, display: "inline-flex" }} href={src.url} target="_blank" rel="noreferrer" title={t("cvCheck.openSource")}><OpenNewWindow width={13} height={13} /></a>}
+              <button className="btn btn-ghost btn-icon chk-icon-btn" onClick={() => setPdfNonce(n => n + 1)} title={t("cvCheck.reloadPdf")}><RefreshCircle width={13} height={13} /></button>
+              {src.url && <a className="btn btn-ghost btn-icon chk-icon-btn" style={{ display: "inline-flex" }} href={src.url} target="_blank" rel="noreferrer" title={t("cvCheck.openSource")}><OpenNewWindow width={13} height={13} /></a>}
             </>}
           />
-          <div style={{ flex: 1, minHeight: 0, borderRadius: 10, border: "1px solid var(--border)", overflow: "hidden", background: "var(--surface-2)" }}>
+          <CheckFrame>
             {src && src.reachable ? (
               <PdfViewer url={`/api/cv/pdf?documentId=${encodeURIComponent(src.documentId)}`} reloadKey={pdfNonce}
                 highlights={highlights} activeId={activeId}
@@ -210,35 +183,17 @@ export function CvCheckPage() {
                 <Link to="/documents" className="btn btn-secondary" style={{ fontSize: 12, gap: 5, textDecoration: "none" }}><Folder width={12} height={12} /> {t("cvCheck.linkDocuments")}</Link>
               </EmptyState>
             )}
-          </div>
-        </section>
+          </CheckFrame>
+        </CheckMain>
 
         {/* ── Sidebar: scores, improvements, structure, versions ── */}
         {sidebarOpen && (
-          <aside style={large === "side" ? LARGE_STYLE : {
-            width: SIDEBAR_WIDTH, flexShrink: 0, borderLeft: "1px solid var(--border)", display: "flex", flexDirection: "column", minHeight: 0, background: "var(--surface)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 4, padding: large === "side" ? "0 0 0 0" : "8px 12px 0", borderBottom: "1px solid var(--border)" }} role="tablist">
-              {([
-                ["score", t("cvCheck.tabs.score"), <StatsReport key="i" width={13} height={13} />],
-                ["improve", t("cvCheck.tabs.improve"), <Sparks key="i" width={13} height={13} />],
-                ["structure", t("cvCheck.tabs.structure"), <Page key="i" width={13} height={13} />],
-                ["versions", t("cvCheck.tabs.versions"), <Clock key="i" width={13} height={13} />],
-              ] as Array<[SideTab, string, ReactNode]>).map(([id, label, icon]) => (
-                <button key={id} role="tab" aria-selected={tab === id} className={`tab${tab === id ? " active" : ""}`}
-                  onClick={() => setTab(id)} title={label}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, padding: "8px 8px", whiteSpace: "nowrap", flexShrink: 0 }}>
-                  {icon} {(tab === id || large === "side") && label}
-                </button>
-              ))}
-              <div style={{ flex: 1 }} />
-              <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} onClick={() => setLarge(large === "side" ? null : "side")}
-                title={large === "side" ? t("cvCheck.minimize") : t("cvCheck.maximize")}>
-                {large === "side" ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
-              </button>
-            </div>
-            <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: large === "side" ? "16px 0" : 14 }}>
-              <div style={large === "side" ? { maxWidth: 860, margin: "0 auto" } : undefined}>
+          <CheckSide<SideTab> tab={tab} onTab={setTab} large={large === "side"} onLarge={() => toggleLarge("side")} tabs={[
+            { id: "score", label: t("cvCheck.tabs.score"), icon: <StatsReport width={13} height={13} /> },
+            { id: "improve", label: t("cvCheck.tabs.improve"), icon: <Sparks width={13} height={13} /> },
+            { id: "structure", label: t("cvCheck.tabs.structure"), icon: <Page width={13} height={13} /> },
+            { id: "versions", label: t("cvCheck.tabs.versions"), icon: <Clock width={13} height={13} /> },
+          ]}>
                 {tab === "score" && <ScoreTab s={check} hasVersion={!!ver} fmt={fmt} />}
                 {tab === "improve" && <ImproveTab s={check} hasVersion={!!ver} fmt={fmt} activeId={activeId} onSelect={setActiveId} />}
                 {tab === "structure" && (
@@ -249,47 +204,10 @@ export function CvCheckPage() {
                   />
                 )}
                 {tab === "versions" && <VersionsTab lang={activeLang} reloadKey={ver?.id ?? ""} fmt={fmt} />}
-              </div>
-            </div>
-          </aside>
+          </CheckSide>
         )}
-      </div>
+      </CheckBody>
     </>
-  );
-}
-
-function PanelHeader({ title, meta, large, onLarge, extra }: { title: string; meta: ReactNode; large: boolean; onLarge: () => void; extra?: ReactNode }) {
-  const { t } = useTranslation();
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, minWidth: 0 }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{title}</div>
-        {meta && <div style={{ fontSize: 11, color: "var(--fg-3)", display: "flex", gap: 10, whiteSpace: "nowrap", overflow: "hidden" }}>{meta}</div>}
-      </div>
-      {extra}
-      <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} onClick={onLarge} title={large ? t("cvCheck.minimize") : t("cvCheck.maximize")}>
-        {large ? <Collapse width={13} height={13} /> : <Expand width={13} height={13} />}
-      </button>
-    </div>
-  );
-}
-
-function EmptyState({ icon, text, children }: { icon: ReactNode; text: string; children?: ReactNode }) {
-  return (
-    <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10, padding: 24, textAlign: "center", color: "var(--fg-3)" }}>
-      {icon}
-      <div style={{ fontSize: 12, maxWidth: 320, lineHeight: 1.5 }}>{text}</div>
-      {children}
-    </div>
-  );
-}
-
-function PhasePlaceholder({ icon, title, text }: { icon: ReactNode; title: string; text: string }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8, padding: "18px 16px", borderRadius: 10, border: "1px dashed var(--border)", color: "var(--fg-3)" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--fg-2)" }}>{icon}<div className="eyebrow">{title}</div></div>
-      <div style={{ fontSize: 12, lineHeight: 1.6, whiteSpace: "pre-line" }}>{text}</div>
-    </div>
   );
 }
 

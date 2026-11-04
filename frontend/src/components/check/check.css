@@ -6,6 +6,36 @@
 .chk-muted { font-size: 11px; color: var(--fg-3); line-height: 1.5; }
 .chk-h { font-size: 12px; font-weight: 600; color: var(--fg-1); margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
 
+/* ── Page shell: content area + tabbed sidebar (CheckLayout.tsx) ── */
+.chk-shell { flex: 1; min-height: 0; display: flex; }
+.chk-shell-main { flex: 1; min-width: 280px; display: flex; flex-direction: column; padding: 16px 20px; }
+.chk-shell-side { width: var(--chk-side-w, clamp(300px, 36%, 480px)); flex-shrink: 0; border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; min-height: 0; background: var(--surface); }
+/* Large view (Expand-Logik): the section fills app-main below the topbar */
+.chk-shell-main.chk-large, .chk-shell-side.chk-large { position: absolute; top: 57px; left: 0; right: 0; bottom: 0; z-index: 10;
+  width: auto; min-width: 0; border-left: 0; background: var(--bg); padding: 16px 24px; display: flex; flex-direction: column; }
+.chk-frame { flex: 1; min-height: 0; border-radius: 10px; border: 1px solid var(--border); overflow: hidden; background: var(--surface-2); }
+.chk-side-tabs { display: flex; align-items: center; gap: 4px; padding: 8px 12px 0; border-bottom: 1px solid var(--border); }
+.chk-large .chk-side-tabs { padding: 0; }
+.tab.chk-side-tab { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 8px; white-space: nowrap; flex-shrink: 0; }
+.chk-side-body { flex: 1; min-height: 0; overflow-y: auto; padding: 14px; }
+.chk-large .chk-side-body { padding: 16px 0; }
+.chk-large .chk-side-inner { max-width: 860px; margin: 0 auto; }
+.chk-icon-btn { padding: 4px; }
+.chk-icon-btn[data-size="lg"] { padding: 6px; }
+.chk-panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; min-width: 0; }
+.chk-panel-titles { flex: 1; min-width: 0; }
+.chk-panel-title { font-size: 13px; font-weight: 600; color: var(--fg-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chk-panel-meta { font-size: 11px; color: var(--fg-3); display: flex; gap: 10px; white-space: nowrap; overflow: hidden; }
+.chk-empty { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 24px; text-align: center; color: var(--fg-3); }
+.chk-empty-text { font-size: 12px; max-width: 320px; line-height: 1.5; }
+.chk-placeholder { display: flex; flex-direction: column; gap: 8px; padding: 18px 16px; border-radius: 10px; border: 1px dashed var(--border); color: var(--fg-3); }
+.chk-placeholder-head { display: flex; align-items: center; gap: 8px; color: var(--fg-2); }
+.chk-placeholder-text { font-size: 12px; line-height: 1.6; white-space: pre-line; }
+.chk-loading { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--fg-3); }
+.chk-loading-error { font-size: 13px; color: var(--score-low); }
+.chk-spin { animation: spin 1s linear infinite; }
+
 /* ── Total score ── */
 .chk-total { display: flex; align-items: center; gap: 16px; }
 .chk-ring { --p: 0; --c: var(--score-low); width: 84px; height: 84px; border-radius: 50%; flex-shrink: 0;
