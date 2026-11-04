@@ -152,9 +152,66 @@ export function normalizeSnapshot(snap: Snapshot, opts: { source: string; fetche
       fetchedAt: opts.fetchedAt ?? new Date().toISOString(),
       notProvided: NOT_PROVIDED_BY_EXPORT,
       failed: opts.failed ?? [],
+      present: Object.keys(snap).filter(d => !(opts.failed ?? []).includes(d)),
     },
   };
   return linkedInProfileSchema.parse(profile);
+}
+
+// ── ZIP export ──────────────────────────────────────────────────
+/** RFC-4180 CSV (quoted fields may contain commas, quotes and newlines). */
+export function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [], cell = "", quoted = false;
+  const s = text.replace(/^﻿/, "");
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (quoted) {
+      if (ch === '"') { if (s[i + 1] === '"') { cell += '"'; i++; } else quoted = false; }
+      else cell += ch;
+    } else if (ch === '"' && cell === "") quoted = true;
+    else if (ch === ",") { row.push(cell); cell = ""; }
+    else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && s[i + 1] === "\n") i++;
+      row.push(cell); rows.push(row); row = []; cell = "";
+    } else cell += ch;
+  }
+  if (cell !== "" || row.length) { row.push(cell); rows.push(row); }
+  return rows;
+}
+
+/** CSV → records. Skips preamble lines (Connections.csv starts with "Notes:" and a blank line):
+ *  the header is the first row with at least two non-empty cells. */
+export function csvRecords(text: string): SnapshotRecord[] {
+  const rows = parseCsv(text);
+  const h = rows.findIndex(r => r.filter(c => c.trim()).length >= 2);
+  if (h < 0) return [];
+  const header = rows[h].map(x => x.trim());
+  return rows.slice(h + 1)
+    .filter(r => r.some(c => c.trim()))
+    .map(r => Object.fromEntries(header.map((k, i) => [k, (r[i] ?? "").trim()])));
+}
+
+/** LinkedIn ZIP export → snapshot. Files are matched by base name, case-insensitively;
+ *  given recommendations are merged into RECOMMENDATIONS with a "given" marker. */
+export function snapshotFromZip(files: Record<string, Uint8Array>): { snap: Snapshot; files: string[] } {
+  const snap: Snapshot = {};
+  const used: string[] = [];
+  const dec = new TextDecoder("utf-8");
+  for (const [path, bytes] of Object.entries(files)) {
+    const base = path.split("/").pop()!.toLowerCase();
+    if (base === "recommendations_given.csv") {
+      const given = csvRecords(dec.decode(bytes)).map(r => ({ ...r, Type: "given" }));
+      snap.RECOMMENDATIONS = [...(snap.RECOMMENDATIONS ?? []), ...given];
+      used.push(path);
+      continue;
+    }
+    const domain = ZIP_FILE_DOMAINS[base];
+    if (!domain) continue;
+    snap[domain] = [...(snap[domain] ?? []), ...csvRecords(dec.decode(bytes))];
+    used.push(path);
+  }
+  return { snap, files: used };
 }
 
 /** What gets stored as `raw`: everything except connection names (only their count is kept). */

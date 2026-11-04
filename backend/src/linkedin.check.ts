@@ -3,7 +3,30 @@ import assert from "node:assert/strict";
 import {
   field, parseWebsites, normalizeSnapshot, rawForStorage, profileFingerprint, profileStats,
   fetchSnapshotDomain, fetchSnapshot, LinkedInAuthError, SNAPSHOT_DOMAINS, type Snapshot,
+  parseCsv, csvRecords, snapshotFromZip,
 } from "./linkedin.js";
+import { strToU8 } from "fflate";
+
+// CSV: quotes, embedded commas/newlines, CRLF, BOM
+assert.deepEqual(parseCsv('﻿a,b\r\n"x, y","multi\nline ""q"""\r\n'), [["a", "b"], ["x, y", 'multi\nline "q"']]);
+// Connections.csv preamble is skipped; header = first row with ≥ 2 cells
+const conn = csvRecords('Notes:\n"When exporting your connection data, you may notice …"\n\nFirst Name,Last Name,Company\nAnna,Beispiel,ACME\nBen,Test,\n');
+assert.equal(conn.length, 2);
+assert.equal(conn[0]["Last Name"], "Beispiel");
+assert.equal(csvRecords("").length, 0);
+// ZIP: base-name matching, given recommendations merged with a marker, unknown files ignored
+const zipSnap = snapshotFromZip({
+  "Basic_LinkedInDataExport/Profile.csv": strToU8("First Name,Last Name,Headline\nAlex,Muster,Design Lead\n"),
+  "Recommendations_Received.csv": strToU8("First Name,Last Name,Company,Text,Creation Date\nAnna,B,ACME,Great work,05/12/24\n"),
+  "Recommendations_Given.csv": strToU8("First Name,Last Name,Text\nBen,C,Super\n"),
+  "Ad_Targeting.csv": strToU8("a,b\n1,2\n"),
+});
+assert.deepEqual(Object.keys(zipSnap.snap).sort(), ["PROFILE", "RECOMMENDATIONS"]);
+assert.equal(zipSnap.files.length, 3);
+const zipProfile = normalizeSnapshot(zipSnap.snap, { source: "zip" });
+assert.equal(zipProfile.recommendations.received.length, 1);
+assert.equal(zipProfile.recommendations.givenCount, 1);
+assert.deepEqual(zipProfile.meta.present?.sort(), ["PROFILE", "RECOMMENDATIONS"]);
 
 // Field access ignores case, spaces and punctuation; empty values fall through to the next alias
 assert.equal(field({ "first name": " Claus " }, "First Name"), "Claus");

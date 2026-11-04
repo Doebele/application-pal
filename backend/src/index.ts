@@ -54,6 +54,9 @@ import {
   linkedinConnections,
   linkedinVersions,
   linkedInProfileSchema,
+  linkedInStateSchema,
+  type LinkedInProfile,
+  type LinkedInState,
   CV_LANGUAGES,
   type AiConfig,
   type UserDocument,
@@ -71,7 +74,10 @@ import { analyzePdfLayout, type LayoutFacts } from "./cv-layout.js";
 import {
   LINKEDIN_AUTH_URL, LINKEDIN_TOKEN_URL, LINKEDIN_DEFAULT_SCOPE, LINKEDIN_SCOPES, SNAPSHOT_DOMAINS, LinkedInAuthError,
   fetchSnapshot, fetchSnapshotDomain, normalizeSnapshot, rawForStorage, profileFingerprint, profileStats,
+  snapshotFromZip, type Snapshot,
 } from "./linkedin.js";
+import { runLinkedInCheck } from "./linkedin-rules.js";
+import { unzipSync } from "fflate";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
@@ -4718,6 +4724,21 @@ function linkedinStatusOut(conn: Awaited<ReturnType<typeof getLinkedInConnection
   };
 }
 
+/** Saves an imported profile as a new version — unless it equals the latest import. */
+async function saveLinkedInImport(userId: string, data: LinkedInProfile, snap: Snapshot, source: string, note: string) {
+  const prev = await latestLinkedInVersion(userId);
+  let changed = true;
+  if (prev) {
+    try { changed = profileFingerprint(linkedInProfileSchema.parse(JSON.parse(prev.data))) !== profileFingerprint(data); } catch { /* old shape → save */ }
+  }
+  if (!changed) return { versionId: prev!.id, changed };
+  const [row] = await db.insert(linkedinVersions).values({
+    userId, origin: "import", source, parentId: prev?.id ?? null,
+    data: JSON.stringify(data), raw: JSON.stringify(rawForStorage(snap)), note,
+  }).returning({ id: linkedinVersions.id });
+  return { versionId: row.id, changed };
+}
+
 async function runLinkedInSync(job: LinkedInSyncJob, token: string) {
   const fail = async (error: string) => {
     Object.assign(job, { status: "error", error, finishedAt: new Date().toISOString() });
@@ -4741,19 +4762,7 @@ async function runLinkedInSync(job: LinkedInSyncJob, token: string) {
   }
   const [prof] = await db.select({ linkedinUrl: userProfile.linkedinUrl }).from(userProfile).where(eq(userProfile.userId, job.userId)).limit(1);
   const data = normalizeSnapshot(snap, { source: "api", failed, publicUrl: prof?.linkedinUrl ?? null });
-  const prev = await latestLinkedInVersion(job.userId);
-  let changed = true;
-  if (prev) {
-    try { changed = profileFingerprint(linkedInProfileSchema.parse(JSON.parse(prev.data))) !== profileFingerprint(data); } catch { /* old shape → save */ }
-  }
-  let versionId = prev?.id;
-  if (changed) {
-    const [row] = await db.insert(linkedinVersions).values({
-      userId: job.userId, origin: "import", source: "api", parentId: prev?.id ?? null,
-      data: JSON.stringify(data), raw: JSON.stringify(rawForStorage(snap)), note: "LinkedIn-Synchronisation",
-    }).returning({ id: linkedinVersions.id });
-    versionId = row.id;
-  }
+  const { versionId, changed } = await saveLinkedInImport(job.userId, data, snap, "api", "LinkedIn-Synchronisation");
   await upsertLinkedInConnection(job.userId, {
     lastSyncAt: new Date(),
     lastSyncError: failed.length ? `Teilweise geladen – nicht verfügbar: ${failed.join(", ")}` : null,
@@ -4897,6 +4906,99 @@ app.get("/api/linkedin/current", async (c) => {
   const row = await latestLinkedInVersion(getUserId(c));
   if (!row) return c.json(null);
   return c.json({ id: row.id, source: row.source, note: row.note, createdAt: row.createdAt.toISOString(), data: JSON.parse(row.data) });
+});
+
+// ── LinkedIn-Check (deterministic part; LLM judgements follow in phase 2) ──
+async function readLinkedInState(userId: string): Promise<LinkedInState> {
+  const [p] = await db.select({ s: userProfile.linkedinState }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  try { return linkedInStateSchema.parse(JSON.parse(p?.s ?? "{}")); } catch { return {}; }
+}
+async function writeLinkedInState(userId: string, state: LinkedInState) {
+  await db.update(userProfile).set({ linkedinState: JSON.stringify(state) }).where(eq(userProfile.userId, userId));
+}
+
+app.get("/api/linkedin/state", async (c) => c.json(await readLinkedInState(getUserId(c))));
+
+// Partial update: goal and selfReport are merged key by key (a null selfReport value removes the answer).
+app.patch("/api/linkedin/state", async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json<Record<string, unknown>>();
+  const selfPatch = (body.selfReport ?? {}) as Record<string, number | null>;
+  const cur = await readLinkedInState(userId);
+  const selfReport: Record<string, number> = { ...(cur.selfReport ?? {}) };
+  for (const [k, v] of Object.entries(selfPatch)) { if (v === null) delete selfReport[k]; else selfReport[k] = v; }
+  const parsed = linkedInStateSchema.safeParse({
+    ...cur,
+    ...(body.journey !== undefined ? { journey: body.journey } : {}),
+    ...(body.goal !== undefined ? { goal: { ...(cur.goal ?? {}), ...(body.goal as object) } } : {}),
+    ...(body.checklist !== undefined ? { checklist: body.checklist } : {}),
+    selfReport,
+  });
+  if (!parsed.success) return c.json({ error: "Ungültige Angaben", details: parsed.error.issues.slice(0, 3) }, 400);
+  await writeLinkedInState(userId, parsed.data);
+  return c.json(parsed.data);
+});
+
+// Scores the latest imported profile version. Computed on every read from the stored
+// profile + state, so goal, self-report, waivers and UI language need no new import.
+app.get("/api/linkedin/check", async (c) => {
+  const userId = getUserId(c);
+  const uiLang = (["de", "en", "fr"].includes(c.req.query("uiLang") ?? "") ? c.req.query("uiLang") : "de") as UiLang;
+  const versionId = c.req.query("versionId");
+  const [row] = versionId
+    ? await db.select().from(linkedinVersions).where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.id, versionId))).limit(1)
+    : [await latestLinkedInVersion(userId)];
+  const state = await readLinkedInState(userId);
+  if (!row) return c.json({ result: null, version: null, state });
+  let profile: LinkedInProfile;
+  try { profile = linkedInProfileSchema.parse(JSON.parse(row.data)); } catch { return c.json({ error: "Gespeicherte Profilversion ist beschädigt" }, 500); }
+  const result = runLinkedInCheck({
+    profile, uiLang,
+    goal: state.goal ? { kind: state.goal.kind ?? undefined, targetRole: state.goal.targetRole ?? undefined, market: state.goal.market ?? undefined } : null,
+    selfReport: state.selfReport ?? null,
+    accepted: state.waivers ?? [],
+  });
+  return c.json({
+    result, state,
+    version: { id: row.id, source: row.source, note: row.note, createdAt: row.createdAt.toISOString(), stats: profileStats(profile) },
+  });
+});
+
+// Accept (waive) or un-accept one checkpoint; body { key, accepted }.
+app.post("/api/linkedin/check/waivers", async (c) => {
+  const userId = getUserId(c);
+  const { key, accepted } = await c.req.json<{ key: string; accepted: boolean }>();
+  if (!key || key.length > 60) return c.json({ error: "Ungültig" }, 400);
+  const state = await readLinkedInState(userId);
+  const set = new Set(state.waivers ?? []);
+  if (accepted) set.add(key); else set.delete(key);
+  await writeLinkedInState(userId, { ...state, waivers: [...set] });
+  return c.json({ waivers: [...set] });
+});
+
+// LinkedIn ZIP export (Settings → Data privacy → Get a copy of your data), multipart field "file".
+// Only the CSVs the check needs are unpacked; nothing leaves the server.
+const LINKEDIN_ZIP_MAX = 50 * 1024 * 1024;
+app.post("/api/linkedin/import/zip", async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.parseBody();
+  const file = body.file;
+  if (!(file instanceof File)) return c.json({ error: "Keine Datei" }, 400);
+  if (file.size > LINKEDIN_ZIP_MAX) return c.json({ error: "Die Datei ist grösser als 50 MB" }, 413);
+  let files: Record<string, Uint8Array>;
+  try {
+    files = unzipSync(new Uint8Array(await file.arrayBuffer()), {
+      filter: f => f.name.toLowerCase().endsWith(".csv") && f.originalSize < 20 * 1024 * 1024,
+    });
+  } catch {
+    return c.json({ error: "Die Datei ist kein gültiges ZIP-Archiv" }, 400);
+  }
+  const { snap, files: used } = snapshotFromZip(files);
+  if (!snap.PROFILE?.length) return c.json({ error: "Kein LinkedIn-Export: Profile.csv fehlt im Archiv" }, 400);
+  const [prof] = await db.select({ linkedinUrl: userProfile.linkedinUrl }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const data = normalizeSnapshot(snap, { source: "zip", publicUrl: prof?.linkedinUrl ?? null });
+  const saved = await saveLinkedInImport(userId, data, snap, "zip", `ZIP-Export (${file.name})`);
+  return c.json({ ...saved, files: used.length, stats: profileStats(data) });
 });
 
 type DriveFile = { id: string; name: string; mimeType: string; webViewLink: string; capabilities?: { canCopy?: boolean } };

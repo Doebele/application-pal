@@ -413,6 +413,19 @@ Read-only sync of the member's own profile via the **Member Data Portability API
 
 Sync runs as an in-memory background job (`/api/linkedin/sync`, polled via `/api/linkedin/status`); a changed profile is appended to `linkedin_versions` (identical syncs are skipped via `profileFingerprint`). The Profile page auto-syncs when the last sync is older than 24 h. Photo, banner, custom URL, Featured and "Open to" are not in the API — the LinkedIn-Check must treat them as self-report / "not rated".
 
+### LinkedIn-Check (scoring engine)
+
+100 points = First impression 25 + Content 35 + Evidence 20 + Activity 20, plus 8 separate AI-visibility points (never in the total). `backend/src/linkedin-criteria.ts` is the versioned catalogue (`li-1`, labels de/en/fr, efforts, buzzword lists). `backend/src/linkedin-rules.ts` holds the pure `runLinkedInCheck()`. Each checkpoint has a `kind`: `rule` (deterministic), `self` (user's self-report), `llm` (local model, phase 2). Self-check: `npx tsx backend/src/linkedin-rules.check.ts`.
+
+User input lives in `user_profile.linkedin_state` (`LinkedInState`: journey, goal.targetRole/market, selfReport `{checkId: points}`, waivers, checklist), via `GET`/`PATCH /api/linkedin/state` and `POST /api/linkedin/check/waivers`. `GET /api/linkedin/check?uiLang=` re-scores the latest import on every read. `POST /api/linkedin/import/zip` (multipart `file`) reads the LinkedIn ZIP export: CSVs only, preamble rows skipped, `Recommendations_Given.csv` merged with a "given" marker. nginx allows 50 MB uploads.
+
+Rules — don't "fix" them:
+- A checkpoint without input is `na`: it leaves the maximum and `total = round(earned / ratedMax × 100)`. Never guess.
+- A domain the source delivered but that is empty scores 0. A domain missing from `meta.present` (or listed in `meta.failed`) is `na`.
+- A missing headline or About text scores 0 on all its checkpoints, including the `llm` ones.
+- Buzzwords cost −0.5 each (`about.phrases`, max 0), never more than the About points already earned.
+- A year-only end date (`"2016"`) counts as December for the gap check.
+
 ### Google OAuth Scopes
 
 `openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets`

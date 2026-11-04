@@ -19,6 +19,7 @@
     "bcrypt": "^5.1.1",
     "drizzle-kit": "^0.25.0",
     "drizzle-orm": "^0.34.1",
+    "fflate": "^0.8.2",
     "hono": "^4.6.10",
     "jsonwebtoken": "^9.0.2",
     "nodemailer": "^8.0.7",

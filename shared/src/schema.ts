@@ -127,6 +127,7 @@ export const userProfile = pgTable("user_profile", {
   ravSheetId: text("rav_sheet_id"),                                 // per-user RAV proof spreadsheet (target of the RAV export)
   cvMasterLang: text("cv_master_lang"),                             // CV-Check: master language the other CV languages are translated from ("de"|"en"|"fr", null = en)
   cvCheckWaivers: text("cv_check_waivers"),                         // CV-Check: JSON { de?: string[], en?: string[], fr?: string[] } — points the user accepted as-is (count as passed)
+  linkedinState: text("linkedin_state"),                           // LinkedIn-Check: JSON LinkedInState (journey, goal, selfReport, waivers, checklist)
   docSummaryRunAt: timestamp("doc_summary_run_at", { withTimezone: true }), // last daily document-summary run (shared across devices)
   docTemplates: text("doc_templates"),                             // JSON: DocTemplateConfig per content type
   letterConfig: text("letter_config"),                             // JSON: LetterConfig — persistent cover-letter guidance (structure/values/strengths/phrases/styleRules/noGos/referenceLetter)
@@ -543,6 +544,25 @@ export const linkedInProfileSchema = z.object({
     notProvided: z.array(z.string()).default([]),
     /** Snapshot domains that failed to load in this run. */
     failed: z.array(z.string()).default([]),
+    /** Snapshot domains this source delivered (empty or not). Absent = legacy, treat all as delivered. */
+    present: z.array(z.string()).optional(),
   }),
 });
 export type LinkedInProfile = z.infer<typeof linkedInProfileSchema>;
+
+/** LinkedIn-Check user input, stored in user_profile.linkedin_state. */
+export const linkedInStateSchema = z.object({
+  journey: z.enum(["check", "build"]).nullish(),
+  goal: z.object({
+    kind: z.enum(["job", "clients", "switch", "visibility"]).nullish(),
+    targetRole: z.string().max(120).nullish(),
+    market: z.string().max(80).nullish(),
+  }).nullish(),
+  /** Points per self-report check id (photo, banner, featured.* …), 0 … max. */
+  selfReport: z.record(z.string(), z.number().min(0).max(10)).nullish(),
+  /** Check ids the user accepts as they are. */
+  waivers: z.array(z.string().max(60)).max(100).nullish(),
+  /** Done items of the tips/checklist page. */
+  checklist: z.array(z.string().max(60)).max(200).nullish(),
+});
+export type LinkedInState = z.infer<typeof linkedInStateSchema>;
