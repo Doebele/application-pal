@@ -1002,6 +1002,88 @@
     "makeMaster": "Définir comme maître",
     "recognised": "Structure reconnue",
     "noVersions": "Pas encore de versions – importez d'abord le CV.",
-    "versionN": "Version {{n}}"
+    "versionN": "Version {{n}}",
+    "check": {
+      "run": "Vérifier le CV",
+      "rerun": "Vérifier à nouveau",
+      "running": "Vérification…",
+      "step": {
+        "pdf": "Lecture de la mise en page",
+        "llm": "L'IA évalue puces et compétences",
+        "score": "Calcul des points"
+      },
+      "checkedAt": "Vérifié le {{date}}",
+      "notChecked": "Ce CV n'a pas encore été vérifié.",
+      "needImport": "Importer d'abord le CV dans l'onglet « Structure ».",
+      "stale": "Cette vérification concerne une version antérieure — veuillez revérifier.",
+      "layoutError": "Mise en page non vérifiable : {{error}}",
+      "llmError": "Évaluation IA échouée : {{error}} — points concernés « non vérifiables ».",
+      "slowHint": "Un modèle local a besoin de quelques minutes. Vous pouvez quitter la page — la vérification continue.",
+      "acceptedInfo_one": "{{count}} point accepté",
+      "acceptedInfo_other": "{{count}} points acceptés",
+      "steps": "Steps to improve",
+      "areas": "Domaines",
+      "details": "Tous les contrôles",
+      "recommendations": "Recommandations (sans points)",
+      "area": {
+        "impact": "Impact",
+        "presentation": "Presentation",
+        "competencies": "Competencies"
+      },
+      "group": {
+        "action": "Verbes d'action",
+        "specifics": "Précision",
+        "language": "Langue",
+        "pages": "Nombre de pages",
+        "sections": "Sections essentielles",
+        "format": "Format",
+        "section": "Détails des sections",
+        "competency": "Compétences"
+      },
+      "bonus": "Bonus +{{points}} : {{state}}",
+      "bonusEarned": "obtenu",
+      "bonusOpen": "ouvert",
+      "bullets": "Puces",
+      "bulletsOpen_one": "{{count}} puce avec points ouverts",
+      "bulletsOpen_other": "{{count}} puces avec points ouverts",
+      "showDone": "Afficher terminées",
+      "hideDone": "Masquer terminées",
+      "noRewrites": "Pas de reformulations sans évaluation IA — lancer la vérification avec un fournisseur IA.",
+      "languageIssues": "Langue",
+      "competencyEvidence": "Preuves des compétences",
+      "noEvidence": "Aucune preuve trouvée",
+      "placeholderHint": "[X] = chiffre manquant — à compléter soi-même, ne rien inventer."
+    }
+  },
+  "check": {
+    "status": {
+      "pass": "Validé",
+      "fail": "Ouvert",
+      "na": "Non vérifiable",
+      "accepted": "Accepté",
+      "good": "Good Job",
+      "onTrack": "On Track",
+      "needsWork": "Needs Work"
+    },
+    "totalAria": "{{total}} sur {{max}} points",
+    "split": "{{raw}} mesurés",
+    "acceptedShort": "acceptés",
+    "target": "Objectif : {{target}}+ points",
+    "noSteps": "Plus rien d'ouvert — tous les points sont validés ou acceptés.",
+    "accept": "Accepter",
+    "accepted": "Accepté",
+    "acceptHint": "Garder ainsi volontairement — compte comme validé",
+    "unacceptHint": "Retirer l'acceptation — compte de nouveau comme ouvert",
+    "hygiene": "Obligatoire",
+    "copy": "Copier",
+    "bullet": {
+      "action": "Verbe d'action",
+      "scope": "Portée",
+      "outcome": "Résultat",
+      "rewriteScope": "Suggestion · portée",
+      "rewriteOutcome": "Suggestion · résultat",
+      "acceptAction": "Accepter le début",
+      "acceptSpecifics": "Accepter sans chiffre"
+    }
   }
 }

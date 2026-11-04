@@ -126,6 +126,7 @@ export const userProfile = pgTable("user_profile", {
   driveApplicationsFolderId: text("drive_applications_folder_id"), // per-user Drive folder
   ravSheetId: text("rav_sheet_id"),                                 // per-user RAV proof spreadsheet (target of the RAV export)
   cvMasterLang: text("cv_master_lang"),                             // CV-Check: master language the other CV languages are translated from ("de"|"en"|"fr", null = en)
+  cvCheckWaivers: text("cv_check_waivers"),                         // CV-Check: JSON { de?: string[], en?: string[], fr?: string[] } — points the user accepted as-is (count as passed)
   docSummaryRunAt: timestamp("doc_summary_run_at", { withTimezone: true }), // last daily document-summary run (shared across devices)
   docTemplates: text("doc_templates"),                             // JSON: DocTemplateConfig per content type
   letterConfig: text("letter_config"),                             // JSON: LetterConfig — persistent cover-letter guidance (structure/values/strengths/phrases/styleRules/noGos/referenceLetter)

@@ -63,6 +63,8 @@ import {
   type RavLang, type RavApplication, type RavContact
 } from "./rav.js";
 import { detectCvLang, normalizeParsedCv, verbatimWarnings, cvStats, CV_IMPORT_SYSTEM_PROMPT } from "./cv.js";
+import { runCvCheck, cvJudgePrompt, cvJudgeInput, normalizeJudgement, type CvCheckResult, type LlmJudgement, type UiLang } from "./cv-rules.js";
+import { analyzePdfLayout, type LayoutFacts } from "./cv-layout.js";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
@@ -4507,6 +4509,146 @@ app.get("/api/cv/versions/:id", async (c) => {
     .where(and(eq(cvVersions.id, c.req.param("id")), eq(cvVersions.userId, userId))).limit(1);
   if (!row) return c.json({ error: "Nicht gefunden" }, 404);
   return c.json(cvVersionOut(row));
+});
+
+// ─── CV-Check (VMock-style scoring) ──────────────────────────────
+// A check run gathers three inputs and stores them on the version row
+// (`check_result` = { inputs, result }): PDF layout facts, the Google Doc header text
+// (contact details often live there and are missing from the text export) and one LLM
+// judgement. Scoring itself is pure (cv-rules.ts), so GET re-scores from the stored
+// inputs with the user's current waivers and UI language — accepting a point never
+// needs another LLM call.
+type CvCheckStored = { inputs: { layout: LayoutFacts | null; headerText: string | null; llm: LlmJudgement | null; sourceDocumentId: string | null; layoutError?: string; llmError?: string }; result: CvCheckResult };
+type CvCheckJob = {
+  id: string; userId: string; lang: CvLanguage; versionId: string;
+  status: "running" | "done" | "error"; step: "pdf" | "llm" | "score"; startedAt: string; finishedAt?: string; error?: string;
+};
+const cvCheckJobs = new Map<string, CvCheckJob>();
+
+async function fetchDocHeaderText(docId: string, token: string): Promise<string | null> {
+  const r = await fetch(`https://docs.googleapis.com/v1/documents/${docId}?fields=headers,footers`, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(30_000) });
+  if (!r.ok) return null;
+  const d = await r.json() as { headers?: Record<string, { content?: unknown[] }>; footers?: Record<string, { content?: unknown[] }> };
+  const out: string[] = [];
+  const walk = (n: unknown) => {
+    if (Array.isArray(n)) n.forEach(walk);
+    else if (n && typeof n === "object") {
+      const o = n as Record<string, unknown>;
+      if (o.textRun && typeof (o.textRun as { content?: string }).content === "string") out.push((o.textRun as { content: string }).content);
+      Object.values(o).forEach(v => { if (v && typeof v === "object") walk(v); });
+    }
+  };
+  walk([...Object.values(d.headers ?? {}), ...Object.values(d.footers ?? {})].map(h => h.content));
+  return out.join("").trim() || null;
+}
+
+async function loadCvWaivers(userId: string, lang: CvLanguage): Promise<string[]> {
+  const [p] = await db.select({ w: userProfile.cvCheckWaivers }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  try { const all = JSON.parse(p?.w ?? "{}") as Record<string, string[]>; return Array.isArray(all[lang]) ? all[lang] : []; } catch { return []; }
+}
+
+const asUiLang = (v: unknown): UiLang => (v === "en" || v === "fr" ? v : "de");
+
+async function runCvCheckJob(job: CvCheckJob, ai: AiConfig, uiLang: UiLang) {
+  const [row] = await db.select().from(cvVersions).where(and(eq(cvVersions.id, job.versionId), eq(cvVersions.userId, job.userId))).limit(1);
+  if (!row) return Object.assign(job, { status: "error", error: "Version nicht gefunden", finishedAt: new Date().toISOString() });
+  const cv = cvDocumentSchema.parse(JSON.parse(row.data));
+  const inputs: CvCheckStored["inputs"] = { layout: null, headerText: null, llm: null, sourceDocumentId: row.sourceDocumentId ?? null };
+
+  // 1) PDF layout + Doc header from the source document
+  const [doc] = row.sourceDocumentId
+    ? await db.select().from(userDocuments).where(and(eq(userDocuments.id, row.sourceDocumentId), eq(userDocuments.userId, job.userId))).limit(1)
+    : [];
+  const token = await getDriveAccessToken(job.userId);
+  const driveId = doc?.url ? driveFileId(doc.url) : undefined;
+  if (doc && driveId && token) {
+    const isGDoc = doc.fileType === "gdoc" || doc.url!.includes("docs.google.com/document");
+    try {
+      const url = isGDoc ? `https://www.googleapis.com/drive/v3/files/${driveId}/export?mimeType=application/pdf` : `https://www.googleapis.com/drive/v3/files/${driveId}?alt=media`;
+      const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
+      if (!r.ok) throw new Error(`Drive HTTP ${r.status}`);
+      inputs.layout = await analyzePdfLayout(new Uint8Array(await r.arrayBuffer()));
+    } catch (err) { inputs.layoutError = (err as Error).message.slice(0, 200); }
+    if (isGDoc) inputs.headerText = await fetchDocHeaderText(driveId, token).catch(() => null);
+  } else inputs.layoutError = !token ? "Google Drive nicht verbunden" : "Keine Quelldatei";
+
+  // 2) LLM judgement
+  job.step = "llm";
+  if (ai && ai.provider !== "none") {
+    try {
+      const raw = await callAi(cvJudgePrompt(job.lang), cvJudgeInput(cv), ai);
+      inputs.llm = normalizeJudgement(extractJson(raw), cv);
+    } catch (err) {
+      console.error("cv check llm error:", err);
+      inputs.llmError = (err as Error).message.slice(0, 200);
+    }
+  } else inputs.llmError = "Kein KI-Anbieter konfiguriert";
+
+  // 3) Score + store
+  job.step = "score";
+  const result = runCvCheck({ cv, cvLang: job.lang, uiLang, headerText: inputs.headerText, layout: inputs.layout, llm: inputs.llm, accepted: await loadCvWaivers(job.userId, job.lang) });
+  const stored: CvCheckStored = { inputs, result };
+  await db.update(cvVersions).set({ checkResult: JSON.stringify(stored) }).where(eq(cvVersions.id, row.id));
+  Object.assign(job, { status: "done", finishedAt: new Date().toISOString() });
+}
+
+app.post("/api/cv/check", async (c) => {
+  const userId = getUserId(c);
+  const { lang, ai, uiLang, versionId } = await c.req.json<{ lang: CvLanguage; ai: AiConfig; uiLang?: string; versionId?: string }>();
+  if (!CV_LANGUAGES.includes(lang)) return c.json({ error: "Sprache fehlt" }, 400);
+  const running = [...cvCheckJobs.values()].find(j => j.userId === userId && j.lang === lang && j.status === "running");
+  if (running) return c.json(running, 202);
+  const [row] = await db.select({ id: cvVersions.id }).from(cvVersions)
+    .where(versionId ? and(eq(cvVersions.id, versionId), eq(cvVersions.userId, userId)) : and(eq(cvVersions.userId, userId), eq(cvVersions.lang, lang), isNull(cvVersions.applicationId)))
+    .orderBy(desc(cvVersions.createdAt)).limit(1);
+  if (!row) return c.json({ error: "Noch kein importierter CV in dieser Sprache" }, 404);
+  for (const [id, j] of cvCheckJobs) if (j.status !== "running" && Date.now() - Date.parse(j.startedAt) > 86_400_000) cvCheckJobs.delete(id);
+  const job: CvCheckJob = { id: crypto.randomUUID(), userId, lang, versionId: row.id, status: "running", step: "pdf", startedAt: new Date().toISOString() };
+  cvCheckJobs.set(job.id, job);
+  void runCvCheckJob(job, ai, asUiLang(uiLang)).catch(err => {
+    console.error("cv check job crashed:", err);
+    Object.assign(job, { status: "error", error: "Interner Fehler bei der Prüfung", finishedAt: new Date().toISOString() });
+  });
+  return c.json(job, 202);
+});
+
+app.get("/api/cv/check-jobs", (c) => {
+  const userId = getUserId(c);
+  return c.json([...cvCheckJobs.values()].filter(j => j.userId === userId).sort((a, b) => b.startedAt.localeCompare(a.startedAt)).map(({ userId: _u, ...j }) => j));
+});
+
+// Latest check of a language, re-scored with the current waivers + UI language.
+app.get("/api/cv/check", async (c) => {
+  const userId = getUserId(c);
+  const lang = c.req.query("lang") as CvLanguage;
+  if (!CV_LANGUAGES.includes(lang)) return c.json({ error: "Sprache fehlt" }, 400);
+  const rows = await db.select().from(cvVersions)
+    .where(and(eq(cvVersions.userId, userId), eq(cvVersions.lang, lang), isNull(cvVersions.applicationId)))
+    .orderBy(desc(cvVersions.createdAt));
+  const checked = rows.find(r => r.checkResult);
+  if (!checked) return c.json({ result: null, versionId: rows[0]?.id ?? null, stale: false });
+  const stored = JSON.parse(checked.checkResult!) as CvCheckStored;
+  const cv = cvDocumentSchema.parse(JSON.parse(checked.data));
+  const result = runCvCheck({ cv, cvLang: lang, uiLang: asUiLang(c.req.query("uiLang")), headerText: stored.inputs.headerText, layout: stored.inputs.layout, llm: stored.inputs.llm, accepted: await loadCvWaivers(userId, lang), now: new Date(stored.result.checkedAt) });
+  return c.json({
+    result, versionId: checked.id, stale: checked.id !== rows[0].id,
+    inputErrors: { layout: stored.inputs.layoutError ?? null, llm: stored.inputs.llmError ?? null },
+  });
+});
+
+// Accept (waive) or un-accept one point; body { lang, key, accepted }.
+app.post("/api/cv/check/waivers", async (c) => {
+  const userId = getUserId(c);
+  const { lang, key, accepted } = await c.req.json<{ lang: CvLanguage; key: string; accepted: boolean }>();
+  if (!CV_LANGUAGES.includes(lang) || !key || key.length > 80) return c.json({ error: "Ungültig" }, 400);
+  const [p] = await db.select({ w: userProfile.cvCheckWaivers }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  let all: Record<string, string[]> = {};
+  try { all = JSON.parse(p?.w ?? "{}"); } catch { /* reset */ }
+  const set = new Set(all[lang] ?? []);
+  if (accepted) set.add(key); else set.delete(key);
+  all[lang] = [...set];
+  await db.update(userProfile).set({ cvCheckWaivers: JSON.stringify(all) }).where(eq(userProfile.userId, userId));
+  return c.json({ lang, waivers: all[lang] });
 });
 
 type DriveFile = { id: string; name: string; mimeType: string; webViewLink: string; capabilities?: { canCopy?: boolean } };

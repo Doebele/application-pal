@@ -9,6 +9,7 @@ import type { CvDocument, CvLanguage } from "@application-pal/shared";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
+import { useCvCheck, ScoreTab, ImproveTab } from "./CvCheckTabs";
 
 const LANGS: CvLanguage[] = ["de", "en", "fr"];
 const SIDEBAR_WIDTH = "clamp(300px, 36%, 480px)";
@@ -123,6 +124,13 @@ export function CvCheckPage() {
     ? new Date(iso).toLocaleDateString(i18n.language, { day: "2-digit", month: "2-digit", year: "numeric" })
     : "–", [i18n.language]);
 
+  // Shown language: stored choice → master → first language with a source
+  const activeLang: CvLanguage = lang
+    ?? (sources?.languages.find(l => l.lang === current?.masterLang && l.documentId) ? current!.masterLang : null)
+    ?? sources?.languages.find(l => l.documentId)?.lang
+    ?? current?.masterLang ?? "en";
+  const check = useCvCheck(activeLang);
+
   if (!sources || !current) {
     return (
       <>
@@ -136,11 +144,6 @@ export function CvCheckPage() {
     );
   }
 
-  // Shown language: stored choice → master → first language with a source
-  const activeLang: CvLanguage = lang
-    ?? (sources.languages.find(l => l.lang === current.masterLang && l.documentId) ? current.masterLang : null)
-    ?? sources.languages.find(l => l.documentId)?.lang
-    ?? current.masterLang;
   const status = sources.languages.find(l => l.lang === activeLang)!;
   const src = sources.sources.find(s => s.documentId === status.documentId) ?? null;
   const ver = current.current[activeLang];
@@ -231,8 +234,8 @@ export function CvCheckPage() {
             </div>
             <div style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: large === "side" ? "16px 0" : 14 }}>
               <div style={large === "side" ? { maxWidth: 860, margin: "0 auto" } : undefined}>
-                {tab === "score" && <PhasePlaceholder icon={<StatsReport width={20} height={20} />} title={t("cvCheck.score.title")} text={t("cvCheck.score.placeholder")} />}
-                {tab === "improve" && <PhasePlaceholder icon={<Sparks width={20} height={20} />} title={t("cvCheck.improve.title")} text={t("cvCheck.improve.placeholder")} />}
+                {tab === "score" && <ScoreTab s={check} hasVersion={!!ver} fmt={fmt} />}
+                {tab === "improve" && <ImproveTab s={check} hasVersion={!!ver} fmt={fmt} />}
                 {tab === "structure" && (
                   <StructureTab
                     lang={activeLang} src={src} status={status.status} ver={ver} job={job} now={now}

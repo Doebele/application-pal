@@ -1002,6 +1002,88 @@
     "makeMaster": "Set as master",
     "recognised": "Recognised structure",
     "noVersions": "No versions yet – import the CV first.",
-    "versionN": "Version {{n}}"
+    "versionN": "Version {{n}}",
+    "check": {
+      "run": "Check CV",
+      "rerun": "Check again",
+      "running": "Checking…",
+      "step": {
+        "pdf": "Reading PDF layout",
+        "llm": "AI judges bullets and competencies",
+        "score": "Calculating points"
+      },
+      "checkedAt": "Checked on {{date}}",
+      "notChecked": "This CV has not been checked yet.",
+      "needImport": "Import the CV in the “Structure” tab first.",
+      "stale": "This check belongs to an older version — please check again.",
+      "layoutError": "Layout not checkable: {{error}}",
+      "llmError": "AI judgement failed: {{error}} — affected points are “not checkable”.",
+      "slowHint": "A local model needs a few minutes for this. You can leave the page — the check keeps running.",
+      "acceptedInfo_one": "{{count}} point accepted",
+      "acceptedInfo_other": "{{count}} points accepted",
+      "steps": "Steps to improve",
+      "areas": "Areas",
+      "details": "All checks",
+      "recommendations": "Recommendations (no points)",
+      "area": {
+        "impact": "Impact",
+        "presentation": "Presentation",
+        "competencies": "Competencies"
+      },
+      "group": {
+        "action": "Action verbs",
+        "specifics": "Specifics",
+        "language": "Language",
+        "pages": "Page count",
+        "sections": "Essential sections",
+        "format": "Format",
+        "section": "Section details",
+        "competency": "Competencies"
+      },
+      "bonus": "Bonus +{{points}}: {{state}}",
+      "bonusEarned": "earned",
+      "bonusOpen": "open",
+      "bullets": "Bullets",
+      "bulletsOpen_one": "{{count}} bullet with open points",
+      "bulletsOpen_other": "{{count}} bullets with open points",
+      "showDone": "Show done",
+      "hideDone": "Hide done",
+      "noRewrites": "No rewrites without an AI judgement — run the check with an AI provider.",
+      "languageIssues": "Language",
+      "competencyEvidence": "Evidence for competencies",
+      "noEvidence": "No evidence found",
+      "placeholderHint": "[X] = number missing — fill it in yourself, never invent."
+    }
+  },
+  "check": {
+    "status": {
+      "pass": "Passed",
+      "fail": "Open",
+      "na": "Not checkable",
+      "accepted": "Accepted",
+      "good": "Good Job",
+      "onTrack": "On Track",
+      "needsWork": "Needs Work"
+    },
+    "totalAria": "{{total}} of {{max}} points",
+    "split": "{{raw}} measured",
+    "acceptedShort": "accepted",
+    "target": "Target: {{target}}+ points",
+    "noSteps": "Nothing left — every point is passed or accepted.",
+    "accept": "Accept",
+    "accepted": "Accepted",
+    "acceptHint": "Keep it this way on purpose — counts as passed in the score",
+    "unacceptHint": "Withdraw acceptance — counts as open again",
+    "hygiene": "Required",
+    "copy": "Copy",
+    "bullet": {
+      "action": "Action verb",
+      "scope": "Scope",
+      "outcome": "Outcome",
+      "rewriteScope": "Suggestion · scope",
+      "rewriteOutcome": "Suggestion · outcome",
+      "acceptAction": "Accept opener",
+      "acceptSpecifics": "Accept without number"
+    }
   }
 }

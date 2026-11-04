@@ -1002,6 +1002,88 @@
     "makeMaster": "Als Master festlegen",
     "recognised": "Erkannte Struktur",
     "noVersions": "Noch keine Versionen – importiere zuerst den Lebenslauf.",
-    "versionN": "Version {{n}}"
+    "versionN": "Version {{n}}",
+    "check": {
+      "run": "CV prüfen",
+      "rerun": "Neu prüfen",
+      "running": "Prüfung läuft…",
+      "step": {
+        "pdf": "PDF-Layout lesen",
+        "llm": "KI bewertet Bullets und Kompetenzen",
+        "score": "Punkte berechnen"
+      },
+      "checkedAt": "Geprüft am {{date}}",
+      "notChecked": "Dieser CV wurde noch nicht geprüft.",
+      "needImport": "Zuerst den CV im Tab „Struktur“ importieren.",
+      "stale": "Die Prüfung gehört zu einer älteren Version – bitte neu prüfen.",
+      "layoutError": "Layout nicht prüfbar: {{error}}",
+      "llmError": "KI-Bewertung fehlgeschlagen: {{error}} – betroffene Punkte sind „nicht prüfbar“.",
+      "slowHint": "Ein lokales Modell braucht dafür einige Minuten. Du kannst die Seite verlassen – die Prüfung läuft weiter.",
+      "acceptedInfo_one": "{{count}} Punkt akzeptiert",
+      "acceptedInfo_other": "{{count}} Punkte akzeptiert",
+      "steps": "Steps to improve",
+      "areas": "Bereiche",
+      "details": "Alle Prüfungen",
+      "recommendations": "Empfehlungen (ohne Punkte)",
+      "area": {
+        "impact": "Impact",
+        "presentation": "Presentation",
+        "competencies": "Competencies"
+      },
+      "group": {
+        "action": "Aktionsverben",
+        "specifics": "Konkretheit",
+        "language": "Sprache",
+        "pages": "Seitenzahl",
+        "sections": "Pflichtabschnitte",
+        "format": "Format",
+        "section": "Abschnittsdetails",
+        "competency": "Kompetenzen"
+      },
+      "bonus": "Bonus +{{points}}: {{state}}",
+      "bonusEarned": "erreicht",
+      "bonusOpen": "offen",
+      "bullets": "Bullets",
+      "bulletsOpen_one": "{{count}} Bullet mit offenen Punkten",
+      "bulletsOpen_other": "{{count}} Bullets mit offenen Punkten",
+      "showDone": "Erledigte zeigen",
+      "hideDone": "Erledigte ausblenden",
+      "noRewrites": "Ohne KI-Bewertung gibt es keine Umformulierungen – Prüfung mit KI-Anbieter starten.",
+      "languageIssues": "Sprache",
+      "competencyEvidence": "Belege für Kompetenzen",
+      "noEvidence": "Kein Beleg gefunden",
+      "placeholderHint": "[X] = Zahl fehlt – bitte selbst einsetzen, nichts erfinden."
+    }
+  },
+  "check": {
+    "status": {
+      "pass": "Erfüllt",
+      "fail": "Offen",
+      "na": "Nicht prüfbar",
+      "accepted": "Akzeptiert",
+      "good": "Good Job",
+      "onTrack": "On Track",
+      "needsWork": "Needs Work"
+    },
+    "totalAria": "{{total}} von {{max}} Punkten",
+    "split": "{{raw}} gemessen",
+    "acceptedShort": "akzeptiert",
+    "target": "Ziel: {{target}}+ Punkte",
+    "noSteps": "Nichts mehr offen – alle Punkte erfüllt oder akzeptiert.",
+    "accept": "Akzeptieren",
+    "accepted": "Akzeptiert",
+    "acceptHint": "Bewusst so lassen – zählt in der Bewertung als erfüllt",
+    "unacceptHint": "Akzeptanz aufheben – wird wieder als offen gewertet",
+    "hygiene": "Pflicht",
+    "copy": "Kopieren",
+    "bullet": {
+      "action": "Aktionsverb",
+      "scope": "Umfang",
+      "outcome": "Ergebnis",
+      "rewriteScope": "Vorschlag · Umfang",
+      "rewriteOutcome": "Vorschlag · Ergebnis",
+      "acceptAction": "Einstieg akzeptieren",
+      "acceptSpecifics": "Ohne Zahl akzeptieren"
+    }
   }
 }
