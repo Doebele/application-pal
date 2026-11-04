@@ -51,6 +51,9 @@ import {
   invites,
   cvVersions,
   cvDocumentSchema,
+  linkedinConnections,
+  linkedinVersions,
+  linkedInProfileSchema,
   CV_LANGUAGES,
   type AiConfig,
   type UserDocument,
@@ -65,6 +68,10 @@ import {
 import { detectCvLang, normalizeParsedCv, verbatimWarnings, cvStats, CV_IMPORT_SYSTEM_PROMPT } from "./cv.js";
 import { runCvCheck, cvJudgePrompt, cvJudgeInput, normalizeJudgement, type CvCheckResult, type LlmJudgement, type UiLang } from "./cv-rules.js";
 import { analyzePdfLayout, type LayoutFacts } from "./cv-layout.js";
+import {
+  LINKEDIN_AUTH_URL, LINKEDIN_TOKEN_URL, LINKEDIN_DEFAULT_SCOPE, LINKEDIN_SCOPES, SNAPSHOT_DOMAINS, LinkedInAuthError,
+  fetchSnapshot, fetchSnapshotDomain, normalizeSnapshot, rawForStorage, profileFingerprint, profileStats,
+} from "./linkedin.js";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
@@ -143,8 +150,8 @@ const webauthnChallenges = new Map<string, string>();
 // ─── Auth Middleware ──────────────────────────────────────────
 app.use("/api/*", async (c, next) => {
   const p = c.req.path;
-  // Public routes: auth endpoints + google callback + health
-  if (p.startsWith("/api/auth/") || p === "/api/google/callback" || p === "/health") {
+  // Public routes: auth endpoints + google/linkedin OAuth callbacks + health
+  if (p.startsWith("/api/auth/") || p === "/api/google/callback" || p === "/api/linkedin/callback" || p === "/health") {
     return next();
   }
   const token = getCookie(c, "access_token");
@@ -4651,6 +4658,247 @@ app.post("/api/cv/check/waivers", async (c) => {
   return c.json({ lang, waivers: all[lang] });
 });
 
+// ─────────────────────────────────────────────────────────────────
+// LinkedIn connection (Member Data Portability API, read-only)
+// ─────────────────────────────────────────────────────────────────
+// Each user connects their OWN LinkedIn developer app (self-serve product "Member
+// Data Portability API (Member)", EU/EEA + CH only). Two ways to get a token:
+// the OAuth redirect flow below, or pasting a token from LinkedIn's token generator.
+// Tokens live 60 days and cannot be refreshed. Nothing is ever written to LinkedIn.
+// See docs/linkedin-setup.md.
+const LINKEDIN_REDIRECT_URI = process.env.LINKEDIN_REDIRECT_URI ?? `${env.APP_URL}/api/linkedin/callback`;
+const LINKEDIN_TOKEN_DAYS = 60;
+
+type LinkedInSyncJob = {
+  id: string; userId: string; status: "running" | "done" | "error";
+  step: number; total: number; domain?: string;
+  startedAt: string; finishedAt?: string; error?: string;
+  versionId?: string; changed?: boolean; failed?: string[];
+};
+const linkedinSyncJobs = new Map<string, LinkedInSyncJob>(); // one per user, keyed by userId
+
+async function getLinkedInConnection(userId: string) {
+  const [row] = await db.select().from(linkedinConnections).where(eq(linkedinConnections.userId, userId)).limit(1);
+  return row ?? null;
+}
+
+async function upsertLinkedInConnection(userId: string, patch: Partial<typeof linkedinConnections.$inferInsert>) {
+  const set = { ...patch, updatedAt: new Date() };
+  await db.insert(linkedinConnections).values({ userId, ...set })
+    .onConflictDoUpdate({ target: linkedinConnections.userId, set });
+}
+
+async function latestLinkedInVersion(userId: string) {
+  const [row] = await db.select().from(linkedinVersions)
+    .where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "import")))
+    .orderBy(desc(linkedinVersions.createdAt)).limit(1);
+  return row ?? null;
+}
+
+function linkedinStatusOut(conn: Awaited<ReturnType<typeof getLinkedInConnection>>) {
+  const hasToken = !!conn?.accessToken;
+  const expiresMs = conn?.expiresAt?.getTime() ?? null;
+  const expired = hasToken && expiresMs !== null && expiresMs <= Date.now();
+  return {
+    appConfigured: !!conn?.clientId,
+    clientId: conn?.clientId ?? null,
+    hasSecret: !!conn?.clientSecret,
+    requestedScope: conn?.requestedScope ?? LINKEDIN_DEFAULT_SCOPE,
+    scopes: LINKEDIN_SCOPES,
+    redirectUri: LINKEDIN_REDIRECT_URI,
+    connected: hasToken && !expired,
+    expired,
+    method: conn?.method ?? null,
+    scope: conn?.scope ?? null,
+    connectedAt: conn?.connectedAt?.toISOString() ?? null,
+    expiresAt: conn?.expiresAt?.toISOString() ?? null,
+    daysLeft: hasToken && expiresMs !== null ? Math.max(0, Math.floor((expiresMs - Date.now()) / 86_400_000)) : null,
+    lastSyncAt: conn?.lastSyncAt?.toISOString() ?? null,
+    lastSyncError: conn?.lastSyncError ?? null,
+  };
+}
+
+async function runLinkedInSync(job: LinkedInSyncJob, token: string) {
+  const fail = async (error: string) => {
+    Object.assign(job, { status: "error", error, finishedAt: new Date().toISOString() });
+    await upsertLinkedInConnection(job.userId, { lastSyncError: error });
+  };
+  let result;
+  try {
+    result = await fetchSnapshot(token, (d, i) => { job.step = i; job.domain = d; });
+  } catch (err) {
+    if (err instanceof LinkedInAuthError) {
+      // A rejected token is useless: mark it expired so the profile page asks to reconnect.
+      if (/abgelehnt/.test(err.message)) await upsertLinkedInConnection(job.userId, { expiresAt: new Date() });
+      return fail(err.message);
+    }
+    console.error("linkedin sync error:", err);
+    return fail(`LinkedIn nicht erreichbar (${(err as Error).message.slice(0, 120)})`);
+  }
+  const { snap, failed } = result;
+  if (!snap.PROFILE?.length) {
+    return fail("LinkedIn stellt deine Daten noch zusammen. Nach der ersten Freigabe kann das bis zu 30 Minuten dauern – bitte später erneut aktualisieren.");
+  }
+  const [prof] = await db.select({ linkedinUrl: userProfile.linkedinUrl }).from(userProfile).where(eq(userProfile.userId, job.userId)).limit(1);
+  const data = normalizeSnapshot(snap, { source: "api", failed, publicUrl: prof?.linkedinUrl ?? null });
+  const prev = await latestLinkedInVersion(job.userId);
+  let changed = true;
+  if (prev) {
+    try { changed = profileFingerprint(linkedInProfileSchema.parse(JSON.parse(prev.data))) !== profileFingerprint(data); } catch { /* old shape → save */ }
+  }
+  let versionId = prev?.id;
+  if (changed) {
+    const [row] = await db.insert(linkedinVersions).values({
+      userId: job.userId, origin: "import", source: "api", parentId: prev?.id ?? null,
+      data: JSON.stringify(data), raw: JSON.stringify(rawForStorage(snap)), note: "LinkedIn-Synchronisation",
+    }).returning({ id: linkedinVersions.id });
+    versionId = row.id;
+  }
+  await upsertLinkedInConnection(job.userId, {
+    lastSyncAt: new Date(),
+    lastSyncError: failed.length ? `Teilweise geladen – nicht verfügbar: ${failed.join(", ")}` : null,
+  });
+  Object.assign(job, { status: "done", step: job.total, versionId, changed, failed, finishedAt: new Date().toISOString() });
+}
+
+function startLinkedInSync(userId: string, token: string): LinkedInSyncJob {
+  const running = linkedinSyncJobs.get(userId);
+  if (running?.status === "running") return running;
+  const job: LinkedInSyncJob = { id: crypto.randomUUID(), userId, status: "running", step: 0, total: SNAPSHOT_DOMAINS.length, startedAt: new Date().toISOString() };
+  linkedinSyncJobs.set(userId, job);
+  void runLinkedInSync(job, token).catch(err => {
+    console.error("linkedin sync job crashed:", err);
+    Object.assign(job, { status: "error", error: "Interner Fehler bei der Synchronisation", finishedAt: new Date().toISOString() });
+  });
+  return job;
+}
+
+const jobOut = (j: LinkedInSyncJob | undefined) => (j ? (({ userId: _u, ...rest }) => rest)(j) : null);
+
+// Connection state + running/last sync job + summary of the current profile version.
+app.get("/api/linkedin/status", async (c) => {
+  const userId = getUserId(c);
+  const [conn, cur] = await Promise.all([getLinkedInConnection(userId), latestLinkedInVersion(userId)]);
+  let current = null;
+  if (cur) {
+    try {
+      const data = linkedInProfileSchema.parse(JSON.parse(cur.data));
+      current = { id: cur.id, createdAt: cur.createdAt.toISOString(), source: cur.source, headline: data.basics.headline ?? null,
+        summary: data.basics.summary ?? null, name: [data.basics.firstName, data.basics.lastName].filter(Boolean).join(" ") || null,
+        stats: profileStats(data), failed: data.meta.failed };
+    } catch { /* unreadable version → treat as none */ }
+  }
+  return c.json({ ...linkedinStatusOut(conn), job: jobOut(linkedinSyncJobs.get(userId)), current });
+});
+
+// Store the user's LinkedIn developer app (client id, secret, scope). Empty secret keeps the stored one.
+app.put("/api/linkedin/app", async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json<{ clientId?: string; clientSecret?: string; scope?: string }>();
+  const clientId = (body.clientId ?? "").trim();
+  if (!/^[A-Za-z0-9_-]{6,100}$/.test(clientId)) return c.json({ error: "Ungültige Client-ID" }, 400);
+  const scope = body.scope && (LINKEDIN_SCOPES as readonly string[]).includes(body.scope) ? body.scope : LINKEDIN_DEFAULT_SCOPE;
+  const secret = (body.clientSecret ?? "").trim();
+  if (secret && secret.length > 200) return c.json({ error: "Ungültiges Client-Secret" }, 400);
+  await upsertLinkedInConnection(userId, { clientId, requestedScope: scope, ...(secret ? { clientSecret: secret } : {}) });
+  return c.json(linkedinStatusOut(await getLinkedInConnection(userId)));
+});
+
+app.get("/api/linkedin/auth-url", async (c) => {
+  const userId = getUserId(c);
+  const conn = await getLinkedInConnection(userId);
+  if (!conn?.clientId || !conn.clientSecret) return c.json({ error: "Zuerst Client-ID und Client-Secret der LinkedIn-App speichern" }, 400);
+  const state = jwt.sign({ userId, purpose: "linkedin" }, getJwtSecret(), { expiresIn: "15m" });
+  const url = new URL(LINKEDIN_AUTH_URL);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("client_id", conn.clientId);
+  url.searchParams.set("redirect_uri", LINKEDIN_REDIRECT_URI);
+  url.searchParams.set("scope", conn.requestedScope ?? LINKEDIN_DEFAULT_SCOPE);
+  url.searchParams.set("state", state);
+  return c.json({ url: url.toString() });
+});
+
+// Public route (see auth middleware): the user is identified by the signed `state`.
+app.get("/api/linkedin/callback", async (c) => {
+  const back = (q: string) => c.redirect(`${env.APP_URL}/profile?${q}`);
+  const errParam = c.req.query("error");
+  if (errParam) return back(`linkedin_error=${encodeURIComponent(c.req.query("error_description") ?? errParam)}`);
+  let userId: string;
+  try {
+    const st = jwt.verify(c.req.query("state") ?? "", getJwtSecret()) as { userId: string; purpose?: string };
+    if (st.purpose !== "linkedin") throw new Error("purpose");
+    userId = st.userId;
+  } catch { return back("linkedin_error=state"); }
+  const code = c.req.query("code");
+  const conn = await getLinkedInConnection(userId);
+  if (!code || !conn?.clientId || !conn.clientSecret) return back("linkedin_error=no_code");
+  try {
+    const res = await fetch(LINKEDIN_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ grant_type: "authorization_code", code, client_id: conn.clientId, client_secret: conn.clientSecret, redirect_uri: LINKEDIN_REDIRECT_URI }),
+    });
+    const data = await res.json() as { access_token?: string; expires_in?: number; scope?: string; error?: string; error_description?: string };
+    if (!data.access_token) return back(`linkedin_error=${encodeURIComponent(data.error_description ?? data.error ?? "token_failed")}`);
+    const expiresAt = new Date(Date.now() + (data.expires_in ?? LINKEDIN_TOKEN_DAYS * 86_400) * 1000);
+    await upsertLinkedInConnection(userId, {
+      accessToken: data.access_token, expiresAt, scope: data.scope ?? conn.requestedScope ?? LINKEDIN_DEFAULT_SCOPE,
+      method: "oauth", connectedAt: new Date(), lastSyncError: null,
+    });
+    startLinkedInSync(userId, data.access_token);
+    return back("linkedin=connected");
+  } catch (err) {
+    console.error("linkedin callback error:", err);
+    return back("linkedin_error=exception");
+  }
+});
+
+// Fallback: a token generated in LinkedIn's developer portal (OAuth Token Tools).
+app.post("/api/linkedin/token", async (c) => {
+  const userId = getUserId(c);
+  const { accessToken, expiresInDays } = await c.req.json<{ accessToken?: string; expiresInDays?: number }>();
+  const token = (accessToken ?? "").trim();
+  if (token.length < 20 || token.length > 4000 || /\s/.test(token)) return c.json({ error: "Das sieht nicht nach einem LinkedIn-Zugangsschlüssel aus" }, 400);
+  try { await fetchSnapshotDomain(token, "PROFILE"); }
+  catch (err) {
+    if (err instanceof LinkedInAuthError) return c.json({ error: err.message }, 400);
+    return c.json({ error: `LinkedIn nicht erreichbar (${(err as Error).message.slice(0, 120)})` }, 502);
+  }
+  const days = Number.isFinite(expiresInDays) && expiresInDays! > 0 && expiresInDays! <= 366 ? expiresInDays! : LINKEDIN_TOKEN_DAYS;
+  await upsertLinkedInConnection(userId, {
+    accessToken: token, expiresAt: new Date(Date.now() + days * 86_400_000), scope: null,
+    method: "token", connectedAt: new Date(), lastSyncError: null,
+  });
+  const job = startLinkedInSync(userId, token);
+  return c.json({ ...linkedinStatusOut(await getLinkedInConnection(userId)), job: jobOut(job) });
+});
+
+// Disconnect: drops the token; `forgetApp=1` also removes client id/secret. Synced versions stay.
+app.delete("/api/linkedin/connection", async (c) => {
+  const userId = getUserId(c);
+  if (c.req.query("forgetApp") === "1") {
+    await db.delete(linkedinConnections).where(eq(linkedinConnections.userId, userId));
+  } else {
+    await upsertLinkedInConnection(userId, { accessToken: null, expiresAt: null, scope: null, method: null, connectedAt: null });
+  }
+  return c.json(linkedinStatusOut(await getLinkedInConnection(userId)));
+});
+
+app.post("/api/linkedin/sync", async (c) => {
+  const userId = getUserId(c);
+  const conn = await getLinkedInConnection(userId);
+  const st = linkedinStatusOut(conn);
+  if (!st.connected || !conn?.accessToken) return c.json({ error: st.expired ? "Die Verbindung ist abgelaufen – bitte neu verbinden" : "LinkedIn ist nicht verbunden" }, 400);
+  return c.json(jobOut(startLinkedInSync(userId, conn.accessToken)), 202);
+});
+
+// Current profile version (full data) — used by the LinkedIn-Check.
+app.get("/api/linkedin/current", async (c) => {
+  const row = await latestLinkedInVersion(getUserId(c));
+  if (!row) return c.json(null);
+  return c.json({ id: row.id, source: row.source, note: row.note, createdAt: row.createdAt.toISOString(), data: JSON.parse(row.data) });
+});
+
 type DriveFile = { id: string; name: string; mimeType: string; webViewLink: string; capabilities?: { canCopy?: boolean } };
 
 async function listDriveFiles(accessToken: string, folderId: string): Promise<DriveFile[]> {
@@ -5017,7 +5265,7 @@ app.post("/api/applications/:id/drive/copy-template", async (c) => {
 // ─────────────────────────────────────────────────────────────────
 async function buildExportPayload(userId: string) {
   const appIds = (await db.select({ id: applications.id }).from(applications).where(eq(applications.userId, userId))).map(a => a.id);
-  const [apps, docs, activities, contacts, profiles, userDocs, cvRows] = await Promise.all([
+  const [apps, docs, activities, contacts, profiles, userDocs, cvRows, liRows] = await Promise.all([
     db.select().from(applications).where(eq(applications.userId, userId)).orderBy(applications.createdAt),
     appIds.length > 0
       ? db.select().from(applicationDocuments).where(inArray(applicationDocuments.applicationId, appIds)).orderBy(applicationDocuments.createdAt)
@@ -5031,6 +5279,7 @@ async function buildExportPayload(userId: string) {
     db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1),
     db.select().from(userDocuments).where(eq(userDocuments.userId, userId)).orderBy(userDocuments.createdAt),
     db.select().from(cvVersions).where(eq(cvVersions.userId, userId)).orderBy(cvVersions.createdAt),
+    db.select().from(linkedinVersions).where(eq(linkedinVersions.userId, userId)).orderBy(linkedinVersions.createdAt),
   ]);
   return {
     meta: { version: 1, exportedAt: new Date().toISOString(), app: "application-pal" },
@@ -5041,6 +5290,7 @@ async function buildExportPayload(userId: string) {
     userProfile: profiles[0] ?? null,
     userDocuments: userDocs,
     cvVersions: cvRows,
+    linkedinVersions: liRows,
   };
 }
 
@@ -5630,6 +5880,7 @@ app.post("/api/import", async (c) => {
       userProfile?: Record<string, unknown> | null;
       userDocuments?: Record<string, unknown>[];
       cvVersions?: Record<string, unknown>[];
+      linkedinVersions?: Record<string, unknown>[];
     };
   }>();
 
@@ -5650,6 +5901,7 @@ app.post("/api/import", async (c) => {
     await db.delete(applications).where(eq(applications.userId, userId));
     await db.delete(userDocuments).where(eq(userDocuments.userId, userId));
     await db.delete(cvVersions).where(eq(cvVersions.userId, userId));
+    await db.delete(linkedinVersions).where(eq(linkedinVersions.userId, userId));
     await db.delete(userProfile).where(eq(userProfile.userId, userId));
   }
 
@@ -5696,6 +5948,12 @@ app.post("/api/import", async (c) => {
       await db.insert(cvVersions).values(r).onConflictDoUpdate({ target: cvVersions.id, set: r });
     }
   }
+  if (data.linkedinVersions?.length) {
+    for (const row of data.linkedinVersions) {
+      const r = Object.assign({}, row, { userId, createdAt: row.createdAt ? new Date(String(row.createdAt)) : undefined }) as never;
+      await db.insert(linkedinVersions).values(r).onConflictDoUpdate({ target: linkedinVersions.id, set: r });
+    }
+  }
   if (data.userProfile) {
     const rp = Object.assign({}, data.userProfile, { userId }) as never;
     await db.insert(userProfile).values(rp).onConflictDoUpdate({ target: userProfile.id, set: rp });
@@ -5708,6 +5966,7 @@ app.post("/api/import", async (c) => {
     contacts: data.applicationContacts?.length ?? 0,
     userDocuments: data.userDocuments?.length ?? 0,
     cvVersions: data.cvVersions?.length ?? 0,
+    linkedinVersions: data.linkedinVersions?.length ?? 0,
     userProfile: data.userProfile ? 1 : 0,
   }});
 });

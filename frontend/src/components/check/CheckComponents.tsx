@@ -5,20 +5,8 @@ import { useState, useEffect, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { CheckCircle, XmarkCircle, HelpCircle, NavArrowDown, NavArrowRight, ThumbsUp, Copy, Check } from "iconoir-react";
 import type { AreaStatus, BulletOutcome, CheckOutcome, CheckStatus, ImproveStep, Recommendation } from "./types";
+import { copyText } from "../../lib/clipboard";
 import "./check.css";
-
-async function copyText(text: string): Promise<void> {
-  if (navigator.clipboard && document.hasFocus()) {
-    try { await navigator.clipboard.writeText(text); return; } catch { /* fall through */ }
-  }
-  const el = document.createElement("textarea");
-  el.value = text;
-  el.style.cssText = "position:fixed;top:-9999px;left:-9999px;opacity:0";
-  document.body.appendChild(el);
-  el.focus(); el.select();
-  document.execCommand("copy");
-  document.body.removeChild(el);
-}
 
 export function StatusPill({ status }: { status: CheckStatus | AreaStatus }) {
   const { t } = useTranslation();

@@ -1,0 +1,39 @@
+/* LinkedIn connection card (Profile page). Tokens only, like check.css. */
+.li-card { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.li-status { display: flex; align-items: center; gap: 10px; }
+.li-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; background: var(--fg-3); }
+.li-dot[data-state="on"] { background: var(--score-high); }
+.li-dot[data-state="warn"] { background: var(--score-mid); }
+.li-dot[data-state="off"] { background: var(--score-low); }
+.li-status-text { flex: 1; min-width: 0; }
+.li-status-title { font-size: 13px; font-weight: 600; color: var(--fg-1); }
+.li-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.li-btn { font-size: 12px; gap: 5px; display: inline-flex; align-items: center; }
+.li-progress { display: flex; flex-direction: column; gap: 4px; }
+
+.li-summary { border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+.li-summary-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.li-name { font-size: 14px; font-weight: 700; color: var(--fg-1); }
+.li-headline { font-size: 12px; color: var(--fg-2); line-height: 1.45; }
+.li-stats { display: flex; flex-wrap: wrap; gap: 4px; }
+.li-stat { font-size: 11px; color: var(--fg-2); background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+.li-adopt { border-left: 2px solid var(--accent); padding: 2px 0 2px 10px; display: flex; flex-direction: column; gap: 4px; }
+.li-adopt-label { font-size: 10px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .04em; }
+.li-adopt-text { font-size: 12px; color: var(--fg-1); line-height: 1.5; white-space: pre-line; }
+.li-clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.li-adopt-actions { display: flex; align-items: center; gap: 4px; }
+
+.li-setup { border-top: 1px solid var(--border); padding-top: 6px; display: flex; flex-direction: column; gap: 10px; }
+.li-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); }
+.li-steps { margin: 0; padding-left: 18px; font-size: 12px; color: var(--fg-2); line-height: 1.6; display: flex; flex-direction: column; gap: 2px; }
+.li-steps a { color: var(--accent); text-decoration: none; display: inline-flex; align-items: center; gap: 3px; }
+.li-form { display: flex; flex-direction: column; gap: 10px; }
+.li-field { display: flex; flex-direction: column; gap: 2px; }
+.li-field > span:first-child { font-size: 9px; font-weight: 700; color: var(--fg-3); letter-spacing: .08em; text-transform: uppercase; }
+.li-copyline { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.li-copyline code { font-family: var(--font-mono); font-size: 11px; color: var(--fg-1); background: var(--surface-2); border-radius: 4px; padding: 2px 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.li-token { resize: vertical; font-family: var(--font-mono); font-size: 11px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--fg-1); outline: none; }
+.li-token:focus { border-color: var(--accent); }
+.li-disconnect { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 8px; }
+.li-privacy { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: var(--fg-3); line-height: 1.5; }
+.li-privacy svg { flex-shrink: 0; margin-top: 2px; }

@@ -405,6 +405,14 @@ JWT in httpOnly cookies. `GET /api/auth/status` returns `{ setup: bool }`. `GET 
 
 **User-switch flow** (Rail `UserModal`): `GET /api/auth/users` (public endpoint) returns all registered emails. Each entry is enriched with a `rememberedToken` from `pal-remembered-users` localStorage. Users with a remembered token show a ⚡ "Direkt anmelden" option → calls `POST /api/auth/auto-login` directly without navigating away. Users without a token navigate to `/setup?email=...` (Login tab) or the generic "Registrieren" button navigates to `/setup?mode=register`.
 
+### LinkedIn connection (Profile page)
+
+Read-only sync of the member's own profile via the **Member Data Portability API** (EU/EEA + CH, `docs/linkedin-setup.md`). Each user brings their own LinkedIn developer app (self-serve product), so `client_id`/`client_secret` live per user in `linkedin_connections` — a credentials table, **never exported**. Token from the OAuth redirect flow (`/api/linkedin/auth-url` → public `/api/linkedin/callback`, user identified by a signed `state` JWT) or pasted from LinkedIn's token generator (`POST /api/linkedin/token`). Tokens live 60 days, no refresh; a 401 marks the connection expired.
+
+`backend/src/linkedin.ts` holds the pure mapping: snapshot records use the ZIP-export column names, so `normalizeSnapshot()` serves both the API and the ZIP import (`ZIP_FILE_DOMAINS`). Fields are matched case/punctuation-insensitively with aliases. A domain that answers "no data" = 0 entries (not unknown) — unless PROFILE is empty, which means LinkedIn is still collating the snapshot. Connection names are never stored (`rawForStorage` keeps only the count). Self-check: `npx tsx backend/src/linkedin.check.ts`.
+
+Sync runs as an in-memory background job (`/api/linkedin/sync`, polled via `/api/linkedin/status`); a changed profile is appended to `linkedin_versions` (identical syncs are skipped via `profileFingerprint`). The Profile page auto-syncs when the last sync is older than 24 h. Photo, banner, custom URL, Featured and "Open to" are not in the API — the LinkedIn-Check must treat them as self-report / "not rated".
+
 ### Google OAuth Scopes
 
 `openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets`

@@ -56,6 +56,12 @@ AI is used for job import, match scoring, CV analysis, cover letters, interview 
 
 → [docs/ai-setup.md](docs/ai-setup.md)
 
+### 6. Optional: Connect LinkedIn
+
+Keeps a read-only copy of your LinkedIn profile in sync (official Member Data Portability API, EU/EEA + Switzerland). Needs a free LinkedIn developer app of your own; nothing is ever written to LinkedIn.
+
+→ [docs/linkedin-setup.md](docs/linkedin-setup.md)
+
 ### Update
 
 ```bash

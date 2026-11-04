@@ -467,3 +467,82 @@ export type CvSection = z.infer<typeof cvSectionSchema>;
 export type CvDocument = z.infer<typeof cvDocumentSchema>;
 export const cvVersionSelectSchema = createSelectSchema(cvVersions);
 export type CvVersionRow = z.infer<typeof cvVersionSelectSchema>;
+
+// ─── LinkedIn (LinkedIn-Check + profile connection) ───────────
+// Connection to the member's own LinkedIn data through the Member Data Portability
+// API (EU/EEA + CH, read-only). Each user brings their own LinkedIn developer app
+// (self-serve product), so client id/secret live per user. Credentials — never exported.
+export const linkedinConnections = pgTable("linkedin_connections", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull().unique(),         // FK → users.id
+  clientId: text("client_id"),                        // user's LinkedIn developer app
+  clientSecret: text("client_secret"),
+  requestedScope: text("requested_scope"),            // scope asked for in the OAuth flow (null = default)
+  accessToken: text("access_token"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  scope: text("scope"),                               // scope LinkedIn granted
+  method: text("method"),                             // "oauth" | "token" (pasted from the developer portal)
+  connectedAt: timestamp("connected_at", { withTimezone: true }),
+  lastSyncAt: timestamp("last_sync_at", { withTimezone: true }),
+  lastSyncError: text("last_sync_error"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+// LinkedIn profile, one row per saved version (append-only, like cv_versions).
+// The current profile = newest row with origin "import"; drafts/optimisations come later.
+export const linkedinVersions = pgTable("linkedin_versions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull(),
+  origin: text("origin").notNull(),                   // "import" | "draft" | "optimize"
+  source: text("source").notNull(),                   // "api" | "zip" | "pdf" | "text" | "form" | "builder"
+  lang: text("lang"),                                 // profile language, if known
+  parentId: uuid("parent_id"),
+  data: text("data").notNull(),                       // JSON: LinkedInProfile
+  raw: text("raw"),                                   // source data as received (snapshot domains), for re-normalising
+  checkResult: text("check_result"),                  // JSON: LinkedIn-Check result, null until checked
+  note: text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+const liText = z.string().nullish();
+const liDates = { start: liText, end: liText };       // dates as delivered ("Mar 2021", "2021-03", …)
+export const linkedInProfileSchema = z.object({
+  basics: z.object({
+    firstName: liText, lastName: liText, headline: liText, summary: liText,
+    location: liText, industry: liText, publicUrl: liText,
+    websites: z.array(z.string()).default([]),
+  }),
+  positions: z.array(z.object({ id: z.string(), title: liText, company: liText, location: liText, description: liText, ...liDates })).default([]),
+  education: z.array(z.object({ id: z.string(), school: liText, degree: liText, notes: liText, activities: liText, ...liDates })).default([]),
+  skills: z.array(z.object({ name: z.string(), endorsements: z.number().nullish() })).default([]),
+  certifications: z.array(z.object({ id: z.string(), name: z.string(), authority: liText, url: liText, ...liDates })).default([]),
+  languages: z.array(z.object({ name: z.string(), proficiency: liText })).default([]),
+  honors: z.array(z.object({ id: z.string(), title: z.string(), issuer: liText, date: liText, description: liText })).default([]),
+  projects: z.array(z.object({ id: z.string(), title: z.string(), description: liText, url: liText, ...liDates })).default([]),
+  publications: z.array(z.object({ id: z.string(), title: z.string(), publisher: liText, date: liText, description: liText, url: liText })).default([]),
+  courses: z.array(z.object({ name: z.string() })).default([]),
+  volunteering: z.array(z.object({ id: z.string(), role: liText, organization: liText, cause: liText, description: liText, ...liDates })).default([]),
+  recommendations: z.object({
+    received: z.array(z.object({ id: z.string(), author: liText, company: liText, jobTitle: liText, text: liText, date: liText })).default([]),
+    givenCount: z.number().nullish(),
+  }).default({}),
+  activity: z.object({
+    posts: z.array(z.object({ date: liText, text: liText, url: liText })).default([]),
+    comments: z.array(z.object({ date: liText, text: liText, url: liText })).default([]),
+    articles: z.array(z.object({ date: liText, title: liText, url: liText })).default([]),
+  }).default({}),
+  network: z.object({
+    connections: z.number().nullish(),               // count only — names are never stored
+    groups: z.array(z.string()).default([]),
+  }).default({}),
+  meta: z.object({
+    source: z.string(),
+    fetchedAt: z.string(),
+    /** Parts this source cannot deliver (rated as "not rated", never guessed). */
+    notProvided: z.array(z.string()).default([]),
+    /** Snapshot domains that failed to load in this run. */
+    failed: z.array(z.string()).default([]),
+  }),
+});
+export type LinkedInProfile = z.infer<typeof linkedInProfileSchema>;
