@@ -49,8 +49,12 @@ import {
   webauthnCredentials,
   passwordResetTokens,
   invites,
+  cvVersions,
+  cvDocumentSchema,
+  CV_LANGUAGES,
   type AiConfig,
-  type UserDocument
+  type UserDocument,
+  type CvLanguage
 } from "@application-pal/shared";
 import { PDFParse } from "pdf-parse";
 import {
@@ -58,6 +62,7 @@ import {
   detectSheetLang, planRavWrite, isRavPlaceholderRow, sortRavApplications, ravRow, ravDate, ravMonthKey,
   type RavLang, type RavApplication, type RavContact
 } from "./rav.js";
+import { detectCvLang, normalizeParsedCv, verbatimWarnings, cvStats, CV_IMPORT_SYSTEM_PROMPT } from "./cv.js";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
@@ -2396,6 +2401,37 @@ app.delete("/api/applications/:id/tasks/:taskId", async (c) => {
 
 // ─── Stage AI Actions ─────────────────────────────────────────
 /** Shared helper: call AI with a system + user prompt, return raw text */
+// Local models (LM Studio, Ollama) can take many minutes, mostly in a long <think> phase.
+// They are called with `stream: true`: a non-streamed response sends its headers only when
+// generation is finished, and Node's fetch gives up waiting for headers after 300 s
+// ("fetch failed"). Streaming delivers headers at once and keeps the connection busy.
+const LOCAL_AI_TIMEOUT_MS = 20 * 60_000;
+
+async function readChatCompletionStream(res: Response): Promise<string> {
+  if (!res.body) return "";
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "", out = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let nl: number;
+    while ((nl = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, nl).trim();
+      buf = buf.slice(nl + 1);
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") return out;
+      let j: { choices?: { delta?: { content?: string } }[]; error?: { message?: string } | string };
+      try { j = JSON.parse(data); } catch { continue; } // keep-alive / partial noise
+      if (j.error) throw new Error(`KI-Stream: ${typeof j.error === "string" ? j.error : j.error.message ?? "Fehler"}`);
+      out += j.choices?.[0]?.delta?.content ?? "";
+    }
+  }
+  return out;
+}
+
 async function callAi(system: string, user: string, ai: AiConfig, additionalContext?: string): Promise<string> {
   const fullUser = additionalContext?.trim()
     ? `${user}\n\n---\nZusätzliche Hinweise des Nutzers:\n${additionalContext.trim()}`
@@ -2409,13 +2445,13 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
         model: ai.lmStudioModel || undefined,
         messages: [{ role: "system", content: system }, { role: "user", content: fullUser }],
         temperature: 0.15,
-        max_tokens: 32768
+        max_tokens: 32768,
+        stream: true
       }),
-      signal: AbortSignal.timeout(480_000)
+      signal: AbortSignal.timeout(LOCAL_AI_TIMEOUT_MS)
     });
-    if (!res.ok) throw new Error(`LM Studio error: ${res.status}`);
-    const json = await res.json() as { choices?: { message?: { content?: string } }[] };
-    return json.choices?.[0]?.message?.content ?? "";
+    if (!res.ok) throw new Error(`LM Studio error: ${res.status} ${(await res.text().catch(() => "")).slice(0, 400)}`);
+    return readChatCompletionStream(res);
   } else if (ai.provider === "anthropic") {
     if (!ai.anthropicApiKey) throw new Error("Anthropic API Key fehlt");
     const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -2477,13 +2513,13 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
         model: model || undefined,
         messages: [{ role: "system", content: system }, { role: "user", content: fullUser }],
         temperature: 0.15,
-        max_tokens: 32768
+        max_tokens: 32768,
+        stream: true
       }),
-      signal: AbortSignal.timeout(480_000)
+      signal: AbortSignal.timeout(LOCAL_AI_TIMEOUT_MS)
     });
-    if (!res.ok) throw new Error(`Ollama error: ${res.status}`);
-    const json = await res.json() as { choices?: { message?: { content?: string } }[] };
-    return json.choices?.[0]?.message?.content ?? "";
+    if (!res.ok) throw new Error(`Ollama error: ${res.status} ${(await res.text().catch(() => "")).slice(0, 400)}`);
+    return readChatCompletionStream(res);
   }
   throw new Error("Kein KI-Modell konfiguriert");
 }
@@ -4268,6 +4304,211 @@ app.get("/api/drive/folder-info", async (c) => {
   return c.json({ id: f.id, name: f.name, url: `https://drive.google.com/drive/folders/${f.id}` });
 });
 
+// ─── CV sources (from the Documents library) ─────────────────────
+// The CVs are the user_documents rows with category "lebenslauf" — no separate
+// setting. Language comes from the name or tags (CV-2026-de, "englisch", …). The
+// Drive folder holding a CV is where generated CV docs for that language go, and a
+// PDF next to it older than the source means the PDF no longer shows the current CV.
+type DriveMeta = { id: string; name: string; mimeType: string; modifiedTime: string; parents?: string[]; webViewLink?: string };
+
+app.get("/api/cv/sources", async (c) => {
+  const userId = getUserId(c);
+  const docs = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.userId, userId), eq(userDocuments.category, "lebenslauf")))
+    .orderBy(desc(userDocuments.updatedAt));
+  const token = await getDriveAccessToken(userId);
+  const authH = token ? { Authorization: `Bearer ${token}` } : undefined;
+
+  const pdfsByFolder = new Map<string, DriveMeta[]>();
+  const folderPdfs = async (folderId: string): Promise<DriveMeta[]> => {
+    if (!authH) return [];
+    if (pdfsByFolder.has(folderId)) return pdfsByFolder.get(folderId)!;
+    const q = encodeURIComponent(`'${folderId}' in parents and trashed = false and mimeType = 'application/pdf'`);
+    const fields = encodeURIComponent("files(id,name,mimeType,modifiedTime,webViewLink)");
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=${fields}&orderBy=modifiedTime desc&pageSize=50`, { headers: authH });
+    const list = r.ok ? ((await r.json() as { files?: DriveMeta[] }).files ?? []) : [];
+    pdfsByFolder.set(folderId, list);
+    return list;
+  };
+
+  const sources = await Promise.all(docs.map(async (doc) => {
+    const lang = detectCvLang(doc.name, doc.tags);
+    const driveId = doc.url ? driveFileId(doc.url) : undefined;
+    let meta: DriveMeta | null = null;
+    if (driveId && authH) {
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?fields=id,name,mimeType,modifiedTime,parents`, { headers: authH });
+      if (r.ok) meta = await r.json() as DriveMeta;
+    }
+    const folderId = meta?.parents?.[0] ?? null;
+    // Newest PDF of the same language in the same folder (e.g. CV-2026-de.pdf next to CV-2026-de)
+    const pdf = folderId && doc.fileType !== "pdf"
+      ? (await folderPdfs(folderId)).find(p => detectCvLang(p.name) === lang) ?? null
+      : null;
+    return {
+      documentId: doc.id, name: doc.name, fileType: doc.fileType, url: doc.url, lang,
+      modifiedTime: meta?.modifiedTime ?? null, folderId,
+      folderUrl: folderId ? `https://drive.google.com/drive/folders/${folderId}` : null,
+      pdf: pdf ? { id: pdf.id, name: pdf.name, url: pdf.webViewLink ?? null, modifiedTime: pdf.modifiedTime } : null,
+      reachable: !driveId || !!meta,
+    };
+  }));
+
+  const languages = CV_LANGUAGES.map(lang => {
+    const source = sources.find(s => s.lang === lang) ?? null; // newest first
+    const status: "missing" | "ok" | "noPdf" | "pdfStale" | "pdfOnly" =
+      !source ? "missing"
+      : source.fileType === "pdf" ? "pdfOnly"
+      : !source.pdf ? "noPdf"
+      : source.modifiedTime && new Date(source.pdf.modifiedTime) < new Date(source.modifiedTime) ? "pdfStale"
+      : "ok";
+    return { lang, documentId: source?.documentId ?? null, status };
+  });
+
+  return c.json({ driveConnected: !!token, sources, languages });
+});
+
+// ─── CV versions (structured CV, app = source of truth) ──────────
+type CvVersionOut = Omit<typeof cvVersions.$inferSelect, "data" | "checkResult"> & { data: unknown; checkResult: unknown };
+const cvVersionOut = (row: typeof cvVersions.$inferSelect): CvVersionOut => ({
+  ...row,
+  data: JSON.parse(row.data),
+  checkResult: row.checkResult ? JSON.parse(row.checkResult) : null,
+});
+
+// Import a CV from the Documents library into a new structured version. The LLM only
+// structures the text; verbatimWarnings() flags anything it did not copy word for word.
+// Runs as a background job: a local model can need far longer than the nginx proxy
+// timeout (600 s), so the request returns a job id at once and the page polls it.
+// Jobs live in memory (lost on restart — the page then simply shows no running job).
+type CvImportJob = {
+  id: string; userId: string; lang: CvLanguage; documentId: string; documentName: string;
+  status: "running" | "done" | "error"; startedAt: string; finishedAt?: string;
+  error?: string; versionId?: string; warnings?: ReturnType<typeof verbatimWarnings>; stats?: ReturnType<typeof cvStats>;
+};
+const cvImportJobs = new Map<string, CvImportJob>();
+
+async function runCvImport(job: CvImportJob, doc: UserDocument, ai: AiConfig) {
+  const fail = (error: string) => Object.assign(job, { status: "error", error, finishedAt: new Date().toISOString() });
+  let text: string | null;
+  try { text = await fetchDocumentText(doc, job.userId); }
+  catch (err) { return fail(`CV konnte nicht gelesen werden: ${(err as Error).message}`); }
+  if (!text) return fail("Dieses Dokument enthält keinen lesbaren Text (nur PDF und Google Docs)");
+
+  let cv;
+  try {
+    const raw = await callAi(CV_IMPORT_SYSTEM_PROMPT, `Rohtext des Lebenslaufs:\n\n${text.slice(0, 24000)}`, ai);
+    cv = normalizeParsedCv(extractJson(raw));
+  } catch (err) {
+    console.error("cv import error:", err);
+    return fail(`KI-Anfrage fehlgeschlagen oder Antwort nicht lesbar (${(err as Error).message.slice(0, 160)})`);
+  }
+  if (!cv.sections.length) return fail("Die KI hat keine Abschnitte erkannt");
+
+  const [prev] = await db.select({ id: cvVersions.id }).from(cvVersions)
+    .where(and(eq(cvVersions.userId, job.userId), eq(cvVersions.lang, job.lang), isNull(cvVersions.applicationId)))
+    .orderBy(desc(cvVersions.createdAt)).limit(1);
+  const [row] = await db.insert(cvVersions).values({
+    userId: job.userId, lang: job.lang, origin: "import", parentId: prev?.id ?? null, sourceDocumentId: doc.id,
+    data: JSON.stringify(cv), note: `Import aus ${doc.name}`,
+  }).returning();
+  Object.assign(job, { status: "done", versionId: row.id, warnings: verbatimWarnings(cv, text), stats: cvStats(cv), finishedAt: new Date().toISOString() });
+}
+
+app.post("/api/cv/import", async (c) => {
+  const userId = getUserId(c);
+  const { documentId, ai, lang: bodyLang } = await c.req.json<{ documentId: string; ai: AiConfig; lang?: CvLanguage }>();
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Anbieter konfiguriert" }, 400);
+  const [doc] = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.id, documentId), eq(userDocuments.userId, userId))).limit(1);
+  if (!doc) return c.json({ error: "Dokument nicht gefunden" }, 404);
+  const lang = bodyLang ?? detectCvLang(doc.name, doc.tags);
+  if (!lang) return c.json({ error: "Sprache des CVs nicht erkannt – bitte angeben" }, 400);
+
+  const running = [...cvImportJobs.values()].find(j => j.userId === userId && j.lang === lang && j.status === "running");
+  if (running) return c.json(running, 202); // never run two imports of one language at once
+
+  // Drop this user's finished jobs older than a day
+  for (const [id, j] of cvImportJobs) if (j.status !== "running" && Date.now() - Date.parse(j.startedAt) > 86_400_000) cvImportJobs.delete(id);
+
+  const job: CvImportJob = { id: crypto.randomUUID(), userId, lang, documentId: doc.id, documentName: doc.name, status: "running", startedAt: new Date().toISOString() };
+  cvImportJobs.set(job.id, job);
+  void runCvImport(job, doc, ai).catch(err => {
+    console.error("cv import job crashed:", err);
+    Object.assign(job, { status: "error", error: "Interner Fehler beim Import", finishedAt: new Date().toISOString() });
+  });
+  return c.json(job, 202);
+});
+
+// This user's import jobs (running + recently finished), newest first.
+app.get("/api/cv/import-jobs", (c) => {
+  const userId = getUserId(c);
+  const jobs = [...cvImportJobs.values()].filter(j => j.userId === userId).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+  return c.json(jobs.map(({ userId: _u, ...j }) => j));
+});
+
+// CV as PDF for the in-app viewer. A Google Doc is exported fresh on every call, so the
+// viewer always shows the current text even when the PDF stored in Drive is outdated.
+app.get("/api/cv/pdf", async (c) => {
+  const userId = getUserId(c);
+  const documentId = c.req.query("documentId") ?? "";
+  const [doc] = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.id, documentId), eq(userDocuments.userId, userId))).limit(1);
+  if (!doc?.url) return c.json({ error: "Dokument nicht gefunden" }, 404);
+  const driveId = driveFileId(doc.url);
+  if (!driveId) return c.json({ error: "Kein Drive-Dokument" }, 400);
+  const token = await getDriveAccessToken(userId);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const isGDoc = doc.fileType === "gdoc" || doc.url.includes("docs.google.com/document");
+  const url = isGDoc
+    ? `https://www.googleapis.com/drive/v3/files/${driveId}/export?mimeType=application/pdf`
+    : `https://www.googleapis.com/drive/v3/files/${driveId}?alt=media`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
+  if (!res.ok) return c.json({ error: `Drive: HTTP ${res.status}` }, 502);
+  const safeName = doc.name.replace(/[^\w.\- ]+/g, "_");
+  return new Response(res.body, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="${safeName}.pdf"`,
+      "Cache-Control": "no-store",
+    },
+  });
+});
+
+// Current CV per language (newest untailored version) + the master language.
+app.get("/api/cv/current", async (c) => {
+  const userId = getUserId(c);
+  const [profile] = await db.select({ cvMasterLang: userProfile.cvMasterLang }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const rows = await db.select().from(cvVersions)
+    .where(and(eq(cvVersions.userId, userId), isNull(cvVersions.applicationId)))
+    .orderBy(desc(cvVersions.createdAt));
+  const current = Object.fromEntries(CV_LANGUAGES.map(l => {
+    const own = rows.filter(r => r.lang === l);
+    return [l, own[0] ? { ...cvVersionOut(own[0]), versionCount: own.length, stats: cvStats(cvDocumentSchema.parse(JSON.parse(own[0].data))) } : null];
+  }));
+  return c.json({ masterLang: profile?.cvMasterLang ?? "en", current });
+});
+
+// Version history of one language (metadata only).
+app.get("/api/cv/versions", async (c) => {
+  const userId = getUserId(c);
+  const lang = c.req.query("lang");
+  const rows = await db.select({
+    id: cvVersions.id, lang: cvVersions.lang, origin: cvVersions.origin, parentId: cvVersions.parentId,
+    applicationId: cvVersions.applicationId, note: cvVersions.note, createdAt: cvVersions.createdAt,
+  }).from(cvVersions)
+    .where(lang ? and(eq(cvVersions.userId, userId), eq(cvVersions.lang, lang)) : eq(cvVersions.userId, userId))
+    .orderBy(desc(cvVersions.createdAt));
+  return c.json(rows);
+});
+
+app.get("/api/cv/versions/:id", async (c) => {
+  const userId = getUserId(c);
+  const [row] = await db.select().from(cvVersions)
+    .where(and(eq(cvVersions.id, c.req.param("id")), eq(cvVersions.userId, userId))).limit(1);
+  if (!row) return c.json({ error: "Nicht gefunden" }, 404);
+  return c.json(cvVersionOut(row));
+});
+
 type DriveFile = { id: string; name: string; mimeType: string; webViewLink: string; capabilities?: { canCopy?: boolean } };
 
 async function listDriveFiles(accessToken: string, folderId: string): Promise<DriveFile[]> {
@@ -4634,7 +4875,7 @@ app.post("/api/applications/:id/drive/copy-template", async (c) => {
 // ─────────────────────────────────────────────────────────────────
 async function buildExportPayload(userId: string) {
   const appIds = (await db.select({ id: applications.id }).from(applications).where(eq(applications.userId, userId))).map(a => a.id);
-  const [apps, docs, activities, contacts, profiles, userDocs] = await Promise.all([
+  const [apps, docs, activities, contacts, profiles, userDocs, cvRows] = await Promise.all([
     db.select().from(applications).where(eq(applications.userId, userId)).orderBy(applications.createdAt),
     appIds.length > 0
       ? db.select().from(applicationDocuments).where(inArray(applicationDocuments.applicationId, appIds)).orderBy(applicationDocuments.createdAt)
@@ -4647,6 +4888,7 @@ async function buildExportPayload(userId: string) {
       : Promise.resolve([]),
     db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1),
     db.select().from(userDocuments).where(eq(userDocuments.userId, userId)).orderBy(userDocuments.createdAt),
+    db.select().from(cvVersions).where(eq(cvVersions.userId, userId)).orderBy(cvVersions.createdAt),
   ]);
   return {
     meta: { version: 1, exportedAt: new Date().toISOString(), app: "application-pal" },
@@ -4656,6 +4898,7 @@ async function buildExportPayload(userId: string) {
     applicationContacts: contacts,
     userProfile: profiles[0] ?? null,
     userDocuments: userDocs,
+    cvVersions: cvRows,
   };
 }
 
@@ -5244,6 +5487,7 @@ app.post("/api/import", async (c) => {
       applicationContacts?: Record<string, unknown>[];
       userProfile?: Record<string, unknown> | null;
       userDocuments?: Record<string, unknown>[];
+      cvVersions?: Record<string, unknown>[];
     };
   }>();
 
@@ -5263,6 +5507,7 @@ app.post("/api/import", async (c) => {
     }
     await db.delete(applications).where(eq(applications.userId, userId));
     await db.delete(userDocuments).where(eq(userDocuments.userId, userId));
+    await db.delete(cvVersions).where(eq(cvVersions.userId, userId));
     await db.delete(userProfile).where(eq(userProfile.userId, userId));
   }
 
@@ -5303,6 +5548,12 @@ app.post("/api/import", async (c) => {
       await db.insert(userDocuments).values(r).onConflictDoUpdate({ target: userDocuments.id, set: r });
     }
   }
+  if (data.cvVersions?.length) {
+    for (const row of data.cvVersions) {
+      const r = Object.assign({}, row, { userId, createdAt: row.createdAt ? new Date(String(row.createdAt)) : undefined }) as never;
+      await db.insert(cvVersions).values(r).onConflictDoUpdate({ target: cvVersions.id, set: r });
+    }
+  }
   if (data.userProfile) {
     const rp = Object.assign({}, data.userProfile, { userId }) as never;
     await db.insert(userProfile).values(rp).onConflictDoUpdate({ target: userProfile.id, set: rp });
@@ -5314,6 +5565,7 @@ app.post("/api/import", async (c) => {
     activities: data.applicationActivities?.length ?? 0,
     contacts: data.applicationContacts?.length ?? 0,
     userDocuments: data.userDocuments?.length ?? 0,
+    cvVersions: data.cvVersions?.length ?? 0,
     userProfile: data.userProfile ? 1 : 0,
   }});
 });

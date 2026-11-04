@@ -125,6 +125,7 @@ export const userProfile = pgTable("user_profile", {
   googleCalendarId: text("google_calendar_id"),
   driveApplicationsFolderId: text("drive_applications_folder_id"), // per-user Drive folder
   ravSheetId: text("rav_sheet_id"),                                 // per-user RAV proof spreadsheet (target of the RAV export)
+  cvMasterLang: text("cv_master_lang"),                             // CV-Check: master language the other CV languages are translated from ("de"|"en"|"fr", null = en)
   docSummaryRunAt: timestamp("doc_summary_run_at", { withTimezone: true }), // last daily document-summary run (shared across devices)
   docTemplates: text("doc_templates"),                             // JSON: DocTemplateConfig per content type
   letterConfig: text("letter_config"),                             // JSON: LetterConfig — persistent cover-letter guidance (structure/values/strengths/phrases/styleRules/noGos/referenceLetter)
@@ -400,3 +401,68 @@ export type ImportApplicationInput = z.infer<typeof applicationImportRequestSche
 export type KbIngestUrlInput = z.infer<typeof kbIngestUrlRequestSchema>;
 export type User = { id: string; email: string; createdAt: Date };
 export type WebauthnCredential = { id: string; userId: string; credentialId: string; publicKey: string; counter: number; deviceName: string | null; createdAt: Date };
+
+// ─── CV versions (CV-Check) ───────────────────────────────────
+// Structured CV, one row per saved version. The app holds the source of truth;
+// Google Docs / PDFs are generated from `data`. Versions are append-only: every
+// import, edit-save, optimisation or translation creates a new row (parentId links
+// the chain). The current CV of a language = newest row with applicationId NULL.
+export const cvVersions = pgTable("cv_versions", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: uuid("user_id").notNull(),                  // FK → users.id (multi-user isolation)
+  lang: text("lang").notNull(),                       // "de" | "en" | "fr"
+  origin: text("origin").notNull(),                   // "import" | "edit" | "optimize" | "translate"
+  parentId: uuid("parent_id"),                        // previous version this one was derived from
+  sourceDocumentId: uuid("source_document_id"),       // user_documents.id the import came from
+  applicationId: uuid("application_id"),              // set for a CV tailored to one application
+  data: text("data").notNull(),                       // JSON: CvDocument
+  checkResult: text("check_result"),                  // JSON: score + findings (CV-Check), null until checked
+  note: text("note"),                                 // short label, e.g. "Import aus CV-2026-de"
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
+});
+
+export const CV_LANGUAGES = ["de", "en", "fr"] as const;
+export type CvLanguage = typeof CV_LANGUAGES[number];
+
+// Every item, bullet and section carries a stable `id` so versions and
+// translations can be compared item by item.
+export const cvBulletSchema = z.object({ id: z.string(), text: z.string() });
+export const cvItemSchema = z.object({
+  id: z.string(),
+  title: z.string().nullish(),        // job title / degree / skill group
+  org: z.string().nullish(),          // employer / school / issuer
+  location: z.string().nullish(),
+  start: z.string().nullish(),        // "YYYY-MM" or "YYYY"
+  end: z.string().nullish(),          // "YYYY-MM" | "YYYY" | "present"
+  dateText: z.string().nullish(),     // dates exactly as written in the source
+  text: z.string().nullish(),         // free paragraph (e.g. skills line, description)
+  bullets: z.array(cvBulletSchema).default([]),
+});
+export const cvSectionKindSchema = z.enum(["summary", "experience", "education", "skills", "certifications", "languages", "projects", "achievements", "other"]);
+export const cvSectionSchema = z.object({
+  id: z.string(),
+  kind: cvSectionKindSchema,
+  title: z.string(),                  // heading exactly as written
+  items: z.array(cvItemSchema).default([]),
+});
+export const cvBasicsSchema = z.object({
+  name: z.string().nullish(),
+  headline: z.string().nullish(),     // branding headline (target role)
+  emails: z.array(z.string()).default([]),
+  phones: z.array(z.string()).default([]),
+  location: z.string().nullish(),
+  linkedin: z.string().nullish(),
+  website: z.string().nullish(),
+  otherDetails: z.array(z.string()).default([]), // birth date, nationality, … as written
+  summary: z.string().nullish(),
+});
+export const cvDocumentSchema = z.object({
+  basics: cvBasicsSchema,
+  sections: z.array(cvSectionSchema).default([]),
+});
+export type CvBullet = z.infer<typeof cvBulletSchema>;
+export type CvItem = z.infer<typeof cvItemSchema>;
+export type CvSection = z.infer<typeof cvSectionSchema>;
+export type CvDocument = z.infer<typeof cvDocumentSchema>;
+export const cvVersionSelectSchema = createSelectSchema(cvVersions);
+export type CvVersionRow = z.infer<typeof cvVersionSelectSchema>;

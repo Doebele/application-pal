@@ -54,7 +54,8 @@
     "templates": "Modèles",
     "settings": "Paramètres",
     "timelineSub": "Activités de l'espace de travail — toutes les modifications en un coup d'œil",
-    "letterCoach": "Lettre de motivation"
+    "letterCoach": "Lettre de motivation",
+    "cvCheck": "Contrôle CV"
   },
   "tabs": {
     "actions": "Actions",
@@ -930,5 +931,77 @@
     "onceSheet": "En Google Sheet",
     "onceCsv": "En CSV",
     "csvDone": "{{count}} lignes téléchargées en CSV"
+  },
+  "cvCheck": {
+    "title": "Contrôle CV",
+    "sub": "Évaluer et optimiser votre CV",
+    "infoText": "Les CV proviennent de vos documents (catégorie CV). À l'import, l'IA découpe le texte en sections, postes et puces et le reprend mot pour mot. Dès lors, la version dans l'app fait foi ; les Google Docs et PDF en sont générés.",
+    "linkDocuments": "Vers les documents",
+    "masterLang": "Langue maître",
+    "masterLangHint": "Les autres langues sont traduites à partir de cette version et restent synchronisées.",
+    "master": "Maître",
+    "driveDisconnected": "Google Drive n'est pas connecté – dates de modification et PDF non vérifiables.",
+    "noAi": "Aucun fournisseur d'IA configuré – l'import nécessite une IA (Paramètres).",
+    "source": "Source",
+    "appVersion": "Dans l'app",
+    "noSource": "Aucun CV dans cette langue dans les documents",
+    "notImported": "Pas encore importé",
+    "unreachable": "inaccessible",
+    "openFolder": "Ouvrir le dossier dans Drive",
+    "import": "Importer",
+    "reimport": "Réimporter",
+    "importing": "Import en cours…",
+    "preview": "Aperçu",
+    "importError": "Échec de l'import",
+    "loadError": "Impossible de charger les données CV",
+    "verbatimOk": "Tous les textes ont été repris mot pour mot",
+    "verbatimWarn_one": "{{count}} texte ne correspond pas mot pour mot à la source – à vérifier :",
+    "verbatimWarn_other": "{{count}} textes ne correspondent pas mot pour mot à la source – à vérifier :",
+    "statsLine": "{{positions}} postes, {{bullets}} puces, {{words}} mots",
+    "versionCount_one": "{{count}} version",
+    "versionCount_other": "{{count}} versions",
+    "otherDetails": "Autres informations",
+    "origin": {
+      "import": "Importé",
+      "edit": "Modifié",
+      "optimize": "Optimisé",
+      "translate": "Traduit"
+    },
+    "pdfStatus": {
+      "ok": "PDF à jour",
+      "noPdf": "Pas de PDF",
+      "pdfStale": "PDF obsolète",
+      "pdfOnly": "PDF seulement",
+      "missing": "Manquant"
+    },
+    "importSlowHint": "En arrière-plan – un modèle local peut prendre plusieurs minutes. Vous pouvez quitter cette page.",
+    "language": "Langue",
+    "hideSidebar": "Masquer le panneau",
+    "showSidebar": "Afficher le panneau",
+    "pdfLive": "En direct depuis le Google Doc",
+    "reloadPdf": "Recharger le PDF",
+    "openSource": "Ouvrir la source",
+    "noSourceHint": "Aucun CV en {{lang}} n'est encore lié dans les documents.",
+    "minimize": "Réduire",
+    "maximize": "Agrandir",
+    "tabs": {
+      "score": "Évaluation",
+      "improve": "Améliorations",
+      "structure": "Structure",
+      "versions": "Versions"
+    },
+    "score": {
+      "title": "Évaluation",
+      "placeholder": "Prévu en phase 3 (contrôles) :\n• Score global sur 100, objectif 80+\n• Impact 40 · Présentation 20 · Compétences 40, chacun avec statut\n• Liste détaillée par contrôle, « non vérifiable » plutôt que deviner"
+    },
+    "improve": {
+      "title": "Améliorations",
+      "placeholder": "Prévu en phase 3/4 :\n• « Étapes d'amélioration » avec gain de points estimé\n• Remarques sur chaque puce avec 2 reformulations (portée, résultat)\n• Suggestions cliquables → nouvelle version → réévaluation, comme pour la lettre"
+    },
+    "sourceSection": "Source {{lang}}",
+    "makeMaster": "Définir comme maître",
+    "recognised": "Structure reconnue",
+    "noVersions": "Pas encore de versions – importez d'abord le CV.",
+    "versionN": "Version {{n}}"
   }
 }

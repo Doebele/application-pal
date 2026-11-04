@@ -54,7 +54,8 @@
     "templates": "Templates",
     "settings": "Settings",
     "timelineSub": "Workspace activity — all changes across applications",
-    "letterCoach": "Cover Letter"
+    "letterCoach": "Cover Letter",
+    "cvCheck": "CV check"
   },
   "tabs": {
     "actions": "Actions",
@@ -930,5 +931,77 @@
     "onceSheet": "As Google Sheet",
     "onceCsv": "As CSV",
     "csvDone": "{{count}} rows downloaded as CSV"
+  },
+  "cvCheck": {
+    "title": "CV check",
+    "sub": "Score and optimise your CV",
+    "infoText": "CVs come from your Documents (category CV). On import, the AI splits the text into sections, positions and bullets and keeps it word for word. From then on the version in the app is the source of truth; Google Docs and PDFs are generated from it.",
+    "linkDocuments": "Go to Documents",
+    "masterLang": "Master language",
+    "masterLangHint": "The other languages are translated from this version and kept in sync.",
+    "master": "Master",
+    "driveDisconnected": "Google Drive is not connected – modification dates and PDFs can't be checked.",
+    "noAi": "No AI provider set up – the import needs an AI (Settings).",
+    "source": "Source",
+    "appVersion": "In the app",
+    "noSource": "No CV in this language in Documents",
+    "notImported": "Not imported yet",
+    "unreachable": "unreachable",
+    "openFolder": "Open folder in Drive",
+    "import": "Import",
+    "reimport": "Re-import",
+    "importing": "Importing…",
+    "preview": "Preview",
+    "importError": "Import failed",
+    "loadError": "Could not load CV data",
+    "verbatimOk": "All texts were copied word for word",
+    "verbatimWarn_one": "{{count}} text doesn't match the source word for word – please check:",
+    "verbatimWarn_other": "{{count}} texts don't match the source word for word – please check:",
+    "statsLine": "{{positions}} positions, {{bullets}} bullets, {{words}} words",
+    "versionCount_one": "{{count}} version",
+    "versionCount_other": "{{count}} versions",
+    "otherDetails": "Other details",
+    "origin": {
+      "import": "Imported",
+      "edit": "Edited",
+      "optimize": "Optimised",
+      "translate": "Translated"
+    },
+    "pdfStatus": {
+      "ok": "PDF up to date",
+      "noPdf": "No PDF",
+      "pdfStale": "PDF outdated",
+      "pdfOnly": "PDF only",
+      "missing": "Missing"
+    },
+    "importSlowHint": "Running in the background – a local model can take several minutes. You can leave this page.",
+    "language": "Language",
+    "hideSidebar": "Hide sidebar",
+    "showSidebar": "Show sidebar",
+    "pdfLive": "Live from the Google Doc",
+    "reloadPdf": "Reload PDF",
+    "openSource": "Open source",
+    "noSourceHint": "No CV for {{lang}} is linked in Documents yet.",
+    "minimize": "Minimise",
+    "maximize": "Maximise",
+    "tabs": {
+      "score": "Score",
+      "improve": "Improvements",
+      "structure": "Structure",
+      "versions": "Versions"
+    },
+    "score": {
+      "title": "Score",
+      "placeholder": "Coming with phase 3 (checks):\n• Overall score out of 100, target 80+\n• Impact 40 · Presentation 20 · Competencies 40, each with Good Job / On Track / Needs Work\n• Detailed list per check, “not checkable” instead of guessing"
+    },
+    "improve": {
+      "title": "Improvements",
+      "placeholder": "Coming with phase 3/4:\n• “Steps to improve” with estimated point gain\n• Notes on each bullet with 2 rewrites (scope, outcome)\n• Clickable suggestions → new version → re-score, like the cover letter"
+    },
+    "sourceSection": "Source {{lang}}",
+    "makeMaster": "Set as master",
+    "recognised": "Recognised structure",
+    "noVersions": "No versions yet – import the CV first.",
+    "versionN": "Version {{n}}"
   }
 }

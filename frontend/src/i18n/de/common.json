@@ -54,7 +54,8 @@
     "templates": "Vorlagen",
     "settings": "Einstellungen",
     "timelineSub": "Workspace-Aktivitäten — alle Änderungen im Überblick",
-    "letterCoach": "Anschreiben"
+    "letterCoach": "Anschreiben",
+    "cvCheck": "CV-Check"
   },
   "tabs": {
     "actions": "Aktionen",
@@ -930,5 +931,77 @@
     "onceSheet": "Als Google Sheet",
     "onceCsv": "Als CSV",
     "csvDone": "{{count}} Zeilen als CSV heruntergeladen"
+  },
+  "cvCheck": {
+    "title": "CV-Check",
+    "sub": "Lebenslauf bewerten und optimieren",
+    "infoText": "Die Lebensläufe kommen aus deinen Dokumenten (Kategorie Lebenslauf). Beim Import gliedert die KI den Text in Abschnitte, Stationen und Bullets und übernimmt ihn wörtlich. Ab dann ist die Fassung in der App führend; Google Docs und PDFs werden daraus erzeugt.",
+    "linkDocuments": "Zu den Dokumenten",
+    "masterLang": "Master-Sprache",
+    "masterLangHint": "Aus dieser Fassung werden die anderen Sprachen übersetzt und synchron gehalten.",
+    "master": "Master",
+    "driveDisconnected": "Google Drive ist nicht verbunden – Änderungsdaten und PDFs können nicht geprüft werden.",
+    "noAi": "Kein KI-Anbieter eingerichtet – der Import braucht eine KI (Einstellungen).",
+    "source": "Quelle",
+    "appVersion": "In der App",
+    "noSource": "Kein Lebenslauf in dieser Sprache unter Dokumente",
+    "notImported": "Noch nicht importiert",
+    "unreachable": "nicht erreichbar",
+    "openFolder": "Ordner in Drive öffnen",
+    "import": "Importieren",
+    "reimport": "Neu importieren",
+    "importing": "Wird importiert…",
+    "preview": "Vorschau",
+    "importError": "Import fehlgeschlagen",
+    "loadError": "CV-Daten konnten nicht geladen werden",
+    "verbatimOk": "Alle Texte wurden wörtlich übernommen",
+    "verbatimWarn_one": "{{count}} Text stimmt nicht wörtlich mit der Quelle überein – bitte prüfen:",
+    "verbatimWarn_other": "{{count}} Texte stimmen nicht wörtlich mit der Quelle überein – bitte prüfen:",
+    "statsLine": "{{positions}} Stationen, {{bullets}} Bullets, {{words}} Wörter",
+    "versionCount_one": "{{count}} Version",
+    "versionCount_other": "{{count}} Versionen",
+    "otherDetails": "Weitere Angaben",
+    "origin": {
+      "import": "Importiert",
+      "edit": "Bearbeitet",
+      "optimize": "Optimiert",
+      "translate": "Übersetzt"
+    },
+    "pdfStatus": {
+      "ok": "PDF aktuell",
+      "noPdf": "Kein PDF",
+      "pdfStale": "PDF veraltet",
+      "pdfOnly": "Nur PDF",
+      "missing": "Fehlt"
+    },
+    "importSlowHint": "Läuft im Hintergrund – ein lokales Modell kann mehrere Minuten brauchen. Du kannst die Seite verlassen.",
+    "language": "Sprache",
+    "hideSidebar": "Seitenleiste ausblenden",
+    "showSidebar": "Seitenleiste einblenden",
+    "pdfLive": "Live aus dem Google Doc",
+    "reloadPdf": "PDF neu laden",
+    "openSource": "Quelle öffnen",
+    "noSourceHint": "Für {{lang}} ist unter Dokumente noch kein Lebenslauf verknüpft.",
+    "minimize": "Minimieren",
+    "maximize": "Maximieren",
+    "tabs": {
+      "score": "Bewertung",
+      "improve": "Verbesserungen",
+      "structure": "Struktur",
+      "versions": "Versionen"
+    },
+    "score": {
+      "title": "Bewertung",
+      "placeholder": "Kommt mit Phase 3 (Prüfung):\n• Gesamtscore von 100 Punkten, Ziel 80+\n• Impact 40 · Presentation 20 · Competencies 40, je mit Status Good Job / On Track / Needs Work\n• Detailliste pro Prüfung, „nicht prüfbar“ statt raten"
+    },
+    "improve": {
+      "title": "Verbesserungen",
+      "placeholder": "Kommt mit Phase 3/4:\n• „Steps to improve“ mit geschätztem Punktgewinn\n• Hinweise an jedem Bullet mit je 2 Umformulierungen (Umfang, Ergebnis)\n• Vorschläge zum Anklicken → neue Fassung → erneute Bewertung, wie beim Anschreiben"
+    },
+    "sourceSection": "Quelle {{lang}}",
+    "makeMaster": "Als Master festlegen",
+    "recognised": "Erkannte Struktur",
+    "noVersions": "Noch keine Versionen – importiere zuerst den Lebenslauf.",
+    "versionN": "Version {{n}}"
   }
 }
