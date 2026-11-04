@@ -1022,14 +1022,14 @@
       "slowHint": "Ein lokales Modell braucht dafür einige Minuten. Du kannst die Seite verlassen – die Prüfung läuft weiter.",
       "acceptedInfo_one": "{{count}} Punkt akzeptiert",
       "acceptedInfo_other": "{{count}} Punkte akzeptiert",
-      "steps": "Steps to improve",
+      "steps": "Nächste Schritte",
       "areas": "Bereiche",
       "details": "Alle Prüfungen",
       "recommendations": "Empfehlungen (ohne Punkte)",
       "area": {
-        "impact": "Impact",
-        "presentation": "Presentation",
-        "competencies": "Competencies"
+        "impact": "Wirkung",
+        "presentation": "Darstellung",
+        "competencies": "Kompetenzen"
       },
       "group": {
         "action": "Aktionsverben",
@@ -1044,7 +1044,7 @@
       "bonus": "Bonus +{{points}}: {{state}}",
       "bonusEarned": "erreicht",
       "bonusOpen": "offen",
-      "bullets": "Bullets",
+      "bullets": "Aufzählungspunkte",
       "bulletsOpen_one": "{{count}} Bullet mit offenen Punkten",
       "bulletsOpen_other": "{{count}} Bullets mit offenen Punkten",
       "showDone": "Erledigte zeigen",
@@ -1062,9 +1062,9 @@
       "fail": "Offen",
       "na": "Nicht prüfbar",
       "accepted": "Akzeptiert",
-      "good": "Good Job",
-      "onTrack": "On Track",
-      "needsWork": "Needs Work"
+      "good": "Stark",
+      "onTrack": "Auf Kurs",
+      "needsWork": "Baustelle"
     },
     "totalAria": "{{total}} von {{max}} Punkten",
     "split": "{{raw}} gemessen",
@@ -1266,11 +1266,13 @@
     "tabs": {
       "score": "Bewertung",
       "tools": "KI-Werkzeuge",
-      "source": "Quelle & Ziel"
+      "source": "Quelle & Ziel",
+      "scoreDraft": "Bewertung (Entwurf)"
     },
     "view": {
       "label": "Ansicht",
-      "cards": "Karten"
+      "cards": "Karten",
+      "draft": "Entwurf"
     },
     "tools": {
       "headlines": "Headline-Varianten",
@@ -1283,9 +1285,7 @@
         "niche": "Nische"
       },
       "nda": "Prüfe die Vertraulichkeit dieser Kundennamen: {{names}}",
-      "noCv": "Kein Lebenslauf gefunden (Profil → Master-CV oder Dokumente „Lebenslauf“) – der Abgleich mit dem CV fehlt.",
-      "moreTitle": "Weitere Werkzeuge folgen",
-      "moreText": "Info-Text, Positionsbeschreibungen und Beitragsideen mit Kopierkarten pro Abschnitt."
+      "noCv": "Kein Lebenslauf gefunden (Profil → Master-CV oder Dokumente „Lebenslauf“) – der Abgleich mit dem CV fehlt."
     },
     "goal": {
       "title": "Ziel",
@@ -1322,7 +1322,8 @@
         "zip": "ZIP-Export",
         "pdf": "Profil-PDF",
         "text": "Kopierter Text"
-      }
+      },
+      "draft": "Entwurf"
     },
     "cards": {
       "intro": "Intro",
@@ -1348,6 +1349,146 @@
       "ghost": "Fehlt – bis zu {{n}} Punkte möglich",
       "notRatedShort": "n. b.",
       "ptsTitle": "Erreicht / bewertbar (voll: {{full}})"
+    },
+    "emptyBuild": "Noch kein LinkedIn-Profil? Application-Pal baut es mit dir auf – aus Lebenslauf, Dokumenten und ein paar Fragen.",
+    "emptyBuildGo": "Profil aufbauen",
+    "lang": {
+      "de": "Deutsch",
+      "en": "Englisch",
+      "fr": "Französisch",
+      "unknown": "Sprache unbekannt",
+      "switch": "Profilsprache",
+      "auto": "Automatisch erkennen",
+      "importAs": "Sprache des Imports",
+      "profileLang": "Sprache dieses Profils",
+      "setHint": "Die Sprache liess sich nicht erkennen. Lege sie fest, damit Bewertung und Entwurf zur richtigen Sprachversion gehören.",
+      "createDraft": "{{lang}}es Profil mit KI anlegen",
+      "state": {
+        "import": "Profil importiert",
+        "draft": "nur Entwurf",
+        "none": "noch kein Profil"
+      },
+      "empty": {
+        "sharpen": "Für {{lang}} gibt es ein Profil – wähle oben die Ansicht.",
+        "translate": "Für {{lang}} gibt es noch kein Profil. LinkedIn erlaubt ein Profil pro Sprache: importiere es, falls du es schon hast, oder lass es aus deinem bestehenden Profil anlegen.",
+        "build": "Für {{lang}} gibt es noch kein Profil. Importiere es oder baue es aus Lebenslauf und Dokumenten auf."
+      }
+    },
+    "gen": {
+      "title": {
+        "sharpen": "Profil schärfen ({{lang}})",
+        "translate": "Profil auf {{lang}} anlegen",
+        "build": "Profil aufbauen ({{lang}})"
+      },
+      "intro": {
+        "sharpen": "Aus deinem importierten {{lang}}-Profil, Lebenslauf und Dokumenten entsteht ein überarbeiteter Entwurf. Auf LinkedIn wird nichts geändert – du kopierst die Texte selbst.",
+        "translate": "LinkedIn erlaubt ein Profil pro Sprache. Stationen, Firmen und Daten kommen aus deinem Profil ({{base}}), die Texte werden auf {{lang}} neu geschrieben – nicht wörtlich übersetzt.",
+        "build": "Aus Lebenslauf, Dokumenten und deinen Antworten entsteht ein Profil zum Kopieren. Ein neues Profil hat noch keine Empfehlungen und Beiträge – die zählen ehrlich mit 0."
+      },
+      "unknownLang": "Die Sprache dieses Imports ist unbekannt. Lege sie unter „Quelle & Ziel“ fest, dann kannst du Texte erzeugen.",
+      "questions": "Fragen",
+      "questionsHint": "Optional – je genauer, desto weniger [X] im Ergebnis.",
+      "questionsHintBuild": "Wichtig beim Aufbau: Die Antworten ersetzen, was ein bestehendes Profil sonst liefern würde.",
+      "q": {
+        "strengths": "Was kannst du besonders gut?",
+        "audience": "Für wen arbeitest du, wem hilfst du?",
+        "outcomes": "Ergebnisse und Projekte, auf die du stolz bist",
+        "askedFor": "Wofür möchtest du angefragt werden?",
+        "avoid": "Was soll nicht ins Profil?"
+      },
+      "qPh": {
+        "strengths": "z. B. Design Systems, Barrierefreiheit, Workshops leiten",
+        "audience": "z. B. Produktteams in Banken",
+        "outcomes": "Gern mit Zahlen – nur echte Werte",
+        "askedFor": "z. B. Lead-Rollen, Beratung, Vorträge",
+        "avoid": "z. B. vertrauliche Kundennamen"
+      },
+      "positioning": "Positionierung",
+      "positioningHint": "Ein Satz, der alles trägt: Rolle, Zielgruppe, was daraus wird. Wähle einen Vorschlag oder schreib deinen eigenen – erst nach der Bestätigung entstehen die Texte.",
+      "positioningRun": "Vorschläge erzeugen",
+      "positioningAgain": "Neue Vorschläge",
+      "positioningOwn": "Bestätigte Positionierung",
+      "positioningPh": "<Rolle> für <Zielgruppe>, <was daraus wird>",
+      "confirm": "Bestätigen",
+      "confirmed": "Bestätigt",
+      "texts": "Texte erzeugen",
+      "part": {
+        "intro": "Headline & Info",
+        "positions": "Berufserfahrung",
+        "skills": "Kenntnisse & Im Fokus",
+        "activity": "Empfehlungen, Themen & Plan"
+      },
+      "tailor": "Auf eine Stelle zuschneiden (optional)",
+      "tailorNone": "Kein Zuschnitt",
+      "generate": "Entwurf erzeugen",
+      "regenerate": "Gewählte Teile neu erzeugen",
+      "needPositioning": "Zuerst die Positionierung bestätigen.",
+      "slow": "Das lokale Modell schreibt Teil für Teil – jeder fertige Teil erscheint sofort im Entwurf.",
+      "rules": "Zahlen, Namen und Firmen nur aus deinen Quellen, sonst [X]. Gruppen nur als Kriterien und Suchbegriffe. Nichts wird an LinkedIn gesendet.",
+      "warn": {
+        "phrases": "Floskeln im Text: {{v}}",
+        "aboutShort": "Info-Text ist kurz ({{v}} Zeichen) – Ziel ab 1200.",
+        "unverified": "{{what}} nicht in den Quellen gefunden: {{v}} – durch [X] ersetzt.",
+        "unverifiedSkills": "{{v}} Kenntnisse ohne Beleg in den Quellen – prüfen (mit ? markiert).",
+        "what": {
+          "company": "Firma",
+          "school": "Schule"
+        }
+      }
+    },
+    "draft": {
+      "title": "Entwurf ({{lang}})",
+      "show": "Entwurf ansehen",
+      "metaLabel": "Entwurf · {{lang}}",
+      "delete": "Entwurf löschen",
+      "deleteConfirm": "Wirklich löschen",
+      "cancel": "Abbrechen",
+      "placeholders": "{{count}} × [X] noch ausfüllen",
+      "banner": "Entwurf für dein {{lang}}-Profil – nichts davon ist auf LinkedIn. Kopiere Feld für Feld.",
+      "judgeStale": "Der Entwurf wurde nach der letzten KI-Bewertung geändert – die KI-Punkte zählen erst nach einer neuen Bewertung.",
+      "compare": "Profil {{before}} → Entwurf {{after}} ({{delta}})",
+      "scoreNew": "Neues Profil – kein Vergleich",
+      "notYet": "Noch nicht erzeugt – unter KI-Werkzeuge „{{part}}“ wählen.",
+      "zoom": "Vergrössern (mit aktuellem Profil vergleichen)",
+      "unzoom": "Schliessen",
+      "before": "Aktuelles Profil",
+      "after": "Entwurf",
+      "headline": "Headline",
+      "variants": "Varianten",
+      "useVariant": "Übernehmen",
+      "about": "Info",
+      "experience": "Berufserfahrung",
+      "posTitle": "Titel",
+      "company": "Firma",
+      "dates": "Zeitraum",
+      "description": "Beschreibung",
+      "posSkills": "Kenntnisse verknüpfen",
+      "education": "Ausbildung",
+      "school": "Schule",
+      "degree": "Abschluss",
+      "skills": "Kenntnisse ({{count}})",
+      "skillsHint": "Klick kopiert einen Begriff – LinkedIn nimmt Kenntnisse einzeln auf. Die ersten fünf sind die Top-Kenntnisse.",
+      "skillsUnverified": "{{count}} ohne Beleg in den Quellen (mit ?).",
+      "unverifiedSkill": "Kein Beleg in deinen Quellen – prüfen",
+      "editSkills": "Liste bearbeiten",
+      "save": "Speichern",
+      "featured": "Im Fokus – Vorschläge",
+      "featuredHint": "Nur was es in deinen Quellen gibt. Links nur, wenn sie dort stehen.",
+      "kind": {
+        "link": "Link",
+        "post": "Beitrag",
+        "document": "Dokument",
+        "media": "Medien"
+      },
+      "recRequests": "Empfehlungen anfragen",
+      "recHint": "Vorlagen zum Anpassen – Application-Pal sendet nichts. [Name] und [Projekt] selbst ersetzen.",
+      "pillars": "Themensäulen für Beiträge",
+      "groups": "Gruppen finden",
+      "groupsHint": "Keine Gruppennamen – mit diesen Kriterien und Suchbegriffen findest du passende Gruppen selbst.",
+      "searchTerms": "Suchbegriffe",
+      "plan": "4-Wochen-Plan",
+      "week": "Woche {{n}}",
+      "xHint": "Platzhalter: vor dem Kopieren durch echte Werte ersetzen"
     }
   }
 }

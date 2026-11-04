@@ -1022,14 +1022,14 @@
       "slowHint": "Un modèle local a besoin de quelques minutes. Vous pouvez quitter la page — la vérification continue.",
       "acceptedInfo_one": "{{count}} point accepté",
       "acceptedInfo_other": "{{count}} points acceptés",
-      "steps": "Steps to improve",
+      "steps": "Prochaines étapes",
       "areas": "Domaines",
       "details": "Tous les contrôles",
       "recommendations": "Recommandations (sans points)",
       "area": {
         "impact": "Impact",
-        "presentation": "Presentation",
-        "competencies": "Competencies"
+        "presentation": "Présentation",
+        "competencies": "Compétences"
       },
       "group": {
         "action": "Verbes d'action",
@@ -1062,9 +1062,9 @@
       "fail": "Ouvert",
       "na": "Non vérifiable",
       "accepted": "Accepté",
-      "good": "Good Job",
-      "onTrack": "On Track",
-      "needsWork": "Needs Work"
+      "good": "Solide",
+      "onTrack": "En bonne voie",
+      "needsWork": "À retravailler"
     },
     "totalAria": "{{total}} sur {{max}} points",
     "split": "{{raw}} mesurés",
@@ -1266,11 +1266,13 @@
     "tabs": {
       "score": "Évaluation",
       "tools": "Outils IA",
-      "source": "Source & objectif"
+      "source": "Source & objectif",
+      "scoreDraft": "Évaluation (brouillon)"
     },
     "view": {
       "label": "Vue",
-      "cards": "Cartes"
+      "cards": "Cartes",
+      "draft": "Brouillon"
     },
     "tools": {
       "headlines": "Variantes de titre",
@@ -1283,9 +1285,7 @@
         "niche": "Niche"
       },
       "nda": "Vérifie la confidentialité de ces noms de clients : {{names}}",
-      "noCv": "Aucun CV trouvé (Profil → CV maître ou Documents « Lebenslauf ») – la comparaison avec le CV manque.",
-      "moreTitle": "D'autres outils suivront",
-      "moreText": "Texte Infos, descriptions de postes et idées de publications avec cartes à copier par section."
+      "noCv": "Aucun CV trouvé (Profil → CV maître ou Documents « Lebenslauf ») – la comparaison avec le CV manque."
     },
     "goal": {
       "title": "Objectif",
@@ -1322,7 +1322,8 @@
         "zip": "Export ZIP",
         "pdf": "PDF du profil",
         "text": "Texte copié"
-      }
+      },
+      "draft": "Brouillon"
     },
     "cards": {
       "intro": "Intro",
@@ -1348,6 +1349,146 @@
       "ghost": "Manquant – jusqu'à {{n}} points possibles",
       "notRatedShort": "n. é.",
       "ptsTitle": "Obtenus / évaluables (total : {{full}})"
+    },
+    "emptyBuild": "Pas encore de profil LinkedIn ? Application-Pal le construit avec toi – à partir du CV, des documents et de quelques questions.",
+    "emptyBuildGo": "Construire le profil",
+    "lang": {
+      "de": "Allemand",
+      "en": "Anglais",
+      "fr": "Français",
+      "unknown": "Langue inconnue",
+      "switch": "Langue du profil",
+      "auto": "Détection automatique",
+      "importAs": "Langue de l'import",
+      "profileLang": "Langue de ce profil",
+      "setHint": "La langue n'a pas pu être détectée. Indique-la pour que l'évaluation et le brouillon appartiennent à la bonne version linguistique.",
+      "createDraft": "Créer le profil ({{lang}}) avec l'IA",
+      "state": {
+        "import": "profil importé",
+        "draft": "brouillon seulement",
+        "none": "pas encore de profil"
+      },
+      "empty": {
+        "sharpen": "Il existe un profil en {{lang}} – choisis une vue en haut.",
+        "translate": "Pas encore de profil en {{lang}}. LinkedIn permet un profil par langue : importe-le si tu l'as déjà, ou crée-le à partir de ton profil existant.",
+        "build": "Pas encore de profil en {{lang}}. Importe-le ou construis-le à partir du CV et des documents."
+      }
+    },
+    "gen": {
+      "title": {
+        "sharpen": "Affiner le profil ({{lang}})",
+        "translate": "Créer le profil en {{lang}}",
+        "build": "Construire le profil ({{lang}})"
+      },
+      "intro": {
+        "sharpen": "Ton profil importé ({{lang}}), ton CV et tes documents donnent un brouillon révisé. Rien ne change sur LinkedIn – tu copies les textes toi-même.",
+        "translate": "LinkedIn permet un profil par langue. Postes, entreprises et dates viennent de ton profil ({{base}}) ; les textes sont réécrits en {{lang}} – pas traduits mot à mot.",
+        "build": "Ton CV, tes documents et tes réponses donnent un profil à copier. Un nouveau profil n'a encore ni recommandations ni publications – elles comptent honnêtement 0."
+      },
+      "unknownLang": "La langue de cet import est inconnue. Indique-la sous « Source & objectif » pour générer des textes.",
+      "questions": "Questions",
+      "questionsHint": "Facultatif – plus c'est précis, moins il y a de [X] dans le résultat.",
+      "questionsHintBuild": "Important pour la construction : les réponses remplacent ce qu'un profil existant fournirait.",
+      "q": {
+        "strengths": "Qu'est-ce que tu fais particulièrement bien ?",
+        "audience": "Pour qui travailles-tu, qui aides-tu ?",
+        "outcomes": "Résultats et projets dont tu es fier·ère",
+        "askedFor": "Pour quoi veux-tu être sollicité·e ?",
+        "avoid": "Qu'est-ce qui ne doit pas figurer dans le profil ?"
+      },
+      "qPh": {
+        "strengths": "p. ex. design systems, accessibilité, animation d'ateliers",
+        "audience": "p. ex. équipes produit dans les banques",
+        "outcomes": "Chiffres bienvenus – uniquement des valeurs réelles",
+        "askedFor": "p. ex. rôles de lead, conseil, conférences",
+        "avoid": "p. ex. noms de clients confidentiels"
+      },
+      "positioning": "Positionnement",
+      "positioningHint": "Une phrase qui porte tout : rôle, public, résultat. Choisis une proposition ou écris la tienne – les textes ne sont rédigés qu'après confirmation.",
+      "positioningRun": "Générer des propositions",
+      "positioningAgain": "Nouvelles propositions",
+      "positioningOwn": "Positionnement confirmé",
+      "positioningPh": "<rôle> pour <public>, <résultat>",
+      "confirm": "Confirmer",
+      "confirmed": "Confirmé",
+      "texts": "Générer les textes",
+      "part": {
+        "intro": "Titre & Infos",
+        "positions": "Expérience",
+        "skills": "Compétences & Sélection",
+        "activity": "Recommandations, thèmes & plan"
+      },
+      "tailor": "Adapter à une offre (facultatif)",
+      "tailorNone": "Pas d'adaptation",
+      "generate": "Générer le brouillon",
+      "regenerate": "Régénérer les parties choisies",
+      "needPositioning": "Confirme d'abord le positionnement.",
+      "slow": "Le modèle local écrit partie par partie – chaque partie terminée apparaît aussitôt dans le brouillon.",
+      "rules": "Chiffres, noms et entreprises uniquement issus de tes sources, sinon [X]. Groupes uniquement comme critères et mots-clés. Rien n'est envoyé à LinkedIn.",
+      "warn": {
+        "phrases": "Formules creuses dans le texte : {{v}}",
+        "aboutShort": "Le texte Infos est court ({{v}} caractères) – viser 1200+.",
+        "unverified": "{{what}} introuvable dans les sources : {{v}} – remplacé par [X].",
+        "unverifiedSkills": "{{v}} compétences sans preuve dans les sources – à vérifier (marquées ?).",
+        "what": {
+          "company": "Entreprise",
+          "school": "École"
+        }
+      }
+    },
+    "draft": {
+      "title": "Brouillon ({{lang}})",
+      "show": "Voir le brouillon",
+      "metaLabel": "Brouillon · {{lang}}",
+      "delete": "Supprimer le brouillon",
+      "deleteConfirm": "Vraiment supprimer",
+      "cancel": "Annuler",
+      "placeholders": "{{count}} × [X] encore à compléter",
+      "banner": "Brouillon pour ton profil en {{lang}} – rien de tout cela n'est sur LinkedIn. Copie champ par champ.",
+      "judgeStale": "Le brouillon a changé après la dernière évaluation IA – les points IA comptent à nouveau après une nouvelle évaluation.",
+      "compare": "Profil {{before}} → brouillon {{after}} ({{delta}})",
+      "scoreNew": "Nouveau profil – pas de comparaison",
+      "notYet": "Pas encore généré – choisir « {{part}} » sous Outils IA.",
+      "zoom": "Agrandir (comparer avec le profil actuel)",
+      "unzoom": "Fermer",
+      "before": "Profil actuel",
+      "after": "Brouillon",
+      "headline": "Titre",
+      "variants": "Variantes",
+      "useVariant": "Reprendre",
+      "about": "Infos",
+      "experience": "Expérience",
+      "posTitle": "Intitulé",
+      "company": "Entreprise",
+      "dates": "Période",
+      "description": "Description",
+      "posSkills": "Lier des compétences",
+      "education": "Formation",
+      "school": "École",
+      "degree": "Diplôme",
+      "skills": "Compétences ({{count}})",
+      "skillsHint": "Un clic copie un terme – LinkedIn ajoute les compétences une par une. Les cinq premières sont les principales.",
+      "skillsUnverified": "{{count}} sans preuve dans les sources (marquées ?).",
+      "unverifiedSkill": "Aucune preuve dans tes sources – à vérifier",
+      "editSkills": "Modifier la liste",
+      "save": "Enregistrer",
+      "featured": "Sélection – propositions",
+      "featuredHint": "Uniquement ce qui existe dans tes sources. Des liens seulement s'ils y figurent.",
+      "kind": {
+        "link": "Lien",
+        "post": "Publication",
+        "document": "Document",
+        "media": "Média"
+      },
+      "recRequests": "Demander des recommandations",
+      "recHint": "Modèles à adapter – Application-Pal n'envoie rien. Remplace toi-même [Name] et [Projekt].",
+      "pillars": "Piliers thématiques pour les publications",
+      "groups": "Trouver des groupes",
+      "groupsHint": "Pas de noms de groupes – avec ces critères et mots-clés, tu trouves toi-même des groupes adaptés.",
+      "searchTerms": "Mots-clés",
+      "plan": "Plan sur 4 semaines",
+      "week": "Semaine {{n}}",
+      "xHint": "Espace réservé : à remplacer par des valeurs réelles avant de copier"
     }
   }
 }

@@ -9,7 +9,7 @@
 /* ── Page shell: content area + tabbed sidebar (CheckLayout.tsx) ── */
 .chk-shell { flex: 1; min-height: 0; display: flex; }
 .chk-shell-main { flex: 1; min-width: 280px; display: flex; flex-direction: column; padding: 16px 20px; }
-.chk-shell-side { width: var(--chk-side-w, clamp(300px, 36%, 480px)); flex-shrink: 0; border-left: 1px solid var(--border);
+.chk-shell-side { width: var(--chk-side-w, clamp(300px, 36%, 480px)); flex-shrink: 1; min-width: 240px; border-left: 1px solid var(--border);
   display: flex; flex-direction: column; min-height: 0; background: var(--surface); }
 /* Large view (Expand-Logik): the section fills app-main below the topbar */
 .chk-shell-main.chk-large, .chk-shell-side.chk-large { position: absolute; top: 57px; left: 0; right: 0; bottom: 0; z-index: 10;

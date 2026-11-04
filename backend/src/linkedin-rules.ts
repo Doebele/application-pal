@@ -55,6 +55,9 @@ export type LiCheckInput = {
   goal?: LiGoal | null; selfReport?: LiSelfReport | null; llm?: LiLlmJudgement | null; cvFacts?: LiCvFacts | null;
   /** Waivers: check ids the user accepts as they are. */
   accepted?: string[];
+  /** Language of this profile and the languages the user has a LinkedIn profile in (imports or drafts). */
+  profileLang?: UiLang | null;
+  availableLangs?: string[];
   now?: Date;
 };
 
@@ -151,6 +154,14 @@ export function detectTextLang(text: string): "de" | "en" | "fr" | null {
   const best = (Object.entries(s) as Array<["de" | "en" | "fr", number]>).sort((a, b) => b[1] - a[1])[0];
   return best[1] >= 2 ? best[0] : null;
 }
+/** Language a LinkedIn profile is written in: headline, About, position titles and texts. */
+export function profileLang(p: LinkedInProfile): "de" | "en" | "fr" | null {
+  return detectTextLang([
+    p.basics.headline, p.basics.summary,
+    ...p.positions.flatMap(x => [x.title, x.description]),
+    ...p.education.map(x => x.degree),
+  ].filter(Boolean).join("\n"));
+}
 /** Language a target market expects, from free text ("Schweiz", "Zürich", "DACH", "Romandie" …). */
 export function marketLang(market: string | null | undefined): "de" | "en" | "fr" | null {
   const m = norm(market ?? "");
@@ -211,7 +222,7 @@ export function resultStatements(text: string | null | undefined): string[] {
 }
 const hasNumber = (s: string) => /\d/.test(s);
 
-function phrasesIn(text: string, lang: "de" | "en" | "fr" | "all"): string[] {
+export function phrasesIn(text: string, lang: "de" | "en" | "fr" | "all"): string[] {
   const n = norm(text);
   const lists = lang === "all" ? [...LI_CRITERIA.phrases.de, ...LI_CRITERIA.phrases.en, ...LI_CRITERIA.phrases.fr] : LI_CRITERIA.phrases[lang];
   const found = new Set<string>();
@@ -560,9 +571,10 @@ function scoreProfile(input: LiCheckInput): LiCheckResult {
     { id: "llm", ok: llmOpen === 0, text: L(REC.llm, { n: llmOpen }) },
     ...(missingDomains.length ? [{ id: "domains", ok: false, text: L(REC.domains, { w: missingDomains.join(", ") }) }] : []),
   ];
-  const profLang = detectTextLang([headline, summary].join("\n"));
+  const profLang = input.profileLang ?? detectTextLang([headline, summary].join("\n"));
   const wantLang = marketLang(input.goal?.market);
-  if (profLang && wantLang && profLang !== wantLang) {
+  // A profile in the market language already exists (LinkedIn keeps one profile per language) → no hint.
+  if (profLang && wantLang && profLang !== wantLang && !(input.availableLangs ?? []).includes(wantLang)) {
     recommendations.push({ id: "secondLang", ok: false, text: L(REC.secondLang, { a: pick(LANG_LABEL[profLang], uiLang), b: pick(LANG_LABEL[wantLang], uiLang) }) });
   }
   if (input.cvFacts?.missingInLinkedIn.length) {

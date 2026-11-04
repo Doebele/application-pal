@@ -1062,9 +1062,9 @@
       "fail": "Open",
       "na": "Not checkable",
       "accepted": "Accepted",
-      "good": "Good Job",
-      "onTrack": "On Track",
-      "needsWork": "Needs Work"
+      "good": "Strong",
+      "onTrack": "On track",
+      "needsWork": "Needs work"
     },
     "totalAria": "{{total}} of {{max}} points",
     "split": "{{raw}} measured",
@@ -1266,11 +1266,13 @@
     "tabs": {
       "score": "Score",
       "tools": "AI tools",
-      "source": "Source & goal"
+      "source": "Source & goal",
+      "scoreDraft": "Score (draft)"
     },
     "view": {
       "label": "View",
-      "cards": "Cards"
+      "cards": "Cards",
+      "draft": "Draft"
     },
     "tools": {
       "headlines": "Headline variants",
@@ -1283,9 +1285,7 @@
         "niche": "Niche"
       },
       "nda": "Check whether these client names are confidential: {{names}}",
-      "noCv": "No CV found (Profile → Master CV or Documents “Lebenslauf”) – the CV comparison is missing.",
-      "moreTitle": "More tools coming",
-      "moreText": "About text, position descriptions and post ideas with copy cards per section."
+      "noCv": "No CV found (Profile → Master CV or Documents “Lebenslauf”) – the CV comparison is missing."
     },
     "goal": {
       "title": "Goal",
@@ -1322,7 +1322,8 @@
         "zip": "ZIP export",
         "pdf": "Profile PDF",
         "text": "Copied text"
-      }
+      },
+      "draft": "Draft"
     },
     "cards": {
       "intro": "Intro",
@@ -1348,6 +1349,146 @@
       "ghost": "Missing – up to {{n}} points possible",
       "notRatedShort": "n/r",
       "ptsTitle": "Earned / ratable (full: {{full}})"
+    },
+    "emptyBuild": "No LinkedIn profile yet? Application-Pal builds it with you – from your CV, documents and a few questions.",
+    "emptyBuildGo": "Build profile",
+    "lang": {
+      "de": "German",
+      "en": "English",
+      "fr": "French",
+      "unknown": "Language unknown",
+      "switch": "Profile language",
+      "auto": "Detect automatically",
+      "importAs": "Language of the import",
+      "profileLang": "Language of this profile",
+      "setHint": "The language could not be detected. Set it so the score and the draft belong to the right language version.",
+      "createDraft": "Create {{lang}} profile with AI",
+      "state": {
+        "import": "profile imported",
+        "draft": "draft only",
+        "none": "no profile yet"
+      },
+      "empty": {
+        "sharpen": "There is a {{lang}} profile – pick a view above.",
+        "translate": "There is no {{lang}} profile yet. LinkedIn allows one profile per language: import it if you have one, or create it from your existing profile.",
+        "build": "There is no {{lang}} profile yet. Import it or build it from your CV and documents."
+      }
+    },
+    "gen": {
+      "title": {
+        "sharpen": "Sharpen profile ({{lang}})",
+        "translate": "Create {{lang}} profile",
+        "build": "Build profile ({{lang}})"
+      },
+      "intro": {
+        "sharpen": "Your imported {{lang}} profile, CV and documents become a revised draft. Nothing changes on LinkedIn – you copy the texts yourself.",
+        "translate": "LinkedIn allows one profile per language. Roles, companies and dates come from your profile ({{base}}); the texts are written anew in {{lang}} – not translated word for word.",
+        "build": "Your CV, documents and answers become a profile to copy. A new profile has no recommendations or posts yet – they honestly count as 0."
+      },
+      "unknownLang": "The language of this import is unknown. Set it under “Source & goal” to generate texts.",
+      "questions": "Questions",
+      "questionsHint": "Optional – the more precise, the fewer [X] in the result.",
+      "questionsHintBuild": "Important when building: the answers replace what an existing profile would provide.",
+      "q": {
+        "strengths": "What are you especially good at?",
+        "audience": "Who do you work for, who do you help?",
+        "outcomes": "Results and projects you are proud of",
+        "askedFor": "What do you want to be approached for?",
+        "avoid": "What must not be in the profile?"
+      },
+      "qPh": {
+        "strengths": "e.g. design systems, accessibility, running workshops",
+        "audience": "e.g. product teams in banks",
+        "outcomes": "Numbers welcome – real values only",
+        "askedFor": "e.g. lead roles, consulting, talks",
+        "avoid": "e.g. confidential client names"
+      },
+      "positioning": "Positioning",
+      "positioningHint": "One sentence that carries everything: role, audience, outcome. Pick a suggestion or write your own – the texts are written only after you confirm it.",
+      "positioningRun": "Generate suggestions",
+      "positioningAgain": "New suggestions",
+      "positioningOwn": "Confirmed positioning",
+      "positioningPh": "<role> for <audience>, <outcome>",
+      "confirm": "Confirm",
+      "confirmed": "Confirmed",
+      "texts": "Generate texts",
+      "part": {
+        "intro": "Headline & About",
+        "positions": "Experience",
+        "skills": "Skills & Featured",
+        "activity": "Recommendations, topics & plan"
+      },
+      "tailor": "Tailor to a job (optional)",
+      "tailorNone": "No tailoring",
+      "generate": "Generate draft",
+      "regenerate": "Regenerate selected parts",
+      "needPositioning": "Confirm the positioning first.",
+      "slow": "The local model writes part by part – each finished part appears in the draft right away.",
+      "rules": "Numbers, names and companies only from your sources, otherwise [X]. Groups only as criteria and search terms. Nothing is sent to LinkedIn.",
+      "warn": {
+        "phrases": "Buzzwords in the text: {{v}}",
+        "aboutShort": "About is short ({{v}} characters) – aim for 1200+.",
+        "unverified": "{{what}} not found in the sources: {{v}} – replaced with [X].",
+        "unverifiedSkills": "{{v}} skills without evidence in the sources – check them (marked ?).",
+        "what": {
+          "company": "Company",
+          "school": "School"
+        }
+      }
+    },
+    "draft": {
+      "title": "Draft ({{lang}})",
+      "show": "Show draft",
+      "metaLabel": "Draft · {{lang}}",
+      "delete": "Delete draft",
+      "deleteConfirm": "Really delete",
+      "cancel": "Cancel",
+      "placeholders": "{{count}} × [X] still to fill in",
+      "banner": "Draft for your {{lang}} profile – none of it is on LinkedIn. Copy field by field.",
+      "judgeStale": "The draft changed after the last AI judgement – the AI points count again after a new judgement.",
+      "compare": "Profile {{before}} → draft {{after}} ({{delta}})",
+      "scoreNew": "New profile – nothing to compare",
+      "notYet": "Not generated yet – choose “{{part}}” under AI tools.",
+      "zoom": "Enlarge (compare with current profile)",
+      "unzoom": "Close",
+      "before": "Current profile",
+      "after": "Draft",
+      "headline": "Headline",
+      "variants": "Variants",
+      "useVariant": "Use",
+      "about": "About",
+      "experience": "Experience",
+      "posTitle": "Title",
+      "company": "Company",
+      "dates": "Dates",
+      "description": "Description",
+      "posSkills": "Link skills",
+      "education": "Education",
+      "school": "School",
+      "degree": "Degree",
+      "skills": "Skills ({{count}})",
+      "skillsHint": "Click copies one term – LinkedIn adds skills one at a time. The first five are your top skills.",
+      "skillsUnverified": "{{count}} without evidence in the sources (marked ?).",
+      "unverifiedSkill": "No evidence in your sources – check",
+      "editSkills": "Edit list",
+      "save": "Save",
+      "featured": "Featured – suggestions",
+      "featuredHint": "Only what exists in your sources. Links only if they appear there.",
+      "kind": {
+        "link": "Link",
+        "post": "Post",
+        "document": "Document",
+        "media": "Media"
+      },
+      "recRequests": "Ask for recommendations",
+      "recHint": "Templates to adapt – Application-Pal sends nothing. Replace [Name] and [Projekt] yourself.",
+      "pillars": "Topic pillars for posts",
+      "groups": "Finding groups",
+      "groupsHint": "No group names – use these criteria and search terms to find fitting groups yourself.",
+      "searchTerms": "Search terms",
+      "plan": "4-week plan",
+      "week": "Week {{n}}",
+      "xHint": "Placeholder: replace with real values before copying"
     }
   }
 }

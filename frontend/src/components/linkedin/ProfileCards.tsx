@@ -21,6 +21,17 @@ const pts = (checks: CheckOutcome[], groups: string[]): Pts => {
 };
 const tone = (p: Pts) => (!p.rated ? "na" : p.max && p.score / p.max >= 0.8 ? "good" : p.max && p.score / p.max >= 0.5 ? "onTrack" : "needsWork");
 
+/** Points of some check groups as a coloured badge (shared with the draft cards). */
+export function PtsBadge({ checks, groups }: { checks: CheckOutcome[]; groups: string[] }) {
+  const { t } = useTranslation();
+  const p = pts(checks, groups);
+  return (
+    <span className="lic-pts" data-status={tone(p)} title={p.rated ? t("linkedinCheck.cards.ptsTitle", { full: p.full }) : t("linkedinCheck.notRated")}>
+      {p.rated ? `${Math.round(p.score * 10) / 10} / ${p.max}` : t("linkedinCheck.cards.notRatedShort")}
+    </span>
+  );
+}
+
 function Card({ title, icon, groups, checks, onFocus, ghost, children }: {
   title: string; icon: ReactNode; groups: string[]; checks: CheckOutcome[]; onFocus: (g: string) => void; ghost?: boolean; children?: ReactNode;
 }) {

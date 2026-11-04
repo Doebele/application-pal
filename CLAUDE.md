@@ -431,6 +431,17 @@ Rules — don't "fix" them:
 - The model never sets a score directly for rule checkpoints; it only fills the `llm` ones and the CV facts. Without a judgement the `llm` points are `na`.
 - `Skills.csv` has a single column: `csvRecords` falls back to the first non-empty row as header.
 
+**Profile languages.** LinkedIn keeps one profile per language, so every `linkedin_versions` row has a `lang` (`de`/`en`/`fr`; `""` = not detected; `NULL` = legacy, filled by `backfillLinkedInLangs`). Imports detect it via `profileLang()` (`linkedin-rules.ts`) or take a `lang` override (multipart field / body); `PATCH /api/linkedin/versions/:id { lang }` corrects it. The import dedupe fingerprint is per language. `GET /api/linkedin/check?lang=` scores one language and returns `langs` (import + draft per language); the page's `LangSwitch` picks it. The `secondLang` recommendation is skipped when an import in the market language exists.
+
+**Text generator (phase 3, `backend/src/linkedin-gen.ts`)**, self-check `npx tsx backend/src/linkedin-gen.check.ts`. Flow in the „KI-Werkzeuge" tab: answers (`state.answers`) → `POST /api/linkedin/positioning { ai, lang, applicationId? }` (3 options, user picks or writes one; `PATCH /state { positioning: { lang, chosen } }`) → `POST /api/linkedin/generate { ai, lang, parts, applicationId? }` with parts `intro` (headline + variants + About + Featured), `positions`, `skills`, `activity` (rec requests, content pillars, group criteria, 4-week plan). Generate requires a confirmed positioning. Base per language: an import in the same language → **sharpen** (rewrite); else the newest import of another language → **translate** (structure kept, texts rewritten); else **build** from CV, documents and answers. The result is one working **draft** row per language (`origin "draft"`, `source "builder"`, `parentId` = base import, `raw` = `LiDraftRaw`), updated in place after each part; edit via `PATCH /api/linkedin/drafts/:id`, delete via `DELETE`. The draft is scored like an import (`draft.result`); a judge run on it counts only while `checkedAt >= raw.updatedAt`. `DraftCards.tsx` renders field-by-field copy cards with LinkedIn length limits, `[X]` counts and a zoom view with before/after against the import.
+
+Generator rules — don't "fix" them:
+- `guardNumbers()` turns any figure not found in the sources (profile, CV, documents, answers — **not** the job ad) into `[X]`. New companies/schools not found in the sources become `[X]` with a warning; Featured URLs survive only if they appear in the sources.
+- Groups are proposed only as criteria + search terms, never as invented group names.
+- `langPrompt()` only knows DE/EN, so the generator uses its own `LANG_DIRECTIVE` (de/en/fr). The humanizer ruleset is appended to the prose prompts (intro, positions, activity).
+- A built-from-scratch draft has honest zeros (recommendations, posts, comments, connections present but empty) — never `na`.
+- Application-Pal never writes to LinkedIn: everything is copied by the user.
+
 ### Google OAuth Scopes
 
 `openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets`

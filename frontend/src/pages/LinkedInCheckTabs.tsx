@@ -4,13 +4,14 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { Play, RefreshCircle, Copy, Check, Upload, Page, PasteClipboard, InfoCircle, WarningTriangle, Clock, Link as LinkIcon } from "iconoir-react";
+import { Play, RefreshCircle, Copy, Check, Upload, Page, PasteClipboard, InfoCircle, WarningTriangle, Clock, Link as LinkIcon, Sparks } from "iconoir-react";
+import { useQuery } from "@tanstack/react-query";
 import type { LinkedInProfile } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
 import { copyText } from "../lib/clipboard";
 import { TotalScore, AreaBars, CheckRow, RecommendationList, StatusIcon } from "../components/check/CheckComponents";
-import { EmptyState } from "../components/check/CheckLayout";
+import { EmptyState, readStored, writeStored } from "../components/check/CheckLayout";
 import type { CheckOutcome, AreaStatus, Recommendation } from "../components/check/types";
 import "../components/linkedin/linkedin.css";
 
@@ -33,13 +34,40 @@ export type LiState = {
   journey?: "check" | "build" | null;
   goal?: { kind?: "job" | "clients" | "switch" | "visibility" | null; targetRole?: string | null; market?: string | null } | null;
   selfReport?: Record<string, number> | null; waivers?: string[] | null; checklist?: string[] | null;
+  answers?: Record<string, string> | null;
+  positioning?: Record<string, { options: Array<{ text: string; angle?: string | null }>; chosen?: string | null; createdAt?: string | null }> | null;
 };
 type Stats = Record<string, number | null>;
-export type LiVersion = { id: string; source: string; note: string | null; createdAt: string; stats: Stats; hasPdf: boolean; profile: LinkedInProfile };
-type Judge = { checkedAt: string; error: string | null; cvUsed: boolean; extras: { headlineVariants: Array<{ type: string; text: string }>; cv: { titleConflicts: Array<{ linkedin: string; cv: string }>; missingInLinkedIn: string[] } | null; ndaHints: string[] } };
-type CheckResponse = { result: LiResult | null; state: LiState; version: LiVersion | null; judge?: Judge | null };
-type Job = { id: string; kind: "check" | "import"; status: "running" | "done" | "error"; step: string; startedAt: string; finishedAt?: string; error?: string; versionId?: string; warnings?: string[]; changed?: boolean };
-type VersionMeta = { id: string; origin: string; source: string; note: string | null; createdAt: string; judged: boolean };
+export type LiVersion = { id: string; source: string; note: string | null; lang: string | null; createdAt: string; stats: Stats; hasPdf: boolean; profile: LinkedInProfile };
+type Extras = { headlineVariants: Array<{ type: string; text: string }>; cv: { titleConflicts: Array<{ linkedin: string; cv: string }>; missingInLinkedIn: string[] } | null; ndaHints: string[] };
+type Judge = { checkedAt: string; error: string | null; cvUsed: boolean; extras: Extras };
+/** One LinkedIn profile language: newest import and/or draft (LinkedIn keeps one profile per language). */
+export type LiLangInfo = { lang: string; importId: string | null; importedAt: string | null; source: string | null; draftId: string | null; draftAt: string | null };
+export const GEN_PARTS = ["intro", "positions", "skills", "activity"] as const;
+export type GenPart = typeof GEN_PARTS[number];
+export type LiDraftRaw = {
+  lang: string; baseVersionId: string | null; baseLang: string | null; positioning: string | null; applicationId: string | null; updatedAt: string;
+  generated: Partial<Record<GenPart, string>>; errors: Partial<Record<GenPart, string>>;
+  headlineVariants: Array<{ type: string; text: string }>; skills: Array<{ name: string; verified: boolean }>; positionSkills: Record<string, string[]>;
+  featured: Array<{ title: string; kind: string; why: string | null; url: string | null }>;
+  recRequests: Array<{ to: string; text: string }>;
+  pillars: Array<{ title: string; why: string | null; ideas: string[] }>;
+  groups: { criteria: string[]; searchTerms: string[] } | null;
+  plan: Array<{ week: number; tasks: string[] }>;
+  ndaHints: string[]; warnings: string[];
+};
+export type LiDraft = {
+  id: string; lang: string; raw: LiDraftRaw; profile: LinkedInProfile; placeholders: number; result: LiResult;
+  judge: { checkedAt: string; error: string | null; stale: boolean; extras: Extras } | null;
+};
+type CheckResponse = { result: LiResult | null; state: LiState; version: LiVersion | null; judge?: Judge | null; lang: string | null; langs: LiLangInfo[]; draft: LiDraft | null };
+type Job = {
+  id: string; kind: "check" | "import" | "positioning" | "generate"; status: "running" | "done" | "error"; step: string; startedAt: string; finishedAt?: string;
+  error?: string; versionId?: string; warnings?: string[]; changed?: boolean; lang?: string | null; parts?: string[]; done?: string[]; failed?: string[];
+};
+type VersionMeta = { id: string; origin: string; source: string; lang: string | null; note: string | null; createdAt: string; judged: boolean };
+export type DraftPatch = { headline?: string | null; summary?: string | null; positions?: Array<{ id: string; title?: string | null; description?: string | null }>; skills?: string[] };
+export const LI_LANGS = ["de", "en", "fr"] as const;
 
 const errMsg = (e: unknown, fallback: string) => (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
 const CLOUD = ["anthropic", "openai", "gemini", "openrouter"];
@@ -55,11 +83,17 @@ export function useLinkedInCheck() {
   const [error, setError] = useState<string | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  // Profile language shown (LinkedIn keeps one profile per language). null = newest import's language.
+  const [langPick, setLangPick] = useState<string | null>(() => readStored<string | null>("licheck-lang", null));
+  const setLang = (l: string) => { setLangPick(l); writeStored("licheck-lang", l); };
 
   const load = useCallback(async () => {
-    try { const r = await api.get<CheckResponse>("/api/linkedin/check", { params: { uiLang } }); setData(r.data); setLoadErr(null); }
-    catch (e) { setLoadErr(errMsg(e, t("linkedinCheck.loadError"))); }
-  }, [uiLang, t]);
+    try {
+      const r = await api.get<CheckResponse>("/api/linkedin/check", { params: { uiLang, ...(langPick ? { lang: langPick } : {}) } });
+      setData(r.data); setLoadErr(null);
+    } catch (e) { setLoadErr(errMsg(e, t("linkedinCheck.loadError"))); }
+  }, [uiLang, t, langPick]);
+  const lang = data?.lang ?? langPick;
   const loadJobs = useCallback(async () => {
     const r = await api.get<Job[]>("/api/linkedin/jobs").catch(() => null);
     if (r) setJobs(r.data);
@@ -73,7 +107,8 @@ export function useLinkedInCheck() {
     const iv = setInterval(async () => {
       setNow(Date.now());
       const list = await loadJobs();
-      if (!list.some(j => j.status === "running")) load();
+      // The generator saves after every part → show each part as soon as it is there.
+      if (!list.some(j => j.status === "running") || list.some(j => j.kind === "generate" && j.status === "running")) load();
     }, 3000);
     return () => clearInterval(iv);
   }, [anyRunning, loadJobs, load]);
@@ -83,20 +118,52 @@ export function useLinkedInCheck() {
     try { const r = await p; setJobs(js => [r.data, ...js.filter(j => j.id !== r.data.id)]); setNow(Date.now()); }
     catch (e) { setError(errMsg(e, t("linkedinCheck.actionError"))); }
   };
-  const runJudge = () => startJob(api.post<Job>("/api/linkedin/check", { ai, uiLang }));
-  const importPdf = (file: File) => {
-    const fd = new FormData(); fd.append("file", file); fd.append("ai", JSON.stringify(ai));
+  /** Judge the newest import of the shown language, or a given version (the draft). */
+  const runJudge = (versionId?: string) => startJob(api.post<Job>("/api/linkedin/check", { ai, uiLang, lang, versionId }));
+  // importLang: the language the user says the profile is in; empty = detect from the text.
+  const importPdf = (file: File, importLang = "") => {
+    const fd = new FormData(); fd.append("file", file); fd.append("ai", JSON.stringify(ai)); if (importLang) fd.append("lang", importLang);
     return startJob(api.post<Job>("/api/linkedin/import/pdf", fd));
   };
-  const importText = (text: string) => startJob(api.post<Job>("/api/linkedin/import/text", { text, ai }));
-  const importZip = async (file: File) => {
+  const importText = (text: string, importLang = "") => startJob(api.post<Job>("/api/linkedin/import/text", { text, ai, lang: importLang || undefined }));
+  const importZip = async (file: File, importLang = "") => {
     setError(null); setBusyKey("zip");
-    try { const fd = new FormData(); fd.append("file", file); await api.post("/api/linkedin/import/zip", fd); await load(); }
+    try {
+      const fd = new FormData(); fd.append("file", file); if (importLang) fd.append("lang", importLang);
+      const r = await api.post<{ lang: string | null }>("/api/linkedin/import/zip", fd);
+      setLang(r.data.lang || "unknown");
+    }
+    catch (e) { setError(errMsg(e, t("linkedinCheck.actionError"))); }
+    finally { setBusyKey(null); }
+  };
+  const setVersionLang = async (id: string, l: string) => {
+    setBusyKey(`lang:${id}`);
+    try { await api.patch(`/api/linkedin/versions/${id}`, { lang: l }); setLang(l); }
     catch (e) { setError(errMsg(e, t("linkedinCheck.actionError"))); }
     finally { setBusyKey(null); }
   };
 
-  const patchState = async (patch: Omit<Partial<LiState>, "selfReport"> & { selfReport?: Record<string, number | null> }, key: string) => {
+  // Generator: positioning first, then the texts — both for the shown profile language.
+  const runPositioning = (applicationId?: string | null) => startJob(api.post<Job>("/api/linkedin/positioning", { ai, lang, applicationId: applicationId || null }));
+  const runGenerate = (parts: GenPart[], applicationId?: string | null) => startJob(api.post<Job>("/api/linkedin/generate", { ai, lang, parts, applicationId: applicationId || null }));
+  const patchDraft = async (patch: DraftPatch) => {
+    const id = data?.draft?.id;
+    if (!id) return;
+    setBusyKey("draft");
+    try { await api.patch(`/api/linkedin/drafts/${id}`, patch); await load(); }
+    catch (e) { setError(errMsg(e, t("linkedinCheck.actionError"))); }
+    finally { setBusyKey(null); }
+  };
+  const deleteDraft = async () => {
+    const id = data?.draft?.id;
+    if (!id) return;
+    setBusyKey("draft");
+    try { await api.delete(`/api/linkedin/drafts/${id}`); await load(); }
+    catch (e) { setError(errMsg(e, t("linkedinCheck.actionError"))); }
+    finally { setBusyKey(null); }
+  };
+
+  const patchState = async (patch: Record<string, unknown>, key: string) => {
     setBusyKey(key);
     try { await api.patch("/api/linkedin/state", patch); await load(); }
     catch (e) { setError(errMsg(e, t("linkedinCheck.actionError"))); }
@@ -111,12 +178,20 @@ export function useLinkedInCheck() {
     finally { setBusyKey(null); }
   };
 
+  const setAnswers = (answers: Record<string, string>) => patchState({ answers }, "answers");
+  const choosePositioning = (chosen: string | null) => patchState({ positioning: { lang, chosen } }, "positioning");
+
   const judgeJob = jobs.find(j => j.kind === "check") ?? null;
   const importJob = jobs.find(j => j.kind === "import") ?? null;
+  const positioningJob = jobs.find(j => j.kind === "positioning") ?? null;
+  const generateJob = jobs.find(j => j.kind === "generate") ?? null;
   return {
-    data, loadErr, error, busyKey, now, judgeJob, importJob, load,
+    data, loadErr, error, busyKey, now, judgeJob, importJob, positioningJob, generateJob, load,
+    lang, setLang, langs: data?.langs ?? [], draft: data?.draft ?? null,
     judgeRunning: judgeJob?.status === "running", importRunning: importJob?.status === "running",
-    runJudge, importPdf, importText, importZip, setSelf, setGoal, toggleWaiver,
+    positioningRunning: positioningJob?.status === "running", generateRunning: generateJob?.status === "running",
+    runJudge, importPdf, importText, importZip, setVersionLang, setSelf, setGoal, toggleWaiver,
+    setAnswers, choosePositioning, runPositioning, runGenerate, patchDraft, deleteDraft,
     aiReady: ai.provider !== "none", cloud: CLOUD.includes(ai.provider) ? ai.provider : null,
   };
 }
@@ -170,14 +245,21 @@ function SelfRow({ check, value, busy, onSet }: { check: CheckOutcome; value: nu
   );
 }
 
-function RunBar({ s }: { s: LiCheckState }) {
+export function CloudNote({ s }: { s: LiCheckState }) {
+  const { t } = useTranslation();
+  return s.cloud ? <div className="chk-note"><WarningTriangle width={11} height={11} style={{ verticalAlign: -1 }} /> {t("linkedinCheck.judge.cloud", { provider: s.cloud })}</div> : null;
+}
+
+function RunBar({ s, draft }: { s: LiCheckState; draft: boolean }) {
   const { t, i18n } = useTranslation();
-  const judge = s.data?.judge;
+  const judge = draft ? s.draft?.judge : s.data?.judge;
+  const target = draft ? s.draft : s.data?.version;
   const job = s.judgeJob;
+  const stale = draft && !!s.draft?.judge?.stale;
   return (
     <div className="chk-stack" style={{ gap: 8 }}>
       <div className="chk-run">
-        <button className="btn btn-primary" style={{ fontSize: 12, gap: 6 }} disabled={!s.data?.version || s.judgeRunning || !s.aiReady} onClick={s.runJudge}>
+        <button className="btn btn-primary" style={{ fontSize: 12, gap: 6 }} disabled={!target || s.judgeRunning || !s.aiReady} onClick={() => s.runJudge(draft ? s.draft?.id : undefined)}>
           {s.judgeRunning ? <RefreshCircle width={12} height={12} className="chk-spin" /> : <Play width={12} height={12} />}
           {s.judgeRunning ? t("linkedinCheck.judge.running") : judge ? t("linkedinCheck.judge.rerun") : t("linkedinCheck.judge.run")}
         </button>
@@ -185,8 +267,9 @@ function RunBar({ s }: { s: LiCheckState }) {
         {!s.judgeRunning && judge && <span className="chk-muted">{t("linkedinCheck.judge.at", { date: new Date(judge.checkedAt).toLocaleString(i18n.language, { dateStyle: "short", timeStyle: "short" }) })}</span>}
       </div>
       {!s.aiReady && <div className="chk-note" data-tone="info">{t("linkedinCheck.judge.noAi")}</div>}
-      {s.cloud && <div className="chk-note"><WarningTriangle width={11} height={11} style={{ verticalAlign: -1 }} /> {t("linkedinCheck.judge.cloud", { provider: s.cloud })}</div>}
-      {!judge && s.data?.version && !s.judgeRunning && <div className="chk-note" data-tone="info">{t("linkedinCheck.judge.needed")}</div>}
+      <CloudNote s={s} />
+      {stale && !s.judgeRunning && <div className="chk-note" data-tone="info">{t("linkedinCheck.draft.judgeStale")}</div>}
+      {!judge && target && !s.judgeRunning && <div className="chk-note" data-tone="info">{t("linkedinCheck.judge.needed")}</div>}
       {s.judgeRunning && <div className="chk-note" data-tone="info">{t("linkedinCheck.judge.slow")}</div>}
       {job?.status === "error" && job.error && <div className="chk-note" data-tone="error">{job.error}</div>}
       {judge?.error && <div className="chk-note" data-tone="error">{t("linkedinCheck.judge.error", { error: judge.error })}</div>}
@@ -200,14 +283,16 @@ function EffortTag({ effort }: { effort: LiEffort }) {
   return <span className="li-effort" data-effort={effort}><Clock width={9} height={9} /> {t(`linkedinCheck.effort.${effort}`)}</span>;
 }
 
-/** Bewertung: total (extrapolated) + disclaimer, steps, areas, details incl. self-report, AI visibility. */
-export function ScoreTab({ s, focusGroup }: { s: LiCheckState; focusGroup: string | null }) {
+/** Bewertung: total (extrapolated) + disclaimer, steps, areas, details incl. self-report, AI visibility.
+ *  `draft` = score the draft of the shown language instead of the imported profile. */
+export function ScoreTab({ s, focusGroup, draft = false }: { s: LiCheckState; focusGroup: string | null; draft?: boolean }) {
   const { t } = useTranslation();
-  const res = s.data?.result;
+  const res = draft ? s.draft?.result : s.data?.result;
+  const before = draft ? s.data?.result : null;
   const self = s.data?.state.selfReport ?? {};
   const focusRef = useRef<HTMLDivElement>(null);
   useEffect(() => { if (focusGroup) focusRef.current?.scrollIntoView({ behavior: "auto", block: "start" }); }, [focusGroup]);
-  if (!s.data?.version || !res) {
+  if (!res) {
     return <div className="chk-card"><div className="chk-muted">{t("linkedinCheck.noProfile")}</div></div>;
   }
   const rows = (checks: CheckOutcome[]) => checks.map(c => c.kind === "self"
@@ -219,9 +304,12 @@ export function ScoreTab({ s, focusGroup }: { s: LiCheckState; focusGroup: strin
       <div className="chk-card chk-stack" style={{ gap: 12 }}>
         <TotalScore total={res.total} rawTotal={res.rawTotal} acceptedGain={res.acceptedGain}>
           <div className="chk-muted">{t("linkedinCheck.rated", { score: Math.round(res.rated.score), max: res.rated.max })}</div>
+          {draft && <div className="li-compare">{before
+            ? t("linkedinCheck.draft.compare", { before: before.total, after: res.total, delta: `${res.total - before.total >= 0 ? "+" : ""}${res.total - before.total}` })
+            : t("linkedinCheck.draft.scoreNew")}</div>}
         </TotalScore>
         <div className="chk-note" data-tone="info"><InfoCircle width={11} height={11} style={{ verticalAlign: -1 }} /> {t("linkedinCheck.disclaimer")}</div>
-        <RunBar s={s} />
+        <RunBar s={s} draft={draft} />
       </div>
 
       <div className="chk-card">
@@ -275,10 +363,10 @@ export function ScoreTab({ s, focusGroup }: { s: LiCheckState; focusGroup: strin
   );
 }
 
-function withPlaceholders(text: string) {
+export function withPlaceholders(text: string) {
   return text.split(/(\[X\])/g).map((p, i) => (p === "[X]" ? <mark key={i}>[X]</mark> : p));
 }
-function CopyBtn({ text }: { text: string }) {
+export function CopyBtn({ text }: { text: string }) {
   const { t } = useTranslation();
   const [done, setDone] = useState(false);
   return (
@@ -289,13 +377,181 @@ function CopyBtn({ text }: { text: string }) {
   );
 }
 
-/** KI-Werkzeuge: headline variants from the judge run (more tools follow in phase 3). */
-export function ToolsTab({ s }: { s: LiCheckState }) {
+export const ANSWER_KEYS = ["strengths", "audience", "outcomes", "askedFor", "avoid"] as const;
+type AppLite = { id: string; company: string; role: string; archived?: string | null };
+
+/** Which kind of draft the shown language gets: sharpen its import, write it from another language, or build from the CV. */
+export function draftMode(s: LiCheckState): "sharpen" | "translate" | "build" {
+  const info = s.langs.find(l => l.lang === s.lang);
+  if (info?.importId) return "sharpen";
+  return s.langs.some(l => l.importId && l.lang !== "unknown") ? "translate" : "build";
+}
+
+function GenStatus({ s }: { s: LiCheckState }) {
+  const { t } = useTranslation();
+  const job = s.generateJob?.lang === s.lang ? s.generateJob : null;
+  const raw = s.draft?.raw;
+  const parts = (job?.parts ?? (raw ? GEN_PARTS.filter(p => raw.generated[p] || raw.errors[p]) : [])) as GenPart[];
+  if (!parts.length) return null;
+  return (
+    <ul className="li-genstatus">
+      {parts.map(p => {
+        const running = job?.status === "running" && job.step === p;
+        const failed = job ? job.failed?.includes(p) : !!raw?.errors[p] && !raw.generated[p];
+        const done = job ? job.done?.includes(p) : !!raw?.generated[p];
+        return (
+          <li key={p} data-state={running ? "running" : failed ? "failed" : done ? "done" : "waiting"}>
+            {running ? <RefreshCircle width={11} height={11} className="chk-spin" /> : failed ? <WarningTriangle width={11} height={11} /> : done ? <Check width={11} height={11} /> : <Clock width={11} height={11} />}
+            <span>{t(`linkedinCheck.gen.part.${p}`)}</span>
+            {running && job && <span className="chk-muted">{elapsedOf(job, s.now)}</span>}
+            {failed && raw?.errors[p] && <span className="chk-muted">{raw.errors[p]}</span>}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** Draft warnings ("intro|phrases:…") → readable lines. */
+function draftWarnings(raw: LiDraftRaw, t: (k: string, o?: Record<string, unknown>) => string) {
+  return raw.warnings.map(w => {
+    const body = w.includes("|") ? w.slice(w.indexOf("|") + 1) : w;
+    const [kind, ...rest] = body.split(":");
+    const v = rest.join(":");
+    return kind === "unverified" ? t("linkedinCheck.gen.warn.unverified", { what: t(`linkedinCheck.gen.warn.what.${rest[0]}`, { defaultValue: rest[0] }), v: rest.slice(1).join(":") })
+      : t(`linkedinCheck.gen.warn.${kind}`, { v, defaultValue: body });
+  });
+}
+
+/** KI-Werkzeuge: the text generator for the shown profile language (questions → positioning → texts)
+ *  plus the headline variants of the judge run. */
+export function ToolsTab({ s, onShowDraft }: { s: LiCheckState; onShowDraft: () => void }) {
   const { t } = useTranslation();
   const judge = s.data?.judge;
   const variants = judge?.extras.headlineVariants ?? [];
+  const lang = s.lang && (LI_LANGS as readonly string[]).includes(s.lang) ? s.lang : null;
+  const state = s.data?.state;
+  const pos = lang ? state?.positioning?.[lang] : undefined;
+  const mode = draftMode(s);
+  const answersKey = JSON.stringify(state?.answers ?? {});
+  const [answers, setAnswersLocal] = useState<Record<string, string>>(state?.answers ?? {});
+  useEffect(() => { setAnswersLocal(JSON.parse(answersKey)); }, [answersKey]);
+  const [chosen, setChosen] = useState(pos?.chosen ?? "");
+  useEffect(() => { setChosen(pos?.chosen ?? ""); }, [pos?.chosen, lang]);
+  const [parts, setParts] = useState<GenPart[]>([...GEN_PARTS]);
+  const [appId, setAppId] = useState<string>(s.draft?.raw.applicationId ?? "");
+  const [confirmDel, setConfirmDel] = useState(false);
+  const { data: apps } = useQuery({ queryKey: ["applications"], queryFn: async () => (await api.get<AppLite[]>("/api/applications")).data });
+  const posJob = s.positioningJob?.lang === lang ? s.positioningJob : null;
+  const genJob = s.generateJob?.lang === lang ? s.generateJob : null;
+  const draft = s.draft;
+  const langName = lang ? t(`linkedinCheck.lang.${lang}`) : "";
+  const baseLang = s.langs.find(l => l.importId && l.lang !== s.lang && l.lang !== "unknown")?.lang;
+
+  if (!lang) {
+    return <div className="chk-note" data-tone="info">{t("linkedinCheck.gen.unknownLang")}</div>;
+  }
   return (
     <div className="chk-stack">
+      <div className="chk-card chk-stack" style={{ gap: 6 }}>
+        <div className="chk-h" style={{ margin: 0 }}>{t(`linkedinCheck.gen.title.${mode}`, { lang: langName })}</div>
+        <div className="chk-muted">{t(`linkedinCheck.gen.intro.${mode}`, { lang: langName, base: baseLang ? t(`linkedinCheck.lang.${baseLang}`) : "" })}</div>
+        {!s.aiReady && <div className="chk-note" data-tone="info">{t("linkedinCheck.judge.noAi")}</div>}
+        <CloudNote s={s} />
+      </div>
+
+      <div className="chk-card chk-stack" style={{ gap: 10 }}>
+        <div className="chk-h" style={{ margin: 0 }}><span className="li-stepno">1</span>{t("linkedinCheck.gen.questions")}</div>
+        <div className="chk-muted">{t(mode === "build" ? "linkedinCheck.gen.questionsHintBuild" : "linkedinCheck.gen.questionsHint")}</div>
+        {ANSWER_KEYS.map(k => (
+          <label key={k} className="li-field">
+            <span>{t(`linkedinCheck.gen.q.${k}`)}</span>
+            <textarea className="li-answer" rows={2} value={answers[k] ?? ""} placeholder={t(`linkedinCheck.gen.qPh.${k}`)}
+              onChange={e => setAnswersLocal(a => ({ ...a, [k]: e.target.value }))}
+              onBlur={() => (answers[k] ?? "") !== (state?.answers?.[k] ?? "") && s.setAnswers({ [k]: answers[k] ?? "" })} />
+          </label>
+        ))}
+      </div>
+
+      <div className="chk-card chk-stack" style={{ gap: 10 }}>
+        <div className="chk-h" style={{ margin: 0 }}><span className="li-stepno">2</span>{t("linkedinCheck.gen.positioning")}</div>
+        <div className="chk-muted">{t("linkedinCheck.gen.positioningHint")}</div>
+        <div className="li-actions">
+          <button className="btn btn-secondary li-btn" disabled={!s.aiReady || s.positioningRunning} onClick={() => s.runPositioning(appId)}>
+            {s.positioningRunning ? <RefreshCircle width={11} height={11} className="chk-spin" /> : <Sparks width={11} height={11} />}
+            {pos?.options.length ? t("linkedinCheck.gen.positioningAgain") : t("linkedinCheck.gen.positioningRun")}
+          </button>
+          {s.positioningRunning && posJob && <span className="chk-muted">{elapsedOf(posJob, s.now)}</span>}
+        </div>
+        {posJob?.status === "error" && posJob.error && <div className="chk-note" data-tone="error">{posJob.error}</div>}
+        {!!pos?.options.length && (
+          <div className="li-options" role="radiogroup" aria-label={t("linkedinCheck.gen.positioning")}>
+            {pos.options.map((o, i) => (
+              <button key={i} type="button" role="radio" aria-checked={chosen === o.text} className="li-option" onClick={() => setChosen(o.text)}>
+                {o.angle && <span className="li-kind" style={{ marginLeft: 0 }}>{o.angle}</span>}
+                <span>{withPlaceholders(o.text)}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <label className="li-field">
+          <span>{t("linkedinCheck.gen.positioningOwn")}</span>
+          <textarea className="li-answer" rows={2} value={chosen} placeholder={t("linkedinCheck.gen.positioningPh")} onChange={e => setChosen(e.target.value)} />
+        </label>
+        <div className="li-actions">
+          <button className="btn btn-primary li-btn" disabled={!chosen.trim() || chosen.trim() === (pos?.chosen ?? "") || s.busyKey === "positioning"}
+            onClick={() => s.choosePositioning(chosen.trim())}><Check width={11} height={11} /> {t("linkedinCheck.gen.confirm")}</button>
+          {pos?.chosen && chosen.trim() === pos.chosen && <span className="li-confirmed"><Check width={11} height={11} /> {t("linkedinCheck.gen.confirmed")}</span>}
+        </div>
+      </div>
+
+      <div className="chk-card chk-stack" style={{ gap: 10 }}>
+        <div className="chk-h" style={{ margin: 0 }}><span className="li-stepno">3</span>{t("linkedinCheck.gen.texts")}</div>
+        <div className="li-parts">
+          {GEN_PARTS.map(p => (
+            <label key={p} className="li-check">
+              <input type="checkbox" checked={parts.includes(p)} onChange={e => setParts(ps => e.target.checked ? GEN_PARTS.filter(x => ps.includes(x) || x === p) : ps.filter(x => x !== p))} />
+              <span>{t(`linkedinCheck.gen.part.${p}`)}</span>
+              {draft?.raw.generated[p] && <Check width={10} height={10} className="li-gen-ok" />}
+            </label>
+          ))}
+        </div>
+        <label className="li-field">
+          <span>{t("linkedinCheck.gen.tailor")}</span>
+          <select className="input-line" value={appId} onChange={e => setAppId(e.target.value)}>
+            <option value="">{t("linkedinCheck.gen.tailorNone")}</option>
+            {(apps ?? []).filter(a => a.archived !== "true").map(a => <option key={a.id} value={a.id}>{a.company} · {a.role}</option>)}
+          </select>
+        </label>
+        <div className="li-actions">
+          <button className="btn btn-primary li-btn" disabled={!s.aiReady || !pos?.chosen || !parts.length || s.generateRunning} onClick={() => s.runGenerate(parts, appId)}>
+            {s.generateRunning ? <RefreshCircle width={11} height={11} className="chk-spin" /> : <Play width={11} height={11} />}
+            {draft ? t("linkedinCheck.gen.regenerate") : t("linkedinCheck.gen.generate")}
+          </button>
+          {!pos?.chosen && <span className="chk-muted">{t("linkedinCheck.gen.needPositioning")}</span>}
+        </div>
+        {s.generateRunning && <div className="chk-note" data-tone="info">{t("linkedinCheck.gen.slow")}</div>}
+        <GenStatus s={s} />
+        {genJob?.status === "error" && genJob.error && <div className="chk-note" data-tone="error">{genJob.error}</div>}
+        <div className="li-privacy"><InfoCircle width={11} height={11} /> {t("linkedinCheck.gen.rules")}</div>
+      </div>
+
+      {draft && (
+        <div className="chk-card chk-stack" style={{ gap: 8 }}>
+          <div className="chk-h" style={{ margin: 0 }}>{t("linkedinCheck.draft.title", { lang: langName })}</div>
+          <div className="li-actions">
+            <button className="btn btn-primary li-btn" onClick={onShowDraft}><Page width={11} height={11} /> {t("linkedinCheck.draft.show")}</button>
+            {!confirmDel
+              ? <button className="btn btn-ghost li-btn" onClick={() => setConfirmDel(true)}>{t("linkedinCheck.draft.delete")}</button>
+              : <><button className="btn btn-secondary li-btn" disabled={s.busyKey === "draft"} onClick={async () => { await s.deleteDraft(); setConfirmDel(false); }}>{t("linkedinCheck.draft.deleteConfirm")}</button>
+                <button className="btn btn-ghost li-btn" onClick={() => setConfirmDel(false)}>{t("linkedinCheck.draft.cancel")}</button></>}
+          </div>
+          {draft.placeholders > 0 && <div className="chk-note">{t("linkedinCheck.draft.placeholders", { count: draft.placeholders })}</div>}
+          {draft.raw.ndaHints.length > 0 && <div className="chk-note"><WarningTriangle width={11} height={11} style={{ verticalAlign: -1 }} /> {t("linkedinCheck.tools.nda", { names: draft.raw.ndaHints.join(", ") })}</div>}
+          {draft.raw.warnings.length > 0 && <ul className="chk-findings">{draftWarnings(draft.raw, t).map((w, i) => <li key={i}>{w}</li>)}</ul>}
+        </div>
+      )}
+
       <div className="chk-card">
         <div className="chk-h">{t("linkedinCheck.tools.headlines")}</div>
         {!judge ? <div className="chk-muted">{t("linkedinCheck.tools.needJudge")}</div>
@@ -316,10 +572,6 @@ export function ToolsTab({ s }: { s: LiCheckState }) {
         <div className="chk-note"><WarningTriangle width={11} height={11} style={{ verticalAlign: -1 }} /> {t("linkedinCheck.tools.nda", { names: judge.extras.ndaHints.join(", ") })}</div>
       ) : null}
       {judge && !judge.cvUsed && <div className="chk-note" data-tone="info">{t("linkedinCheck.tools.noCv")}</div>}
-      <div className="chk-placeholder">
-        <div className="chk-placeholder-head"><Page width={14} height={14} /> {t("linkedinCheck.tools.moreTitle")}</div>
-        <div className="chk-placeholder-text">{t("linkedinCheck.tools.moreText")}</div>
-      </div>
     </div>
   );
 }
@@ -334,10 +586,11 @@ export function SourceTab({ s, persona }: { s: LiCheckState; persona: string | n
   const [market, setMarket] = useState(goal.market ?? "");
   const [paste, setPaste] = useState("");
   const [showPaste, setShowPaste] = useState(false);
+  const [importLang, setImportLang] = useState("");   // "" = detect from the profile text
   const [versions, setVersions] = useState<VersionMeta[] | null>(null);
   const ver = s.data?.version;
   useEffect(() => { setRole(goal.targetRole ?? ""); setMarket(goal.market ?? ""); }, [goal.targetRole, goal.market]);
-  useEffect(() => { api.get<VersionMeta[]>("/api/linkedin/versions").then(r => setVersions(r.data)).catch(() => setVersions([])); }, [ver?.id]);
+  useEffect(() => { api.get<VersionMeta[]>("/api/linkedin/versions").then(r => setVersions(r.data)).catch(() => setVersions([])); }, [ver?.id, ver?.lang, s.draft?.id]);
   const fmt = (iso: string) => new Date(iso).toLocaleString(i18n.language, { dateStyle: "short", timeStyle: "short" });
   const job = s.importJob;
 
@@ -376,14 +629,34 @@ export function SourceTab({ s, persona }: { s: LiCheckState; persona: string | n
       <div className="chk-card chk-stack" style={{ gap: 10 }}>
         <div className="chk-h" style={{ margin: 0 }}>{t("linkedinCheck.source.title")}</div>
         {ver ? (
-          <div className="chk-muted" style={{ color: "var(--fg-2)" }}>
-            <b>{t(`linkedinCheck.source.kind.${ver.source}`, ver.source)}</b> · {fmt(ver.createdAt)}{ver.note && <> · {ver.note}</>}
+          <div className="chk-stack" style={{ gap: 6 }}>
+            <div className="chk-muted" style={{ color: "var(--fg-2)" }}>
+              <b>{t(`linkedinCheck.source.kind.${ver.source}`, ver.source)}</b> · {fmt(ver.createdAt)}{ver.note && <> · {ver.note}</>}
+            </div>
+            <label className="li-inline">
+              <span>{t("linkedinCheck.lang.profileLang")}</span>
+              <select className="input-line" value={ver.lang ?? ""} disabled={s.busyKey === `lang:${ver.id}`} onChange={e => e.target.value && s.setVersionLang(ver.id, e.target.value)}>
+                {!ver.lang && <option value="">{t("linkedinCheck.lang.unknown")}</option>}
+                {LI_LANGS.map(l => <option key={l} value={l}>{t(`linkedinCheck.lang.${l}`)}</option>)}
+              </select>
+            </label>
+            {!ver.lang && <div className="chk-note">{t("linkedinCheck.lang.setHint")}</div>}
           </div>
         ) : <div className="chk-muted">{t("linkedinCheck.noProfile")}</div>}
+        <div className="li-inline">
+          <span>{t("linkedinCheck.lang.importAs")}</span>
+          <div className="li-self" role="radiogroup" aria-label={t("linkedinCheck.lang.importAs")}>
+            {["", ...LI_LANGS].map(l => (
+              <button key={l || "auto"} type="button" role="radio" aria-checked={importLang === l} className="li-self-opt" onClick={() => setImportLang(l)}>
+                {l ? t(`linkedinCheck.lang.${l}`) : t("linkedinCheck.lang.auto")}
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="li-actions">
           <Link to="/profile" className="btn btn-secondary li-btn" style={{ textDecoration: "none" }}><LinkIcon width={11} height={11} /> {t("linkedinCheck.source.connection")}</Link>
-          {filePick(".zip,application/zip", f => s.importZip(f), <>{s.busyKey === "zip" ? <RefreshCircle width={11} height={11} className="chk-spin" /> : <Upload width={11} height={11} />} {t("linkedinCheck.source.zip")}</>, s.busyKey === "zip")}
-          {filePick("application/pdf,.pdf", f => s.importPdf(f), <><Page width={11} height={11} /> {t("linkedinCheck.source.pdf")}</>, s.importRunning || !s.aiReady)}
+          {filePick(".zip,application/zip", f => s.importZip(f, importLang), <>{s.busyKey === "zip" ? <RefreshCircle width={11} height={11} className="chk-spin" /> : <Upload width={11} height={11} />} {t("linkedinCheck.source.zip")}</>, s.busyKey === "zip")}
+          {filePick("application/pdf,.pdf", f => s.importPdf(f, importLang), <><Page width={11} height={11} /> {t("linkedinCheck.source.pdf")}</>, s.importRunning || !s.aiReady)}
           <button type="button" className="btn btn-ghost li-btn" disabled={s.importRunning || !s.aiReady} onClick={() => setShowPaste(v => !v)}>
             <PasteClipboard width={11} height={11} /> {t("linkedinCheck.source.text")}
           </button>
@@ -392,7 +665,7 @@ export function SourceTab({ s, persona }: { s: LiCheckState; persona: string | n
           <div className="chk-stack" style={{ gap: 6 }}>
             <textarea className="li-token" rows={6} value={paste} placeholder={t("linkedinCheck.source.textPh")} onChange={e => setPaste(e.target.value)} />
             <button type="button" className="btn btn-primary li-btn" style={{ alignSelf: "flex-start" }} disabled={paste.trim().length < 80 || s.importRunning}
-              onClick={async () => { await s.importText(paste); setPaste(""); setShowPaste(false); }}>{t("linkedinCheck.source.textGo")}</button>
+              onClick={async () => { await s.importText(paste, importLang); setPaste(""); setShowPaste(false); }}>{t("linkedinCheck.source.textGo")}</button>
           </div>
         )}
         <div className="chk-muted">{t("linkedinCheck.source.hint")}</div>
@@ -413,8 +686,9 @@ export function SourceTab({ s, persona }: { s: LiCheckState; persona: string | n
           : (
             <ol className="li-versions">
               {versions.map((v, i) => (
-                <li key={v.id} data-current={v.id === ver?.id}>
-                  <b>{versions.length - i}</b> <span>{t(`linkedinCheck.source.kind.${v.source}`, v.source)}</span>
+                <li key={v.id} data-current={v.id === ver?.id || v.id === s.draft?.id}>
+                  <b>{versions.length - i}</b> <span>{v.origin === "draft" ? t("linkedinCheck.source.draft") : t(`linkedinCheck.source.kind.${v.source}`, v.source)}</span>
+                  <span className="li-lang-tag">{v.lang ? v.lang.toUpperCase() : "?"}</span>
                   {v.judged && <span className="li-kind">{t("linkedinCheck.source.judged")}</span>}
                   <span className="chk-muted" style={{ marginLeft: "auto" }}>{fmt(v.createdAt)}</span>
                 </li>

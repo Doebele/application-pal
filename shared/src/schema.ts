@@ -564,5 +564,17 @@ export const linkedInStateSchema = z.object({
   waivers: z.array(z.string().max(60)).max(100).nullish(),
   /** Done items of the tips/checklist page. */
   checklist: z.array(z.string().max(60)).max(200).nullish(),
+  /** Answers of the build/sharpen questions (strengths, audience …), used by the text generator. */
+  answers: z.record(z.string(), z.string().max(800)).nullish(),
+  /** Positioning sentence per profile language: model options + the sentence the user confirmed. */
+  positioning: z.record(z.string(), z.object({
+    options: z.array(z.object({ text: z.string().max(400), angle: z.string().max(80).nullish() })).max(5).default([]),
+    chosen: z.string().max(400).nullish(),
+    createdAt: z.string().nullish(),
+  })).nullish(),
 });
 export type LinkedInState = z.infer<typeof linkedInStateSchema>;
+
+/** LinkedIn profile languages (LinkedIn allows one profile per language). */
+export const LINKEDIN_LANGS = ["de", "en", "fr"] as const;
+export type LinkedInLang = typeof LINKEDIN_LANGS[number];

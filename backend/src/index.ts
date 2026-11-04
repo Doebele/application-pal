@@ -55,8 +55,10 @@ import {
   linkedinVersions,
   linkedInProfileSchema,
   linkedInStateSchema,
+  LINKEDIN_LANGS,
   type LinkedInProfile,
   type LinkedInState,
+  type LinkedInLang,
   CV_LANGUAGES,
   type AiConfig,
   type UserDocument,
@@ -76,11 +78,16 @@ import {
   fetchSnapshot, fetchSnapshotDomain, normalizeSnapshot, rawForStorage, profileFingerprint, profileStats,
   snapshotFromZip, type Snapshot,
 } from "./linkedin.js";
-import { runLinkedInCheck, type LiLlmJudgement } from "./linkedin-rules.js";
+import { runLinkedInCheck, profileLang, type LiLlmJudgement } from "./linkedin-rules.js";
 import {
   liJudgePrompt, liJudgeInput, normalizeLiJudgement, LI_IMPORT_SYSTEM_PROMPT, normalizeImportedProfile, liVerbatimWarnings,
   type LiJudgeExtras,
 } from "./linkedin-llm.js";
+import {
+  LI_GEN_PARTS, liGenInput, liPositioningPrompt, liIntroPrompt, liPositionsPrompt, liSkillsPrompt, liActivityPrompt,
+  normalizePositioning, normalizeIntro, normalizePositionsAnswer, normalizeSkillsAnswer, normalizeActivityAnswer,
+  initialDraftProfile, applyDraftParts, emptyDraftRaw, placeholderCount, type LiDraftRaw, type LiGenPart,
+} from "./linkedin-gen.js";
 import { unzipSync } from "fflate";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
@@ -4698,11 +4705,28 @@ async function upsertLinkedInConnection(userId: string, patch: Partial<typeof li
     .onConflictDoUpdate({ target: linkedinConnections.userId, set });
 }
 
-async function latestLinkedInVersion(userId: string) {
+/** Newest import; with `lang` the newest import of that profile language ("unknown" = language not detected). */
+async function latestLinkedInVersion(userId: string, lang?: string | null) {
+  const langCond = lang === undefined || lang === null ? undefined
+    : lang === "unknown" ? or(isNull(linkedinVersions.lang), eq(linkedinVersions.lang, "")) : eq(linkedinVersions.lang, lang);
   const [row] = await db.select().from(linkedinVersions)
-    .where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "import")))
+    .where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "import"), langCond))
     .orderBy(desc(linkedinVersions.createdAt)).limit(1);
   return row ?? null;
+}
+
+const asLiLang = (v: unknown): LinkedInLang | null => ((LINKEDIN_LANGS as readonly string[]).includes(String(v)) ? v as LinkedInLang : null);
+
+/** Imports saved before languages were tracked get their language detected once
+ *  (lang "" = could not be detected; the user sets it on the Source tab). */
+async function backfillLinkedInLangs(userId: string) {
+  const rows = await db.select({ id: linkedinVersions.id, data: linkedinVersions.data }).from(linkedinVersions)
+    .where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "import"), isNull(linkedinVersions.lang)));
+  for (const r of rows) {
+    let lang: string | null = null;
+    try { lang = profileLang(linkedInProfileSchema.parse(JSON.parse(r.data))); } catch { /* broken row */ }
+    await db.update(linkedinVersions).set({ lang: lang ?? "" }).where(eq(linkedinVersions.id, r.id));
+  }
 }
 
 function linkedinStatusOut(conn: Awaited<ReturnType<typeof getLinkedInConnection>>) {
@@ -4728,19 +4752,21 @@ function linkedinStatusOut(conn: Awaited<ReturnType<typeof getLinkedInConnection
   };
 }
 
-/** Saves an imported profile as a new version — unless it equals the latest import. */
-async function saveLinkedInImport(userId: string, data: LinkedInProfile, raw: unknown, source: string, note: string) {
-  const prev = await latestLinkedInVersion(userId);
+/** Saves an imported profile as a new version — unless it equals the latest import of the same
+ *  profile language. LinkedIn keeps one profile per language; `lang` = the user's choice, else detected. */
+async function saveLinkedInImport(userId: string, data: LinkedInProfile, raw: unknown, source: string, note: string, langOverride?: LinkedInLang | null) {
+  const lang = langOverride ?? profileLang(data);
+  const prev = await latestLinkedInVersion(userId, lang ?? "unknown");
   let changed = true;
   if (prev) {
     try { changed = profileFingerprint(linkedInProfileSchema.parse(JSON.parse(prev.data))) !== profileFingerprint(data); } catch { /* old shape → save */ }
   }
-  if (!changed) return { versionId: prev!.id, changed };
+  if (!changed) return { versionId: prev!.id, changed, lang };
   const [row] = await db.insert(linkedinVersions).values({
-    userId, origin: "import", source, parentId: prev?.id ?? null,
+    userId, origin: "import", source, lang: lang ?? "", parentId: prev?.id ?? null,
     data: JSON.stringify(data), raw: JSON.stringify(raw), note,
   }).returning({ id: linkedinVersions.id });
-  return { versionId: row.id, changed };
+  return { versionId: row.id, changed, lang };
 }
 
 async function runLinkedInSync(job: LinkedInSyncJob, token: string) {
@@ -4936,6 +4962,15 @@ app.patch("/api/linkedin/state", async (c) => {
     ...(body.journey !== undefined ? { journey: body.journey } : {}),
     ...(body.goal !== undefined ? { goal: { ...(cur.goal ?? {}), ...(body.goal as object) } } : {}),
     ...(body.checklist !== undefined ? { checklist: body.checklist } : {}),
+    ...(body.answers !== undefined ? { answers: { ...(cur.answers ?? {}), ...(body.answers as object) } } : {}),
+    // { positioning: { lang, chosen } } — the sentence the user confirmed (or edited) for that profile language
+    ...(body.positioning !== undefined ? (() => {
+      const pp = body.positioning as { lang?: string; chosen?: string | null };
+      const l = asLiLang(pp.lang);
+      if (!l) return {};
+      const prev = cur.positioning?.[l] ?? { options: [] };
+      return { positioning: { ...(cur.positioning ?? {}), [l]: { ...prev, chosen: pp.chosen?.trim() || null } } };
+    })() : {}),
     selfReport,
   });
   if (!parsed.success) return c.json({ error: "Ungültige Angaben", details: parsed.error.issues.slice(0, 3) }, 400);
@@ -4945,32 +4980,73 @@ app.patch("/api/linkedin/state", async (c) => {
 
 // Scores the latest imported profile version. Computed on every read from the stored
 // profile + state, so goal, self-report, waivers and UI language need no new import.
+// `lang` picks the profile language (LinkedIn keeps one profile per language); without it the
+// language of the newest import is used. The draft of that language is scored alongside.
 app.get("/api/linkedin/check", async (c) => {
   const userId = getUserId(c);
   const uiLang = (["de", "en", "fr"].includes(c.req.query("uiLang") ?? "") ? c.req.query("uiLang") : "de") as UiLang;
   const versionId = c.req.query("versionId");
+  await backfillLinkedInLangs(userId);
+  const state = await readLinkedInState(userId);
+  const all = await db.select({ id: linkedinVersions.id, origin: linkedinVersions.origin, lang: linkedinVersions.lang, source: linkedinVersions.source, createdAt: linkedinVersions.createdAt })
+    .from(linkedinVersions).where(eq(linkedinVersions.userId, userId)).orderBy(desc(linkedinVersions.createdAt));
+  const imports = all.filter(r => r.origin === "import");
+  const drafts = all.filter(r => r.origin === "draft");
+  const langKey = (l: string | null) => (l ? l : "unknown");
+  const langs = [...new Set([...imports.map(r => langKey(r.lang)), ...drafts.map(r => langKey(r.lang))])].map(l => {
+    const imp = imports.find(r => langKey(r.lang) === l);
+    const dr = drafts.find(r => langKey(r.lang) === l);
+    return { lang: l, importId: imp?.id ?? null, importedAt: imp?.createdAt.toISOString() ?? null, source: imp?.source ?? null, draftId: dr?.id ?? null, draftAt: dr?.createdAt.toISOString() ?? null };
+  });
+  const qLang = c.req.query("lang");
+  const newest = imports[0] ?? drafts[0];
+  const lang = qLang && (asLiLang(qLang) || qLang === "unknown") ? qLang : newest ? langKey(newest.lang) : null;
   const [row] = versionId
     ? await db.select().from(linkedinVersions).where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.id, versionId))).limit(1)
-    : [await latestLinkedInVersion(userId)];
-  const state = await readLinkedInState(userId);
-  if (!row) return c.json({ result: null, version: null, state });
-  let profile: LinkedInProfile;
-  try { profile = linkedInProfileSchema.parse(JSON.parse(row.data)); } catch { return c.json({ error: "Gespeicherte Profilversion ist beschädigt" }, 500); }
-  // The model's judgement belongs to exactly this version (it read this text).
-  const judged = row.checkResult ? JSON.parse(row.checkResult) as LiCheckStored : null;
-  const result = runLinkedInCheck({
-    profile, uiLang,
-    goal: liGoalOf(state),
+    : [lang ? await latestLinkedInVersion(userId, lang) : null];
+  const availableLangs = [...new Set(imports.map(r => r.lang).filter((l): l is string => !!l))];
+  const goal = liGoalOf(state);
+  const score = (profile: LinkedInProfile, judged: LiCheckStored | null, pLang: string | null) => runLinkedInCheck({
+    profile, uiLang, goal,
     selfReport: state.selfReport ?? null,
     llm: judged?.llm ?? null, cvFacts: judged?.extras.cv ?? null,
     accepted: state.waivers ?? [],
+    profileLang: asLiLang(pLang), availableLangs,
   });
+  const parse = (data: string) => { try { return linkedInProfileSchema.parse(JSON.parse(data)); } catch { return null; } };
+
+  // Draft of this language: scored like an import; its judgement counts only if it read the current text.
+  let draft: Record<string, unknown> | null = null;
+  const draftLang = asLiLang(lang);
+  if (draftLang) {
+    const [d] = await db.select().from(linkedinVersions)
+      .where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "draft"), eq(linkedinVersions.lang, draftLang)))
+      .orderBy(desc(linkedinVersions.createdAt)).limit(1);
+    const dp = d ? parse(d.data) : null;
+    if (d && dp) {
+      const dRaw = JSON.parse(d.raw ?? "{}") as LiDraftRaw;
+      const dJudged = d.checkResult ? JSON.parse(d.checkResult) as LiCheckStored : null;
+      const fresh = !!dJudged?.llm && dJudged.checkedAt >= dRaw.updatedAt;
+      draft = {
+        id: d.id, lang: draftLang, raw: dRaw, profile: dp, placeholders: placeholderCount(dp),
+        result: score(dp, fresh ? dJudged : null, draftLang),
+        judge: dJudged ? { checkedAt: dJudged.checkedAt, error: dJudged.llmError ?? null, stale: !fresh, extras: dJudged.extras } : null,
+      };
+    }
+  }
+
+  if (!row) return c.json({ result: null, version: null, state, lang, langs, draft });
+  const profile = parse(row.data);
+  if (!profile) return c.json({ error: "Gespeicherte Profilversion ist beschädigt" }, 500);
+  // The model's judgement belongs to exactly this version (it read this text).
+  const judged = row.checkResult ? JSON.parse(row.checkResult) as LiCheckStored : null;
+  const result = score(profile, judged, row.lang);
   const raw = row.raw ? (() => { try { return JSON.parse(row.raw!) as { kind?: string }; } catch { return null; } })() : null;
   return c.json({
-    result, state,
+    result, state, lang, langs, draft,
     judge: judged ? { checkedAt: judged.checkedAt, error: judged.llmError ?? null, cvUsed: judged.cvUsed, extras: judged.extras } : null,
     version: {
-      id: row.id, source: row.source, note: row.note, createdAt: row.createdAt.toISOString(), stats: profileStats(profile),
+      id: row.id, source: row.source, note: row.note, lang: row.lang || null, createdAt: row.createdAt.toISOString(), stats: profileStats(profile),
       hasPdf: raw?.kind === "pdf", profile,
     },
   });
@@ -4985,8 +5061,9 @@ const liGoalOf = (s: LinkedInState) => (s.goal
 // re-runs on every GET. Background job because local models exceed the nginx timeout.
 type LiCheckStored = { checkedAt: string; uiLang: UiLang; llm: LiLlmJudgement | null; llmError?: string; cvUsed: boolean; extras: LiJudgeExtras };
 type LiJob = {
-  id: string; userId: string; kind: "check" | "import"; status: "running" | "done" | "error"; step: string;
+  id: string; userId: string; kind: "check" | "import" | "positioning" | "generate"; status: "running" | "done" | "error"; step: string;
   startedAt: string; finishedAt?: string; error?: string; versionId?: string; warnings?: string[]; changed?: boolean;
+  lang?: string | null; parts?: string[]; done?: string[]; failed?: string[];
 };
 const linkedinJobs = new Map<string, LiJob>();
 const liJobOut = ({ userId: _u, ...j }: LiJob) => j;
@@ -5016,9 +5093,12 @@ async function loadLinkedInCvText(userId: string): Promise<string | null> {
 
 app.post("/api/linkedin/check", async (c) => {
   const userId = getUserId(c);
-  const { ai, uiLang: rawLang } = await c.req.json<{ ai: AiConfig; uiLang?: string }>();
+  const { ai, uiLang: rawLang, lang, versionId } = await c.req.json<{ ai: AiConfig; uiLang?: string; lang?: string; versionId?: string }>();
   if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Anbieter konfiguriert" }, 400);
-  const row = await latestLinkedInVersion(userId);
+  // A draft or a specific import (versionId), else the newest import of the profile language.
+  const [row] = versionId
+    ? await db.select().from(linkedinVersions).where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.id, versionId))).limit(1)
+    : [await latestLinkedInVersion(userId, lang || undefined)];
   if (!row) return c.json({ error: "Noch kein LinkedIn-Profil importiert" }, 404);
   const uiLang = asUiLang(rawLang);
   const job = startLiJob(userId, "check", "cv", async job => {
@@ -5062,7 +5142,7 @@ app.get("/api/linkedin/jobs", (c) => {
 // ── Import from a LinkedIn PDF ("More → Save to PDF") or the copied profile page ──
 // The model only structures the text (verbatim); the PDF is kept on the version so the
 // check page can show it with pdf.js.
-async function runLinkedInTextImport(job: LiJob, userId: string, text: string, ai: AiConfig, source: "pdf" | "text", note: string, pdf?: Uint8Array) {
+async function runLinkedInTextImport(job: LiJob, userId: string, text: string, ai: AiConfig, source: "pdf" | "text", note: string, pdf?: Uint8Array, lang?: LinkedInLang | null) {
   job.step = "llm";
   let data: LinkedInProfile;
   try {
@@ -5080,8 +5160,8 @@ async function runLinkedInTextImport(job: LiJob, userId: string, text: string, a
   }
   job.step = "save";
   const raw = source === "pdf" ? { kind: "pdf", text, pdfBase64: Buffer.from(pdf!).toString("base64") } : { kind: "text", text };
-  const saved = await saveLinkedInImport(userId, data, raw, source, note);
-  Object.assign(job, { status: "done", versionId: saved.versionId, changed: saved.changed, warnings: liVerbatimWarnings(data, text), finishedAt: new Date().toISOString() });
+  const saved = await saveLinkedInImport(userId, data, raw, source, note, lang);
+  Object.assign(job, { status: "done", versionId: saved.versionId, changed: saved.changed, lang: saved.lang, warnings: liVerbatimWarnings(data, text), finishedAt: new Date().toISOString() });
 }
 
 app.post("/api/linkedin/import/pdf", async (c) => {
@@ -5101,17 +5181,17 @@ app.post("/api/linkedin/import/pdf", async (c) => {
     await parser.destroy();
   } catch { return c.json({ error: "Die Datei ist kein lesbares PDF" }, 400); }
   if (!text) return c.json({ error: "Das PDF enthält keinen lesbaren Text" }, 422);
-  const job = startLiJob(userId, "import", "pdf", j => runLinkedInTextImport(j, userId, text, ai!, "pdf", `PDF (${file.name})`, bytes));
+  const job = startLiJob(userId, "import", "pdf", j => runLinkedInTextImport(j, userId, text, ai!, "pdf", `PDF (${file.name})`, bytes, asLiLang(body.lang)));
   return c.json(liJobOut(job), 202);
 });
 
 app.post("/api/linkedin/import/text", async (c) => {
   const userId = getUserId(c);
-  const { text, ai } = await c.req.json<{ text: string; ai: AiConfig }>();
+  const { text, ai, lang } = await c.req.json<{ text: string; ai: AiConfig; lang?: string }>();
   if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Anbieter konfiguriert" }, 400);
   const t = (text ?? "").trim();
   if (t.length < 80) return c.json({ error: "Zu wenig Text – bitte die ganze Profilseite kopieren" }, 400);
-  const job = startLiJob(userId, "import", "text", j => runLinkedInTextImport(j, userId, t.slice(0, 60000), ai, "text", "Kopierter Profiltext"));
+  const job = startLiJob(userId, "import", "text", j => runLinkedInTextImport(j, userId, t.slice(0, 60000), ai, "text", "Kopierter Profiltext", undefined, asLiLang(lang)));
   return c.json(liJobOut(job), 202);
 });
 
@@ -5119,10 +5199,218 @@ app.post("/api/linkedin/import/text", async (c) => {
 app.get("/api/linkedin/versions", async (c) => {
   const userId = getUserId(c);
   const rows = await db.select({
-    id: linkedinVersions.id, origin: linkedinVersions.origin, source: linkedinVersions.source,
+    id: linkedinVersions.id, origin: linkedinVersions.origin, source: linkedinVersions.source, lang: linkedinVersions.lang,
     note: linkedinVersions.note, createdAt: linkedinVersions.createdAt, judged: linkedinVersions.checkResult,
   }).from(linkedinVersions).where(eq(linkedinVersions.userId, userId)).orderBy(desc(linkedinVersions.createdAt));
-  return c.json(rows.map(r => ({ ...r, judged: !!r.judged })));
+  return c.json(rows.map(r => ({ ...r, lang: r.lang || null, judged: !!r.judged })));
+});
+
+// Correct the detected profile language of an import; body { lang: "de" | "en" | "fr" }.
+app.patch("/api/linkedin/versions/:id", async (c) => {
+  const userId = getUserId(c);
+  const lang = asLiLang((await c.req.json<{ lang?: string }>()).lang);
+  if (!lang) return c.json({ error: "Ungültige Sprache" }, 400);
+  const res = await db.update(linkedinVersions).set({ lang })
+    .where(and(eq(linkedinVersions.id, c.req.param("id")), eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "import")))
+    .returning({ id: linkedinVersions.id });
+  if (!res.length) return c.json({ error: "Nicht gefunden" }, 404);
+  return c.json({ id: res[0].id, lang });
+});
+
+// ── LinkedIn-Check: text generator ("Profil schärfen" / "Profil aufbauen") ──
+// 1) POST /positioning → 3 positioning sentences for one profile language; the user confirms one
+//    (PATCH /state { positioning: { lang, chosen } }).
+// 2) POST /generate → the texts in up to four calls, written into the draft of that language
+//    (linkedin_versions origin "draft", generator state in `raw`). Saved after every part.
+async function liGenSources(userId: string, lang: LinkedInLang, applicationId?: string | null) {
+  const state = await readLinkedInState(userId);
+  // Base: the import of this language, else the newest import of another language, else none (built from the CV).
+  const own = await latestLinkedInVersion(userId, lang);
+  const baseRow = own ?? await latestLinkedInVersion(userId);
+  let baseProfile: LinkedInProfile | null = null;
+  try { baseProfile = baseRow ? linkedInProfileSchema.parse(JSON.parse(baseRow.data)) : null; } catch { /* broken row */ }
+  const [prof] = await db.select({ letterConfig: userProfile.letterConfig }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const cvText = await loadLinkedInCvText(userId);
+  const docs = await loadDocumentsContext(userId);
+  let jobAd: { company: string | null; role: string | null; description: string | null } | null = null;
+  if (applicationId) {
+    const [a] = await db.select({ company: applications.company, role: applications.role, description: applications.description }).from(applications)
+      .where(and(eq(applications.id, applicationId), eq(applications.userId, userId))).limit(1);
+    jobAd = a ?? null;
+  }
+  // Tone: the user's own About and posts, plus their style rules from the Letter-Coach.
+  let rules = "";
+  try {
+    const lc = JSON.parse(prof?.letterConfig ?? "{}") as { styleRules?: string; noGos?: string };
+    rules = [lc.styleRules?.trim() && `Stilregeln: ${lc.styleRules.trim()}`, lc.noGos?.trim() && `No-Gos: ${lc.noGos.trim()}`].filter(Boolean).join("\n");
+  } catch { /* no config */ }
+  const toneSample = [baseProfile?.basics.summary, ...(baseProfile?.activity.posts ?? []).filter(p => p.text).slice(0, 2).map(p => p.text), rules].filter(Boolean).join("\n---\n") || null;
+  const common = {
+    profile: baseProfile, profileLang: baseRow?.lang || null, positioning: state.positioning?.[lang]?.chosen ?? null,
+    goal: state.goal ?? null, answers: state.answers ?? null, cvText, docs, toneSample,
+  };
+  const hasAnswers = Object.values(state.answers ?? {}).some(v => v?.trim());
+  return {
+    state, letterConfig: prof?.letterConfig ?? null, cvText,
+    base: { row: baseProfile ? baseRow : null, profile: baseProfile, sameLang: !!own && !!baseProfile },
+    input: liGenInput({ ...common, jobAd }),
+    // Figures may only come from the candidate's own sources — never from the job ad.
+    guardSource: liGenInput({ ...common, jobAd: null }),
+    hasSource: !!baseProfile || !!cvText || !!docs || hasAnswers,
+  };
+}
+const NO_GEN_SOURCE = "Keine Quellen: Profil importieren, Lebenslauf hinterlegen oder die Fragen beantworten";
+
+app.post("/api/linkedin/positioning", async (c) => {
+  const userId = getUserId(c);
+  const { ai, lang: rawLang, applicationId } = await c.req.json<{ ai: AiConfig; lang?: string; applicationId?: string | null }>();
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Anbieter konfiguriert" }, 400);
+  const lang = asLiLang(rawLang);
+  if (!lang) return c.json({ error: "Ungültige Sprache" }, 400);
+  const job = startLiJob(userId, "positioning", "sources", async job => {
+    job.lang = lang;
+    const src = await liGenSources(userId, lang, applicationId);
+    const finish = (patch: Partial<LiJob>) => Object.assign(job, { ...patch, finishedAt: new Date().toISOString() });
+    if (!src.hasSource) return void finish({ status: "error", error: NO_GEN_SOURCE });
+    job.step = "llm";
+    try {
+      const options = normalizePositioning(extractJson(await callAi(liPositioningPrompt(lang), src.input, ai)), src.guardSource);
+      if (!options.length) throw new Error("Die KI-Antwort enthielt keine Positionierung");
+      const state = await readLinkedInState(userId);   // re-read: the user may have edited meanwhile
+      const prev = state.positioning?.[lang];
+      await writeLinkedInState(userId, { ...state, positioning: { ...(state.positioning ?? {}), [lang]: { options, chosen: prev?.chosen ?? null, createdAt: new Date().toISOString() } } });
+      finish({ status: "done" });
+    } catch (err) {
+      console.error("linkedin positioning error:", err);
+      finish({ status: "error", error: `KI-Anfrage fehlgeschlagen: ${(err as Error).message.slice(0, 160)}` });
+    }
+  });
+  return c.json(liJobOut(job), 202);
+});
+
+async function runLinkedInGenerate(job: LiJob, userId: string, lang: LinkedInLang, parts: LiGenPart[], ai: AiConfig, applicationId: string | null) {
+  Object.assign(job, { lang, parts, done: [], failed: [] });
+  const src = await liGenSources(userId, lang, applicationId);
+  if (!src.hasSource) return void Object.assign(job, { status: "error", error: NO_GEN_SOURCE, finishedAt: new Date().toISOString() });
+  let [row] = await db.select().from(linkedinVersions)
+    .where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "draft"), eq(linkedinVersions.lang, lang)))
+    .orderBy(desc(linkedinVersions.createdAt)).limit(1);
+  let profile: LinkedInProfile;
+  let raw: LiDraftRaw;
+  if (row) {
+    profile = linkedInProfileSchema.parse(JSON.parse(row.data));
+    raw = JSON.parse(row.raw ?? "{}") as LiDraftRaw;
+  } else {
+    profile = initialDraftProfile(src.base.profile, { sameLang: src.base.sameLang, location: src.state.goal?.market ?? null });
+    raw = emptyDraftRaw(lang, src.base.row ? { id: src.base.row.id, lang: src.base.row.lang || null } : null);
+    [row] = await db.insert(linkedinVersions).values({
+      userId, origin: "draft", source: "builder", lang, parentId: src.base.row?.id ?? null,
+      data: JSON.stringify(profile), raw: JSON.stringify(raw), note: "Entwurf",
+    }).returning();
+  }
+  job.versionId = row.id;
+  raw.positioning = src.state.positioning?.[lang]?.chosen ?? null;
+  raw.applicationId = applicationId;
+  const humanize = humanizerPrompt(lang, src.letterConfig);
+  const prose = (system: string) => (humanize ? `${system}\n\n${humanize}` : system);
+  const setWarnings = (part: LiGenPart, ws: string[]) => { raw.warnings = [...raw.warnings.filter(w => !w.startsWith(`${part}|`)), ...ws.map(w => `${part}|${w}`)]; };
+  const addNda = (xs: string[]) => { raw.ndaHints = [...new Set([...raw.ndaHints, ...xs])].slice(0, 10); };
+  for (const part of parts) {
+    job.step = part;
+    try {
+      if (part === "intro") {
+        const out = normalizeIntro(extractJson(await callAi(prose(liIntroPrompt(lang)), src.input, ai)), src.guardSource);
+        if (!out.headline && !out.about) throw new Error("Die KI-Antwort enthielt keine Texte");
+        profile = applyDraftParts(profile, { headline: out.headline ?? profile.basics.headline, summary: out.about ?? profile.basics.summary });
+        raw.headlineVariants = out.headlineVariants; addNda(out.ndaHints); setWarnings(part, out.warnings);
+      } else if (part === "positions") {
+        const mode = src.base.profile && profile.positions.length ? (src.base.sameLang ? "rewrite" : "translate") : "build";
+        const out = normalizePositionsAnswer(extractJson(await callAi(prose(liPositionsPrompt(lang, mode)), src.input, ai)), src.guardSource, {
+          positions: mode === "build" ? [] : profile.positions, education: mode === "build" ? [] : profile.education, translate: mode === "translate",
+        });
+        if (!out.positions.length) throw new Error("Die KI-Antwort enthielt keine Positionen");
+        profile = applyDraftParts(profile, { positions: out.positions, education: out.education });
+        raw.positionSkills = out.positionSkills; addNda(out.ndaHints); setWarnings(part, out.warnings);
+      } else if (part === "skills") {
+        const out = normalizeSkillsAnswer(extractJson(await callAi(liSkillsPrompt(lang), src.input, ai)), src.guardSource);
+        if (!out.skills.length) throw new Error("Die KI-Antwort enthielt keine Kenntnisse");
+        profile = applyDraftParts(profile, { skills: out.skills });
+        raw.skills = out.skills; raw.featured = out.featured;
+        const unverified = out.skills.filter(s => !s.verified).length;
+        setWarnings(part, unverified ? [`unverifiedSkills:${unverified}`] : []);
+      } else {
+        const out = normalizeActivityAnswer(extractJson(await callAi(prose(liActivityPrompt(lang)), src.input, ai)), src.guardSource);
+        if (!out.recRequests.length && !out.pillars.length && !out.plan.length) throw new Error("Die KI-Antwort enthielt keine Vorschläge");
+        Object.assign(raw, { recRequests: out.recRequests, pillars: out.pillars, groups: out.groups, plan: out.plan });
+      }
+      raw.generated[part] = new Date().toISOString();
+      delete raw.errors[part];
+      job.done!.push(part);
+    } catch (err) {
+      console.error(`linkedin generate ${part} error:`, err);
+      raw.errors[part] = (err as Error).message.slice(0, 200);
+      job.failed!.push(part);
+    }
+    raw.updatedAt = new Date().toISOString();
+    await db.update(linkedinVersions).set({ data: JSON.stringify(profile), raw: JSON.stringify(raw) }).where(eq(linkedinVersions.id, row.id));
+  }
+  Object.assign(job, job.done!.length
+    ? { status: "done", finishedAt: new Date().toISOString() }
+    : { status: "error", error: `Keine Texte erzeugt: ${Object.values(raw.errors)[0] ?? "unbekannter Fehler"}`, finishedAt: new Date().toISOString() });
+}
+
+app.post("/api/linkedin/generate", async (c) => {
+  const userId = getUserId(c);
+  const { ai, lang: rawLang, parts: rawParts, applicationId } = await c.req.json<{ ai: AiConfig; lang?: string; parts?: string[]; applicationId?: string | null }>();
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Anbieter konfiguriert" }, 400);
+  const lang = asLiLang(rawLang);
+  if (!lang) return c.json({ error: "Ungültige Sprache" }, 400);
+  const parts = (rawParts?.length ? rawParts : [...LI_GEN_PARTS]).filter((p): p is LiGenPart => (LI_GEN_PARTS as readonly string[]).includes(p));
+  if (!parts.length) return c.json({ error: "Keine Abschnitte gewählt" }, 400);
+  const state = await readLinkedInState(userId);
+  if (!state.positioning?.[lang]?.chosen) return c.json({ error: "Bitte zuerst die Positionierung bestätigen" }, 400);
+  const job = startLiJob(userId, "generate", parts[0], j => runLinkedInGenerate(j, userId, lang, parts, ai, applicationId ?? null));
+  return c.json(liJobOut(job), 202);
+});
+
+// Manual edits of a draft (headline, About, position titles/texts, skills) — overwrite in place.
+// Any edit makes an earlier judgement of the draft stale (it read the old text).
+app.patch("/api/linkedin/drafts/:id", async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.json<{ headline?: string | null; summary?: string | null; positions?: Array<{ id: string; title?: string | null; description?: string | null }>; skills?: string[] }>();
+  const [row] = await db.select().from(linkedinVersions)
+    .where(and(eq(linkedinVersions.id, c.req.param("id")), eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "draft"))).limit(1);
+  if (!row) return c.json({ error: "Entwurf nicht gefunden" }, 404);
+  let profile = linkedInProfileSchema.parse(JSON.parse(row.data));
+  const raw = JSON.parse(row.raw ?? "{}") as LiDraftRaw;
+  const clip = (v: unknown, n: number) => (typeof v === "string" ? v.slice(0, n).trim() || null : null);
+  if (body.headline !== undefined) profile.basics.headline = clip(body.headline, 220);
+  if (body.summary !== undefined) profile.basics.summary = clip(body.summary, 2600);
+  for (const e of Array.isArray(body.positions) ? body.positions : []) {
+    const p = profile.positions.find(x => x.id === e.id);
+    if (!p) continue;
+    if (e.title !== undefined) p.title = clip(e.title, 160);
+    if (e.description !== undefined) p.description = clip(e.description, 2000);
+  }
+  if (Array.isArray(body.skills)) {
+    const seen = new Set<string>();
+    const names = body.skills.map(s => String(s).trim().slice(0, 80)).filter(s => s && !seen.has(s.toLowerCase()) && seen.add(s.toLowerCase())).slice(0, 100);
+    // A skill the user typed is their own statement → counts as verified.
+    raw.skills = names.map(n => ({ name: n, verified: raw.skills?.find(s => s.name.toLowerCase() === n.toLowerCase())?.verified ?? true }));
+    profile = applyDraftParts(profile, { skills: raw.skills });
+  }
+  raw.updatedAt = new Date().toISOString();
+  await db.update(linkedinVersions).set({ data: JSON.stringify(profile), raw: JSON.stringify(raw) }).where(eq(linkedinVersions.id, row.id));
+  return c.json({ id: row.id, updatedAt: raw.updatedAt, placeholders: placeholderCount(profile) });
+});
+
+app.delete("/api/linkedin/drafts/:id", async (c) => {
+  const userId = getUserId(c);
+  const res = await db.delete(linkedinVersions)
+    .where(and(eq(linkedinVersions.id, c.req.param("id")), eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "draft")))
+    .returning({ id: linkedinVersions.id });
+  if (!res.length) return c.json({ error: "Entwurf nicht gefunden" }, 404);
+  return c.json({ deleted: res[0].id });
 });
 
 app.get("/api/linkedin/versions/:id/pdf", async (c) => {
@@ -5168,7 +5456,7 @@ app.post("/api/linkedin/import/zip", async (c) => {
   if (!snap.PROFILE?.length) return c.json({ error: "Kein LinkedIn-Export: Profile.csv fehlt im Archiv" }, 400);
   const [prof] = await db.select({ linkedinUrl: userProfile.linkedinUrl }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const data = normalizeSnapshot(snap, { source: "zip", publicUrl: prof?.linkedinUrl ?? null });
-  const saved = await saveLinkedInImport(userId, data, rawForStorage(snap), "zip", `ZIP-Export (${file.name})`);
+  const saved = await saveLinkedInImport(userId, data, rawForStorage(snap), "zip", `ZIP-Export (${file.name})`, asLiLang(body.lang));
   return c.json({ ...saved, files: used.length, stats: profileStats(data) });
 });
 
