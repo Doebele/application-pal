@@ -137,6 +137,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | `applications` | Jobs: stage, tags, salary, archived, archiveReason, matchScore, interview1/2Details, interview1/2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache, googleFolderId, **jobType** (pensum %), **workModel**, **contractType**, **language** | ✅ `user_id` FK | ✅ |
 | `user_profile` | Per-user profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, driveApplicationsFolderId, **ravSheetId** (RAV proof spreadsheet), sessionTimeout, desiredSalary, **letterConfig** (JSON: persistent cover-letter guidance, see `LetterCoachPage`) | ✅ `user_id` FK | ✅ |
 | `user_documents` | Document library (CV, Zeugnisse, Figma, etc.); `extraUrl` = optional secondary link, surfaced as a "Link" button on the tile when set | ✅ `user_id` FK | ✅ |
+| `cv_versions` | CV-Check: structured CV versions per language (append-only) + stored check inputs/result | ✅ `user_id` FK | ✅ |
 | `application_documents` | Per-job docs; `googleDocId`/`googleDocUrl` for Drive | via `application_id` | ✅ |
 | `application_activities` | Timeline events per job | via `application_id` | ✅ |
 | `application_contacts` | Contacts per job | via `application_id` | ✅ |
@@ -264,6 +265,26 @@ Swiss unemployment offices require a monthly proof of job-search efforts. `backe
 **Language**: the sheet export never uses the UI language — it uses the language detected from the target sheet's header row, otherwise the written values would violate the sheet's existing data validation.
 
 **Validation refresh**: the original template validates only down to row 25. Every export re-applies `setDataValidation` down to `lastRow + 15`, so appended rows get working dropdowns.
+
+### CV-Check (`/cv-check`, full guide `docs/cv-check.md`)
+
+VMock-style CV scoring. CVs are the `user_documents` rows with category `lebenslauf` — **never add a Settings field for CV locations**. The app is the source of truth: `cv_versions` (append-only, `origin` import|edit|optimize|translate, `data` = `CvDocument` JSON from shared, `check_result` = `{ inputs, result }`). `user_profile.cv_master_lang`, `user_profile.cv_check_waivers` (JSON `{ de?, en?, fr? }` of accepted keys).
+
+| File | Role |
+|---|---|
+| `backend/src/cv.ts` | import prompt (verbatim rules), `normalizeParsedCv`, `verbatimWarnings`, `detectCvLang` |
+| `backend/src/cv-criteria.ts` | weights, thresholds, word lists, check definitions (de/en/fr labels) — `version: "vmock-1"` |
+| `backend/src/cv-layout.ts` | `analyzePdfLayout()` via `pdfjs-dist/legacy` — lines (size/bold/italic from font names), margins, fill, coloured text, images |
+| `backend/src/cv-rules.ts` | pure `runCvCheck()` + LLM judge prompt/normaliser; self-check `npx tsx backend/src/cv-rules.check.ts` |
+| `frontend/src/components/check/` | shared check UI (tokens + classes, no inline colours) — reused by the LinkedIn-Check |
+
+Rules — don't "fix" them:
+- A check without its input is `"na"`, never passed; unverified hygiene never earns the bonus.
+- Specifics require a number in the bullet text; the LLM only decides scope vs outcome.
+- Rewrites use `[X]` placeholders, never invented numbers; competency quotes not found in the CV are dropped.
+- Waivers (`"format.colour"`, `"action:<bulletId>"`, `"specifics:<bulletId>"`) turn a fail into `"accepted"` with full points; `rawTotal` + `acceptedGain` = `total`.
+- `GET /api/cv/check` re-scores from stored inputs on every read — accepting a point or switching UI language needs no AI call.
+- Import and check run as in-memory background jobs (local models exceed the nginx 600 s limit); LM Studio/Ollama calls stream with a 20-minute timeout.
 
 ### Key Frontend Patterns
 

@@ -91,6 +91,9 @@ Month and week view with interview, deadline, and follow-up events. Filter by st
 - Desired salary as a reference line in the salary chart
 - Markdown preview for Master CV and notes
 
+### CV-Check `/cv-check`
+Scores your CV VMock-style (Impact 40 · Presentation 20 · Competencies 40, +10 bonus) against a target of 80+. Reads the CVs linked in Documents, checks layout straight from the PDF, and lists steps to improve with their point gains plus two AI rewrites per bullet (no invented numbers). Points you keep on purpose can be **accepted** and count as passed. → Full guide: [docs/cv-check.md](docs/cv-check.md)
+
 ### Cover Letter `/letter-coach`
 Personal, reusable cover-letter guidance the AI applies to **every** generated letter: structure, values, core strengths, preferred phrasing, style & tone, no-gos, and a reference letter. Configure once, refine over time. → Full guide: [docs/cover-letter.md](docs/cover-letter.md)
 
