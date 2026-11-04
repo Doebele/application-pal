@@ -181,10 +181,12 @@ export function parseCsv(text: string): string[][] {
 }
 
 /** CSV → records. Skips preamble lines (Connections.csv starts with "Notes:" and a blank line):
- *  the header is the first row with at least two non-empty cells. */
+ *  the header is the first row with at least two non-empty cells — or, in single-column
+ *  files like Skills.csv ("Name"), the first non-empty row. */
 export function csvRecords(text: string): SnapshotRecord[] {
   const rows = parseCsv(text);
-  const h = rows.findIndex(r => r.filter(c => c.trim()).length >= 2);
+  let h = rows.findIndex(r => r.filter(c => c.trim()).length >= 2);
+  if (h < 0) h = rows.findIndex(r => r.some(c => c.trim()));
   if (h < 0) return [];
   const header = rows[h].map(x => x.trim());
   return rows.slice(h + 1)

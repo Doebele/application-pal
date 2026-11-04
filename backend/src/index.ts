@@ -76,7 +76,11 @@ import {
   fetchSnapshot, fetchSnapshotDomain, normalizeSnapshot, rawForStorage, profileFingerprint, profileStats,
   snapshotFromZip, type Snapshot,
 } from "./linkedin.js";
-import { runLinkedInCheck } from "./linkedin-rules.js";
+import { runLinkedInCheck, type LiLlmJudgement } from "./linkedin-rules.js";
+import {
+  liJudgePrompt, liJudgeInput, normalizeLiJudgement, LI_IMPORT_SYSTEM_PROMPT, normalizeImportedProfile, liVerbatimWarnings,
+  type LiJudgeExtras,
+} from "./linkedin-llm.js";
 import { unzipSync } from "fflate";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
@@ -4725,7 +4729,7 @@ function linkedinStatusOut(conn: Awaited<ReturnType<typeof getLinkedInConnection
 }
 
 /** Saves an imported profile as a new version — unless it equals the latest import. */
-async function saveLinkedInImport(userId: string, data: LinkedInProfile, snap: Snapshot, source: string, note: string) {
+async function saveLinkedInImport(userId: string, data: LinkedInProfile, raw: unknown, source: string, note: string) {
   const prev = await latestLinkedInVersion(userId);
   let changed = true;
   if (prev) {
@@ -4734,7 +4738,7 @@ async function saveLinkedInImport(userId: string, data: LinkedInProfile, snap: S
   if (!changed) return { versionId: prev!.id, changed };
   const [row] = await db.insert(linkedinVersions).values({
     userId, origin: "import", source, parentId: prev?.id ?? null,
-    data: JSON.stringify(data), raw: JSON.stringify(rawForStorage(snap)), note,
+    data: JSON.stringify(data), raw: JSON.stringify(raw), note,
   }).returning({ id: linkedinVersions.id });
   return { versionId: row.id, changed };
 }
@@ -4762,7 +4766,7 @@ async function runLinkedInSync(job: LinkedInSyncJob, token: string) {
   }
   const [prof] = await db.select({ linkedinUrl: userProfile.linkedinUrl }).from(userProfile).where(eq(userProfile.userId, job.userId)).limit(1);
   const data = normalizeSnapshot(snap, { source: "api", failed, publicUrl: prof?.linkedinUrl ?? null });
-  const { versionId, changed } = await saveLinkedInImport(job.userId, data, snap, "api", "LinkedIn-Synchronisation");
+  const { versionId, changed } = await saveLinkedInImport(job.userId, data, rawForStorage(snap), "api", "LinkedIn-Synchronisation");
   await upsertLinkedInConnection(job.userId, {
     lastSyncAt: new Date(),
     lastSyncError: failed.length ? `Teilweise geladen – nicht verfügbar: ${failed.join(", ")}` : null,
@@ -4952,16 +4956,183 @@ app.get("/api/linkedin/check", async (c) => {
   if (!row) return c.json({ result: null, version: null, state });
   let profile: LinkedInProfile;
   try { profile = linkedInProfileSchema.parse(JSON.parse(row.data)); } catch { return c.json({ error: "Gespeicherte Profilversion ist beschädigt" }, 500); }
+  // The model's judgement belongs to exactly this version (it read this text).
+  const judged = row.checkResult ? JSON.parse(row.checkResult) as LiCheckStored : null;
   const result = runLinkedInCheck({
     profile, uiLang,
-    goal: state.goal ? { kind: state.goal.kind ?? undefined, targetRole: state.goal.targetRole ?? undefined, market: state.goal.market ?? undefined } : null,
+    goal: liGoalOf(state),
     selfReport: state.selfReport ?? null,
+    llm: judged?.llm ?? null, cvFacts: judged?.extras.cv ?? null,
     accepted: state.waivers ?? [],
   });
+  const raw = row.raw ? (() => { try { return JSON.parse(row.raw!) as { kind?: string }; } catch { return null; } })() : null;
   return c.json({
     result, state,
-    version: { id: row.id, source: row.source, note: row.note, createdAt: row.createdAt.toISOString(), stats: profileStats(profile) },
+    judge: judged ? { checkedAt: judged.checkedAt, error: judged.llmError ?? null, cvUsed: judged.cvUsed, extras: judged.extras } : null,
+    version: {
+      id: row.id, source: row.source, note: row.note, createdAt: row.createdAt.toISOString(), stats: profileStats(profile),
+      hasPdf: raw?.kind === "pdf", profile,
+    },
   });
+});
+
+const liGoalOf = (s: LinkedInState) => (s.goal
+  ? { kind: s.goal.kind ?? undefined, targetRole: s.goal.targetRole ?? undefined, market: s.goal.market ?? undefined }
+  : null);
+
+// ── LinkedIn-Check: judgement by the configured (local) model ──
+// One call per run, stored on the version row (`check_result`); scoring stays pure and
+// re-runs on every GET. Background job because local models exceed the nginx timeout.
+type LiCheckStored = { checkedAt: string; uiLang: UiLang; llm: LiLlmJudgement | null; llmError?: string; cvUsed: boolean; extras: LiJudgeExtras };
+type LiJob = {
+  id: string; userId: string; kind: "check" | "import"; status: "running" | "done" | "error"; step: string;
+  startedAt: string; finishedAt?: string; error?: string; versionId?: string; warnings?: string[]; changed?: boolean;
+};
+const linkedinJobs = new Map<string, LiJob>();
+const liJobOut = ({ userId: _u, ...j }: LiJob) => j;
+function startLiJob(userId: string, kind: LiJob["kind"], step: string, run: (job: LiJob) => Promise<void>): LiJob {
+  const running = [...linkedinJobs.values()].find(j => j.userId === userId && j.kind === kind && j.status === "running");
+  if (running) return running;
+  for (const [id, j] of linkedinJobs) if (j.status !== "running" && Date.now() - Date.parse(j.startedAt) > 86_400_000) linkedinJobs.delete(id);
+  const job: LiJob = { id: crypto.randomUUID(), userId, kind, status: "running", step, startedAt: new Date().toISOString() };
+  linkedinJobs.set(job.id, job);
+  void run(job).catch(err => {
+    console.error(`linkedin ${kind} job crashed:`, err);
+    Object.assign(job, { status: "error", error: "Interner Fehler", finishedAt: new Date().toISOString() });
+  });
+  return job;
+}
+
+/** CV facts for the comparison — independent of the CV-Check: Master-CV text, else the
+ *  cached summaries of "Lebenslauf" documents. */
+async function loadLinkedInCvText(userId: string): Promise<string | null> {
+  const [p] = await db.select({ cv: userProfile.masterCv }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  if (p?.cv?.trim()) return p.cv.trim();
+  const docs = await db.select({ name: userDocuments.name, s: userDocuments.contentSummary }).from(userDocuments)
+    .where(and(eq(userDocuments.userId, userId), eq(userDocuments.category, "lebenslauf")));
+  const text = docs.filter(d => d.s).map(d => `### ${d.name}\n${d.s}`).join("\n\n");
+  return text || null;
+}
+
+app.post("/api/linkedin/check", async (c) => {
+  const userId = getUserId(c);
+  const { ai, uiLang: rawLang } = await c.req.json<{ ai: AiConfig; uiLang?: string }>();
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Anbieter konfiguriert" }, 400);
+  const row = await latestLinkedInVersion(userId);
+  if (!row) return c.json({ error: "Noch kein LinkedIn-Profil importiert" }, 404);
+  const uiLang = asUiLang(rawLang);
+  const job = startLiJob(userId, "check", "cv", async job => {
+    job.versionId = row.id;
+    const profile = linkedInProfileSchema.parse(JSON.parse(row.data));
+    const state = await readLinkedInState(userId);
+    const cvText = await loadLinkedInCvText(userId);
+    job.step = "llm";
+    const stored: LiCheckStored = { checkedAt: new Date().toISOString(), uiLang, llm: null, cvUsed: !!cvText, extras: { headlineVariants: [], cv: null, ndaHints: [] } };
+    try {
+      const input = liJudgeInput(profile, { targetRole: state.goal?.targetRole, market: state.goal?.market, cvText });
+      const raw = await callAi(liJudgePrompt(uiLang, !!cvText), input, ai);
+      const n = normalizeLiJudgement(extractJson(raw), { hasCv: !!cvText, source: input });
+      stored.llm = n.llm; stored.extras = n.extras;
+      if (!Object.keys(n.llm).length) stored.llmError = "Die KI-Antwort enthielt keine Bewertung";
+    } catch (err) {
+      console.error("linkedin judge error:", err);
+      stored.llmError = (err as Error).message.slice(0, 200);
+    }
+    job.step = "score";
+    // A failed run never wipes an earlier judgement of this version: keep it, only record the error.
+    let save: LiCheckStored = stored;
+    if (!stored.llm) {
+      const [cur] = await db.select({ r: linkedinVersions.checkResult }).from(linkedinVersions).where(eq(linkedinVersions.id, row.id));
+      const prev = (() => { try { return cur?.r ? (JSON.parse(cur.r) as LiCheckStored) : null; } catch { return null; } })();
+      if (prev?.llm) save = { ...prev, llmError: stored.llmError };
+    }
+    await db.update(linkedinVersions).set({ checkResult: JSON.stringify(save) }).where(eq(linkedinVersions.id, row.id));
+    Object.assign(job, stored.llmError && !stored.llm
+      ? { status: "error", error: `KI-Bewertung fehlgeschlagen: ${stored.llmError}`, finishedAt: new Date().toISOString() }
+      : { status: "done", finishedAt: new Date().toISOString() });
+  });
+  return c.json(liJobOut(job), 202);
+});
+
+app.get("/api/linkedin/jobs", (c) => {
+  const userId = getUserId(c);
+  return c.json([...linkedinJobs.values()].filter(j => j.userId === userId).sort((a, b) => b.startedAt.localeCompare(a.startedAt)).map(liJobOut));
+});
+
+// ── Import from a LinkedIn PDF ("More → Save to PDF") or the copied profile page ──
+// The model only structures the text (verbatim); the PDF is kept on the version so the
+// check page can show it with pdf.js.
+async function runLinkedInTextImport(job: LiJob, userId: string, text: string, ai: AiConfig, source: "pdf" | "text", note: string, pdf?: Uint8Array) {
+  job.step = "llm";
+  let data: LinkedInProfile;
+  try {
+    const raw = await callAi(LI_IMPORT_SYSTEM_PROMPT, `Text des LinkedIn-Profils:\n\n${text.slice(0, 30000)}`, ai);
+    const [prof] = await db.select({ linkedinUrl: userProfile.linkedinUrl }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+    data = normalizeImportedProfile(extractJson(raw), { source, text, publicUrl: prof?.linkedinUrl ?? null });
+  } catch (err) {
+    console.error("linkedin import llm error:", err);
+    Object.assign(job, { status: "error", error: `KI-Anfrage fehlgeschlagen oder Antwort nicht lesbar (${(err as Error).message.slice(0, 160)})`, finishedAt: new Date().toISOString() });
+    return;
+  }
+  if (!data.basics.headline && !data.positions.length) {
+    Object.assign(job, { status: "error", error: "Im Text wurde kein LinkedIn-Profil erkannt", finishedAt: new Date().toISOString() });
+    return;
+  }
+  job.step = "save";
+  const raw = source === "pdf" ? { kind: "pdf", text, pdfBase64: Buffer.from(pdf!).toString("base64") } : { kind: "text", text };
+  const saved = await saveLinkedInImport(userId, data, raw, source, note);
+  Object.assign(job, { status: "done", versionId: saved.versionId, changed: saved.changed, warnings: liVerbatimWarnings(data, text), finishedAt: new Date().toISOString() });
+}
+
+app.post("/api/linkedin/import/pdf", async (c) => {
+  const userId = getUserId(c);
+  const body = await c.req.parseBody();
+  const file = body.file;
+  let ai: AiConfig | null = null;
+  try { ai = JSON.parse(String(body.ai ?? "null")); } catch { /* invalid */ }
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Anbieter konfiguriert" }, 400);
+  if (!(file instanceof File)) return c.json({ error: "Keine Datei" }, 400);
+  if (file.size > 20 * 1024 * 1024) return c.json({ error: "Die Datei ist grösser als 20 MB" }, 413);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let text = "";
+  try {
+    const parser = new PDFParse({ data: Buffer.from(bytes) });
+    text = (await parser.getText()).text.trim();
+    await parser.destroy();
+  } catch { return c.json({ error: "Die Datei ist kein lesbares PDF" }, 400); }
+  if (!text) return c.json({ error: "Das PDF enthält keinen lesbaren Text" }, 422);
+  const job = startLiJob(userId, "import", "pdf", j => runLinkedInTextImport(j, userId, text, ai!, "pdf", `PDF (${file.name})`, bytes));
+  return c.json(liJobOut(job), 202);
+});
+
+app.post("/api/linkedin/import/text", async (c) => {
+  const userId = getUserId(c);
+  const { text, ai } = await c.req.json<{ text: string; ai: AiConfig }>();
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Anbieter konfiguriert" }, 400);
+  const t = (text ?? "").trim();
+  if (t.length < 80) return c.json({ error: "Zu wenig Text – bitte die ganze Profilseite kopieren" }, 400);
+  const job = startLiJob(userId, "import", "text", j => runLinkedInTextImport(j, userId, t.slice(0, 60000), ai, "text", "Kopierter Profiltext"));
+  return c.json(liJobOut(job), 202);
+});
+
+// Version history (metadata) and the stored PDF of a PDF import.
+app.get("/api/linkedin/versions", async (c) => {
+  const userId = getUserId(c);
+  const rows = await db.select({
+    id: linkedinVersions.id, origin: linkedinVersions.origin, source: linkedinVersions.source,
+    note: linkedinVersions.note, createdAt: linkedinVersions.createdAt, judged: linkedinVersions.checkResult,
+  }).from(linkedinVersions).where(eq(linkedinVersions.userId, userId)).orderBy(desc(linkedinVersions.createdAt));
+  return c.json(rows.map(r => ({ ...r, judged: !!r.judged })));
+});
+
+app.get("/api/linkedin/versions/:id/pdf", async (c) => {
+  const userId = getUserId(c);
+  const [row] = await db.select({ raw: linkedinVersions.raw }).from(linkedinVersions)
+    .where(and(eq(linkedinVersions.id, c.req.param("id")), eq(linkedinVersions.userId, userId))).limit(1);
+  let raw: { kind?: string; pdfBase64?: string } | null = null;
+  try { raw = row?.raw ? JSON.parse(row.raw) : null; } catch { /* none */ }
+  if (raw?.kind !== "pdf" || !raw.pdfBase64) return c.json({ error: "Kein PDF zu dieser Version" }, 404);
+  return new Response(Buffer.from(raw.pdfBase64, "base64"), { headers: { "Content-Type": "application/pdf", "Cache-Control": "no-store" } });
 });
 
 // Accept (waive) or un-accept one checkpoint; body { key, accepted }.
@@ -4997,7 +5168,7 @@ app.post("/api/linkedin/import/zip", async (c) => {
   if (!snap.PROFILE?.length) return c.json({ error: "Kein LinkedIn-Export: Profile.csv fehlt im Archiv" }, 400);
   const [prof] = await db.select({ linkedinUrl: userProfile.linkedinUrl }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const data = normalizeSnapshot(snap, { source: "zip", publicUrl: prof?.linkedinUrl ?? null });
-  const saved = await saveLinkedInImport(userId, data, snap, "zip", `ZIP-Export (${file.name})`);
+  const saved = await saveLinkedInImport(userId, data, rawForStorage(snap), "zip", `ZIP-Export (${file.name})`);
   return c.json({ ...saved, files: used.length, stats: profileStats(data) });
 });
 

@@ -37,3 +37,58 @@
 .li-disconnect { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--border); padding-top: 8px; }
 .li-privacy { display: flex; align-items: flex-start; gap: 6px; font-size: 11px; color: var(--fg-3); line-height: 1.5; }
 .li-privacy svg { flex-shrink: 0; margin-top: 2px; }
+
+/* ── LinkedIn-Check: sidebar pieces ── */
+.li-kind { margin-left: 6px; font-size: 9px; text-transform: uppercase; letter-spacing: .05em; color: var(--fg-3); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; vertical-align: 1px; }
+.li-self, .li-goal-kinds { display: flex; flex-wrap: wrap; gap: 4px; }
+.li-self-opt { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; padding: 3px 9px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: none; color: var(--fg-2); font: inherit; font-size: 11px; }
+.li-self-opt:hover { border-color: var(--accent); color: var(--accent); }
+.li-self-opt[aria-checked="true"] { border-color: var(--accent); color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-weight: 600; }
+.li-self-opt:disabled { opacity: .5; cursor: default; }
+.li-self-pts { font-size: 10px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.li-effort { flex-shrink: 0; display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--fg-3); border: 1px solid var(--border); border-radius: 999px; padding: 0 7px; white-space: nowrap; }
+.li-effort[data-effort="minutes"] { color: var(--score-high); border-color: var(--score-high-border); }
+.li-effort[data-effort="weeks"] { color: var(--score-mid); border-color: var(--score-mid-border); }
+.li-group { scroll-margin-top: 8px; border-radius: 8px; }
+.li-group[data-focus="true"] { box-shadow: 0 0 0 1px var(--accent); padding: 0 8px 4px; margin: 4px -8px; }
+.li-versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.li-versions li { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--fg-2); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); }
+.li-versions li[data-current="true"] { border-color: color-mix(in srgb, var(--accent) 40%, transparent); background: color-mix(in srgb, var(--accent) 6%, transparent); }
+.li-viewswitch { display: flex; gap: 2px; padding: 2px; border-radius: 8px; background: var(--surface-2); }
+.li-viewswitch .btn { font-size: 12px; padding: 4px 10px; gap: 5px; }
+
+/* ── LinkedIn-Check: profile cards (content area) ── */
+.lic-scroll { flex: 1; min-height: 0; overflow-y: auto; padding-right: 4px; }
+.lic-stack { display: flex; flex-direction: column; gap: 10px; max-width: 760px; margin: 0 auto; padding-bottom: 24px; }
+.lic-card { border: 1px solid var(--border); border-radius: 10px; background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; cursor: pointer; text-align: left; }
+.lic-card:hover, .lic-card:focus-visible { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); outline: none; }
+.lic-card[data-ghost="true"] { border-style: dashed; background: transparent; }
+.lic-card-head { display: flex; align-items: center; gap: 8px; }
+.lic-card-head h3 { flex: 1; margin: 0; font-size: 13px; font-weight: 600; color: var(--fg-1); }
+.lic-card-icon { color: var(--fg-3); display: inline-flex; }
+.lic-pts { font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--fg-3); white-space: nowrap; }
+.lic-pts[data-status="good"] { color: var(--score-high); background: var(--score-high-bg); border-color: var(--score-high-border); }
+.lic-pts[data-status="onTrack"] { color: var(--score-mid); background: var(--score-mid-bg); border-color: var(--score-mid-border); }
+.lic-pts[data-status="needsWork"] { color: var(--score-low); background: var(--score-low-bg); border-color: var(--score-low-border); }
+.lic-ghost { font-size: 12px; color: var(--fg-3); }
+.lic-banner { height: 64px; border-radius: 8px; background: var(--surface-2); border: 1px dashed var(--border); display: flex; align-items: flex-end; justify-content: flex-end; padding: 6px 8px; font-size: 10px; color: var(--fg-3); }
+.lic-intro { display: flex; flex-direction: column; gap: 3px; margin-top: -30px; padding-left: 4px; }
+.lic-avatar { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; font-size: 20px; font-weight: 700; color: var(--fg-2);
+  background: var(--surface-2); border: 3px solid var(--surface); box-shadow: 0 0 0 1px var(--border); margin-bottom: 4px; }
+.lic-name { font-size: 18px; font-weight: 700; color: var(--fg-1); }
+.lic-headline { font-size: 13px; color: var(--fg-1); line-height: 1.45; }
+.lic-meta { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--fg-3); }
+.lic-meta span { display: inline-flex; align-items: center; gap: 3px; }
+.lic-url { font-family: var(--font-mono); }
+.lic-text { font-size: 12px; color: var(--fg-2); line-height: 1.55; white-space: pre-line; }
+.lic-clamp { display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
+.lic-muted { font-size: 11px; color: var(--fg-3); line-height: 1.5; }
+.lic-missing { font-size: 11px; color: var(--score-low); }
+.lic-item { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; border-top: 1px solid var(--border); }
+.lic-item:first-of-type { border-top: 0; padding-top: 0; }
+.lic-item-title { font-size: 12px; font-weight: 600; color: var(--fg-1); }
+.lic-item-sub { font-size: 12px; color: var(--fg-2); }
+.lic-sub { font-size: 12px; color: var(--fg-2); line-height: 1.5; }
+.lic-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.lic-post { font-size: 12px; color: var(--fg-2); line-height: 1.45; }

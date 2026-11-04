@@ -16,6 +16,7 @@ import { TimelinePage } from "./pages/TimelinePage";
 import { ProfilePage } from "./pages/ProfilePage";
 import { DocumentsPage } from "./pages/DocumentsPage";
 import { LetterCoachPage } from "./pages/LetterCoachPage";
+import { LinkedInCheckPage } from "./pages/LinkedInCheckPage";
 import { CvCheckPage } from "./pages/CvCheckPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 import { TablePage } from "./pages/TablePage";
@@ -75,6 +76,7 @@ function MainApp() {
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/cv-check"      element={<CvCheckPage />} />
           <Route path="/letter-coach"  element={<LetterCoachPage />} />
+          <Route path="/linkedin"      element={<LinkedInCheckPage />} />
           <Route path="/knowledge"     element={<KnowledgeBasePage />} />
           <Route path="*"              element={<Navigate to="/" replace />} />
         </Routes>

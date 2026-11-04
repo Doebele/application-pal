@@ -9,6 +9,7 @@ import { OpenNewWindow, FloppyDisk, User, Linkedin, Page, RefreshCircle, Expand,
 import { Topbar } from "../components/Topbar";
 import { LinkedInConnection } from "../components/linkedin/LinkedInConnection";
 import { api } from "../lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import type { UserProfile } from "@application-pal/shared";
 
 function AutoResizeTextarea({ value, onChange, onBlur, placeholder, minRows = 4 }: {
@@ -63,6 +64,7 @@ export function ProfilePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const queryClient = useQueryClient();
   const save = useCallback(async (patch?: Partial<UserProfile>) => {
     setSaving(true);
     try {
@@ -145,7 +147,8 @@ export function ProfilePage() {
                   key={p.value}
                   onClick={() => {
                     setProfile(prev => ({ ...prev, persona: p.value }));
-                    save({ persona: p.value });
+                    // The Rail gates the LinkedIn-Check on the persona → refresh the shared profile query
+                    save({ persona: p.value }).then(() => queryClient.invalidateQueries({ queryKey: ["profile"] }));
                   }}
                   style={{
                     padding: 0, borderRadius: 12, textAlign: "left",

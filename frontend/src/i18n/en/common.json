@@ -55,7 +55,8 @@
     "settings": "Settings",
     "timelineSub": "Workspace activity — all changes across applications",
     "letterCoach": "Cover Letter",
-    "cvCheck": "CV check"
+    "cvCheck": "CV check",
+    "linkedinCheck": "LinkedIn Check"
   },
   "tabs": {
     "actions": "Actions",
@@ -1183,6 +1184,170 @@
       "ARTICLES": "Articles",
       "MEMBER_SHARE_INFO": "Posts",
       "ALL_COMMENTS": "Comments"
+    }
+  },
+  "linkedinCheck": {
+    "title": "LinkedIn Check",
+    "sub": "Score and prioritise your profile – locally, nothing is changed on LinkedIn",
+    "loadError": "Could not load the LinkedIn Check",
+    "actionError": "Action failed",
+    "noProfile": "No LinkedIn profile imported yet.",
+    "empty": "No profile yet. Connect LinkedIn on the Profile page or import the ZIP export, the profile PDF or the copied page text.",
+    "emptyConnect": "Connect LinkedIn",
+    "emptyImport": "Import",
+    "totalShort": "{{total}} / 100",
+    "rated": "{{score}} of {{max}} rated points – scaled to 100",
+    "disclaimer": "The score is an estimate to set priorities, not a LinkedIn value. Points that can't be rated are left out.",
+    "notRated": "not rated",
+    "ofFull": "of {{max}}",
+    "steps": "Biggest levers",
+    "areas": "Areas",
+    "details": "All checkpoints",
+    "recommendations": "Notes",
+    "aiVisibility": "AI visibility (separate)",
+    "aiVisibilityHint": "How well AI search can identify and quote you. Not part of the score.",
+    "area": {
+      "firstImpression": "First impression",
+      "content": "Content",
+      "evidence": "Evidence",
+      "activity": "Activity & network"
+    },
+    "group": {
+      "photo": "Profile photo",
+      "banner": "Banner",
+      "headline": "Headline",
+      "basics": "URL, location, contact",
+      "about": "About",
+      "experience": "Experience",
+      "featured": "Featured",
+      "extras": "Projects, education, certifications",
+      "skills": "Skills",
+      "recommendations": "Recommendations",
+      "honors": "Honors, publications, languages",
+      "posts": "Posts",
+      "comments": "Comments",
+      "network": "Network & groups"
+    },
+    "effort": {
+      "minutes": "minutes",
+      "hours": "hours",
+      "weeks": "weeks"
+    },
+    "kind": {
+      "self": "self-report"
+    },
+    "self": {
+      "pro": "professional",
+      "ok": "decent",
+      "none": "missing",
+      "custom": "own design",
+      "image": "image, no message",
+      "default": "default",
+      "yes": "yes",
+      "partly": "partly",
+      "no": "no"
+    },
+    "judge": {
+      "run": "Run AI judgement",
+      "rerun": "Re-run AI judgement",
+      "running": "AI is judging…",
+      "at": "AI judgement from {{date}}",
+      "step": {
+        "cv": "Loading CV",
+        "llm": "Model is judging",
+        "score": "Saving"
+      },
+      "noAi": "No AI model configured (Settings). Rule points are still calculated.",
+      "cloud": "Note: with {{provider}} your profile data goes to a cloud provider. Choose a local model (LM Studio/Ollama) for full privacy.",
+      "needed": "Headline, About and topics are judged by the local model. Until then these points are not rated.",
+      "slow": "Local models take a few minutes. You can leave the page – the judgement keeps running.",
+      "error": "AI judgement incomplete: {{error}}"
+    },
+    "tabs": {
+      "score": "Score",
+      "tools": "AI tools",
+      "source": "Source & goal"
+    },
+    "view": {
+      "label": "View",
+      "cards": "Cards"
+    },
+    "tools": {
+      "headlines": "Headline variants",
+      "needJudge": "Appear after the AI judgement.",
+      "noVariants": "The AI returned no variants.",
+      "placeholderHint": "[X] = a number or name only you know – nothing is invented.",
+      "variant": {
+        "authority": "Authority",
+        "result": "Result",
+        "niche": "Niche"
+      },
+      "nda": "Check whether these client names are confidential: {{names}}",
+      "noCv": "No CV found (Profile → Master CV or Documents “Lebenslauf”) – the CV comparison is missing.",
+      "moreTitle": "More tools coming",
+      "moreText": "About text, position descriptions and post ideas with copy cards per section."
+    },
+    "goal": {
+      "title": "Goal",
+      "kind": {
+        "job": "New job",
+        "switch": "Career change",
+        "clients": "Clients",
+        "visibility": "Visibility"
+      },
+      "targetRole": "Target role",
+      "targetRolePh": "e.g. Design Lead",
+      "market": "Target market",
+      "marketPh": "e.g. German-speaking Switzerland",
+      "hint": "With a target role the app checks headline and search terms directly; the market sets the expected profile language."
+    },
+    "source": {
+      "title": "Source",
+      "connection": "LinkedIn connection",
+      "zip": "ZIP export",
+      "pdf": "Profile PDF",
+      "text": "Paste text",
+      "textPh": "Select the whole profile page (Cmd+A), copy and paste it here…",
+      "textGo": "Import text",
+      "hint": "ZIP: LinkedIn → Settings → Data privacy → Get a copy of your data. PDF: Profile → More → Save to PDF. The local model structures PDF and text verbatim.",
+      "importing": "Import running",
+      "verbatimWarn": "{{count}} passages differ from the original – please check:",
+      "privacy": "The app never changes anything on LinkedIn, sends nothing and keeps imports only in your database.",
+      "versions": "Versions",
+      "noVersions": "No versions yet.",
+      "judged": "AI-judged",
+      "beginner": "As a career starter you'll later begin with the build assistant; until then you can check an existing profile here.",
+      "kind": {
+        "api": "LinkedIn API",
+        "zip": "ZIP export",
+        "pdf": "Profile PDF",
+        "text": "Copied text"
+      }
+    },
+    "cards": {
+      "intro": "Intro",
+      "activity": "Activity",
+      "extras": "Education, projects, certifications",
+      "noName": "LinkedIn profile",
+      "noHeadline": "No headline",
+      "bannerSelf": "Banner – self-report",
+      "featuredSelf": "No import delivers “Featured” – please report it in the score tab.",
+      "chars": "{{n}} characters",
+      "activityStats": "{{posts}} posts · {{comments}} comments",
+      "notInSource": "Not delivered by this source.",
+      "noDescription": "No description",
+      "present": "present",
+      "projects": "Projects",
+      "certs": "Certifications",
+      "skillCount": "{{n}} skills",
+      "partialSkills": "source shows only some",
+      "awards": "Awards",
+      "publications": "Publications",
+      "connections": "{{n}} connections",
+      "groups": "{{n}} groups",
+      "ghost": "Missing – up to {{n}} points possible",
+      "notRatedShort": "n/r",
+      "ptsTitle": "Earned / ratable (full: {{full}})"
     }
   }
 }

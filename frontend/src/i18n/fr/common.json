@@ -55,7 +55,8 @@
     "settings": "Paramètres",
     "timelineSub": "Activités de l'espace de travail — toutes les modifications en un coup d'œil",
     "letterCoach": "Lettre de motivation",
-    "cvCheck": "Contrôle CV"
+    "cvCheck": "Contrôle CV",
+    "linkedinCheck": "Check LinkedIn"
   },
   "tabs": {
     "actions": "Actions",
@@ -1183,6 +1184,170 @@
       "ARTICLES": "Articles",
       "MEMBER_SHARE_INFO": "Publications",
       "ALL_COMMENTS": "Commentaires"
+    }
+  },
+  "linkedinCheck": {
+    "title": "Check LinkedIn",
+    "sub": "Évaluer et prioriser le profil – en local, rien n'est modifié sur LinkedIn",
+    "loadError": "Impossible de charger le Check LinkedIn",
+    "actionError": "Action échouée",
+    "noProfile": "Aucun profil LinkedIn importé.",
+    "empty": "Pas encore de profil. Connecte LinkedIn dans le Profil ou importe l'export ZIP, le PDF du profil ou le texte copié.",
+    "emptyConnect": "Connecter LinkedIn",
+    "emptyImport": "Importer",
+    "totalShort": "{{total}} / 100",
+    "rated": "{{score}} sur {{max}} points évalués – ramené à 100",
+    "disclaimer": "Le score est une estimation pour prioriser, pas une valeur LinkedIn. Les points non évaluables sont exclus.",
+    "notRated": "non évalué",
+    "ofFull": "sur {{max}}",
+    "steps": "Leviers principaux",
+    "areas": "Domaines",
+    "details": "Tous les critères",
+    "recommendations": "Remarques",
+    "aiVisibility": "Visibilité IA (à part)",
+    "aiVisibilityHint": "Dans quelle mesure les recherches IA te reconnaissent et te citent. Hors score.",
+    "area": {
+      "firstImpression": "Première impression",
+      "content": "Contenu",
+      "evidence": "Preuves",
+      "activity": "Activité & réseau"
+    },
+    "group": {
+      "photo": "Photo de profil",
+      "banner": "Bannière",
+      "headline": "Titre",
+      "basics": "URL, lieu, contact",
+      "about": "Infos",
+      "experience": "Expérience",
+      "featured": "Sélection",
+      "extras": "Projets, formation, certifications",
+      "skills": "Compétences",
+      "recommendations": "Recommandations",
+      "honors": "Distinctions, publications, langues",
+      "posts": "Publications",
+      "comments": "Commentaires",
+      "network": "Réseau & groupes"
+    },
+    "effort": {
+      "minutes": "minutes",
+      "hours": "heures",
+      "weeks": "semaines"
+    },
+    "kind": {
+      "self": "auto-évaluation"
+    },
+    "self": {
+      "pro": "professionnelle",
+      "ok": "correcte",
+      "none": "absente",
+      "custom": "visuel propre",
+      "image": "image sans message",
+      "default": "par défaut",
+      "yes": "oui",
+      "partly": "en partie",
+      "no": "non"
+    },
+    "judge": {
+      "run": "Lancer l'évaluation IA",
+      "rerun": "Relancer l'évaluation IA",
+      "running": "L'IA évalue…",
+      "at": "Évaluation IA du {{date}}",
+      "step": {
+        "cv": "Chargement du CV",
+        "llm": "Le modèle évalue",
+        "score": "Enregistrement"
+      },
+      "noAi": "Aucun modèle IA configuré (Paramètres). Les points de règle sont tout de même calculés.",
+      "cloud": "Attention : avec {{provider}}, les données du profil partent vers un fournisseur cloud. Choisis un modèle local (LM Studio/Ollama) pour une confidentialité totale.",
+      "needed": "Le titre, les infos et les sujets sont évalués par le modèle local. D'ici là, ces points ne sont pas évalués.",
+      "slow": "Les modèles locaux prennent quelques minutes. Tu peux quitter la page – l'évaluation continue.",
+      "error": "Évaluation IA incomplète : {{error}}"
+    },
+    "tabs": {
+      "score": "Évaluation",
+      "tools": "Outils IA",
+      "source": "Source & objectif"
+    },
+    "view": {
+      "label": "Vue",
+      "cards": "Cartes"
+    },
+    "tools": {
+      "headlines": "Variantes de titre",
+      "needJudge": "Apparaissent après l'évaluation IA.",
+      "noVariants": "L'IA n'a fourni aucune variante.",
+      "placeholderHint": "[X] = un chiffre ou un nom que toi seul connais – rien n'est inventé.",
+      "variant": {
+        "authority": "Autorité",
+        "result": "Résultat",
+        "niche": "Niche"
+      },
+      "nda": "Vérifie la confidentialité de ces noms de clients : {{names}}",
+      "noCv": "Aucun CV trouvé (Profil → CV maître ou Documents « Lebenslauf ») – la comparaison avec le CV manque.",
+      "moreTitle": "D'autres outils suivront",
+      "moreText": "Texte Infos, descriptions de postes et idées de publications avec cartes à copier par section."
+    },
+    "goal": {
+      "title": "Objectif",
+      "kind": {
+        "job": "Nouveau poste",
+        "switch": "Reconversion",
+        "clients": "Clients",
+        "visibility": "Visibilité"
+      },
+      "targetRole": "Rôle cible",
+      "targetRolePh": "p. ex. Design Lead",
+      "market": "Marché cible",
+      "marketPh": "p. ex. Suisse romande",
+      "hint": "Avec un rôle cible, l'app vérifie directement le titre et les mots-clés ; le marché détermine la langue attendue du profil."
+    },
+    "source": {
+      "title": "Source",
+      "connection": "Connexion LinkedIn",
+      "zip": "Export ZIP",
+      "pdf": "PDF du profil",
+      "text": "Coller le texte",
+      "textPh": "Sélectionne toute la page du profil (Cmd+A), copie-la et colle-la ici…",
+      "textGo": "Importer le texte",
+      "hint": "ZIP : LinkedIn → Préférences → Confidentialité → Obtenir une copie de vos données. PDF : Profil → Plus → Enregistrer au format PDF. Le modèle local structure PDF et texte mot pour mot.",
+      "importing": "Import en cours",
+      "verbatimWarn": "{{count}} passages diffèrent de l'original – à vérifier :",
+      "privacy": "L'app ne modifie rien sur LinkedIn, n'envoie rien et garde les imports uniquement dans ta base de données.",
+      "versions": "Versions",
+      "noVersions": "Pas encore de versions.",
+      "judged": "évalué IA",
+      "beginner": "En début de carrière, tu commenceras plus tard avec l'assistant de création ; en attendant, tu peux vérifier un profil existant ici.",
+      "kind": {
+        "api": "API LinkedIn",
+        "zip": "Export ZIP",
+        "pdf": "PDF du profil",
+        "text": "Texte copié"
+      }
+    },
+    "cards": {
+      "intro": "Intro",
+      "activity": "Activité",
+      "extras": "Formation, projets, certifications",
+      "noName": "Profil LinkedIn",
+      "noHeadline": "Pas de titre",
+      "bannerSelf": "Bannière – auto-évaluation",
+      "featuredSelf": "Aucun import ne fournit la « Sélection » – indique-la dans l'évaluation.",
+      "chars": "{{n}} caractères",
+      "activityStats": "{{posts}} publications · {{comments}} commentaires",
+      "notInSource": "Non fourni par cette source.",
+      "noDescription": "Sans description",
+      "present": "aujourd'hui",
+      "projects": "Projets",
+      "certs": "Certifications",
+      "skillCount": "{{n}} compétences",
+      "partialSkills": "la source n'en montre qu'une partie",
+      "awards": "Distinctions",
+      "publications": "Publications",
+      "connections": "{{n}} relations",
+      "groups": "{{n}} groupes",
+      "ghost": "Manquant – jusqu'à {{n}} points possibles",
+      "notRatedShort": "n. é.",
+      "ptsTitle": "Obtenus / évaluables (total : {{full}})"
     }
   }
 }

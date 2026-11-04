@@ -413,9 +413,11 @@ Read-only sync of the member's own profile via the **Member Data Portability API
 
 Sync runs as an in-memory background job (`/api/linkedin/sync`, polled via `/api/linkedin/status`); a changed profile is appended to `linkedin_versions` (identical syncs are skipped via `profileFingerprint`). The Profile page auto-syncs when the last sync is older than 24 h. Photo, banner, custom URL, Featured and "Open to" are not in the API — the LinkedIn-Check must treat them as self-report / "not rated".
 
-### LinkedIn-Check (scoring engine)
+### LinkedIn-Check (`/linkedin`)
 
-100 points = First impression 25 + Content 35 + Evidence 20 + Activity 20, plus 8 separate AI-visibility points (never in the total). `backend/src/linkedin-criteria.ts` is the versioned catalogue (`li-1`, labels de/en/fr, efforts, buzzword lists). `backend/src/linkedin-rules.ts` holds the pure `runLinkedInCheck()`. Each checkpoint has a `kind`: `rule` (deterministic), `self` (user's self-report), `llm` (local model, phase 2). Self-check: `npx tsx backend/src/linkedin-rules.check.ts`.
+100 points = First impression 25 + Content 35 + Evidence 20 + Activity 20, plus 8 separate AI-visibility points (never in the total). `backend/src/linkedin-criteria.ts` is the versioned catalogue (`li-1`, labels de/en/fr, efforts, buzzword lists). `backend/src/linkedin-rules.ts` holds the pure `runLinkedInCheck()`. Each checkpoint has a `kind`: `rule` (deterministic), `self` (user's self-report), `llm` (local model). Self-checks: `npx tsx backend/src/linkedin-rules.check.ts` and `npx tsx backend/src/linkedin-llm.check.ts`.
+
+`backend/src/linkedin-llm.ts` holds the judge prompt + `normalizeLiJudgement()` (headline/About/posts/AI-visibility points, optional CV facts, 3 headline variants with `[X]` placeholders, NDA hints) and the PDF/text import prompt + `normalizeImportedProfile()`. `POST /api/linkedin/check` (body `{ ai, uiLang }`) runs the judge as an in-memory background job and stores `LiCheckStored` in `linkedin_versions.check_result` of the latest version; `GET /api/linkedin/check` merges it in. `POST /api/linkedin/import/pdf` (multipart `file` + `ai` JSON string) and `/import/text` (`{ text, ai }`) extract a profile with the model; jobs are polled via `GET /api/linkedin/jobs`. The PDF is kept in the version's raw data for `GET /api/linkedin/versions/:id/pdf` (pdf.js view). CV facts come from `masterCv`, else the `lebenslauf` document summaries — independent of the CV-Check. The Rail entry shows only for the personas `berufsumsteiger` / `berufseinsteiger`.
 
 User input lives in `user_profile.linkedin_state` (`LinkedInState`: journey, goal.targetRole/market, selfReport `{checkId: points}`, waivers, checklist), via `GET`/`PATCH /api/linkedin/state` and `POST /api/linkedin/check/waivers`. `GET /api/linkedin/check?uiLang=` re-scores the latest import on every read. `POST /api/linkedin/import/zip` (multipart `file`) reads the LinkedIn ZIP export: CSVs only, preamble rows skipped, `Recommendations_Given.csv` merged with a "given" marker. nginx allows 50 MB uploads.
 
@@ -425,6 +427,9 @@ Rules — don't "fix" them:
 - A missing headline or About text scores 0 on all its checkpoints, including the `llm` ones.
 - Buzzwords cost −0.5 each (`about.phrases`, max 0), never more than the About points already earned.
 - A year-only end date (`"2016"`) counts as December for the gap check.
+- The LinkedIn PDF only shows the top 3 skills: a PDF import never marks SKILLS as present. A text paste marks only the sections the model found.
+- The model never sets a score directly for rule checkpoints; it only fills the `llm` ones and the CV facts. Without a judgement the `llm` points are `na`.
+- `Skills.csv` has a single column: `csvRecords` falls back to the first non-empty row as header.
 
 ### Google OAuth Scopes
 

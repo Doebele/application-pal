@@ -14,6 +14,8 @@ const conn = csvRecords('Notes:\n"When exporting your connection data, you may n
 assert.equal(conn.length, 2);
 assert.equal(conn[0]["Last Name"], "Beispiel");
 assert.equal(csvRecords("").length, 0);
+// single-column files (Skills.csv) still have a header
+assert.deepEqual(csvRecords("Name\nFigma\nUX Research\n").map(r => r.Name), ["Figma", "UX Research"]);
 // ZIP: base-name matching, given recommendations merged with a marker, unknown files ignored
 const zipSnap = snapshotFromZip({
   "Basic_LinkedInDataExport/Profile.csv": strToU8("First Name,Last Name,Headline\nAlex,Muster,Design Lead\n"),

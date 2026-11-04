@@ -45,12 +45,14 @@ export type LiCheckResult = {
 export type LiGoal = { kind?: "job" | "clients" | "switch" | "visibility"; targetRole?: string; market?: string };
 /** Points per self-report check id (0 … max). */
 export type LiSelfReport = Record<string, number>;
-/** LLM judgements per check id (Phase 2). */
+/** LLM judgements per check id. */
 export type LiLlmJudgement = Record<string, { score: number; findings?: string[] }>;
+/** CV vs LinkedIn comparison from the judge run (null = no CV available). */
+export type LiCvFacts = { titleConflicts: Array<{ linkedin: string; cv: string }>; missingInLinkedIn: string[] };
 
 export type LiCheckInput = {
   profile: LinkedInProfile; uiLang: UiLang;
-  goal?: LiGoal | null; selfReport?: LiSelfReport | null; llm?: LiLlmJudgement | null;
+  goal?: LiGoal | null; selfReport?: LiSelfReport | null; llm?: LiLlmJudgement | null; cvFacts?: LiCvFacts | null;
   /** Waivers: check ids the user accepts as they are. */
   accepted?: string[];
   now?: Date;
@@ -83,6 +85,7 @@ const M = {
   fewResults: { de: "{n} Ergebnis-Sätze (Ziel 3–5)", en: "{n} result sentences (target 3–5)", fr: "{n} phrases de résultat (cible 3–5)" },
   numbers: { de: "{n} Aussagen mit Zahl", en: "{n} statements with a number", fr: "{n} énoncés chiffrés" },
   titleMismatch: { de: "Positionstitel „{t}“ passt nicht zur Headline", en: "Job title “{t}” doesn't match the headline", fr: "L'intitulé « {t} » ne correspond pas au titre" },
+  cvConflict: { de: "LinkedIn „{a}“, im CV „{b}“", en: "LinkedIn “{a}”, CV “{b}”", fr: "LinkedIn « {a} », CV « {b} »" },
   gap: { de: "Lücke von {n} Monaten ({a} bis {b})", en: "Gap of {n} months ({a} to {b})", fr: "Trou de {n} mois ({a} à {b})" },
   olderLong: { de: "Ältere Station mit {n} Zeichen", en: "Older role with {n} characters", fr: "Ancien poste de {n} caractères" },
   noDates: { de: "Keine lesbaren Daten", en: "No readable dates", fr: "Aucune date lisible" },
@@ -126,7 +129,37 @@ const REC: Record<string, L10n> = {
   self: { de: "Selbstauskunft ergänzen (Bild, Banner, Im Fokus …): {n} Punkte sind noch nicht bewertet", en: "Complete the self-report (photo, banner, Featured …): {n} points are not rated yet", fr: "Compléter l'auto-évaluation : {n} points non évalués" },
   llm: { de: "KI-Bewertung starten: {n} Punkte (Headline, Info, Themen) brauchen das lokale Modell", en: "Run the AI judgement: {n} points (headline, About, topics) need the local model", fr: "Lancer l'évaluation IA : {n} points nécessitent le modèle local" },
   domains: { de: "Diese Teile fehlen in der Quelle: {w}", en: "These parts are missing from the source: {w}", fr: "Parties absentes de la source : {w}" },
+  secondLang: { de: "Profil ist auf {a} – für den Zielmarkt ein Zweitprofil auf {b} anlegen (LinkedIn: „Profil in anderer Sprache hinzufügen“)", en: "Profile is in {a} — add a secondary profile in {b} for the target market (LinkedIn: “Add profile in another language”)", fr: "Profil en {a} — ajouter un profil secondaire en {b} pour le marché cible" },
+  cvMissing: { de: "Im CV, aber nicht auf LinkedIn: {w}", en: "In the CV but not on LinkedIn: {w}", fr: "Dans le CV mais pas sur LinkedIn : {w}" },
 };
+const LANG_LABEL: Record<string, L10n> = {
+  de: { de: "Deutsch", en: "German", fr: "allemand" },
+  en: { de: "Englisch", en: "English", fr: "anglais" },
+  fr: { de: "Französisch", en: "French", fr: "français" },
+};
+
+/** Rough language of a profile text by function words (de/en/fr), null when too short. */
+export function detectTextLang(text: string): "de" | "en" | "fr" | null {
+  const w = norm(text).split(/[^\p{L}]+/u);
+  if (w.length < 12) return null;
+  const count = (list: string[]) => w.filter(x => list.includes(x)).length;
+  const s = {
+    de: count(["und", "der", "die", "das", "ich", "mit", "fur", "ist", "nicht", "eine", "auf", "von", "zu", "bei"]),
+    en: count(["and", "the", "with", "for", "is", "my", "of", "to", "in", "at", "who", "that", "on"]),
+    fr: count(["et", "le", "la", "les", "des", "pour", "avec", "est", "je", "une", "dans", "du", "sur"]),
+  };
+  const best = (Object.entries(s) as Array<["de" | "en" | "fr", number]>).sort((a, b) => b[1] - a[1])[0];
+  return best[1] >= 2 ? best[0] : null;
+}
+/** Language a target market expects, from free text ("Schweiz", "Zürich", "DACH", "Romandie" …). */
+export function marketLang(market: string | null | undefined): "de" | "en" | "fr" | null {
+  const m = norm(market ?? "");
+  if (!m) return null;
+  if (/romandie|geneve|genf|lausanne|neuchatel|fribourg|france|frankreich|paris|belgique|\bfr\b/.test(m)) return "fr";
+  if (/dach|schweiz|suisse|switzerland|zurich|bern|basel|luzern|st\.? ?gallen|deutschland|germany|osterreich|austria|wien|munchen|berlin|hamburg|\b(ch|de|at)\b/.test(m)) return "de";
+  if (/\b(uk|us|usa)\b|london|united|international|remote|global|english/.test(m)) return "en";
+  return null;
+}
 
 // ── small helpers ────────────────────────────────────────────────
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -345,7 +378,10 @@ function scoreProfile(input: LiCheckInput): LiCheckResult {
     else {
       const ht = new Set(tokens(headline));
       const overlap = tokens(cur.title).some(t => ht.has(t) || [...ht].some(h => h.length >= 5 && (h.includes(t) || t.includes(h))));
-      graded("exp.titles", overlap ? 2 : 0, overlap ? [] : [{ text: L(M.titleMismatch, { t: cur.title }), where: posName(cur) }]);
+      // A title that contradicts the CV for the same role costs a point (needs the judge run).
+      const conflicts = (input.cvFacts?.titleConflicts ?? []).map(x => ({ text: L(M.cvConflict, { a: x.linkedin, b: x.cv }) }));
+      const findings = [...(overlap ? [] : [{ text: L(M.titleMismatch, { t: cur.title }), where: posName(cur) }]), ...conflicts];
+      graded("exp.titles", Math.min(overlap ? 2 : 0, conflicts.length ? 1 : 2), findings);
     }
     const dated = positions.filter(x => x.s).sort((a, b) => a.s!.getTime() - b.s!.getTime());
     if (!dated.length) na("exp.older", M.noDates);
@@ -524,6 +560,14 @@ function scoreProfile(input: LiCheckInput): LiCheckResult {
     { id: "llm", ok: llmOpen === 0, text: L(REC.llm, { n: llmOpen }) },
     ...(missingDomains.length ? [{ id: "domains", ok: false, text: L(REC.domains, { w: missingDomains.join(", ") }) }] : []),
   ];
+  const profLang = detectTextLang([headline, summary].join("\n"));
+  const wantLang = marketLang(input.goal?.market);
+  if (profLang && wantLang && profLang !== wantLang) {
+    recommendations.push({ id: "secondLang", ok: false, text: L(REC.secondLang, { a: pick(LANG_LABEL[profLang], uiLang), b: pick(LANG_LABEL[wantLang], uiLang) }) });
+  }
+  if (input.cvFacts?.missingInLinkedIn.length) {
+    recommendations.push({ id: "cvMissing", ok: false, text: L(REC.cvMissing, { w: input.cvFacts.missingInLinkedIn.join(" · ") }) });
+  }
 
   return {
     criteriaVersion: C.version, checkedAt: now.toISOString(), uiLang,
