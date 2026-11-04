@@ -39,6 +39,17 @@ function FlagIcon({ lang, size = 18 }: { lang: "de" | "en"; size?: number }) {
 }
 
 type Tab = "process" | "details" | "documents" | "ki";
+// UI state kept across switching between applications (tab, zoomed section).
+const sticky = new Map<string, unknown>();
+function useSticky<T>(key: string, initial: T): [T, (v: T | ((prev: T) => T)) => void] {
+  const [v, setV] = useState<T>(() => (sticky.has(key) ? sticky.get(key) as T : initial));
+  const set = (next: T | ((prev: T) => T)) => setV(prev => {
+    const val = typeof next === "function" ? (next as (p: T) => T)(prev) : next;
+    sticky.set(key, val);
+    return val;
+  });
+  return [v, set];
+}
 
 // Clipboard helper: tries modern API first, falls back to execCommand for focus/permission issues
 async function copyText(text: string): Promise<void> {
@@ -2491,7 +2502,7 @@ function DetailsTab({ app, stage, url, onUrlChange, onSave }: {
   const { t } = useTranslation();
   const [description, setDescription] = useState(app.description ?? "");
   const [descSaved,   setDescSaved]   = useState(false);
-  const [descExpanded,  setDescExpanded]  = useState(false);
+  const [descExpanded,  setDescExpanded]  = useSticky("descExpanded", false);
   const [descMode,    setDescMode]    = useState<"preview" | "edit">("preview");
 
   const saveDesc = () => {
@@ -4971,12 +4982,12 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
   const [newType, setNewType] = useState("note");
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
+  const [expandedResultId, setExpandedResultId] = useSticky<string | null>("processResult", null);
 
   // Expand-Logik for the content blocks
-  const [interviewExpanded, setInterviewExpanded] = useState(false);
-  const [letterDraftExpanded, setLetterDraftExpanded] = useState(false);
-  const [activitiesExpanded,setActivitiesExpanded]= useState(false);
+  const [interviewExpanded, setInterviewExpanded] = useSticky("interviewExpanded", false);
+  const [letterDraftExpanded, setLetterDraftExpanded] = useSticky("letterDraftExpanded", false);
+  const [activitiesExpanded,setActivitiesExpanded]= useSticky("activitiesExpanded", false);
 
   const expandStyle: React.CSSProperties = {
     position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
@@ -5052,7 +5063,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
         );
       })()}
       {expandedResultId && (
-        <TileExpandView
+        <TileExpandView key={`${app.id}-${expandedResultId}`}
           id={expandedResultId}
           entry={aiResults?.[expandedResultId] ?? null}
           appId={app.id}
@@ -5200,7 +5211,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
   const [running, setRunning] = useState(false);
   const [stepN, setStepN] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [expandedResultId, setExpandedResultId] = useState<string | null>(null);
+  const [expandedResultId, setExpandedResultId] = useSticky<string | null>("kiResult", null);
 
   // Parse stored match details from app
   const stored: MatchResult | null = (() => {
@@ -5290,7 +5301,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
         })}
       </div>
       {expandedResultId && (
-        <TileExpandView
+        <TileExpandView key={`${app.id}-${expandedResultId}`}
           id={expandedResultId}
           entry={expandedResultId === "match-score" && displayResult ? { data: displayResult, createdAt: aiResults?.["match-score"]?.createdAt ?? new Date() } : (aiResults?.[expandedResultId] ?? null)}
           appId={app.id}
@@ -5580,7 +5591,7 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
     { id: "ki",        label: tCommon("tabs.ki")        },
   ];
 
-  const [tab, setTab]             = useState<Tab>("process");
+  const [tab, setTab]             = useSticky<Tab>("tab", "process");
   const [stage, setStage]         = useState<Application["stage"]>(app.stage);
   const [url, setUrl]             = useState(app.url ?? "");
   const [showDeleteModal, setShowDeleteModal]   = useState(false);
