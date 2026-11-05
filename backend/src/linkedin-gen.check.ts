@@ -115,4 +115,18 @@ assert.equal(liAnswersText({}), "");
 assert.ok(liIntroPrompt("fr").startsWith("IMPORTANT : rédige"));
 assert.ok(liPositionsPrompt("en", "build").includes("Ausbildung"));
 
+// Career starters: own prompt block, own answer labels, education notes + volunteering from a build.
+assert.ok(liIntroPrompt("de", true).includes("BERUFSEINSTIEG") && !liIntroPrompt("de").includes("BERUFSEINSTIEG"));
+assert.ok(liPositionsPrompt("de", "build", true).includes("\"volunteering\":[]"));
+assert.ok(liAnswersText({ askedFor: "UX-Trainee" }, true).includes("Einstiegsstelle"));
+assert.ok(liAnswersText({ education: "BSc Interaction Design" }).includes("Ausbildung"));
+const SRC_B = "Lebenslauf: BSc Interaction Design, ZHdK 2022–2025, Abschlussarbeit über Barrierefreiheit. Ehrenamt: Pfadi Zürich, Leiterin 2019–2023.";
+const beg = normalizePositionsAnswer({ positions: [], education: [{ school: "ZHdK", degree: "BSc Interaction Design", start: "2022", end: "2025", notes: "Abschlussarbeit über Barrierefreiheit." }],
+  volunteering: [{ role: "Leiterin", organization: "Pfadi Zürich", start: "2019", end: "2023", description: "Gruppen geleitet" }, { role: "Helfer", organization: "Erfundener Verein" }] }, SRC_B,
+  { positions: [], education: [], translate: false });
+assert.equal(beg.positions.length, 0);
+assert.equal(beg.education?.[0].notes, "Abschlussarbeit über Barrierefreiheit.");
+assert.equal(beg.volunteering?.[0].organization, "Pfadi Zürich");
+assert.equal(beg.volunteering?.[1].organization, "[X]", "organisation not in the sources");
+
 console.log("linkedin-gen: all assertions passed");

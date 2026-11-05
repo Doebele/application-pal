@@ -129,6 +129,9 @@ export function LinkedInCheckPage() {
                     <button className="btn btn-secondary li-btn" onClick={() => openTab("source")}><Database width={11} height={11} /> {t("linkedinCheck.emptyImport")}</button>
                     {profile?.persona !== "berufseinsteiger" && <button className="btn btn-ghost li-btn" onClick={() => openTab("tools")}><Sparks width={11} height={11} /> {t("linkedinCheck.emptyBuildGo")}</button>}
                   </div>
+                  <button type="button" className="btn btn-ghost li-btn" style={{ marginTop: 8 }} onClick={() => openTab("checklist")}>
+                    <TaskList width={11} height={11} /> {t("linkedinCheck.checklist.setupGuide")}
+                  </button>
                 </EmptyState>
               ) : (
                 <EmptyState icon={<User width={22} height={22} />} text={t(`linkedinCheck.lang.empty.${mode}`, { lang: langName })}>
@@ -164,7 +167,7 @@ export function LinkedInCheckPage() {
             { id: "source", label: t("linkedinCheck.tabs.source"), icon: <Database width={13} height={13} /> },
           ]}>
             {tab === "score" && <ScoreTab s={s} focusGroup={focus} draft={eff === "draft"} extra={<SourcesCard s={s} />} />}
-            {tab === "tools" && <ToolsTab s={s} onShowDraft={() => setView("draft")} />}
+            {tab === "tools" && <ToolsTab s={s} onShowDraft={() => setView("draft")} persona={profile?.persona ?? null} />}
             {tab === "checklist" && <ChecklistTab s={s} onOpenSource={() => openTab("source")} onShowDraft={() => setView("draft")} />}
             {tab === "versions" && <VersionsTab s={s} />}
             {tab === "source" && <SourceTab s={s} persona={profile?.persona ?? null} />}

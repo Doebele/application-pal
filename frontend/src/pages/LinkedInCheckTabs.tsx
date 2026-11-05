@@ -70,7 +70,8 @@ export type LiSources = {
 };
 /** What is left to do on LinkedIn (backend/src/linkedin-checklist.ts). */
 export type LiChecklistItem = {
-  key: string; section: "transfer" | "basics" | "documents" | "network" | "plan"; kind: string; label: string | null;
+  tip: string | null;
+  key: string; section: "setup" | "transfer" | "basics" | "documents" | "network" | "plan"; kind: string; label: string | null;
   params: Record<string, string | number>; copy: string | null; auto: boolean; done: boolean; blocked: "placeholders" | null;
 };
 export type LiChecklist = { items: LiChecklistItem[]; done: number; total: number };
@@ -399,6 +400,8 @@ export function CopyBtn({ text }: { text: string }) {
 }
 
 export const ANSWER_KEYS = ["strengths", "audience", "outcomes", "askedFor", "avoid"] as const;
+/** Career starters answer about education and first practice instead of audience and outcomes. */
+const BEGINNER_ANSWER_KEYS = ["strengths", "education", "practice", "askedFor", "avoid"] as const;
 /** Answers that are keyword lists (stored as "a, b, c" — same field, so older free text still reads fine). */
 const KEYWORD_ANSWERS: readonly string[] = ["strengths"];
 const ANSWER_MAX = 800;   // linkedInStateSchema.answers
@@ -506,8 +509,12 @@ function draftWarnings(raw: LiDraftRaw, t: (k: string, o?: Record<string, unknow
 
 /** KI-Werkzeuge: the text generator for the shown profile language (questions → positioning → texts)
  *  plus the headline variants of the judge run. */
-export function ToolsTab({ s, onShowDraft }: { s: LiCheckState; onShowDraft: () => void }) {
+export function ToolsTab({ s, onShowDraft, persona }: { s: LiCheckState; onShowDraft: () => void; persona?: string | null }) {
   const { t } = useTranslation();
+  const beginner = persona === "berufseinsteiger";
+  const answerKeys: readonly string[] = beginner ? BEGINNER_ANSWER_KEYS : ANSWER_KEYS;
+  // askedFor / hints have a career-starter wording.
+  const qKey = (k: string) => (beginner && k === "askedFor" ? "askedForBeginner" : k);
   const judge = s.data?.judge;
   const variants = judge?.extras.headlineVariants ?? [];
   const lang = s.lang && (LI_LANGS as readonly string[]).includes(s.lang) ? s.lang : null;
@@ -543,17 +550,17 @@ export function ToolsTab({ s, onShowDraft }: { s: LiCheckState; onShowDraft: () 
 
       <div className="chk-card chk-stack" style={{ gap: 10 }}>
         <div className="chk-h" style={{ margin: 0 }}><span className="li-stepno">1</span>{t("linkedinCheck.gen.questions")}</div>
-        <div className="chk-muted">{t(mode === "build" ? "linkedinCheck.gen.questionsHintBuild" : "linkedinCheck.gen.questionsHint")}</div>
-        {ANSWER_KEYS.map(k => KEYWORD_ANSWERS.includes(k) ? (
+        <div className="chk-muted">{t(beginner ? "linkedinCheck.gen.questionsHintBeginner" : mode === "build" ? "linkedinCheck.gen.questionsHintBuild" : "linkedinCheck.gen.questionsHint")}</div>
+        {answerKeys.map(k => KEYWORD_ANSWERS.includes(k) ? (
           <div key={k} className="li-field">
-            <label htmlFor={`li-q-${k}`}>{t(`linkedinCheck.gen.q.${k}`)}</label>
-            <KeywordField id={`li-q-${k}`} value={answers[k] ?? ""} suggestions={s.sources?.keywords ?? []} placeholder={t(`linkedinCheck.gen.qPh.${k}`)}
+            <label htmlFor={`li-q-${k}`}>{t(`linkedinCheck.gen.q.${qKey(k)}`)}</label>
+            <KeywordField id={`li-q-${k}`} value={answers[k] ?? ""} suggestions={s.sources?.keywords ?? []} placeholder={t(`linkedinCheck.gen.qPh.${qKey(k)}`)}
               onChange={v => { setAnswersLocal(a => ({ ...a, [k]: v })); s.setAnswers({ [k]: v }); }} />
           </div>
         ) : (
           <label key={k} className="li-field">
-            <span>{t(`linkedinCheck.gen.q.${k}`)}</span>
-            <textarea className="li-answer" rows={2} value={answers[k] ?? ""} placeholder={t(`linkedinCheck.gen.qPh.${k}`)}
+            <span>{t(`linkedinCheck.gen.q.${qKey(k)}`)}</span>
+            <textarea className="li-answer" rows={2} value={answers[k] ?? ""} placeholder={t(`linkedinCheck.gen.qPh.${qKey(k)}`)}
               onChange={e => setAnswersLocal(a => ({ ...a, [k]: e.target.value }))}
               onBlur={() => (answers[k] ?? "") !== (state?.answers?.[k] ?? "") && s.setAnswers({ [k]: answers[k] ?? "" })} />
           </label>

@@ -1318,7 +1318,7 @@
       "versions": "Versions",
       "noVersions": "Pas encore de versions.",
       "judged": "évalué IA",
-      "beginner": "En début de carrière, tu commenceras plus tard avec l'assistant de création ; en attendant, tu peux vérifier un profil existant ici.",
+      "beginner": "En début de carrière, commence de préférence par la création : la checklist te guide pour créer le compte, les outils IA rédigent les textes à partir du CV et des documents. Si tu as déjà un profil, importe-le ici.",
       "kind": {
         "api": "API LinkedIn",
         "zip": "Export ZIP",
@@ -1396,14 +1396,20 @@
         "audience": "Pour qui travailles-tu, qui aides-tu ?",
         "outcomes": "Résultats et projets dont tu es fier·ère",
         "askedFor": "Pour quoi veux-tu être sollicité·e ?",
-        "avoid": "Qu'est-ce qui ne doit pas figurer dans le profil ?"
+        "avoid": "Qu'est-ce qui ne doit pas figurer dans le profil ?",
+        "education": "Que fais-tu dans ta formation ou tes études ?",
+        "practice": "Qu'as-tu déjà fait en pratique ?",
+        "askedForBeginner": "Quel poste de débutant·e cherches-tu ?"
       },
       "qPh": {
         "strengths": "p. ex. design systems, accessibilité, animation d'ateliers",
         "audience": "p. ex. équipes produit dans les banques",
         "outcomes": "Chiffres bienvenus – uniquement des valeurs réelles",
         "askedFor": "p. ex. rôles de lead, conseil, conférences",
-        "avoid": "p. ex. noms de clients confidentiels"
+        "avoid": "p. ex. noms de clients confidentiels",
+        "education": "Diplôme, spécialisation, travail de fin d'études, projets – p. ex. BSc Interaction Design, diplôme 2026, mémoire sur l'accessibilité",
+        "practice": "Stages, jobs d'appoint, bénévolat, projets personnels – les petites choses comptent aussi",
+        "askedForBeginner": "Rôle et type, p. ex. Junior UX Designer, trainee, stage – et à partir de quand"
       },
       "positioning": "Positionnement",
       "positioningHint": "Une phrase qui porte tout : rôle, public, résultat. Choisis une proposition ou écris la tienne – les textes ne sont rédigés qu'après confirmation.",
@@ -1434,7 +1440,8 @@
         "unverifiedSkills": "{{v}} compétences sans preuve dans les sources – à vérifier (marquées ?).",
         "what": {
           "company": "Entreprise",
-          "school": "École"
+          "school": "École",
+          "organization": "Organisation"
         }
       },
       "kw": {
@@ -1443,7 +1450,8 @@
         "suggestions": "Suggestions de ton CV et de ton profil",
         "more": "{{count}} de plus",
         "less": "Moins"
-      }
+      },
+      "questionsHintBeginner": "Sans beaucoup d'expérience, ta formation, tes stages et tes projets portent le profil. Plus tes réponses sont concrètes, meilleurs sont les textes – rien n'est inventé."
     },
     "draft": {
       "title": "Brouillon ({{lang}})",
@@ -1497,7 +1505,10 @@
       "searchTerms": "Mots-clés",
       "plan": "Plan sur 4 semaines",
       "week": "Semaine {{n}}",
-      "xHint": "Espace réservé : à remplacer par des valeurs réelles avant de copier"
+      "xHint": "Espace réservé : à remplacer par des valeurs réelles avant de copier",
+      "volunteering": "Bénévolat",
+      "role": "Rôle",
+      "organization": "Organisation"
     },
     "sources": {
       "title": "D’après tes documents",
@@ -1546,7 +1557,8 @@
         "basics": "À vérifier toi-même",
         "documents": "Depuis tes documents",
         "network": "Réseau",
-        "plan": "Plan sur 4 semaines"
+        "plan": "Plan sur 4 semaines",
+        "setup": "Créer le compte"
       },
       "openDraft": "Afficher le brouillon",
       "basicsHint": "Aucun import ne montre ces points (p. ex. photo, bannière). Les cocher règle ton auto-évaluation – le score suit.",
@@ -1567,7 +1579,50 @@
         "cert": "Ajouter la certification : {{name}}",
         "language": "Ajouter la langue : {{name}}",
         "rec": "Demander une recommandation : {{to}}",
-        "task": "Tâche"
+        "task": "Tâche",
+        "education": "Reprendre la formation : {{degree}} · {{school}}",
+        "volunteering": "Ajouter le bénévolat : {{role}} · {{organization}}"
+      },
+      "setupGuide": "Guide : créer ton profil LinkedIn",
+      "setupHint": "Pas encore de profil LinkedIn ? Crée-le dans cet ordre. Les textes (titre, Infos, postes) viennent de ton brouillon plus bas.",
+      "how": "Comment faire",
+      "setup": {
+        "account": {
+          "title": "Créer le compte",
+          "tip": "S'inscrire avec une adresse e-mail privée – pas celle de l'école, de la haute école ou de l'employeur, que tu perdras plus tard. Prénom et nom comme sur le CV. Dans les paramètres, ajouter une deuxième adresse e-mail et activer la vérification en deux étapes."
+        },
+        "quiet": {
+          "title": "Ne pas encore partager les mises à jour",
+          "tip": "Pendant que tu construis le profil : Préférences → Visibilité → désactiver « Partager les mises à jour du profil avec votre réseau », pour que ton réseau ne voie pas chaque étape intermédiaire. Le réactiver ensuite, par exemple pour annoncer un nouveau poste."
+        },
+        "url": {
+          "title": "Définir ton URL de profil",
+          "tip": "Sur ton profil, « Modifier le profil public et l'URL » : linkedin.com/in/prenom-nom au lieu d'une suite de chiffres. Reprendre ensuite l'URL dans le CV et la signature e-mail."
+        },
+        "location": {
+          "title": "Indiquer lieu et secteur",
+          "tip": "Indiquer comme lieu la ville ou la région où tu veux travailler – les recruteurs filtrent dessus. Choisir le secteur dans lequel tu veux débuter."
+        },
+        "education": {
+          "title": "Détailler la formation",
+          "tip": "Sans beaucoup d'expérience, la formation est ta section la plus forte : école ou haute école, diplôme, domaine, période – et dans la description ta spécialisation, ton travail de fin d'études et tes projets. Ton brouillon fournit le texte."
+        },
+        "practice": {
+          "title": "Ajouter stages, jobs, bénévolat et projets",
+          "tip": "Stages et jobs d'appoint dans Expérience avec le type d'emploi adapté (p. ex. Stage, Temps partiel). Le bénévolat a sa propre section « Bénévolat », les projets d'études et personnels vont dans « Projets ». Ajouter les sections manquantes via « Ajouter une section »."
+        },
+        "openTo": {
+          "title": "Régler « Ouvert à » consciemment",
+          "tip": "Via « Ouvert à » → « Recherche d'emploi », indiquer postes visés, lieux et mode de travail. Choisir ensuite qui le voit : recruteurs seulement (discret) ou tous les membres (cadre vert autour de la photo). Les deux sont courants – décide consciemment."
+        },
+        "network": {
+          "title": "Créer tes premières relations",
+          "tip": "Se connecter avec camarades de classe et d'études, enseignant·es, collègues de stage et de bénévolat – chaque fois avec un court message personnel qui dit d'où vous vous connaissez. Quelques relations pertinentes valent plus que beaucoup d'inconnus."
+        },
+        "follow": {
+          "title": "Suivre des entreprises, trouver des alumni",
+          "tip": "Suivre les entreprises où tu aimerais travailler. Sur la page de ton école ou haute école, l'onglet « Anciens élèves » montre les diplômé·es de ton domaine. Un ou deux commentaires de fond par semaine te rendent visible avant de publier toi-même."
+        }
       }
     },
     "versions": {

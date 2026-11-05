@@ -5052,7 +5052,7 @@ app.get("/api/linkedin/check", async (c) => {
 
   // Checklist: what is left to do on LinkedIn for this language (see linkedin-checklist.ts).
   const checklistOf = (imported: LinkedInProfile | null, src: LiSourceSuggestions, checks: LiCheckResult["checks"]) =>
-    buildLiChecklist({ imported, draft: draftProfile, draftRaw: draftRawObj, sources: src, checks, manual: state.checklist ?? [] });
+    buildLiChecklist({ imported, draft: draftProfile, draftRaw: draftRawObj, sources: src, checks, manual: state.checklist ?? [], setup: !imports.length });
   if (!row) {
     const sources = await loadLiSources(userId, draftLang, null, draftProfile);
     const draftChecks = (draft?.result as LiCheckResult | undefined)?.checks ?? [];
@@ -5319,7 +5319,8 @@ async function liGenSources(userId: string, lang: LinkedInLang, applicationId?: 
   const baseRow = own ?? await latestLinkedInVersion(userId);
   let baseProfile: LinkedInProfile | null = null;
   try { baseProfile = baseRow ? linkedInProfileSchema.parse(JSON.parse(baseRow.data)) : null; } catch { /* broken row */ }
-  const [prof] = await db.select({ letterConfig: userProfile.letterConfig }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const [prof] = await db.select({ letterConfig: userProfile.letterConfig, persona: userProfile.persona }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const beginner = prof?.persona === "berufseinsteiger";
   const cvText = await loadLinkedInCvText(userId);
   const docs = await loadDocumentsContext(userId);
   let jobAd: { company: string | null; role: string | null; description: string | null } | null = null;
@@ -5339,11 +5340,11 @@ async function liGenSources(userId: string, lang: LinkedInLang, applicationId?: 
   const sourceFacts = liSourceFactsText(await loadLiSources(userId, lang, baseProfile, null)) || null;
   const common = {
     profile: baseProfile, profileLang: baseRow?.lang || null, positioning: state.positioning?.[lang]?.chosen ?? null,
-    goal: state.goal ?? null, answers: state.answers ?? null, cvText, docs, toneSample, sourceFacts,
+    goal: state.goal ?? null, answers: state.answers ?? null, cvText, docs, toneSample, sourceFacts, beginner,
   };
   const hasAnswers = Object.values(state.answers ?? {}).some(v => v?.trim());
   return {
-    state, letterConfig: prof?.letterConfig ?? null, cvText,
+    state, letterConfig: prof?.letterConfig ?? null, cvText, beginner,
     base: { row: baseProfile ? baseRow : null, profile: baseProfile, sameLang: !!own && !!baseProfile },
     input: liGenInput({ ...common, jobAd }),
     // Figures may only come from the candidate's own sources — never from the job ad.
@@ -5366,7 +5367,7 @@ app.post("/api/linkedin/positioning", async (c) => {
     if (!src.hasSource) return void finish({ status: "error", error: NO_GEN_SOURCE });
     job.step = "llm";
     try {
-      const options = normalizePositioning(extractJson(await callAi(liPositioningPrompt(lang), src.input, ai)), src.guardSource);
+      const options = normalizePositioning(extractJson(await callAi(liPositioningPrompt(lang, src.beginner), src.input, ai)), src.guardSource);
       if (!options.length) throw new Error("Die KI-Antwort enthielt keine Positionierung");
       const state = await readLinkedInState(userId);   // re-read: the user may have edited meanwhile
       const prev = state.positioning?.[lang];
@@ -5411,27 +5412,28 @@ async function runLinkedInGenerate(job: LiJob, userId: string, lang: LinkedInLan
     job.step = part;
     try {
       if (part === "intro") {
-        const out = normalizeIntro(extractJson(await callAi(prose(liIntroPrompt(lang)), src.input, ai)), src.guardSource);
+        const out = normalizeIntro(extractJson(await callAi(prose(liIntroPrompt(lang, src.beginner)), src.input, ai)), src.guardSource);
         if (!out.headline && !out.about) throw new Error("Die KI-Antwort enthielt keine Texte");
         profile = applyDraftParts(profile, { headline: out.headline ?? profile.basics.headline, summary: out.about ?? profile.basics.summary });
         raw.headlineVariants = out.headlineVariants; addNda(out.ndaHints); setWarnings(part, out.warnings);
       } else if (part === "positions") {
         const mode = src.base.profile && profile.positions.length ? (src.base.sameLang ? "rewrite" : "translate") : "build";
-        const out = normalizePositionsAnswer(extractJson(await callAi(prose(liPositionsPrompt(lang, mode)), src.input, ai)), src.guardSource, {
+        const out = normalizePositionsAnswer(extractJson(await callAi(prose(liPositionsPrompt(lang, mode, src.beginner)), src.input, ai)), src.guardSource, {
           positions: mode === "build" ? [] : profile.positions, education: mode === "build" ? [] : profile.education, translate: mode === "translate",
         });
-        if (!out.positions.length) throw new Error("Die KI-Antwort enthielt keine Positionen");
-        profile = applyDraftParts(profile, { positions: out.positions, education: out.education });
+        // A career starter may have no job yet — education or volunteering is enough then.
+        if (!out.positions.length && !(src.beginner && (out.education?.length || out.volunteering?.length))) throw new Error("Die KI-Antwort enthielt keine Positionen");
+        profile = applyDraftParts(profile, { positions: out.positions, education: out.education, volunteering: out.volunteering });
         raw.positionSkills = out.positionSkills; addNda(out.ndaHints); setWarnings(part, out.warnings);
       } else if (part === "skills") {
-        const out = normalizeSkillsAnswer(extractJson(await callAi(liSkillsPrompt(lang), src.input, ai)), src.guardSource);
+        const out = normalizeSkillsAnswer(extractJson(await callAi(liSkillsPrompt(lang, src.beginner), src.input, ai)), src.guardSource);
         if (!out.skills.length) throw new Error("Die KI-Antwort enthielt keine Kenntnisse");
         profile = applyDraftParts(profile, { skills: out.skills });
         raw.skills = out.skills; raw.featured = out.featured;
         const unverified = out.skills.filter(s => !s.verified).length;
         setWarnings(part, unverified ? [`unverifiedSkills:${unverified}`] : []);
       } else {
-        const out = normalizeActivityAnswer(extractJson(await callAi(prose(liActivityPrompt(lang)), src.input, ai)), src.guardSource);
+        const out = normalizeActivityAnswer(extractJson(await callAi(prose(liActivityPrompt(lang, src.beginner)), src.input, ai)), src.guardSource);
         if (!out.recRequests.length && !out.pillars.length && !out.plan.length) throw new Error("Die KI-Antwort enthielt keine Vorschläge");
         Object.assign(raw, { recRequests: out.recRequests, pillars: out.pillars, groups: out.groups, plan: out.plan });
       }

@@ -10,7 +10,7 @@ import { CopyBtn, type LiCheckState, type LiChecklistItem } from "../../pages/Li
 import { fmtYm } from "./SourceSuggestions";
 import "./linkedin.css";
 
-const SECTIONS = ["transfer", "basics", "documents", "network", "plan"] as const;
+const SECTIONS = ["setup", "transfer", "basics", "documents", "network", "plan"] as const;
 
 function ItemRow({ item, s }: { item: LiChecklistItem; s: LiCheckState }) {
   const { t, i18n } = useTranslation();
@@ -24,7 +24,10 @@ function ItemRow({ item, s }: { item: LiChecklistItem; s: LiCheckState }) {
     if (isSelf) s.setSelf(String(p.checkId), item.done ? null : Number(p.max));
     else s.toggleChecklist(item.key, !item.done);
   };
-  const label = item.label ?? t(`linkedinCheck.checklist.kind.${item.kind}`, { ...p });
+  const isSetup = item.kind === "setup";
+  const label = item.label ?? (isSetup ? t(`linkedinCheck.checklist.setup.${p.id}.title`) : t(`linkedinCheck.checklist.kind.${item.kind}`, { ...p }));
+  // How-to: set-up steps from the UI texts, self-report items from their checkpoint rule.
+  const tip = isSetup ? t(`linkedinCheck.checklist.setup.${p.id}.tip`) : item.tip;
   const meta = item.kind === "cert"
     ? [p.issuer && t("linkedinCheck.sources.issuer", { v: p.issuer }), p.date && t("linkedinCheck.sources.issued", { v: fmtYm(String(p.date), i18n.language) }),
       p.credentialId && t("linkedinCheck.sources.credentialId", { v: p.credentialId })].filter(Boolean).join(" · ")
@@ -39,6 +42,12 @@ function ItemRow({ item, s }: { item: LiChecklistItem; s: LiCheckState }) {
       <div className="li-cl-body">
         <span className="li-cl-label">{label}</span>
         {meta && <span className="li-src-meta">{meta}</span>}
+        {tip && (
+          <details className="li-cl-tip">
+            <summary>{t("linkedinCheck.checklist.how")}</summary>
+            <div>{tip}</div>
+          </details>
+        )}
         {(item.auto || item.blocked) && (
           <span className="li-cl-tags">
             {item.auto && <span className="li-kind" data-tone="ok">{t(isSelf ? "linkedinCheck.checklist.reported" : "linkedinCheck.checklist.detected")}</span>}
@@ -96,6 +105,7 @@ export function ChecklistTab({ s, onOpenSource, onShowDraft }: { s: LiCheckState
             </div>
             {sec === "transfer" && <button type="button" className="btn btn-ghost li-btn" style={{ alignSelf: "flex-start" }} onClick={onShowDraft}>{t("linkedinCheck.checklist.openDraft")}</button>}
             {sec === "basics" && <div className="chk-muted">{t("linkedinCheck.checklist.basicsHint")}</div>}
+            {sec === "setup" && <div className="chk-muted">{t("linkedinCheck.checklist.setupHint")}</div>}
             {!items.length && <div className="chk-muted">{t("linkedinCheck.checklist.allDone")}</div>}
             {weeks.map(w => (
               <div key={w ?? "all"}>

@@ -1318,7 +1318,7 @@
       "versions": "Versionen",
       "noVersions": "Noch keine Versionen.",
       "judged": "KI-bewertet",
-      "beginner": "Als Berufseinsteiger:in startest du später mit dem Aufbau-Assistenten; bis dahin kannst du ein vorhandenes Profil hier prüfen.",
+      "beginner": "Als Berufseinsteiger:in startest du am besten mit dem Aufbau: Die Checkliste führt durch das Einrichten des Kontos, die KI-Werkzeuge schreiben die Texte aus Lebenslauf und Dokumenten. Hast du schon ein Profil, importiere es hier.",
       "kind": {
         "api": "LinkedIn-API",
         "zip": "ZIP-Export",
@@ -1396,14 +1396,20 @@
         "audience": "Für wen arbeitest du, wem hilfst du?",
         "outcomes": "Ergebnisse und Projekte, auf die du stolz bist",
         "askedFor": "Wofür möchtest du angefragt werden?",
-        "avoid": "Was soll nicht ins Profil?"
+        "avoid": "Was soll nicht ins Profil?",
+        "education": "Was machst du in Ausbildung oder Studium?",
+        "practice": "Was hast du schon praktisch gemacht?",
+        "askedForBeginner": "Welche Einstiegsstelle suchst du?"
       },
       "qPh": {
         "strengths": "z. B. Design Systems, Barrierefreiheit, Workshops leiten",
         "audience": "z. B. Produktteams in Banken",
         "outcomes": "Gern mit Zahlen – nur echte Werte",
         "askedFor": "z. B. Lead-Rollen, Beratung, Vorträge",
-        "avoid": "z. B. vertrauliche Kundennamen"
+        "avoid": "z. B. vertrauliche Kundennamen",
+        "education": "Abschluss, Schwerpunkt, Abschlussarbeit, Projekte – z. B. BSc Interaction Design, Abschluss 2026, Thesis über Barrierefreiheit",
+        "practice": "Praktika, Nebenjobs, Ehrenamt, eigene Projekte – auch Kleines zählt",
+        "askedForBeginner": "Rolle und Art, z. B. Junior UX Designer, Trainee, Praktikum – und ab wann"
       },
       "positioning": "Positionierung",
       "positioningHint": "Ein Satz, der alles trägt: Rolle, Zielgruppe, was daraus wird. Wähle einen Vorschlag oder schreib deinen eigenen – erst nach der Bestätigung entstehen die Texte.",
@@ -1434,7 +1440,8 @@
         "unverifiedSkills": "{{v}} Kenntnisse ohne Beleg in den Quellen – prüfen (mit ? markiert).",
         "what": {
           "company": "Firma",
-          "school": "Schule"
+          "school": "Schule",
+          "organization": "Organisation"
         }
       },
       "kw": {
@@ -1443,7 +1450,8 @@
         "suggestions": "Vorschläge aus Lebenslauf und Profil",
         "more": "{{count}} weitere",
         "less": "Weniger"
-      }
+      },
+      "questionsHintBeginner": "Ohne viel Berufserfahrung tragen Ausbildung, Praktika und Projekte dein Profil. Je konkreter deine Antworten, desto besser die Texte – erfunden wird nichts."
     },
     "draft": {
       "title": "Entwurf ({{lang}})",
@@ -1497,7 +1505,10 @@
       "searchTerms": "Suchbegriffe",
       "plan": "4-Wochen-Plan",
       "week": "Woche {{n}}",
-      "xHint": "Platzhalter: vor dem Kopieren durch echte Werte ersetzen"
+      "xHint": "Platzhalter: vor dem Kopieren durch echte Werte ersetzen",
+      "volunteering": "Ehrenamt",
+      "role": "Rolle",
+      "organization": "Organisation"
     },
     "sources": {
       "title": "Aus deinen Unterlagen",
@@ -1546,7 +1557,8 @@
         "basics": "Selbst prüfen",
         "documents": "Aus deinen Dokumenten",
         "network": "Netzwerk",
-        "plan": "4-Wochen-Plan"
+        "plan": "4-Wochen-Plan",
+        "setup": "Konto einrichten"
       },
       "openDraft": "Entwurf anzeigen",
       "basicsHint": "Diese Punkte sieht kein Import (z. B. Foto, Banner). Abhaken setzt deine Selbstauskunft – die Bewertung zieht mit.",
@@ -1567,7 +1579,50 @@
         "cert": "Zertifikat eintragen: {{name}}",
         "language": "Sprache eintragen: {{name}}",
         "rec": "Empfehlung anfragen bei: {{to}}",
-        "task": "Aufgabe"
+        "task": "Aufgabe",
+        "education": "Ausbildung übernehmen: {{degree}} · {{school}}",
+        "volunteering": "Ehrenamt eintragen: {{role}} · {{organization}}"
+      },
+      "setupGuide": "Anleitung: LinkedIn-Profil einrichten",
+      "setupHint": "Noch kein LinkedIn-Profil? Richte es in dieser Reihenfolge ein. Die Texte (Headline, Info, Stationen) kommen aus deinem Entwurf weiter unten.",
+      "how": "So geht's",
+      "setup": {
+        "account": {
+          "title": "Konto anlegen",
+          "tip": "Mit einer privaten E-Mail-Adresse registrieren – nicht mit der Schul-, Hochschul- oder Firmenadresse, die du später verlierst. Vor- und Nachname wie im Lebenslauf. Unter Einstellungen eine zweite E-Mail-Adresse und die Zwei-Faktor-Anmeldung hinterlegen."
+        },
+        "quiet": {
+          "title": "Profil-Updates vorerst nicht teilen",
+          "tip": "Solange du am Profil baust: Einstellungen → Sichtbarkeit → „Profiländerungen mit deinem Netzwerk teilen“ ausschalten. So sieht dein Netzwerk nicht jede Zwischenstufe. Später wieder einschalten, damit z. B. ein neuer Job angekündigt wird."
+        },
+        "url": {
+          "title": "Eigene Profil-URL festlegen",
+          "tip": "Im Profil „Öffentliches Profil und URL bearbeiten“: linkedin.com/in/vorname-nachname statt einer Zahlenfolge. Die URL dann in Lebenslauf und E-Mail-Signatur übernehmen."
+        },
+        "location": {
+          "title": "Standort und Branche setzen",
+          "tip": "Als Standort den Ort oder die Region angeben, in der du arbeiten willst – Recruiter filtern danach. Die Branche wählen, in die du einsteigen möchtest."
+        },
+        "education": {
+          "title": "Ausbildung ausführlich eintragen",
+          "tip": "Ohne viel Berufserfahrung ist die Ausbildung dein stärkster Abschnitt: Schule bzw. Hochschule, Abschluss, Fachrichtung, Zeitraum – und in der Beschreibung Schwerpunkt, Abschlussarbeit und Projekte. Den Text liefert dein Entwurf."
+        },
+        "practice": {
+          "title": "Praktika, Jobs, Ehrenamt und Projekte anlegen",
+          "tip": "Praktika und Nebenjobs unter Berufserfahrung mit passender Beschäftigungsart (z. B. Praktikum, Teilzeit). Ehrenamt in den eigenen Abschnitt „Ehrenamt“, Studien- und eigene Projekte unter „Projekte“. Fehlende Abschnitte fügst du über „Profilbereich hinzufügen“ hinzu."
+        },
+        "openTo": {
+          "title": "„Offen für“ bewusst einstellen",
+          "tip": "Über „Offen für“ → „Jobsuche“ Zielrollen, Orte und Arbeitsmodell eintragen. Dann wählen, wer es sieht: nur Recruiter (diskret) oder alle Mitglieder (grüner Rahmen um das Foto). Beides ist üblich – entscheide bewusst."
+        },
+        "network": {
+          "title": "Erste Kontakte knüpfen",
+          "tip": "Mit Mitschüler:innen und Kommiliton:innen, Lehrpersonen und Dozent:innen, Kolleg:innen aus Praktika und Ehrenamt vernetzen – jeweils mit einer kurzen persönlichen Nachricht, woher ihr euch kennt. Wenige passende Kontakte sind mehr wert als viele fremde."
+        },
+        "follow": {
+          "title": "Unternehmen folgen, Alumni finden",
+          "tip": "Den Unternehmen folgen, bei denen du arbeiten möchtest. Auf der Seite deiner Schule bzw. Hochschule unter „Alumni“ Ehemalige in deinem Zielbereich finden. Ein, zwei fachliche Kommentare pro Woche machen dich sichtbar, bevor du selbst etwas postest."
+        }
       }
     },
     "versions": {

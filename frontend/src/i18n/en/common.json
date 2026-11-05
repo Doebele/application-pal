@@ -1318,7 +1318,7 @@
       "versions": "Versions",
       "noVersions": "No versions yet.",
       "judged": "AI-judged",
-      "beginner": "As a career starter you'll later begin with the build assistant; until then you can check an existing profile here.",
+      "beginner": "As a career starter, it's best to begin with building: the checklist walks you through setting up the account, and the AI tools write the texts from your CV and documents. If you already have a profile, import it here.",
       "kind": {
         "api": "LinkedIn API",
         "zip": "ZIP export",
@@ -1396,14 +1396,20 @@
         "audience": "Who do you work for, who do you help?",
         "outcomes": "Results and projects you are proud of",
         "askedFor": "What do you want to be approached for?",
-        "avoid": "What must not be in the profile?"
+        "avoid": "What must not be in the profile?",
+        "education": "What are you doing in your training or studies?",
+        "practice": "What have you already done in practice?",
+        "askedForBeginner": "What entry-level position are you looking for?"
       },
       "qPh": {
         "strengths": "e.g. design systems, accessibility, running workshops",
         "audience": "e.g. product teams in banks",
         "outcomes": "Numbers welcome – real values only",
         "askedFor": "e.g. lead roles, consulting, talks",
-        "avoid": "e.g. confidential client names"
+        "avoid": "e.g. confidential client names",
+        "education": "Degree, focus, thesis, projects – e.g. BSc Interaction Design, graduating 2026, thesis on accessibility",
+        "practice": "Internships, side jobs, volunteering, own projects – small things count too",
+        "askedForBeginner": "Role and type, e.g. Junior UX Designer, trainee, internship – and from when"
       },
       "positioning": "Positioning",
       "positioningHint": "One sentence that carries everything: role, audience, outcome. Pick a suggestion or write your own – the texts are written only after you confirm it.",
@@ -1434,7 +1440,8 @@
         "unverifiedSkills": "{{v}} skills without evidence in the sources – check them (marked ?).",
         "what": {
           "company": "Company",
-          "school": "School"
+          "school": "School",
+          "organization": "Organisation"
         }
       },
       "kw": {
@@ -1443,7 +1450,8 @@
         "suggestions": "Suggestions from your CV and profile",
         "more": "{{count}} more",
         "less": "Fewer"
-      }
+      },
+      "questionsHintBeginner": "Without much work experience, your education, internships and projects carry the profile. The more specific your answers, the better the texts – nothing is made up."
     },
     "draft": {
       "title": "Draft ({{lang}})",
@@ -1497,7 +1505,10 @@
       "searchTerms": "Search terms",
       "plan": "4-week plan",
       "week": "Week {{n}}",
-      "xHint": "Placeholder: replace with real values before copying"
+      "xHint": "Placeholder: replace with real values before copying",
+      "volunteering": "Volunteering",
+      "role": "Role",
+      "organization": "Organisation"
     },
     "sources": {
       "title": "From your documents",
@@ -1546,7 +1557,8 @@
         "basics": "Check yourself",
         "documents": "From your documents",
         "network": "Network",
-        "plan": "4-week plan"
+        "plan": "4-week plan",
+        "setup": "Set up the account"
       },
       "openDraft": "Show draft",
       "basicsHint": "No import shows these (e.g. photo, banner). Ticking one sets your self-report – the score follows.",
@@ -1567,7 +1579,50 @@
         "cert": "Add certification: {{name}}",
         "language": "Add language: {{name}}",
         "rec": "Ask for a recommendation: {{to}}",
-        "task": "Task"
+        "task": "Task",
+        "education": "Copy education: {{degree}} · {{school}}",
+        "volunteering": "Add volunteering: {{role}} · {{organization}}"
+      },
+      "setupGuide": "Guide: set up your LinkedIn profile",
+      "setupHint": "No LinkedIn profile yet? Set it up in this order. The texts (headline, About, positions) come from your draft further down.",
+      "how": "How to",
+      "setup": {
+        "account": {
+          "title": "Create the account",
+          "tip": "Sign up with a private email address – not your school, university or employer address, which you will lose later. First and last name as on your CV. In the settings, add a second email address and turn on two-step verification."
+        },
+        "quiet": {
+          "title": "Don't share profile updates yet",
+          "tip": "While you build the profile: Settings → Visibility → turn off “Share profile updates with your network”, so your network doesn't see every intermediate step. Turn it back on later so that, for example, a new job gets announced."
+        },
+        "url": {
+          "title": "Set your own profile URL",
+          "tip": "On your profile, “Edit public profile & URL”: linkedin.com/in/firstname-lastname instead of a string of numbers. Then put the URL on your CV and in your email signature."
+        },
+        "location": {
+          "title": "Set location and industry",
+          "tip": "Use the city or region where you want to work as your location – recruiters filter by it. Pick the industry you want to start in."
+        },
+        "education": {
+          "title": "Fill in education in detail",
+          "tip": "Without much work experience, education is your strongest section: school or university, degree, field of study, dates – and in the description your focus, thesis and projects. Your draft provides the text."
+        },
+        "practice": {
+          "title": "Add internships, jobs, volunteering and projects",
+          "tip": "Internships and side jobs go under Experience with the matching employment type (e.g. Internship, Part-time). Volunteering has its own “Volunteering” section, study and personal projects go under “Projects”. Add missing sections via “Add profile section”."
+        },
+        "openTo": {
+          "title": "Set “Open to” deliberately",
+          "tip": "Under “Open to” → “Finding a new job”, enter target roles, locations and workplace type. Then choose who sees it: recruiters only (discreet) or all members (green frame around your photo). Both are common – decide deliberately."
+        },
+        "network": {
+          "title": "Make your first connections",
+          "tip": "Connect with classmates and fellow students, teachers and lecturers, colleagues from internships and volunteering – each with a short personal note on how you know each other. A few relevant connections are worth more than many strangers."
+        },
+        "follow": {
+          "title": "Follow companies, find alumni",
+          "tip": "Follow the companies you want to work for. On your school's or university's page, use “Alumni” to find graduates in your target field. One or two thoughtful comments a week make you visible before you post anything yourself."
+        }
       }
     },
     "versions": {

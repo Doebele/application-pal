@@ -1,7 +1,7 @@
 // Self-check for the LinkedIn checklist: npx tsx backend/src/linkedin-checklist.check.ts
 import assert from "node:assert/strict";
 import { linkedInProfileSchema } from "@application-pal/shared";
-import { buildLiChecklist, liChecklistKey } from "./linkedin-checklist.js";
+import { buildLiChecklist, liChecklistKey, LI_SETUP_STEPS } from "./linkedin-checklist.js";
 import { emptyDraftRaw } from "./linkedin-gen.js";
 import type { LiCheckOutcome } from "./linkedin-rules.js";
 import type { LiSourceSuggestions } from "./linkedin-sources.js";
@@ -15,7 +15,7 @@ const profile = (o: { headline?: string; summary?: string; positions?: Array<{ i
   });
 
 const self = (id: string, status: LiCheckOutcome["status"], score = 0, max = 5): LiCheckOutcome =>
-  ({ id, area: "firstImpression", group: id, hygiene: false, kind: "self", label: `Label ${id}`, rule: "", status, score, max, findings: [] });
+  ({ id, area: "firstImpression", group: id, hygiene: false, kind: "self", label: `Label ${id}`, rule: `Rule ${id}`, status, score, max, findings: [] });
 
 const draft = profile({
   headline: "Design Lead | Design Systems",
@@ -68,6 +68,15 @@ assert.equal(buildLiChecklist({ imported: zip, draft, draftRaw: raw, sources: nu
 // No draft: only basics and documents.
 const c = buildLiChecklist({ imported: old, draft: null, draftRaw: null, sources, checks, manual: [] });
 assert.deepEqual([...new Set(c.items.map(i => i.section))], ["basics", "documents"]);
+
+// No profile at all: the set-up steps come first, manual only; self-report items carry their rule as tip.
+const d0 = buildLiChecklist({ imported: null, draft, draftRaw: raw, sources: null, checks, manual: ["setup:account"], setup: true });
+assert.equal(d0.items[0].section, "setup");
+assert.equal(d0.items.filter(i => i.section === "setup").length, LI_SETUP_STEPS.length);
+assert.equal(d0.items.find(i => i.key === "setup:account")!.done, true);
+assert.equal(d0.items.find(i => i.key === "setup:url")!.done, false);
+assert.ok(d0.items.filter(i => i.kind === "self").every(i => i.tip !== null), "self items carry the checkpoint rule");
+assert.ok(!a.items.some(i => i.section === "setup"), "no set-up steps once a profile exists");
 
 assert.ok(liChecklistKey("cert", "A very long certificate name that goes on and on and on, issued by someone").length <= 60);
 console.log("linkedin-checklist.check: all assertions passed");

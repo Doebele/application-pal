@@ -5,7 +5,7 @@
 // Application-Pal never writes to LinkedIn — the user copies and pastes.
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { User, Journal, Suitcase, GraduationCap, Star, Pin, ChatLines, Calendar, Group, Expand, Collapse, Check, LightBulb } from "iconoir-react";
+import { User, Journal, Suitcase, GraduationCap, Star, Pin, ChatLines, Calendar, Group, Expand, Collapse, Check, LightBulb, Heart } from "iconoir-react";
 import type { LinkedInProfile } from "@application-pal/shared";
 import { copyText } from "../../lib/clipboard";
 import { PtsBadge } from "./ProfileCards";
@@ -162,6 +162,20 @@ export function DraftCards({ draft, before, busy, onPatch, sources, zoom, onZoom
               <CopyLine label={t("linkedinCheck.draft.school")} value={e.school} />
               <CopyLine label={t("linkedinCheck.draft.degree")} value={e.degree} />
               <CopyLine label={t("linkedinCheck.draft.dates")} value={[e.start, e.end].filter(Boolean).join(" – ")} />
+              {e.notes && <CopyLine label={t("linkedinCheck.draft.description")} value={e.notes} />}
+            </div>
+          ))}
+        </DCard>
+      )}
+
+      {p.volunteering.length > 0 && (
+        <DCard id="volunteering" title={t("linkedinCheck.draft.volunteering")} icon={<Heart width={13} height={13} />} groups={["extras"]} {...common}>
+          {p.volunteering.map(v => (
+            <div key={v.id} className="lid-item">
+              <CopyLine label={t("linkedinCheck.draft.role")} value={v.role} />
+              <CopyLine label={t("linkedinCheck.draft.organization")} value={v.organization} />
+              <CopyLine label={t("linkedinCheck.draft.dates")} value={[v.start, v.end].filter(Boolean).join(" – ")} />
+              {v.description && <CopyLine label={t("linkedinCheck.draft.description")} value={v.description} />}
             </div>
           ))}
         </DCard>

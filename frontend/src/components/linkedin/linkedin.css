@@ -240,3 +240,6 @@
 .li-cmp-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 11.5px; line-height: 1.45; color: var(--fg-1); white-space: pre-wrap; max-height: 260px; overflow: auto; }
 .li-cmp-cols > div { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; }
 @media (max-width: 640px) { .li-cmp-cols, .li-cmp-names { grid-template-columns: 1fr; } }
+.li-cl-tip { font-size: 11.5px; color: var(--fg-2); }
+.li-cl-tip summary { cursor: pointer; color: var(--accent); font-size: 11px; width: fit-content; }
+.li-cl-tip > div { margin-top: 4px; line-height: 1.5; }
