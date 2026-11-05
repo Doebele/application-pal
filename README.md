@@ -58,7 +58,7 @@ AI is used for job import, match scoring, CV analysis, cover letters, interview 
 
 ### 6. Optional: Connect LinkedIn
 
-Keeps a read-only copy of your LinkedIn profile in sync (official Member Data Portability API, EU/EEA + Switzerland). Needs a free LinkedIn developer app of your own; nothing is ever written to LinkedIn.
+Keeps a read-only copy of your LinkedIn profile in sync (official Member Data Portability API, EU/EEA + Switzerland). Needs a free LinkedIn developer app of your own; nothing is ever written to LinkedIn. LinkedIn requires the app to be linked to its own company page **Member Data Portability (Member) Default Company**; don't create a company page yourself ([official guide](https://learn.microsoft.com/en-us/linkedin/dma/member-data-portability/member-data-portability-member/?view=li-dma-data-portability-2026-08)).
 
 → [docs/linkedin-setup.md](docs/linkedin-setup.md)
 
@@ -99,6 +99,15 @@ Month and week view with interview, deadline, and follow-up events. Filter by st
 
 ### CV-Check `/cv-check`
 Scores your CV VMock-style (Impact 40 · Presentation 20 · Competencies 40, +10 bonus) against a target of 80+. Reads the CVs linked in Documents, checks layout straight from the PDF, and lists steps to improve with their point gains plus two AI rewrites per bullet (no invented numbers). Points you keep on purpose can be **accepted** and count as passed. → Full guide: [docs/cv-check.md](docs/cv-check.md)
+
+### LinkedIn-Check `/linkedin`
+Scores your LinkedIn profile out of 100 (First impression 25 · Content 35 · Evidence 20 · Activity 20, plus separate AI-visibility points), one profile per language (DE/EN/FR). Import via the API connection, the LinkedIn ZIP export, the profile PDF or pasted page text. Everything runs with your configured local AI; nothing is ever written to LinkedIn, and what a source doesn't deliver is "not rated" instead of guessed.
+- **Score:** biggest levers with point gains, self-report for what no import shows (photo, banner, Featured), AI judgement of headline, About and posts
+- **AI tools:** a few questions → 3 positioning options → headline, About, positions, skills, Featured, recommendation requests and a 4-week plan as a draft per language; numbers only from your sources, otherwise `[X]`
+- **Suggestions:** skills, certificates and languages from your CV and Documents, one click into the draft
+- **Checklist:** what's left to do on LinkedIn: copy the draft field by field, self-checks with how-to tips, documents, recommendation requests, the plan. Items tick themselves once a re-import proves them
+- **Versions:** every import and draft scored, history and side-by-side comparison
+- **Career starters:** without a profile, a set-up guide (account, visibility, URL, education, "Open to", first contacts) and starter questions; the generator puts education, internships, projects and volunteering first
 
 ### Cover Letter `/letter-coach`
 Personal, reusable cover-letter guidance the AI applies to **every** generated letter: structure, values, core strengths, preferred phrasing, style & tone, no-gos, and a reference letter. Configure once, refine over time. → Full guide: [docs/cover-letter.md](docs/cover-letter.md)
