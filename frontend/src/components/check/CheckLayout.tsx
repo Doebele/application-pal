@@ -66,23 +66,24 @@ export function CheckFrame({ children }: { children: ReactNode }) {
   return <div className="chk-frame">{children}</div>;
 }
 
-export type SideTabDef<T extends string> = { id: T; label: string; icon: ReactNode };
+export type SideTabDef<T extends string> = { id: T; label: string };
 
-/** Right sidebar with an icon tab bar (label shown for the active tab, or all in the large view). */
+/** Right sidebar with a text tab bar (labels only — they scroll sideways if the panel is too narrow). */
 export function CheckSide<T extends string>({ tabs, tab, onTab, large, onLarge, children }: {
   tabs: Array<SideTabDef<T>>; tab: T; onTab: (t: T) => void; large: boolean; onLarge: () => void; children: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
     <aside className={`chk-shell-side${large ? " chk-large" : ""}`}>
-      <div className="chk-side-tabs" role="tablist">
-        {tabs.map(d => (
-          <button key={d.id} role="tab" aria-selected={tab === d.id} className={`tab chk-side-tab${tab === d.id ? " active" : ""}`}
-            onClick={() => onTab(d.id)} title={d.label}>
-            {d.icon} {(tab === d.id || large) && d.label}
-          </button>
-        ))}
-        <div style={{ flex: 1 }} />
+      <div className="chk-side-tabs">
+        <div className="chk-side-tablist" role="tablist">
+          {tabs.map(d => (
+            <button key={d.id} role="tab" aria-selected={tab === d.id} className={`tab chk-side-tab${tab === d.id ? " active" : ""}`}
+              onClick={() => onTab(d.id)}>
+              {d.label}
+            </button>
+          ))}
+        </div>
         <LargeButton large={large} onClick={onLarge} />
       </div>
       <div className="chk-side-body">

@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import {
-  RefreshCircle, InfoCircle, Folder, OpenNewWindow, CheckCircle, WarningCircle, Download,
-  StatsReport, Sparks, Page, Clock,
-} from "iconoir-react";
+import { RefreshCircle, InfoCircle, Folder, OpenNewWindow, CheckCircle, WarningCircle, Download, Page, Clock } from "iconoir-react";
 import type { CvDocument, CvLanguage } from "@application-pal/shared";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
@@ -189,10 +186,10 @@ export function CvCheckPage() {
         {/* ── Sidebar: scores, improvements, structure, versions ── */}
         {sidebarOpen && (
           <CheckSide<SideTab> tab={tab} onTab={setTab} large={large === "side"} onLarge={() => toggleLarge("side")} tabs={[
-            { id: "score", label: t("cvCheck.tabs.score"), icon: <StatsReport width={13} height={13} /> },
-            { id: "improve", label: t("cvCheck.tabs.improve"), icon: <Sparks width={13} height={13} /> },
-            { id: "structure", label: t("cvCheck.tabs.structure"), icon: <Page width={13} height={13} /> },
-            { id: "versions", label: t("cvCheck.tabs.versions"), icon: <Clock width={13} height={13} /> },
+            { id: "score", label: t("cvCheck.tabs.score") },
+            { id: "improve", label: t("cvCheck.tabs.improve") },
+            { id: "structure", label: t("cvCheck.tabs.structure") },
+            { id: "versions", label: t("cvCheck.tabs.versions") },
           ]}>
                 {tab === "score" && <ScoreTab s={check} hasVersion={!!ver} fmt={fmt} />}
                 {tab === "improve" && <ImproveTab s={check} hasVersion={!!ver} fmt={fmt} activeId={activeId} onSelect={setActiveId} />}

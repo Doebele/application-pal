@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { StatsReport, Sparks, Database, ViewGrid, Page, User, EditPencil, TaskList, ClockRotateRight } from "iconoir-react";
+import { Sparks, Database, ViewGrid, Page, User, EditPencil, TaskList } from "iconoir-react";
 import { ChecklistTab } from "../components/linkedin/ChecklistTab";
 import { VersionsTab } from "../components/linkedin/VersionsTab";
 import { Topbar } from "../components/Topbar";
@@ -160,11 +160,11 @@ export function LinkedInCheckPage() {
 
         {sidebarOpen && (
           <CheckSide<SideTab> tab={tab} onTab={setTab} large={large === "side"} onLarge={() => toggleLarge("side")} tabs={[
-            { id: "score", label: t(eff === "draft" ? "linkedinCheck.tabs.scoreDraft" : "linkedinCheck.tabs.score"), icon: <StatsReport width={13} height={13} /> },
-            { id: "tools", label: t("linkedinCheck.tabs.tools"), icon: <Sparks width={13} height={13} /> },
-            { id: "checklist", label: t("linkedinCheck.tabs.checklist"), icon: <TaskList width={13} height={13} /> },
-            { id: "versions", label: t("linkedinCheck.tabs.versions"), icon: <ClockRotateRight width={13} height={13} /> },
-            { id: "source", label: t("linkedinCheck.tabs.source"), icon: <Database width={13} height={13} /> },
+            { id: "score", label: t(eff === "draft" ? "linkedinCheck.tabs.scoreDraft" : "linkedinCheck.tabs.score") },
+            { id: "tools", label: t("linkedinCheck.tabs.tools") },
+            { id: "checklist", label: t("linkedinCheck.tabs.checklist") },
+            { id: "versions", label: t("linkedinCheck.tabs.versions") },
+            { id: "source", label: t("linkedinCheck.tabs.source") },
           ]}>
             {tab === "score" && <ScoreTab s={s} focusGroup={focus} draft={eff === "draft"} extra={<SourcesCard s={s} />} />}
             {tab === "tools" && <ToolsTab s={s} onShowDraft={() => setView("draft")} persona={profile?.persona ?? null} />}
