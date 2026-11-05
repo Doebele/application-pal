@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import {
   DashboardDots, Calendar, List, MultiplePages, Settings, Table2Columns,
   SidebarCollapse, SunLight, HalfMoon, DashboardSpeed, Sofa, ProfileCircle, Folder, Database, Archive,
-  LogOut, SwitchOff, WarningCircle, Globe, SendMail,
+  LogOut, SwitchOff, WarningCircle, Globe, SendMail, PageSearch, Linkedin,
 } from "iconoir-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -11,7 +11,7 @@ import type { Application } from "@application-pal/shared";
 import { useUiStore } from "../lib/store";
 import { useAuth } from "../lib/auth";
 import { api } from "../lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import { removeRememberedToken, getRememberedToken, storeRememberedToken } from "../pages/SetupPage";
 // @ts-ignore
 import deFlagUrl from "round-flag-icons/flags/de.svg?url";
@@ -483,6 +483,9 @@ export function Rail({ applications }: Props) {
     navigate("/", { replace: true });
   };
 
+  const { data: profileData } = useQuery({ queryKey: ["profile"], queryFn: async () => (await api.get<{ persona?: string | null }>("/api/profile")).data });
+  const persona = profileData?.persona ?? null;
+
   // Ordered nav items — labels via i18n
   const navItems = [
     { to: "/",           label: t("nav.board"),     icon: <DashboardDots  width={15} height={15} />, count: applications.filter(a => a.stage !== undefined).length },
@@ -491,6 +494,10 @@ export function Rail({ applications }: Props) {
     { to: "/timeline",   label: t("nav.timeline"),  icon: <List           width={15} height={15} /> },
     { to: "/profile",    label: t("nav.profile"),   icon: <ProfileCircle  width={15} height={15} /> },
     { to: "/documents",  label: t("nav.documents"), icon: <Folder         width={15} height={15} /> },
+    { to: "/cv-check",   label: t("nav.cvCheck"),   icon: <PageSearch     width={15} height={15} /> },
+    // LinkedIn-Check: Berufsumsteiger (check + build) and Berufseinsteiger (build first); hidden for Schulabgänger / no persona
+    ...(persona === "berufsumsteiger" || persona === "berufseinsteiger"
+      ? [{ to: "/linkedin", label: t("nav.linkedinCheck"), icon: <Linkedin width={15} height={15} /> }] : []),
     { to: "/letter-coach", label: t("nav.letterCoach"), icon: <SendMail   width={15} height={15} /> },
     { to: "/knowledge",  label: t("nav.knowledge"), icon: <Database       width={15} height={15} /> },
     { to: "/templates",  label: t("nav.templates"), icon: <MultiplePages  width={15} height={15} /> },

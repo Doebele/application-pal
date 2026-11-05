@@ -7,7 +7,9 @@ import imgBerufseinsteiger from "../assets/personas/berufseinsteiger.png";
 import imgBerufsumsteiger  from "../assets/personas/berufsumsteiger.png";
 import { OpenNewWindow, FloppyDisk, User, Linkedin, Page, RefreshCircle, Expand, Collapse, LightBulb } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
+import { LinkedInConnection } from "../components/linkedin/LinkedInConnection";
 import { api } from "../lib/api";
+import { useQueryClient } from "@tanstack/react-query";
 import type { UserProfile } from "@application-pal/shared";
 
 function AutoResizeTextarea({ value, onChange, onBlur, placeholder, minRows = 4 }: {
@@ -62,6 +64,7 @@ export function ProfilePage() {
       .finally(() => setLoading(false));
   }, []);
 
+  const queryClient = useQueryClient();
   const save = useCallback(async (patch?: Partial<UserProfile>) => {
     setSaving(true);
     try {
@@ -144,7 +147,8 @@ export function ProfilePage() {
                   key={p.value}
                   onClick={() => {
                     setProfile(prev => ({ ...prev, persona: p.value }));
-                    save({ persona: p.value });
+                    // The Rail gates the LinkedIn-Check on the persona → refresh the shared profile query
+                    save({ persona: p.value }).then(() => queryClient.invalidateQueries({ queryKey: ["profile"] }));
                   }}
                   style={{
                     padding: 0, borderRadius: 12, textAlign: "left",
@@ -279,6 +283,11 @@ export function ProfilePage() {
           </div>
           <div className="settings-group" style={linkedinExpanded ? { flex: 1, display: "flex", flexDirection: "column" } : {}}>
             <div className="settings-row" style={{ flexDirection: "column", alignItems: "stretch", gap: 12, ...(linkedinExpanded ? { flex: 1 } : {}) }}>
+              <LinkedInConnection
+                headline={profile.headline ?? ""}
+                bio={profile.linkedinBio ?? ""}
+                onAdopt={(patch) => save(patch)}
+              />
               <div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 2 }}>
                   <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>{t("contacts.linkedin")}</div>

@@ -137,6 +137,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | `applications` | Jobs: stage, tags, salary, archived, archiveReason, matchScore, interview1/2Details, interview1/2Prep, glassdoorData, kununuData, linkedinData, aiResultsCache, googleFolderId, **jobType** (pensum %), **workModel**, **contractType**, **language** | ✅ `user_id` FK | ✅ |
 | `user_profile` | Per-user profile: masterCv, linkedinBio, headline, personalNotes, googleCalendarId, driveApplicationsFolderId, **ravSheetId** (RAV proof spreadsheet), sessionTimeout, desiredSalary, **letterConfig** (JSON: persistent cover-letter guidance, see `LetterCoachPage`) | ✅ `user_id` FK | ✅ |
 | `user_documents` | Document library (CV, Zeugnisse, Figma, etc.); `extraUrl` = optional secondary link, surfaced as a "Link" button on the tile when set | ✅ `user_id` FK | ✅ |
+| `cv_versions` | CV-Check: structured CV versions per language (append-only) + stored check inputs/result | ✅ `user_id` FK | ✅ |
 | `application_documents` | Per-job docs; `googleDocId`/`googleDocUrl` for Drive | via `application_id` | ✅ |
 | `application_activities` | Timeline events per job | via `application_id` | ✅ |
 | `application_contacts` | Contacts per job | via `application_id` | ✅ |
@@ -265,6 +266,28 @@ Swiss unemployment offices require a monthly proof of job-search efforts. `backe
 
 **Validation refresh**: the original template validates only down to row 25. Every export re-applies `setDataValidation` down to `lastRow + 15`, so appended rows get working dropdowns.
 
+### CV-Check (`/cv-check`, full guide `docs/cv-check.md`)
+
+VMock-style CV scoring. CVs are the `user_documents` rows with category `lebenslauf` — **never add a Settings field for CV locations**. The app is the source of truth: `cv_versions` (append-only, `origin` import|edit|optimize|translate, `data` = `CvDocument` JSON from shared, `check_result` = `{ inputs, result }`). `user_profile.cv_master_lang`, `user_profile.cv_check_waivers` (JSON `{ de?, en?, fr? }` of accepted keys).
+
+| File | Role |
+|---|---|
+| `backend/src/cv.ts` | import prompt (verbatim rules), `normalizeParsedCv`, `verbatimWarnings`, `detectCvLang` |
+| `backend/src/cv-criteria.ts` | weights, thresholds, word lists, check definitions (de/en/fr labels) — `version: "vmock-1"` |
+| `backend/src/cv-layout.ts` | `analyzePdfLayout()` via `pdfjs-dist/legacy` — lines (size/bold/italic from font names), margins, fill, coloured text, images |
+| `backend/src/cv-rules.ts` | pure `runCvCheck()` + LLM judge prompt/normaliser; self-check `npx tsx backend/src/cv-rules.check.ts` |
+| `frontend/src/components/check/` | shared check UI (tokens + classes, no inline colours) — reused by the LinkedIn-Check. `PdfViewer` = pdf.js canvas pages + highlight overlay, highlights located by normalised text match |
+
+Rules — don't "fix" them:
+- A check without its input is `"na"`, never passed; unverified hygiene never earns the bonus.
+- Specifics require a number in the bullet text; the LLM only decides scope vs outcome.
+- Rewrites use `[X]` placeholders, never invented numbers; competency quotes not found in the CV are dropped.
+- Waivers (`"format.colour"`, `"action:<bulletId>"`, `"specifics:<bulletId>"`) turn a fail into `"accepted"` with full points; `rawTotal` + `acceptedGain` = `total`.
+- `GET /api/cv/check` re-scores from stored inputs on every read — accepting a point or switching UI language needs no AI call.
+- The pdf.js worker is a `.mjs` file: `frontend/nginx.conf` serves `*.mjs` as `application/javascript` — without it the viewer fails with "Setting up fake worker failed".
+- Never run two smooth scrolls at once (Chrome cancels the first): `BulletCard` scrolls itself instantly, `PdfViewer` scrolls its container with `scrollTo`.
+- Import and check run as in-memory background jobs (local models exceed the nginx 600 s limit); LM Studio/Ollama calls stream with a 20-minute timeout.
+
 ### Key Frontend Patterns
 
 **DetailDrawer**: Main job detail view. `stage` and `url` are lifted to component state for immediate header updates. Tab type: `"process" | "details" | "documents" | "ki"`. Default tab: `"process"`. Uses `useQuery(["application", app.id], { staleTime: 0, refetchOnMount: true })` to always load fresh AI data from DB on open.
@@ -381,6 +404,60 @@ JWT in httpOnly cookies. `GET /api/auth/status` returns `{ setup: bool }`. `GET 
 - `?invite=TOKEN` — pre-fills the invite token field
 
 **User-switch flow** (Rail `UserModal`): `GET /api/auth/users` (public endpoint) returns all registered emails. Each entry is enriched with a `rememberedToken` from `pal-remembered-users` localStorage. Users with a remembered token show a ⚡ "Direkt anmelden" option → calls `POST /api/auth/auto-login` directly without navigating away. Users without a token navigate to `/setup?email=...` (Login tab) or the generic "Registrieren" button navigates to `/setup?mode=register`.
+
+### LinkedIn connection (Profile page)
+
+Read-only sync of the member's own profile via the **Member Data Portability API** (EU/EEA + CH, `docs/linkedin-setup.md`). Each user brings their own LinkedIn developer app (self-serve product), so `client_id`/`client_secret` live per user in `linkedin_connections` — a credentials table, **never exported**. Token from the OAuth redirect flow (`/api/linkedin/auth-url` → public `/api/linkedin/callback`, user identified by a signed `state` JWT) or pasted from LinkedIn's token generator (`POST /api/linkedin/token`). Tokens live 60 days, no refresh; a 401 marks the connection expired.
+
+`backend/src/linkedin.ts` holds the pure mapping: snapshot records use the ZIP-export column names, so `normalizeSnapshot()` serves both the API and the ZIP import (`ZIP_FILE_DOMAINS`). Fields are matched case/punctuation-insensitively with aliases. A domain that answers "no data" = 0 entries (not unknown) — unless PROFILE is empty, which means LinkedIn is still collating the snapshot. Connection names are never stored (`rawForStorage` keeps only the count). Self-check: `npx tsx backend/src/linkedin.check.ts`.
+
+Sync runs as an in-memory background job (`/api/linkedin/sync`, polled via `/api/linkedin/status`); a changed profile is appended to `linkedin_versions` (identical syncs are skipped via `profileFingerprint`). The Profile page auto-syncs when the last sync is older than 24 h. Photo, banner, custom URL, Featured and "Open to" are not in the API — the LinkedIn-Check must treat them as self-report / "not rated".
+
+### LinkedIn-Check (`/linkedin`)
+
+100 points = First impression 25 + Content 35 + Evidence 20 + Activity 20, plus 8 separate AI-visibility points (never in the total). `backend/src/linkedin-criteria.ts` is the versioned catalogue (`li-1`, labels de/en/fr, efforts, buzzword lists). `backend/src/linkedin-rules.ts` holds the pure `runLinkedInCheck()`. Each checkpoint has a `kind`: `rule` (deterministic), `self` (user's self-report), `llm` (local model). Self-checks: `npx tsx backend/src/linkedin-rules.check.ts` and `npx tsx backend/src/linkedin-llm.check.ts`.
+
+`backend/src/linkedin-llm.ts` holds the judge prompt + `normalizeLiJudgement()` (headline/About/posts/AI-visibility points, optional CV facts, 3 headline variants with `[X]` placeholders, NDA hints) and the PDF/text import prompt + `normalizeImportedProfile()`. `POST /api/linkedin/check` (body `{ ai, uiLang }`) runs the judge as an in-memory background job and stores `LiCheckStored` in `linkedin_versions.check_result` of the latest version; `GET /api/linkedin/check` merges it in. `POST /api/linkedin/import/pdf` (multipart `file` + `ai` JSON string) and `/import/text` (`{ text, ai }`) extract a profile with the model; jobs are polled via `GET /api/linkedin/jobs`. The PDF is kept in the version's raw data for `GET /api/linkedin/versions/:id/pdf` (pdf.js view). CV facts come from `masterCv`, else the `lebenslauf` document summaries — independent of the CV-Check. The Rail entry shows only for the personas `berufsumsteiger` / `berufseinsteiger`.
+
+User input lives in `user_profile.linkedin_state` (`LinkedInState`: journey, goal.targetRole/market, selfReport `{checkId: points}`, waivers, checklist), via `GET`/`PATCH /api/linkedin/state` and `POST /api/linkedin/check/waivers`. `GET /api/linkedin/check?uiLang=` re-scores the latest import on every read. `POST /api/linkedin/import/zip` (multipart `file`) reads the LinkedIn ZIP export: CSVs only, preamble rows skipped, `Recommendations_Given.csv` merged with a "given" marker. nginx allows 50 MB uploads.
+
+Rules — don't "fix" them:
+- A checkpoint without input is `na`: it leaves the maximum and `total = round(earned / ratedMax × 100)`. Never guess.
+- A domain the source delivered but that is empty scores 0. A domain missing from `meta.present` (or listed in `meta.failed`) is `na`.
+- A missing headline or About text scores 0 on all its checkpoints, including the `llm` ones.
+- Buzzwords cost −0.5 each (`about.phrases`, max 0), never more than the About points already earned.
+- A year-only end date (`"2016"`) counts as December for the gap check.
+- The LinkedIn PDF only shows the top 3 skills: a PDF import never marks SKILLS as present. A text paste marks only the sections the model found.
+- The model never sets a score directly for rule checkpoints; it only fills the `llm` ones and the CV facts. Without a judgement the `llm` points are `na`.
+- `Skills.csv` has a single column: `csvRecords` falls back to the first non-empty row as header.
+
+**Profile languages.** LinkedIn keeps one profile per language, so every `linkedin_versions` row has a `lang` (`de`/`en`/`fr`; `""` = not detected; `NULL` = legacy, filled by `backfillLinkedInLangs`). Imports detect it via `profileLang()` (`linkedin-rules.ts`) or take a `lang` override (multipart field / body); `PATCH /api/linkedin/versions/:id { lang }` corrects it. The import dedupe fingerprint is per language. `GET /api/linkedin/check?lang=` scores one language and returns `langs` (import + draft per language); the page's `LangSwitch` picks it. The `secondLang` recommendation is skipped when an import in the market language exists.
+
+**Text generator (phase 3, `backend/src/linkedin-gen.ts`)**, self-check `npx tsx backend/src/linkedin-gen.check.ts`. Flow in the „KI-Werkzeuge" tab: answers (`state.answers`) → `POST /api/linkedin/positioning { ai, lang, applicationId? }` (3 options, user picks or writes one; `PATCH /state { positioning: { lang, chosen } }`) → `POST /api/linkedin/generate { ai, lang, parts, applicationId? }` with parts `intro` (headline + variants + About + Featured), `positions`, `skills`, `activity` (rec requests, content pillars, group criteria, 4-week plan). Generate requires a confirmed positioning. Base per language: an import in the same language → **sharpen** (rewrite); else the newest import of another language → **translate** (structure kept, texts rewritten); else **build** from CV, documents and answers. The result is one working **draft** row per language (`origin "draft"`, `source "builder"`, `parentId` = base import, `raw` = `LiDraftRaw`), updated in place after each part; edit via `PATCH /api/linkedin/drafts/:id`, delete via `DELETE`. The draft is scored like an import (`draft.result`); a judge run on it counts only while `checkedAt >= raw.updatedAt`. `DraftCards.tsx` renders field-by-field copy cards with LinkedIn length limits, `[X]` counts and a zoom view with before/after against the import.
+
+**Suggestions from the user's documents (`backend/src/linkedin-sources.ts`, no AI)**, self-check `npx tsx backend/src/linkedin-sources.check.ts`. `liSourceSuggestions()` reads the newest general CV-Check version per language (`cv_versions`, else `textCvFacts()` on the Master-CV) and the `zertifikat` documents' summaries, and returns skills (with CV group), certificates (issuer, `YYYY-MM` date, credential ID read from the summary labels), languages (mapped to LinkedIn's five levels) and `keywords` — each flagged `inProfile` / `inDraft`. `GET /api/linkedin/check` returns it as `sources`; `SourcesCard` (score tab) and the draft's skills card offer one-click adds to the draft (or copy without a draft); question 1 („Was kannst du besonders gut?") is a keyword combo box (`KeywordField`, stored as `"a, b, c"` in `answers.strengths`). `liSourceFactsText()` puts the verbatim skill list, certificates and languages into the generator input before the long CV text, so they are never truncated. Rules: a PDF import shows only the top 3 skills → `skillsKnown: false` and the UI says "check", not "missing"; CV and document certificates are merged by `sameCert()` (typo-tolerant token match); merged skill terms ("Figma FigJam proficiency") don't count as "Figma".
+
+Draft card zoom is owned by the page: enlarging a card also enlarges the panel; the card button, the panel button and Escape shrink both (if the panel was large before, closing the card keeps it large).
+
+The generator prompt repeats the language directive at the **end** (`head()` + `LANG_FIELDS`), naming the free-text fields (`why`, `reason`, …) explicitly — otherwise the German prompt body drags those fields to German in an English draft.
+
+**Checklist (phase 4, `backend/src/linkedin-checklist.ts`, no AI)**, self-check `npx tsx backend/src/linkedin-checklist.check.ts`. `buildLiChecklist()` returns `{ items, done, total }` for the shown language in five sections: `transfer` (draft headline / About / each position description / skills / Featured), `basics` (every `self` checkpoint), `documents` (certificates and languages from `sources`), `network` (recommendation requests), `plan` (4-week plan). `GET /api/linkedin/check` returns it as `checklist`; manual ticks go through `PATCH /api/linkedin/state { checklistToggle: { key, done } }` into `state.checklist` (last 200 keys). Rules — don't "fix" them:
+- Application-Pal never writes to LinkedIn: an item is **auto**-done only with evidence from an import (same text after normalising, certificate/language `inProfile`, skills only from an import that has the full SKILLS domain) — never from the draft alone. Auto items of other kinds can't be unticked by hand.
+- A `basics` item ticks the **self-report** (`setSelf(checkId, max)` / `null`), not the checklist — score and checklist stay one truth.
+- A draft field containing `[X]` is `blocked`: it can't be ticked, and a stored manual tick is ignored while it is blocked.
+- Keys are stable and ≤ 60 chars (`liChecklistKey`); ticks for items that no longer exist are ignored.
+- `setup` section (`LI_SETUP_STEPS`: account, quiet, url, location, education, practice, openTo, network, follow) appears only while the user has **no import in any language** — it's the "set up a LinkedIn account from scratch" guide. Titles and how-to tips are UI texts (`linkedinCheck.checklist.setup.<id>.{title,tip}`); self-report items show their checkpoint `rule` as tip.
+
+**Career starters (persona `berufseinsteiger`)**: `liGenSources` reads `user_profile.persona`; every generator prompt then gets a `BEGINNER_TASK` block (education/internships/projects/volunteering carry the profile, no invented experience, headline = target entry role + degree). The tools tab asks `education` / `practice` instead of `audience` / `outcomes`, and `askedFor` becomes "which entry-level position". In build mode the positions part may return **no positions** for a beginner (education or volunteering is enough), education gets `notes`, and volunteering is written to its own section (`VOLUNTEERING_EXPERIENCES`; organisation must be in the sources, else `[X]`). The draft cards and checklist show both.
+
+**Versions tab**: `GET /api/linkedin/versions?uiLang=` scores every import and draft on read (`scoreLiVersion`, a draft's judgement only while fresh) → `{ total, areas, stats, judged, parentId, … }`; `GET /api/linkedin/versions/:id` returns profile + result for the side-by-side compare (two picked versions, older = A). `DELETE /api/linkedin/versions/:id` deletes **imports only** (drafts via `/drafts/:id`); `parent_id` has no FK, so a draft whose import is gone just shows no delta. Area deltas are shown only when both ratable maxima match — otherwise only the normalised total is comparable.
+
+Generator rules — don't "fix" them:
+- `guardNumbers()` turns any figure not found in the sources (profile, CV, documents, answers — **not** the job ad) into `[X]`. New companies/schools not found in the sources become `[X]` with a warning; Featured URLs survive only if they appear in the sources.
+- Groups are proposed only as criteria + search terms, never as invented group names.
+- `langPrompt()` only knows DE/EN, so the generator uses its own `LANG_DIRECTIVE` (de/en/fr). The humanizer ruleset is appended to the prose prompts (intro, positions, activity).
+- A built-from-scratch draft has honest zeros (recommendations, posts, comments, connections present but empty) — never `na`.
+- Application-Pal never writes to LinkedIn: everything is copied by the user.
 
 ### Google OAuth Scopes
 
