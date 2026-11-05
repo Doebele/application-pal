@@ -1434,6 +1434,13 @@
           "company": "Company",
           "school": "School"
         }
+      },
+      "kw": {
+        "remove": "Remove “{{k}}”",
+        "addPh": "Add a keyword …",
+        "suggestions": "Suggestions from your CV and profile",
+        "more": "{{count}} more",
+        "less": "Fewer"
       }
     },
     "draft": {
@@ -1450,7 +1457,7 @@
       "scoreNew": "New profile – nothing to compare",
       "notYet": "Not generated yet – choose “{{part}}” under AI tools.",
       "zoom": "Enlarge (compare with current profile)",
-      "unzoom": "Close",
+      "unzoom": "Shrink",
       "before": "Current profile",
       "after": "Draft",
       "headline": "Headline",
@@ -1489,6 +1496,41 @@
       "plan": "4-week plan",
       "week": "Week {{n}}",
       "xHint": "Placeholder: replace with real values before copying"
+    },
+    "sources": {
+      "title": "From your documents",
+      "hint": "In your CV or documents but not in the profile – verbatim from the source, nothing invented.",
+      "none": "No sources found: import your CV in the CV check or add certificates under Documents.",
+      "toCvCheck": "Open CV check",
+      "toDocuments": "Open Documents",
+      "allIn": "Everything from your documents is already in the profile.",
+      "skills": "Skills",
+      "skillsDraft_one": "{{count}} skill from your CV is missing in the draft. Click to add it.",
+      "skillsDraft_other": "{{count}} skills from your CV are missing in the draft. Click to add them.",
+      "skillsMissing_one": "{{count}} skill is missing on LinkedIn. Click to copy it.",
+      "skillsMissing_other": "{{count}} skills are missing on LinkedIn. Click to copy them.",
+      "skillsUnknown_one": "The PDF only shows your top skills. Check whether this skill from your CV is missing on LinkedIn.",
+      "skillsUnknown_other": "The PDF only shows your top skills. Check which of these {{count}} skills from your CV are missing on LinkedIn.",
+      "fromCv_one": "From your CV · {{count}} not in the draft yet",
+      "fromCv_other": "From your CV · {{count}} not in the draft yet",
+      "addAll": "Add all ({{count}})",
+      "clickAdd": "Click to add to the draft",
+      "clickCopy": "Click to copy",
+      "certs_one": "{{count}} certificate missing in the profile",
+      "certs_other": "{{count}} certificates missing in the profile",
+      "certsHint": "Add them on LinkedIn under “Licenses & certifications” – issuer, date and credential ID come from the document.",
+      "issuer": "Issuer: {{v}}",
+      "issued": "Issued: {{v}}",
+      "credentialId": "Credential ID: {{v}}",
+      "langs": "Languages",
+      "level": {
+        "native": "Native or bilingual proficiency",
+        "fullProfessional": "Full professional proficiency",
+        "professionalWorking": "Professional working proficiency",
+        "limitedWorking": "Limited working proficiency",
+        "elementary": "Elementary proficiency"
+      },
+      "docSource": "Document “{{name}}”"
     }
   }
 }

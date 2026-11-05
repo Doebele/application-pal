@@ -5,11 +5,12 @@
 // Application-Pal never writes to LinkedIn — the user copies and pastes.
 import { useEffect, useState, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
-import { User, Journal, Suitcase, GraduationCap, Star, Pin, ChatLines, Calendar, Group, Maximize, Xmark, Check, LightBulb } from "iconoir-react";
+import { User, Journal, Suitcase, GraduationCap, Star, Pin, ChatLines, Calendar, Group, Expand, Collapse, Check, LightBulb } from "iconoir-react";
 import type { LinkedInProfile } from "@application-pal/shared";
 import { copyText } from "../../lib/clipboard";
 import { PtsBadge } from "./ProfileCards";
-import { CopyBtn, withPlaceholders, type LiDraft, type DraftPatch, type GenPart } from "../../pages/LinkedInCheckTabs";
+import { CopyBtn, withPlaceholders, type LiDraft, type DraftPatch, type GenPart, type LiSources } from "../../pages/LinkedInCheckTabs";
+import { SkillSuggestionChips } from "./SourceSuggestions";
 import "./linkedin.css";
 
 // LinkedIn's input limits.
@@ -67,7 +68,7 @@ function DCard({ id, title, icon, groups, checks, zoom, onZoom, missing, childre
         {groups && <PtsBadge checks={checks} groups={groups} />}
         <button type="button" className="btn btn-ghost btn-icon chk-icon-btn" title={zoomed ? t("linkedinCheck.draft.unzoom") : t("linkedinCheck.draft.zoom")}
           onClick={() => onZoom(zoomed ? null : id)}>
-          {zoomed ? <Xmark width={12} height={12} /> : <Maximize width={11} height={11} />}
+          {zoomed ? <Collapse width={12} height={12} /> : <Expand width={12} height={12} />}
         </button>
       </header>
       {missing ? <div className="lic-ghost">{missing}</div> : zoomed && before ? (
@@ -82,17 +83,14 @@ function DCard({ id, title, icon, groups, checks, zoom, onZoom, missing, childre
 
 const plain = (s: string | null | undefined) => <div className="lic-text">{s?.trim() || "—"}</div>;
 
-export function DraftCards({ draft, before, busy, onPatch }: {
-  draft: LiDraft; before: LinkedInProfile | null; busy: boolean; onPatch: (p: DraftPatch) => void;
+/** `zoom` is owned by the page: enlarging a card also enlarges the panel, and shrinking either
+ *  (card button, panel button, Escape) shrinks both. */
+export function DraftCards({ draft, before, busy, onPatch, sources, zoom, onZoom }: {
+  draft: LiDraft; before: LinkedInProfile | null; busy: boolean; onPatch: (p: DraftPatch) => void; sources?: LiSources | null;
+  zoom: string | null; onZoom: (id: string | null) => void;
 }) {
   const { t } = useTranslation();
-  const [zoom, setZoom] = useState<string | null>(null);
-  useEffect(() => {
-    if (!zoom) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setZoom(null); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [zoom]);
+  const setZoom = onZoom;
   const p = draft.profile;
   const raw = draft.raw;
   const checks = draft.result.checks;
@@ -100,6 +98,9 @@ export function DraftCards({ draft, before, busy, onPatch }: {
   const notYet = (part: GenPart) => t("linkedinCheck.draft.notYet", { part: t(`linkedinCheck.gen.part.${part}`) });
   const common = { checks, zoom, onZoom: setZoom };
   const beforePos = (id: string) => before?.positions.find(x => x.id === id);
+  // CV skills not in the draft yet — one click adds them (verbatim from the CV, so no [X]).
+  const cvSkills = (sources?.skills ?? []).filter(x => !x.inDraft);
+  const addSkills = (names: string[]) => onPatch({ skills: [...p.skills.map(s => s.name), ...names].slice(0, 100) });
 
   return (
     <div className="lic-stack">
@@ -167,8 +168,19 @@ export function DraftCards({ draft, before, busy, onPatch }: {
       )}
 
       <DCard id="skills" title={t("linkedinCheck.draft.skills", { count: p.skills.length })} icon={<Star width={13} height={13} />} groups={["skills"]} {...common}
-        missing={!p.skills.length ? notYet("skills") : null}>
-        <SkillsEditor names={p.skills.map(s => s.name)} verified={raw.skills} busy={busy} onSave={skills => onPatch({ skills })} />
+        missing={!p.skills.length && !cvSkills.length ? notYet("skills") : null}>
+        {p.skills.length > 0 && <SkillsEditor names={p.skills.map(s => s.name)} verified={raw.skills} busy={busy} onSave={skills => onPatch({ skills })} />}
+        {cvSkills.length > 0 && (
+          <div className="li-src-group">
+            <div className="li-src-head">
+              <span className="lid-label" style={{ flex: 1 }}>{t("linkedinCheck.sources.fromCv", { count: cvSkills.length })}</span>
+              <button type="button" className="btn btn-ghost li-btn" disabled={busy} onClick={() => addSkills(cvSkills.map(x => x.name))}>
+                {t("linkedinCheck.sources.addAll", { count: Math.min(cvSkills.length, 100 - p.skills.length) })}
+              </button>
+            </div>
+            <SkillSuggestionChips skills={cvSkills} onAdd={addSkills} busy={busy} />
+          </div>
+        )}
       </DCard>
 
       <DCard id="featured" title={t("linkedinCheck.draft.featured")} icon={<Pin width={13} height={13} />} groups={["featured"]} {...common}

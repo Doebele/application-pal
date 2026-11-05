@@ -135,7 +135,8 @@ Format: {"positions":[{"ref":"…","title":"…","company":"…","start":"…","
 }
 
 export function liSkillsPrompt(lang: LinkedInLang): string {
-  return head(lang, `"skills": ${LI_CRITERIA.skills.full}–50 Kenntnisse für LinkedIn, die ${LI_CRITERIA.skills.topN} wichtigsten zuerst (passend zu Zielrolle und Headline). Nur Kenntnisse, die in den Quellen belegt sind, je mit kurzem wörtlichem Zitat als "evidence". Begriffe mit max. 4 Wörtern, keine Sätze.
+  return head(lang, `"skills": ${LI_CRITERIA.skills.full}–50 Kenntnisse für LinkedIn, die ${LI_CRITERIA.skills.topN} wichtigsten zuerst (passend zu Zielrolle und Headline). Nur Kenntnisse, die in den Quellen belegt sind, je mit kurzem wörtlichem Zitat als "evidence".
+  Jede Kenntnis ist EIN gängiger LinkedIn-Skill (1–3 Wörter, z. B. „Figma", „Design Thinking", „Barrierefreiheit") — nie zwei Kenntnisse zu einem Begriff zusammenfügen („Figma FigJam proficiency" ist falsch: „Figma" und „FigJam" einzeln), keine Zusätze wie „proficiency", „methodology", „tracking". Stehen Begriffe unter „Kenntnisse laut Lebenslauf", übernimm sie wörtlich. Erworbene Zertifikate dürfen ihre Themen als Kenntnis belegen.
 "featured": 3–6 Vorschläge für „Im Fokus", die stärksten zwei zuerst. Nur Dinge, die in den Quellen existieren (Portfolio, Projekte, Publikationen, Dokumente, Beiträge). "url" nur, wenn sie wörtlich in den Quellen steht, sonst null. "kind": link | post | document | media. "why": ein Satz, warum es die Positionierung belegt.
 Format: {"skills":[{"name":"…","evidence":"…"}],"featured":[{"title":"…","kind":"link","why":"…","url":null}]}`);
 }
@@ -155,6 +156,8 @@ export function liGenInput(o: {
   answers?: Record<string, string> | null; cvText?: string | null; docs?: string | null;
   jobAd?: { company?: string | null; role?: string | null; description?: string | null } | null;
   toneSample?: string | null;
+  /** liSourceFactsText(): verbatim skills, certificates, languages from CV + Documents. */
+  sourceFacts?: string | null;
 }): string {
   const out: string[] = [];
   const g = o.goal;
@@ -172,6 +175,7 @@ export function liGenInput(o: {
       ...p.certifications.map(x => `Zertifikat: ${x.name}`), ...p.basics.websites.map(w => `Website: ${w}`)];
     if (extra.length) out.push(`## Weitere Einträge\n${extra.slice(0, 30).map(x => `- ${x}`).join("\n")}`);
   }
+  if (o.sourceFacts) out.push(o.sourceFacts.slice(0, 4000));
   if (o.cvText) out.push(`## Lebenslauf\n${o.cvText.slice(0, 9000)}`);
   if (o.docs) out.push(o.docs.slice(0, 5000));
   if (o.jobAd?.description) out.push(`## Stellenanzeige, auf die zugeschnitten wird${o.jobAd.role ? ` (${o.jobAd.role}${o.jobAd.company ? ` bei ${o.jobAd.company}` : ""})` : ""}\n${o.jobAd.description.slice(0, 4000)}`);

@@ -1434,6 +1434,13 @@
           "company": "Firma",
           "school": "Schule"
         }
+      },
+      "kw": {
+        "remove": "„{{k}}“ entfernen",
+        "addPh": "Stichwort hinzufügen …",
+        "suggestions": "Vorschläge aus Lebenslauf und Profil",
+        "more": "{{count}} weitere",
+        "less": "Weniger"
       }
     },
     "draft": {
@@ -1450,7 +1457,7 @@
       "scoreNew": "Neues Profil – kein Vergleich",
       "notYet": "Noch nicht erzeugt – unter KI-Werkzeuge „{{part}}“ wählen.",
       "zoom": "Vergrössern (mit aktuellem Profil vergleichen)",
-      "unzoom": "Schliessen",
+      "unzoom": "Verkleinern",
       "before": "Aktuelles Profil",
       "after": "Entwurf",
       "headline": "Headline",
@@ -1489,6 +1496,41 @@
       "plan": "4-Wochen-Plan",
       "week": "Woche {{n}}",
       "xHint": "Platzhalter: vor dem Kopieren durch echte Werte ersetzen"
+    },
+    "sources": {
+      "title": "Aus deinen Unterlagen",
+      "hint": "Steht in Lebenslauf oder Dokumenten, aber nicht im Profil – wörtlich aus der Quelle, nichts erfunden.",
+      "none": "Keine Quellen gefunden: Lebenslauf im CV-Check importieren oder Zertifikate unter Dokumente ablegen.",
+      "toCvCheck": "Zum CV-Check",
+      "toDocuments": "Zu den Dokumenten",
+      "allIn": "Alles aus deinen Unterlagen steht schon im Profil.",
+      "skills": "Kenntnisse",
+      "skillsDraft_one": "{{count}} Kenntnis aus dem Lebenslauf fehlt im Entwurf. Klick übernimmt sie.",
+      "skillsDraft_other": "{{count}} Kenntnisse aus dem Lebenslauf fehlen im Entwurf. Klick übernimmt sie.",
+      "skillsMissing_one": "{{count}} Kenntnis fehlt auf LinkedIn. Klick kopiert sie.",
+      "skillsMissing_other": "{{count}} Kenntnisse fehlen auf LinkedIn. Klick kopiert sie.",
+      "skillsUnknown_one": "Das PDF zeigt nur deine Top-Skills. Prüfe, ob diese Kenntnis aus deinem Lebenslauf auf LinkedIn fehlt.",
+      "skillsUnknown_other": "Das PDF zeigt nur deine Top-Skills. Prüfe, welche dieser {{count}} Kenntnisse aus deinem Lebenslauf auf LinkedIn fehlen.",
+      "fromCv_one": "Aus deinem Lebenslauf · {{count}} noch nicht im Entwurf",
+      "fromCv_other": "Aus deinem Lebenslauf · {{count}} noch nicht im Entwurf",
+      "addAll": "Alle übernehmen ({{count}})",
+      "clickAdd": "Klick übernimmt in den Entwurf",
+      "clickCopy": "Klick kopiert",
+      "certs_one": "{{count}} Zertifikat fehlt im Profil",
+      "certs_other": "{{count}} Zertifikate fehlen im Profil",
+      "certsHint": "Auf LinkedIn unter „Bescheinigungen und Zertifikate“ hinzufügen – Aussteller, Datum und Nachweis-ID stammen aus dem Dokument.",
+      "issuer": "Aussteller: {{v}}",
+      "issued": "Ausgestellt: {{v}}",
+      "credentialId": "Nachweis-ID: {{v}}",
+      "langs": "Sprachen",
+      "level": {
+        "native": "Muttersprache oder zweisprachig",
+        "fullProfessional": "Verhandlungssicher",
+        "professionalWorking": "Fließend",
+        "limitedWorking": "Gute Kenntnisse",
+        "elementary": "Grundkenntnisse"
+      },
+      "docSource": "Dokument „{{name}}“"
     }
   }
 }

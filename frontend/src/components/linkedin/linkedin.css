@@ -111,6 +111,33 @@
 .li-answer { resize: vertical; font: inherit; font-size: 12px; line-height: 1.45; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--fg-1); outline: none; }
 .li-answer:focus { border-color: var(--accent); }
+.li-field > label:first-child { font-size: 9px; font-weight: 700; color: var(--fg-3); letter-spacing: .08em; text-transform: uppercase; }
+
+/* Keyword combo box (question 1): chips + input in one bordered box, suggestions below. */
+.li-kw { display: flex; flex-direction: column; gap: 8px; }
+.li-kw-box { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 5px 6px; min-height: 34px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface-2); cursor: text; }
+.li-kw-box:focus-within { border-color: var(--accent); }
+.li-kw-box input { flex: 1; min-width: 120px; border: 0; outline: none; background: transparent; color: var(--fg-1); font: inherit; font-size: 12px; padding: 2px; }
+.li-kw-chip { display: inline-flex; align-items: center; gap: 2px; max-width: 100%; font-size: 11px; color: var(--fg-1); padding: 1px 2px 1px 8px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border)); overflow-wrap: anywhere; }
+.li-kw-chip button { display: inline-grid; place-items: center; width: 16px; height: 16px; border: 0; border-radius: 50%; background: transparent; color: var(--fg-2); cursor: pointer; padding: 0; flex-shrink: 0; }
+.li-kw-chip button:hover, .li-kw-chip button:focus-visible { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--fg-1); }
+.li-kw-sugg { display: flex; flex-direction: column; gap: 4px; }
+.li-kw-add { display: inline-flex; align-items: center; gap: 3px; font: inherit; font-size: 11px; color: var(--fg-2); padding: 1px 8px 1px 6px; border-radius: 999px;
+  border: 1px dashed var(--border); background: transparent; cursor: pointer; }
+.li-kw-add:hover, .li-kw-add:focus-visible { border-color: var(--accent); border-style: solid; color: var(--accent); }
+
+/* "From your documents" suggestions. */
+.li-src-group { display: flex; flex-direction: column; gap: 6px; padding-top: 10px; border-top: 1px solid var(--border); }
+.li-src-group:first-of-type { border-top: 0; padding-top: 0; }
+.li-src-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.li-src-head .chk-h { margin: 0; flex: 1; font-size: 12px; }
+.li-src-sub { font-size: 10px; color: var(--fg-3); margin-top: 2px; }
+.li-src-row { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; color: var(--fg-1); }
+.li-src-row > div { flex: 1; min-width: 0; }
+.li-src-meta { font-size: 11px; color: var(--fg-3); overflow-wrap: anywhere; }
+.li-kw-add[data-done="true"] { border-style: solid; color: var(--score-high); border-color: var(--score-high-border); cursor: default; }
 .li-options { display: flex; flex-direction: column; gap: 6px; }
 .li-option { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; font: inherit; font-size: 12px; line-height: 1.45;
   color: var(--fg-1); padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border); background: none; cursor: pointer; }

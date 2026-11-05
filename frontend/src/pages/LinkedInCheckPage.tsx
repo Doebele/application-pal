@@ -3,7 +3,7 @@
 // LinkedIn keeps one profile per language: the language switch in the top bar picks which
 // profile (import + draft) is shown, scored and written. Same shell and components as the
 // CV-Check (components/check), independent data (linkedin_versions + linkedin_state).
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -16,6 +16,7 @@ import {
 } from "../components/check/CheckLayout";
 import { ProfileCards } from "../components/linkedin/ProfileCards";
 import { DraftCards } from "../components/linkedin/DraftCards";
+import { SourcesCard } from "../components/linkedin/SourceSuggestions";
 import { useLinkedInCheck, ScoreTab, ToolsTab, SourceTab, draftMode, LI_LANGS, type LiResult, type LiCheckState } from "./LinkedInCheckTabs";
 
 type SideTab = "score" | "tools" | "source";
@@ -57,9 +58,20 @@ function LangSwitch({ s }: { s: LiCheckState }) {
 export function LinkedInCheckPage() {
   const { t, i18n } = useTranslation();
   const s = useLinkedInCheck();
-  const { sidebarOpen, setSidebarOpen, tab, setTab, large, toggleLarge } = useCheckShell<SideTab>("licheck", "score");
+  const { sidebarOpen, setSidebarOpen, tab, setTab, large, setLarge, toggleLarge } = useCheckShell<SideTab>("licheck", "score");
+  // Draft card zoom: enlarging a card also enlarges the panel; shrinking either one shrinks both.
+  // If the panel was already large before, closing the card leaves it large.
+  const [zoom, setZoomState] = useState<string | null>(null);
+  const zoomMadeLarge = useRef(false);
+  const setZoom = (id: string | null) => {
+    if (id && !zoom) { zoomMadeLarge.current = large !== "main"; setLarge("main"); }
+    if (!id && zoom && zoomMadeLarge.current) setLarge(null);
+    setZoomState(id);
+  };
+  useEffect(() => { if (large !== "main") setZoomState(null); }, [large]);
   const [view, setViewState] = useState<View>(() => readStored<View>("licheck-view", "cards"));
   const setView = (v: View) => { setViewState(v); writeStored("licheck-view", v); };
+  useEffect(() => { setZoom(null); }, [view, s.lang]); // eslint-disable-line react-hooks/exhaustive-deps
   const [focus, setFocus] = useState<string | null>(null);
   const { data: profile } = useQuery({ queryKey: ["profile"], queryFn: async () => (await api.get<{ persona?: string | null }>("/api/profile")).data });
 
@@ -132,7 +144,7 @@ export function LinkedInCheckPage() {
             </CheckFrame>
           ) : eff === "draft" && draft ? (
             <div className="lic-scroll">
-              <DraftCards draft={draft} before={s.langs.find(l => l.lang === s.lang)?.importId ? ver?.profile ?? null : null} busy={s.busyKey === "draft"} onPatch={s.patchDraft} />
+              <DraftCards draft={draft} before={s.langs.find(l => l.lang === s.lang)?.importId ? ver?.profile ?? null : null} busy={s.busyKey === "draft"} onPatch={s.patchDraft} sources={s.sources} zoom={zoom} onZoom={setZoom} />
             </div>
           ) : ver ? (
             <div className="lic-scroll">
@@ -147,7 +159,7 @@ export function LinkedInCheckPage() {
             { id: "tools", label: t("linkedinCheck.tabs.tools"), icon: <Sparks width={13} height={13} /> },
             { id: "source", label: t("linkedinCheck.tabs.source"), icon: <Database width={13} height={13} /> },
           ]}>
-            {tab === "score" && <ScoreTab s={s} focusGroup={focus} draft={eff === "draft"} />}
+            {tab === "score" && <ScoreTab s={s} focusGroup={focus} draft={eff === "draft"} extra={<SourcesCard s={s} />} />}
             {tab === "tools" && <ToolsTab s={s} onShowDraft={() => setView("draft")} />}
             {tab === "source" && <SourceTab s={s} persona={profile?.persona ?? null} />}
           </CheckSide>

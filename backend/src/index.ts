@@ -60,6 +60,7 @@ import {
   type LinkedInState,
   type LinkedInLang,
   CV_LANGUAGES,
+  type CvDocument,
   type AiConfig,
   type UserDocument,
   type CvLanguage
@@ -88,6 +89,7 @@ import {
   normalizePositioning, normalizeIntro, normalizePositionsAnswer, normalizeSkillsAnswer, normalizeActivityAnswer,
   initialDraftProfile, applyDraftParts, emptyDraftRaw, placeholderCount, type LiDraftRaw, type LiGenPart,
 } from "./linkedin-gen.js";
+import { liSourceSuggestions, liSourceFactsText, type LiSourceSuggestions } from "./linkedin-sources.js";
 import { unzipSync } from "fflate";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
@@ -5017,6 +5019,7 @@ app.get("/api/linkedin/check", async (c) => {
 
   // Draft of this language: scored like an import; its judgement counts only if it read the current text.
   let draft: Record<string, unknown> | null = null;
+  let draftProfile: LinkedInProfile | null = null;
   const draftLang = asLiLang(lang);
   if (draftLang) {
     const [d] = await db.select().from(linkedinVersions)
@@ -5024,6 +5027,7 @@ app.get("/api/linkedin/check", async (c) => {
       .orderBy(desc(linkedinVersions.createdAt)).limit(1);
     const dp = d ? parse(d.data) : null;
     if (d && dp) {
+      draftProfile = dp;
       const dRaw = JSON.parse(d.raw ?? "{}") as LiDraftRaw;
       const dJudged = d.checkResult ? JSON.parse(d.checkResult) as LiCheckStored : null;
       const fresh = !!dJudged?.llm && dJudged.checkedAt >= dRaw.updatedAt;
@@ -5035,15 +5039,16 @@ app.get("/api/linkedin/check", async (c) => {
     }
   }
 
-  if (!row) return c.json({ result: null, version: null, state, lang, langs, draft });
+  if (!row) return c.json({ result: null, version: null, state, lang, langs, draft, sources: await loadLiSources(userId, draftLang, null, draftProfile) });
   const profile = parse(row.data);
   if (!profile) return c.json({ error: "Gespeicherte Profilversion ist beschädigt" }, 500);
+  const sources = await loadLiSources(userId, asLiLang(row.lang) ?? draftLang, row.origin === "import" ? profile : null, draftProfile);
   // The model's judgement belongs to exactly this version (it read this text).
   const judged = row.checkResult ? JSON.parse(row.checkResult) as LiCheckStored : null;
   const result = score(profile, judged, row.lang);
   const raw = row.raw ? (() => { try { return JSON.parse(row.raw!) as { kind?: string }; } catch { return null; } })() : null;
   return c.json({
-    result, state, lang, langs, draft,
+    result, state, lang, langs, draft, sources,
     judge: judged ? { checkedAt: judged.checkedAt, error: judged.llmError ?? null, cvUsed: judged.cvUsed, extras: judged.extras } : null,
     version: {
       id: row.id, source: row.source, note: row.note, lang: row.lang || null, createdAt: row.createdAt.toISOString(), stats: profileStats(profile),
@@ -5051,6 +5056,24 @@ app.get("/api/linkedin/check", async (c) => {
     },
   });
 });
+
+/** Skills, certificates and languages from the user's own documents vs. the profile (see linkedin-sources.ts).
+ *  Sources: newest general CV-Check version per language (else the Master-CV text) + "zertifikat" documents. */
+async function loadLiSources(userId: string, lang: string | null, imported: LinkedInProfile | null, draft: LinkedInProfile | null): Promise<LiSourceSuggestions> {
+  const cvRows = await db.select({ lang: cvVersions.lang, data: cvVersions.data }).from(cvVersions)
+    .where(and(eq(cvVersions.userId, userId), isNull(cvVersions.applicationId))).orderBy(desc(cvVersions.createdAt));
+  const cvs: Array<{ lang: string; doc: CvDocument }> = [];
+  for (const r of cvRows) {
+    if (cvs.some(c => c.lang === r.lang)) continue;
+    try { cvs.push({ lang: r.lang, doc: cvDocumentSchema.parse(JSON.parse(r.data)) }); } catch { /* broken row */ }
+  }
+  const [prof] = await db.select({ cv: userProfile.masterCv }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const certDocs = await db.select({ name: userDocuments.name, summary: userDocuments.contentSummary }).from(userDocuments)
+    .where(and(eq(userDocuments.userId, userId), eq(userDocuments.category, "zertifikat")));
+  const b = (imported ?? draft)?.basics;
+  const ownName = [b?.firstName, b?.lastName].filter((x): x is string => !!x).flatMap(x => x.split(/\s+/));
+  return liSourceSuggestions({ lang, imported, draft, cvs, masterCv: prof?.cv ?? null, certDocs, ownName });
+}
 
 const liGoalOf = (s: LinkedInState) => (s.goal
   ? { kind: s.goal.kind ?? undefined, targetRole: s.goal.targetRole ?? undefined, market: s.goal.market ?? undefined }
@@ -5245,9 +5268,11 @@ async function liGenSources(userId: string, lang: LinkedInLang, applicationId?: 
     rules = [lc.styleRules?.trim() && `Stilregeln: ${lc.styleRules.trim()}`, lc.noGos?.trim() && `No-Gos: ${lc.noGos.trim()}`].filter(Boolean).join("\n");
   } catch { /* no config */ }
   const toneSample = [baseProfile?.basics.summary, ...(baseProfile?.activity.posts ?? []).filter(p => p.text).slice(0, 2).map(p => p.text), rules].filter(Boolean).join("\n---\n") || null;
+  // Verbatim skill list, certificates and languages from CV + Documents — short, so never cut off.
+  const sourceFacts = liSourceFactsText(await loadLiSources(userId, lang, baseProfile, null)) || null;
   const common = {
     profile: baseProfile, profileLang: baseRow?.lang || null, positioning: state.positioning?.[lang]?.chosen ?? null,
-    goal: state.goal ?? null, answers: state.answers ?? null, cvText, docs, toneSample,
+    goal: state.goal ?? null, answers: state.answers ?? null, cvText, docs, toneSample, sourceFacts,
   };
   const hasAnswers = Object.values(state.answers ?? {}).some(v => v?.trim());
   return {
@@ -5256,7 +5281,7 @@ async function liGenSources(userId: string, lang: LinkedInLang, applicationId?: 
     input: liGenInput({ ...common, jobAd }),
     // Figures may only come from the candidate's own sources — never from the job ad.
     guardSource: liGenInput({ ...common, jobAd: null }),
-    hasSource: !!baseProfile || !!cvText || !!docs || hasAnswers,
+    hasSource: !!baseProfile || !!cvText || !!docs || !!sourceFacts || hasAnswers,
   };
 }
 const NO_GEN_SOURCE = "Keine Quellen: Profil importieren, Lebenslauf hinterlegen oder die Fragen beantworten";

@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
-import { Play, RefreshCircle, Copy, Check, Upload, Page, PasteClipboard, InfoCircle, WarningTriangle, Clock, Link as LinkIcon, Sparks } from "iconoir-react";
+import { Play, RefreshCircle, Copy, Check, Upload, Page, PasteClipboard, InfoCircle, WarningTriangle, Clock, Link as LinkIcon, Sparks, Xmark, Plus } from "iconoir-react";
 import { useQuery } from "@tanstack/react-query";
 import type { LinkedInProfile } from "@application-pal/shared";
 import { api } from "../lib/api";
@@ -60,7 +60,15 @@ export type LiDraft = {
   id: string; lang: string; raw: LiDraftRaw; profile: LinkedInProfile; placeholders: number; result: LiResult;
   judge: { checkedAt: string; error: string | null; stale: boolean; extras: Extras } | null;
 };
-type CheckResponse = { result: LiResult | null; state: LiState; version: LiVersion | null; judge?: Judge | null; lang: string | null; langs: LiLangInfo[]; draft: LiDraft | null };
+/** Suggestions from CV + Documents (backend/src/linkedin-sources.ts). */
+export type LiSources = {
+  cvLang: string | null; skillsKnown: boolean;
+  skills: Array<{ name: string; group: string | null; source: string; inProfile: boolean; inDraft: boolean }>;
+  certifications: Array<{ name: string; issuer: string | null; date: string | null; credentialId: string | null; sources: string[]; inProfile: boolean }>;
+  languages: Array<{ name: string; level: string | null; linkedinLevel: string | null; source: string; inProfile: boolean }>;
+  keywords: string[];
+};
+type CheckResponse = { result: LiResult | null; state: LiState; version: LiVersion | null; judge?: Judge | null; lang: string | null; langs: LiLangInfo[]; draft: LiDraft | null; sources?: LiSources | null };
 type Job = {
   id: string; kind: "check" | "import" | "positioning" | "generate"; status: "running" | "done" | "error"; step: string; startedAt: string; finishedAt?: string;
   error?: string; versionId?: string; warnings?: string[]; changed?: boolean; lang?: string | null; parts?: string[]; done?: string[]; failed?: string[];
@@ -187,7 +195,7 @@ export function useLinkedInCheck() {
   const generateJob = jobs.find(j => j.kind === "generate") ?? null;
   return {
     data, loadErr, error, busyKey, now, judgeJob, importJob, positioningJob, generateJob, load,
-    lang, setLang, langs: data?.langs ?? [], draft: data?.draft ?? null,
+    lang, setLang, langs: data?.langs ?? [], draft: data?.draft ?? null, sources: data?.sources ?? null,
     judgeRunning: judgeJob?.status === "running", importRunning: importJob?.status === "running",
     positioningRunning: positioningJob?.status === "running", generateRunning: generateJob?.status === "running",
     runJudge, importPdf, importText, importZip, setVersionLang, setSelf, setGoal, toggleWaiver,
@@ -285,7 +293,8 @@ function EffortTag({ effort }: { effort: LiEffort }) {
 
 /** Bewertung: total (extrapolated) + disclaimer, steps, areas, details incl. self-report, AI visibility.
  *  `draft` = score the draft of the shown language instead of the imported profile. */
-export function ScoreTab({ s, focusGroup, draft = false }: { s: LiCheckState; focusGroup: string | null; draft?: boolean }) {
+/** `extra` renders below the biggest levers (the page passes the "From your documents" card). */
+export function ScoreTab({ s, focusGroup, draft = false, extra }: { s: LiCheckState; focusGroup: string | null; draft?: boolean; extra?: ReactNode }) {
   const { t } = useTranslation();
   const res = draft ? s.draft?.result : s.data?.result;
   const before = draft ? s.data?.result : null;
@@ -326,6 +335,8 @@ export function ScoreTab({ s, focusGroup, draft = false }: { s: LiCheckState; fo
           </ol>
         ) : <div className="chk-muted">{t("check.noSteps")}</div>}
       </div>
+
+      {extra}
 
       <div className="chk-card">
         <div className="chk-h">{t("linkedinCheck.areas")}</div>
@@ -378,6 +389,66 @@ export function CopyBtn({ text }: { text: string }) {
 }
 
 export const ANSWER_KEYS = ["strengths", "audience", "outcomes", "askedFor", "avoid"] as const;
+/** Answers that are keyword lists (stored as "a, b, c" — same field, so older free text still reads fine). */
+const KEYWORD_ANSWERS: readonly string[] = ["strengths"];
+const ANSWER_MAX = 800;   // linkedInStateSchema.answers
+const splitKeywords = (v: string) => v.split(/[,;\n]+/).map(x => x.trim()).filter(Boolean);
+
+/** Combo box for keywords: chips (× removes), typing with autocomplete (Enter / comma adds), suggestion chips (+ adds). */
+function KeywordField({ id, value, suggestions, placeholder, onChange }: {
+  id: string; value: string; suggestions: string[]; placeholder: string; onChange: (v: string) => void;
+}) {
+  const { t } = useTranslation();
+  const chips = splitKeywords(value);
+  const has = (k: string) => chips.some(c => c.toLowerCase() === k.toLowerCase());
+  const [input, setInput] = useState("");
+  const [more, setMore] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const rest = suggestions.filter(k => !has(k));
+  const shown = more ? rest : rest.slice(0, 12);
+  const set = (list: string[]) => { const v = list.join(", "); if (v.length <= ANSWER_MAX) onChange(v); };
+  const add = (raw: string) => {
+    const fresh = splitKeywords(raw).filter((k, i, a) => !has(k) && a.findIndex(x => x.toLowerCase() === k.toLowerCase()) === i);
+    if (fresh.length) set([...chips, ...fresh]);
+    setInput("");
+  };
+  return (
+    <div className="li-kw">
+      <div className="li-kw-box" onClick={e => { if (e.target === e.currentTarget) inputRef.current?.focus(); }}>
+        {chips.map(c => (
+          <span key={c} className="li-kw-chip">
+            {c}
+            <button type="button" aria-label={t("linkedinCheck.gen.kw.remove", { k: c })} title={t("linkedinCheck.gen.kw.remove", { k: c })}
+              onClick={() => set(chips.filter(x => x !== c))}><Xmark width={10} height={10} /></button>
+          </span>
+        ))}
+        <input ref={inputRef} id={id} list={`${id}-list`} value={input} placeholder={chips.length ? t("linkedinCheck.gen.kw.addPh") : placeholder}
+          onChange={e => { const v = e.target.value; if (/[,;]$/.test(v)) add(v); else setInput(v); }}
+          onKeyDown={e => {
+            if (e.key === "Enter") { e.preventDefault(); add(input); }
+            else if (e.key === "Backspace" && !input && chips.length) set(chips.slice(0, -1));
+          }}
+          onBlur={() => input.trim() && add(input)} />
+        <datalist id={`${id}-list`}>{rest.map(k => <option key={k} value={k} />)}</datalist>
+      </div>
+      {rest.length > 0 && (
+        <div className="li-kw-sugg">
+          <span className="lid-label">{t("linkedinCheck.gen.kw.suggestions")}</span>
+          <div className="lic-chips">
+            {shown.map(k => (
+              <button key={k} type="button" className="li-kw-add" onClick={() => set([...chips, k])}><Plus width={10} height={10} />{k}</button>
+            ))}
+            {rest.length > 12 && (
+              <button type="button" className="btn btn-ghost li-btn" onClick={() => setMore(m => !m)}>
+                {more ? t("linkedinCheck.gen.kw.less") : t("linkedinCheck.gen.kw.more", { count: rest.length - 12 })}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 type AppLite = { id: string; company: string; role: string; archived?: string | null };
 
 /** Which kind of draft the shown language gets: sharpen its import, write it from another language, or build from the CV. */
@@ -463,7 +534,13 @@ export function ToolsTab({ s, onShowDraft }: { s: LiCheckState; onShowDraft: () 
       <div className="chk-card chk-stack" style={{ gap: 10 }}>
         <div className="chk-h" style={{ margin: 0 }}><span className="li-stepno">1</span>{t("linkedinCheck.gen.questions")}</div>
         <div className="chk-muted">{t(mode === "build" ? "linkedinCheck.gen.questionsHintBuild" : "linkedinCheck.gen.questionsHint")}</div>
-        {ANSWER_KEYS.map(k => (
+        {ANSWER_KEYS.map(k => KEYWORD_ANSWERS.includes(k) ? (
+          <div key={k} className="li-field">
+            <label htmlFor={`li-q-${k}`}>{t(`linkedinCheck.gen.q.${k}`)}</label>
+            <KeywordField id={`li-q-${k}`} value={answers[k] ?? ""} suggestions={s.sources?.keywords ?? []} placeholder={t(`linkedinCheck.gen.qPh.${k}`)}
+              onChange={v => { setAnswersLocal(a => ({ ...a, [k]: v })); s.setAnswers({ [k]: v }); }} />
+          </div>
+        ) : (
           <label key={k} className="li-field">
             <span>{t(`linkedinCheck.gen.q.${k}`)}</span>
             <textarea className="li-answer" rows={2} value={answers[k] ?? ""} placeholder={t(`linkedinCheck.gen.qPh.${k}`)}

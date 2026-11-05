@@ -1434,6 +1434,13 @@
           "company": "Entreprise",
           "school": "École"
         }
+      },
+      "kw": {
+        "remove": "Retirer « {{k}} »",
+        "addPh": "Ajouter un mot-clé …",
+        "suggestions": "Suggestions de ton CV et de ton profil",
+        "more": "{{count}} de plus",
+        "less": "Moins"
       }
     },
     "draft": {
@@ -1450,7 +1457,7 @@
       "scoreNew": "Nouveau profil – pas de comparaison",
       "notYet": "Pas encore généré – choisir « {{part}} » sous Outils IA.",
       "zoom": "Agrandir (comparer avec le profil actuel)",
-      "unzoom": "Fermer",
+      "unzoom": "Réduire",
       "before": "Profil actuel",
       "after": "Brouillon",
       "headline": "Titre",
@@ -1489,6 +1496,41 @@
       "plan": "Plan sur 4 semaines",
       "week": "Semaine {{n}}",
       "xHint": "Espace réservé : à remplacer par des valeurs réelles avant de copier"
+    },
+    "sources": {
+      "title": "D’après tes documents",
+      "hint": "Figure dans ton CV ou tes documents, mais pas dans le profil – repris tel quel, rien d’inventé.",
+      "none": "Aucune source : importe ton CV dans le contrôle de CV ou ajoute des certificats dans Documents.",
+      "toCvCheck": "Ouvrir le contrôle de CV",
+      "toDocuments": "Ouvrir Documents",
+      "allIn": "Tout ce qui figure dans tes documents est déjà dans le profil.",
+      "skills": "Compétences",
+      "skillsDraft_one": "{{count}} compétence de ton CV manque dans le brouillon. Clique pour l’ajouter.",
+      "skillsDraft_other": "{{count}} compétences de ton CV manquent dans le brouillon. Clique pour les ajouter.",
+      "skillsMissing_one": "{{count}} compétence manque sur LinkedIn. Clique pour la copier.",
+      "skillsMissing_other": "{{count}} compétences manquent sur LinkedIn. Clique pour les copier.",
+      "skillsUnknown_one": "Le PDF ne montre que tes compétences principales. Vérifie si cette compétence de ton CV manque sur LinkedIn.",
+      "skillsUnknown_other": "Le PDF ne montre que tes compétences principales. Vérifie lesquelles de ces {{count}} compétences de ton CV manquent sur LinkedIn.",
+      "fromCv_one": "De ton CV · {{count}} pas encore dans le brouillon",
+      "fromCv_other": "De ton CV · {{count}} pas encore dans le brouillon",
+      "addAll": "Tout ajouter ({{count}})",
+      "clickAdd": "Clique pour ajouter au brouillon",
+      "clickCopy": "Clique pour copier",
+      "certs_one": "{{count}} certificat absent du profil",
+      "certs_other": "{{count}} certificats absents du profil",
+      "certsHint": "Ajoute-les sur LinkedIn sous « Licences et certifications » – émetteur, date et identifiant viennent du document.",
+      "issuer": "Émetteur : {{v}}",
+      "issued": "Délivré : {{v}}",
+      "credentialId": "ID : {{v}}",
+      "langs": "Langues",
+      "level": {
+        "native": "Bilingue ou langue natale",
+        "fullProfessional": "Capacité professionnelle complète",
+        "professionalWorking": "Capacité professionnelle",
+        "limitedWorking": "Compétence professionnelle limitée",
+        "elementary": "Notions"
+      },
+      "docSource": "Document « {{name}} »"
     }
   }
 }
