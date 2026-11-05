@@ -1132,7 +1132,7 @@
     "modeOauth": "Connecter via l'app LinkedIn",
     "modeToken": "Coller un jeton d'accès",
     "step1": "Créer une app sur developer.linkedin.com (une fois, gratuit) :",
-    "step2": "Comme page LinkedIn, choisir la page prédéfinie – pas ta propre page entreprise :",
+    "step2": "LinkedIn exige une page entreprise lors de la création de l'app. Choisis la page que LinkedIn met à disposition exprès pour cela :",
     "defaultPage": "« Member Data Portability (Member) Default Company »",
     "step3": "Sous « Products », demander « Member Data Portability API (Member) » et accepter les conditions.",
     "step4Oauth": "Sous « Auth », ajouter l'URL de redirection ci-dessous, puis coller l'ID client et le secret ici.",
@@ -1184,7 +1184,9 @@
       "ARTICLES": "Articles",
       "MEMBER_SHARE_INFO": "Publications",
       "ALL_COMMENTS": "Commentaires"
-    }
+    },
+    "step2Why": "Ne crée pas ta propre page entreprise. LinkedIn n'accorde le produit qu'aux apps liées à cette page par défaut. Si tu as déjà choisi une autre page, crée une nouvelle app avec la page par défaut.",
+    "officialGuide": "Guide officiel de LinkedIn (Microsoft Learn)"
   },
   "linkedinCheck": {
     "title": "Check LinkedIn",

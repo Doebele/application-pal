@@ -23,6 +23,8 @@ type Status = {
 const DEV_PORTAL = "https://developer.linkedin.com/";
 const TOKEN_TOOL = "https://www.linkedin.com/developers/tools/oauth/token-generator";
 const DEFAULT_PAGE = "https://www.linkedin.com/company/member-data-portability-member-default-company";
+/** LinkedIn's own set-up guide for the Member Data Portability (Member) product. */
+const OFFICIAL_GUIDE = "https://learn.microsoft.com/en-us/linkedin/dma/member-data-portability/member-data-portability-member/?view=li-dma-data-portability-2026-08";
 const AUTO_SYNC_MS = 24 * 3600 * 1000;
 
 const errMsg = (e: unknown, fallback: string) =>
@@ -235,12 +237,16 @@ export function LinkedInConnection({ headline, bio, onAdopt }: {
 
           <ol className="li-steps">
             <li>{t("linkedinConnect.step1")} <a href={DEV_PORTAL} target="_blank" rel="noreferrer">developer.linkedin.com <OpenNewWindow width={10} height={10} /></a></li>
-            <li>{t("linkedinConnect.step2")} <a href={DEFAULT_PAGE} target="_blank" rel="noreferrer">{t("linkedinConnect.defaultPage")} <OpenNewWindow width={10} height={10} /></a></li>
+            <li>
+              {t("linkedinConnect.step2")} <a href={DEFAULT_PAGE} target="_blank" rel="noreferrer">{t("linkedinConnect.defaultPage")} <OpenNewWindow width={10} height={10} /></a>
+              <div className="chk-note" data-tone="info" style={{ marginTop: 6 }}>{t("linkedinConnect.step2Why")}</div>
+            </li>
             <li>{t("linkedinConnect.step3")}</li>
             {mode === "oauth"
               ? <li>{t("linkedinConnect.step4Oauth")}</li>
               : <li>{t("linkedinConnect.step4Token")} <a href={TOKEN_TOOL} target="_blank" rel="noreferrer">{t("linkedinConnect.tokenTool")} <OpenNewWindow width={10} height={10} /></a></li>}
           </ol>
+          <a className="li-guide-link" href={OFFICIAL_GUIDE} target="_blank" rel="noreferrer">{t("linkedinConnect.officialGuide")} <OpenNewWindow width={10} height={10} /></a>
 
           {mode === "oauth" ? (
             <div className="li-form">

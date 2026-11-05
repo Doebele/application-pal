@@ -243,3 +243,4 @@
 .li-cl-tip { font-size: 11.5px; color: var(--fg-2); }
 .li-cl-tip summary { cursor: pointer; color: var(--accent); font-size: 11px; width: fit-content; }
 .li-cl-tip > div { margin-top: 4px; line-height: 1.5; }
+.li-guide-link { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; color: var(--accent); margin: 2px 0 8px; }

@@ -1132,7 +1132,7 @@
     "modeOauth": "Mit LinkedIn-App verbinden",
     "modeToken": "Zugangsschlüssel einfügen",
     "step1": "Auf developer.linkedin.com eine App anlegen (einmalig, kostenlos):",
-    "step2": "Als LinkedIn-Seite die vorgegebene Seite wählen – keine eigene Firmenseite:",
+    "step2": "Beim Anlegen verlangt LinkedIn eine Unternehmensseite. Wähle die Seite, die LinkedIn eigens dafür bereitstellt:",
     "defaultPage": "„Member Data Portability (Member) Default Company“",
     "step3": "Unter „Products“ das Produkt „Member Data Portability API (Member)“ anfordern und den Bedingungen zustimmen.",
     "step4Oauth": "Unter „Auth“ die Redirect-URL unten eintragen, dann Client-ID und Client-Secret hier einfügen.",
@@ -1184,7 +1184,9 @@
       "ARTICLES": "Artikel",
       "MEMBER_SHARE_INFO": "Beiträge",
       "ALL_COMMENTS": "Kommentare"
-    }
+    },
+    "step2Why": "Lege keine eigene Firmenseite an. LinkedIn gibt das Produkt nur Apps, die mit dieser Standardseite verknüpft sind. Hast du schon eine andere Seite gewählt, lege eine neue App mit der Standardseite an.",
+    "officialGuide": "Offizielle Anleitung von LinkedIn (Microsoft Learn)"
   },
   "linkedinCheck": {
     "title": "LinkedIn-Check",

@@ -8,6 +8,9 @@ It uses LinkedIn's official **Member Data Portability API**, which LinkedIn prov
 - **Read-only:** Application Pal never changes or posts anything on LinkedIn, and it never asks for your LinkedIn password.
 - **Your own app:** the self-serve product only lets a member read their *own* data. Each user therefore creates a small LinkedIn developer app once. It is free and takes about ten minutes.
 - **Token lifetime:** an access token lasts **60 days** and cannot be refreshed. The Profile page shows the expiry date and warns you a week ahead. With the OAuth route, reconnecting is one click.
+- **Company page:** LinkedIn requires every developer app to be linked to a company page. For this product LinkedIn provides its own page, **Member Data Portability (Member) Default Company**. You use that page; you never create one.
+
+Official guide by LinkedIn: [Member Data Portability (Member)](https://learn.microsoft.com/en-us/linkedin/dma/member-data-portability/member-data-portability-member/?view=li-dma-data-portability-2026-08) on Microsoft Learn.
 
 ---
 
@@ -15,7 +18,7 @@ It uses LinkedIn's official **Member Data Portability API**, which LinkedIn prov
 
 1. Open [developer.linkedin.com](https://developer.linkedin.com/) → **My apps** → **Create app**.
 2. Enter any **App name**, e.g. "Application Pal – <your name>".
-3. For **LinkedIn Page**, pick **Member Data Portability (Member) Default Company** ([page](https://www.linkedin.com/company/member-data-portability-member-default-company)). Do **not** create a company page of your own: LinkedIn grants this product only to apps attached to that default page.
+3. For **LinkedIn Page**, pick **Member Data Portability (Member) Default Company** ([page](https://www.linkedin.com/company/member-data-portability-member-default-company)). LinkedIn created this page especially for requesting access to this product. Do **not** create a company page of your own while creating the app: LinkedIn's guide says access can be requested *only* if the app uses the default page.
 4. Upload any logo, accept the legal agreement and create the app.
 
 ## Step 2 — Request the product
@@ -36,7 +39,7 @@ Open **Profile → LinkedIn**. There are two ways to connect.
 
 You come back to the Profile page and the first sync starts.
 
-> The scope `r_dma_portability_self_serve` is the default. LinkedIn's documentation also names `r_dma_portability_member`. If LinkedIn rejects the sign-in, switch the scope on the Profile page or use route B.
+> The scope `r_dma_portability_self_serve` is the default. It is the scope LinkedIn's member guide uses with the token generator. LinkedIn's API reference pages (Member Snapshot, Member Changelog) list `r_dma_portability_member` instead ("Allows users to download their own LinkedIn data"). If LinkedIn rejects the sign-in, switch the scope on the Profile page or use route B.
 
 ### B — Paste an access token
 
@@ -72,6 +75,12 @@ Sync behaviour:
 - Synced profile versions (`linkedin_versions`) belong to your user data and are included in the export.
 - **Disconnect** removes the token. *Disconnect and delete app details* also removes the client ID and secret. Synced versions stay in both cases.
 
+## API details
+
+- Snapshot: `GET https://api.linkedin.com/rest/memberSnapshotData?q=criteria&domain=…` with `Linkedin-Version: 202312`. LinkedIn states that this endpoint supports **only** `202312`; any other version fails with `426 NONEXISTENT_VERSION`. Application Pal sends `202312` (`LINKEDIN_API_VERSION` in `backend/src/linkedin.ts`).
+- Pagination: LinkedIn warns that `paging.total` may be too low. Keep requesting pages until LinkedIn answers "No data found for this memberId".
+- The Member Changelog API covers only the last 28 days of interactions (posts, comments). The snapshot holds the full history.
+
 ## Configuration
 
 | Variable | Default | Purpose |
@@ -84,6 +93,7 @@ Sync behaviour:
 | Message | Cause / fix |
 |---|---|
 | *No access: the app needs the product …* | Step 2 is missing, or the app is attached to the wrong LinkedIn page (step 1.3). |
+| **Request access** is missing for the product, or the request is refused | The app is linked to a company page of your own. Create a new app and pick the **Member Data Portability (Member) Default Company** page. |
 | *LinkedIn refused the access (expired or revoked)* | The token expired or was revoked. Reconnect. |
 | *LinkedIn is still collating your data* | This happens on the first sync after consent. Wait a few minutes. |
 | LinkedIn shows "redirect_uri does not match" | The redirect URL in the app's Auth tab must match the one on the Profile page exactly, including `http`/`https` and the port. |
