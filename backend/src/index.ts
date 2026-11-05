@@ -79,7 +79,7 @@ import {
   fetchSnapshot, fetchSnapshotDomain, normalizeSnapshot, rawForStorage, profileFingerprint, profileStats,
   snapshotFromZip, type Snapshot,
 } from "./linkedin.js";
-import { runLinkedInCheck, profileLang, type LiLlmJudgement } from "./linkedin-rules.js";
+import { runLinkedInCheck, profileLang, type LiLlmJudgement, type LiCheckResult } from "./linkedin-rules.js";
 import {
   liJudgePrompt, liJudgeInput, normalizeLiJudgement, LI_IMPORT_SYSTEM_PROMPT, normalizeImportedProfile, liVerbatimWarnings,
   type LiJudgeExtras,
@@ -90,6 +90,7 @@ import {
   initialDraftProfile, applyDraftParts, emptyDraftRaw, placeholderCount, type LiDraftRaw, type LiGenPart,
 } from "./linkedin-gen.js";
 import { liSourceSuggestions, liSourceFactsText, type LiSourceSuggestions } from "./linkedin-sources.js";
+import { buildLiChecklist } from "./linkedin-checklist.js";
 import { unzipSync } from "fflate";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
 import { ZodError } from "zod";
@@ -4964,6 +4965,14 @@ app.patch("/api/linkedin/state", async (c) => {
     ...(body.journey !== undefined ? { journey: body.journey } : {}),
     ...(body.goal !== undefined ? { goal: { ...(cur.goal ?? {}), ...(body.goal as object) } } : {}),
     ...(body.checklist !== undefined ? { checklist: body.checklist } : {}),
+    // { checklistToggle: { key, done } } — one item, merged server-side so fast clicks don't overwrite each other
+    ...(body.checklistToggle !== undefined ? (() => {
+      const tg = body.checklistToggle as { key?: string; done?: boolean };
+      const key = String(tg.key ?? "").slice(0, 60);
+      if (!key) return {};
+      const rest = (cur.checklist ?? []).filter(k => k !== key);
+      return { checklist: (tg.done ? [...rest, key] : rest).slice(-200) };
+    })() : {}),
     ...(body.answers !== undefined ? { answers: { ...(cur.answers ?? {}), ...(body.answers as object) } } : {}),
     // { positioning: { lang, chosen } } — the sentence the user confirmed (or edited) for that profile language
     ...(body.positioning !== undefined ? (() => {
@@ -5020,6 +5029,7 @@ app.get("/api/linkedin/check", async (c) => {
   // Draft of this language: scored like an import; its judgement counts only if it read the current text.
   let draft: Record<string, unknown> | null = null;
   let draftProfile: LinkedInProfile | null = null;
+  let draftRawObj: LiDraftRaw | null = null;
   const draftLang = asLiLang(lang);
   if (draftLang) {
     const [d] = await db.select().from(linkedinVersions)
@@ -5029,6 +5039,7 @@ app.get("/api/linkedin/check", async (c) => {
     if (d && dp) {
       draftProfile = dp;
       const dRaw = JSON.parse(d.raw ?? "{}") as LiDraftRaw;
+      draftRawObj = dRaw;
       const dJudged = d.checkResult ? JSON.parse(d.checkResult) as LiCheckStored : null;
       const fresh = !!dJudged?.llm && dJudged.checkedAt >= dRaw.updatedAt;
       draft = {
@@ -5039,7 +5050,14 @@ app.get("/api/linkedin/check", async (c) => {
     }
   }
 
-  if (!row) return c.json({ result: null, version: null, state, lang, langs, draft, sources: await loadLiSources(userId, draftLang, null, draftProfile) });
+  // Checklist: what is left to do on LinkedIn for this language (see linkedin-checklist.ts).
+  const checklistOf = (imported: LinkedInProfile | null, src: LiSourceSuggestions, checks: LiCheckResult["checks"]) =>
+    buildLiChecklist({ imported, draft: draftProfile, draftRaw: draftRawObj, sources: src, checks, manual: state.checklist ?? [] });
+  if (!row) {
+    const sources = await loadLiSources(userId, draftLang, null, draftProfile);
+    const draftChecks = (draft?.result as LiCheckResult | undefined)?.checks ?? [];
+    return c.json({ result: null, version: null, state, lang, langs, draft, sources, checklist: checklistOf(null, sources, draftChecks) });
+  }
   const profile = parse(row.data);
   if (!profile) return c.json({ error: "Gespeicherte Profilversion ist beschädigt" }, 500);
   const sources = await loadLiSources(userId, asLiLang(row.lang) ?? draftLang, row.origin === "import" ? profile : null, draftProfile);
@@ -5049,6 +5067,7 @@ app.get("/api/linkedin/check", async (c) => {
   const raw = row.raw ? (() => { try { return JSON.parse(row.raw!) as { kind?: string }; } catch { return null; } })() : null;
   return c.json({
     result, state, lang, langs, draft, sources,
+    checklist: checklistOf(row.origin === "import" ? profile : null, sources, result.checks),
     judge: judged ? { checkedAt: judged.checkedAt, error: judged.llmError ?? null, cvUsed: judged.cvUsed, extras: judged.extras } : null,
     version: {
       id: row.id, source: row.source, note: row.note, lang: row.lang || null, createdAt: row.createdAt.toISOString(), stats: profileStats(profile),
@@ -5219,13 +5238,61 @@ app.post("/api/linkedin/import/text", async (c) => {
 });
 
 // Version history (metadata) and the stored PDF of a PDF import.
+/** Scores one stored version the way GET /check does (a draft's judgement only while it read the current text). */
+function scoreLiVersion(row: typeof linkedinVersions.$inferSelect, state: LinkedInState, availableLangs: string[], uiLang: UiLang) {
+  let profile: LinkedInProfile;
+  try { profile = linkedInProfileSchema.parse(JSON.parse(row.data)); } catch { return null; }
+  let judged = row.checkResult ? JSON.parse(row.checkResult) as LiCheckStored : null;
+  if (judged && row.origin === "draft") {
+    const updatedAt = (JSON.parse(row.raw ?? "{}") as Partial<LiDraftRaw>).updatedAt ?? "";
+    if (!(judged.llm && judged.checkedAt >= updatedAt)) judged = null;
+  }
+  const result = runLinkedInCheck({
+    profile, uiLang, goal: liGoalOf(state), selfReport: state.selfReport ?? null,
+    llm: judged?.llm ?? null, cvFacts: judged?.extras.cv ?? null, accepted: state.waivers ?? [],
+    profileLang: asLiLang(row.lang), availableLangs,
+  });
+  return { profile, result, judged: !!judged?.llm };
+}
+
+// Version history: every import and draft, scored on read (so goal / self-report changes apply to all).
 app.get("/api/linkedin/versions", async (c) => {
   const userId = getUserId(c);
-  const rows = await db.select({
-    id: linkedinVersions.id, origin: linkedinVersions.origin, source: linkedinVersions.source, lang: linkedinVersions.lang,
-    note: linkedinVersions.note, createdAt: linkedinVersions.createdAt, judged: linkedinVersions.checkResult,
-  }).from(linkedinVersions).where(eq(linkedinVersions.userId, userId)).orderBy(desc(linkedinVersions.createdAt));
-  return c.json(rows.map(r => ({ ...r, lang: r.lang || null, judged: !!r.judged })));
+  const uiLang = asUiLang(c.req.query("uiLang"));
+  const rows = await db.select().from(linkedinVersions).where(eq(linkedinVersions.userId, userId)).orderBy(desc(linkedinVersions.createdAt)).limit(60);
+  const state = await readLinkedInState(userId);
+  const availableLangs = [...new Set(rows.filter(r => r.origin === "import").map(r => r.lang).filter((l): l is string => !!l))];
+  return c.json(rows.map(r => {
+    const s = scoreLiVersion(r, state, availableLangs, uiLang);
+    return {
+      id: r.id, origin: r.origin, source: r.source, lang: r.lang || null, note: r.note, createdAt: r.createdAt, parentId: r.parentId,
+      judged: s?.judged ?? false,
+      total: s?.result.total ?? null,
+      areas: s ? Object.fromEntries(Object.entries(s.result.areas).map(([k, v]) => [k, { score: v.score, max: v.max }])) : null,
+      stats: s ? profileStats(s.profile) : null,
+    };
+  }));
+});
+
+// One version with its profile and score — for the comparison of two versions.
+app.get("/api/linkedin/versions/:id", async (c) => {
+  const userId = getUserId(c);
+  const [row] = await db.select().from(linkedinVersions).where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.id, c.req.param("id")))).limit(1);
+  if (!row) return c.json({ error: "Nicht gefunden" }, 404);
+  const imports = await db.select({ lang: linkedinVersions.lang }).from(linkedinVersions).where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "import")));
+  const s = scoreLiVersion(row, await readLinkedInState(userId), [...new Set(imports.map(r => r.lang).filter((l): l is string => !!l))], asUiLang(c.req.query("uiLang")));
+  if (!s) return c.json({ error: "Gespeicherte Profilversion ist beschädigt" }, 500);
+  return c.json({ id: row.id, origin: row.origin, source: row.source, lang: row.lang || null, createdAt: row.createdAt, profile: s.profile, result: s.result, judged: s.judged });
+});
+
+// Delete an import (e.g. a duplicate). Drafts have their own route; nothing on LinkedIn changes.
+app.delete("/api/linkedin/versions/:id", async (c) => {
+  const userId = getUserId(c);
+  const res = await db.delete(linkedinVersions)
+    .where(and(eq(linkedinVersions.id, c.req.param("id")), eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "import")))
+    .returning({ id: linkedinVersions.id });
+  if (!res.length) return c.json({ error: "Nicht gefunden" }, 404);
+  return c.json({ ok: true });
 });
 
 // Correct the detected profile language of an import; body { lang: "de" | "en" | "fr" }.

@@ -1267,7 +1267,9 @@
       "score": "Évaluation",
       "tools": "Outils IA",
       "source": "Source & objectif",
-      "scoreDraft": "Évaluation (brouillon)"
+      "scoreDraft": "Évaluation (brouillon)",
+      "checklist": "Checklist",
+      "versions": "Versions"
     },
     "view": {
       "label": "Vue",
@@ -1531,6 +1533,70 @@
         "elementary": "Notions"
       },
       "docSource": "Document « {{name}} »"
+    },
+    "checklist": {
+      "title": "Ce qu'il reste à faire",
+      "progress": "{{done}} sur {{total}} faits",
+      "hint": "Application-Pal ne modifie rien sur LinkedIn – tu reportes chaque point toi-même. Ce qu'un nouvel import peut prouver se coche ensuite tout seul.",
+      "reimport": "Réimporter le profil",
+      "hideDone": "Masquer les points faits",
+      "noDraft": "Pas encore de brouillon dans cette langue – crée-le dans les outils IA, les étapes de report apparaîtront ici.",
+      "section": {
+        "transfer": "Reporter le brouillon",
+        "basics": "À vérifier toi-même",
+        "documents": "Depuis tes documents",
+        "network": "Réseau",
+        "plan": "Plan sur 4 semaines"
+      },
+      "openDraft": "Afficher le brouillon",
+      "basicsHint": "Aucun import ne montre ces points (p. ex. photo, bannière). Les cocher règle ton auto-évaluation – le score suit.",
+      "allDone": "Tout est fait.",
+      "week": "Semaine {{n}}",
+      "empty": "Rien à faire pour l'instant : importe un profil ou crée un brouillon.",
+      "blocked": "Contient encore des espaces réservés [X] – remplis-les d'abord, sinon « [X] » finit sur LinkedIn.",
+      "autoHint": "Prouvé par le dernier import.",
+      "reported": "Auto-évaluation",
+      "detected": "Trouvé dans l'import",
+      "fillX": "Remplir [X]",
+      "kind": {
+        "headline": "Reprendre le titre",
+        "about": "Reprendre le texte Infos",
+        "position": "Reprendre la description : {{title}} · {{company}}",
+        "skills": "Ajouter des compétences ({{count}})",
+        "featured": "Ajouter à « Sélection » : {{title}}",
+        "cert": "Ajouter la certification : {{name}}",
+        "language": "Ajouter la langue : {{name}}",
+        "rec": "Demander une recommandation : {{to}}",
+        "task": "Tâche"
+      }
+    },
+    "versions": {
+      "history": "Historique des imports ({{lang}})",
+      "compare": "Comparaison",
+      "closeCompare": "Fermer la comparaison",
+      "same": "inchangé",
+      "total": "Total",
+      "unjudged": "Au moins une version est notée sans avis IA – ses points IA sont retirés du maximum.",
+      "allLangs": "Toutes les langues",
+      "pickHint": "Choisis deux versions à comparer.",
+      "pickedHint": "La comparaison s'affiche ci-dessus.",
+      "pickOne": "Choisis encore une version.",
+      "pick": "Choisir pour comparer",
+      "current": "actuelle",
+      "delete": "Supprimer l'import",
+      "deleteConfirm": "Supprimer définitivement",
+      "cancel": "Annuler",
+      "deleteHint": "Seuls les imports peuvent être supprimés ici (p. ex. un doublon). Les brouillons se gèrent dans les outils IA.",
+      "stat": {
+        "positionsWithText": "Postes avec texte",
+        "skills": "Compétences",
+        "certifications": "Certifications",
+        "languages": "Langues",
+        "recommendations": "Recommandations",
+        "posts": "Publications",
+        "comments": "Commentaires",
+        "connections": "Relations"
+      }
     }
   }
 }

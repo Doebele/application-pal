@@ -86,6 +86,12 @@ const LANG_DIRECTIVE: Record<LinkedInLang, string> = {
   fr: "IMPORTANT : rédige TOUS les textes exclusivement en français, quelle que soit la langue des sources et des instructions.",
 };
 
+const LANG_FIELDS: Record<LinkedInLang, string> = {
+  de: "Das gilt für jedes Textfeld im JSON, auch kurze wie \"why\", \"to\", \"angle\" und \"title\".",
+  en: "This applies to every text field in the JSON, including short ones such as \"why\", \"to\", \"angle\" and \"title\".",
+  fr: "Cela vaut pour chaque champ de texte du JSON, y compris les champs courts comme \"why\", \"to\", \"angle\" et \"title\".",
+};
+
 const RULES = `REGELN (verbindlich):
 - ERFINDE NICHTS. Zahlen, Namen, Firmen, Kunden, Produkte, Daten und Titel nur, wenn sie in den Quellen stehen. Fehlt ein Wert, schreibe den Platzhalter [X] (z. B. „Durchlaufzeit um [X] % gesenkt").
 - Keine unbelegten Statistiken, keine Marktzahlen, keine Preise.
@@ -94,7 +100,9 @@ const RULES = `REGELN (verbindlich):
 - Was der Nutzer unter „Was NICHT ins Profil soll" nennt, kommt nicht vor.
 - Antworte NUR mit JSON, ohne Erklärtext.`;
 
-const head = (lang: LinkedInLang, task: string) => `${LANG_DIRECTIVE[lang]}\n\n${task}\n\n${RULES}`;
+// The directive comes first AND last: the prompt body is German, and local models otherwise
+// drift back to German in short free-text fields ("why", "to") of an English draft.
+const head = (lang: LinkedInLang, task: string) => `${LANG_DIRECTIVE[lang]}\n\n${task}\n\n${RULES}\n\n${LANG_DIRECTIVE[lang]} ${LANG_FIELDS[lang]}`;
 
 // ── prompts ─────────────────────────────────────────────────────
 export function liPositioningPrompt(lang: LinkedInLang): string {

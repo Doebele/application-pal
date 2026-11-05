@@ -68,12 +68,20 @@ export type LiSources = {
   languages: Array<{ name: string; level: string | null; linkedinLevel: string | null; source: string; inProfile: boolean }>;
   keywords: string[];
 };
-type CheckResponse = { result: LiResult | null; state: LiState; version: LiVersion | null; judge?: Judge | null; lang: string | null; langs: LiLangInfo[]; draft: LiDraft | null; sources?: LiSources | null };
+/** What is left to do on LinkedIn (backend/src/linkedin-checklist.ts). */
+export type LiChecklistItem = {
+  key: string; section: "transfer" | "basics" | "documents" | "network" | "plan"; kind: string; label: string | null;
+  params: Record<string, string | number>; copy: string | null; auto: boolean; done: boolean; blocked: "placeholders" | null;
+};
+export type LiChecklist = { items: LiChecklistItem[]; done: number; total: number };
+type CheckResponse = {
+  result: LiResult | null; state: LiState; version: LiVersion | null; judge?: Judge | null; lang: string | null; langs: LiLangInfo[];
+  draft: LiDraft | null; sources?: LiSources | null; checklist?: LiChecklist | null;
+};
 type Job = {
   id: string; kind: "check" | "import" | "positioning" | "generate"; status: "running" | "done" | "error"; step: string; startedAt: string; finishedAt?: string;
   error?: string; versionId?: string; warnings?: string[]; changed?: boolean; lang?: string | null; parts?: string[]; done?: string[]; failed?: string[];
 };
-type VersionMeta = { id: string; origin: string; source: string; lang: string | null; note: string | null; createdAt: string; judged: boolean };
 export type DraftPatch = { headline?: string | null; summary?: string | null; positions?: Array<{ id: string; title?: string | null; description?: string | null }>; skills?: string[] };
 export const LI_LANGS = ["de", "en", "fr"] as const;
 
@@ -187,6 +195,7 @@ export function useLinkedInCheck() {
   };
 
   const setAnswers = (answers: Record<string, string>) => patchState({ answers }, "answers");
+  const toggleChecklist = (key: string, done: boolean) => patchState({ checklistToggle: { key, done } }, `cl:${key}`);
   const choosePositioning = (chosen: string | null) => patchState({ positioning: { lang, chosen } }, "positioning");
 
   const judgeJob = jobs.find(j => j.kind === "check") ?? null;
@@ -195,7 +204,8 @@ export function useLinkedInCheck() {
   const generateJob = jobs.find(j => j.kind === "generate") ?? null;
   return {
     data, loadErr, error, busyKey, now, judgeJob, importJob, positioningJob, generateJob, load,
-    lang, setLang, langs: data?.langs ?? [], draft: data?.draft ?? null, sources: data?.sources ?? null,
+    lang, setLang, langs: data?.langs ?? [], draft: data?.draft ?? null, sources: data?.sources ?? null, checklist: data?.checklist ?? null,
+    toggleChecklist,
     judgeRunning: judgeJob?.status === "running", importRunning: importJob?.status === "running",
     positioningRunning: positioningJob?.status === "running", generateRunning: generateJob?.status === "running",
     runJudge, importPdf, importText, importZip, setVersionLang, setSelf, setGoal, toggleWaiver,
@@ -664,10 +674,8 @@ export function SourceTab({ s, persona }: { s: LiCheckState; persona: string | n
   const [paste, setPaste] = useState("");
   const [showPaste, setShowPaste] = useState(false);
   const [importLang, setImportLang] = useState("");   // "" = detect from the profile text
-  const [versions, setVersions] = useState<VersionMeta[] | null>(null);
   const ver = s.data?.version;
   useEffect(() => { setRole(goal.targetRole ?? ""); setMarket(goal.market ?? ""); }, [goal.targetRole, goal.market]);
-  useEffect(() => { api.get<VersionMeta[]>("/api/linkedin/versions").then(r => setVersions(r.data)).catch(() => setVersions([])); }, [ver?.id, ver?.lang, s.draft?.id]);
   const fmt = (iso: string) => new Date(iso).toLocaleString(i18n.language, { dateStyle: "short", timeStyle: "short" });
   const job = s.importJob;
 
@@ -754,24 +762,6 @@ export function SourceTab({ s, persona }: { s: LiCheckState; persona: string | n
         )}
         {s.error && <div className="chk-note" data-tone="error">{s.error}</div>}
         <div className="li-privacy"><InfoCircle width={11} height={11} /> {t("linkedinCheck.source.privacy")}</div>
-      </div>
-
-      <div className="chk-card">
-        <div className="chk-h">{t("linkedinCheck.source.versions")}</div>
-        {!versions ? <RefreshCircle width={13} height={13} className="chk-spin" />
-          : !versions.length ? <EmptyState icon={<Clock width={18} height={18} />} text={t("linkedinCheck.source.noVersions")} />
-          : (
-            <ol className="li-versions">
-              {versions.map((v, i) => (
-                <li key={v.id} data-current={v.id === ver?.id || v.id === s.draft?.id}>
-                  <b>{versions.length - i}</b> <span>{v.origin === "draft" ? t("linkedinCheck.source.draft") : t(`linkedinCheck.source.kind.${v.source}`, v.source)}</span>
-                  <span className="li-lang-tag">{v.lang ? v.lang.toUpperCase() : "?"}</span>
-                  {v.judged && <span className="li-kind">{t("linkedinCheck.source.judged")}</span>}
-                  <span className="chk-muted" style={{ marginLeft: "auto" }}>{fmt(v.createdAt)}</span>
-                </li>
-              ))}
-            </ol>
-          )}
       </div>
     </div>
   );

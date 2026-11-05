@@ -1267,7 +1267,9 @@
       "score": "Bewertung",
       "tools": "KI-Werkzeuge",
       "source": "Quelle & Ziel",
-      "scoreDraft": "Bewertung (Entwurf)"
+      "scoreDraft": "Bewertung (Entwurf)",
+      "checklist": "Checkliste",
+      "versions": "Versionen"
     },
     "view": {
       "label": "Ansicht",
@@ -1531,6 +1533,70 @@
         "elementary": "Grundkenntnisse"
       },
       "docSource": "Dokument „{{name}}“"
+    },
+    "checklist": {
+      "title": "Was noch zu tun ist",
+      "progress": "{{done}} von {{total}} erledigt",
+      "hint": "Application-Pal ändert nichts auf LinkedIn – du überträgst jeden Punkt selbst. Was ein neuer Import belegen kann, hakt sich danach von selbst ab.",
+      "reimport": "Profil neu importieren",
+      "hideDone": "Erledigte ausblenden",
+      "noDraft": "Noch kein Entwurf in dieser Sprache – erstelle ihn in den KI-Werkzeugen, dann erscheinen hier die Übertragungsschritte.",
+      "section": {
+        "transfer": "Entwurf übertragen",
+        "basics": "Selbst prüfen",
+        "documents": "Aus deinen Dokumenten",
+        "network": "Netzwerk",
+        "plan": "4-Wochen-Plan"
+      },
+      "openDraft": "Entwurf anzeigen",
+      "basicsHint": "Diese Punkte sieht kein Import (z. B. Foto, Banner). Abhaken setzt deine Selbstauskunft – die Bewertung zieht mit.",
+      "allDone": "Alles erledigt.",
+      "week": "Woche {{n}}",
+      "empty": "Noch nichts zu tun: importiere ein Profil oder erstelle einen Entwurf.",
+      "blocked": "Enthält noch [X]-Platzhalter – erst ausfüllen, sonst landet „[X]“ auf LinkedIn.",
+      "autoHint": "Vom letzten Import belegt.",
+      "reported": "Selbstauskunft",
+      "detected": "Im Import erkannt",
+      "fillX": "[X] ausfüllen",
+      "kind": {
+        "headline": "Headline übernehmen",
+        "about": "Info-Text übernehmen",
+        "position": "Beschreibung übernehmen: {{title}} · {{company}}",
+        "skills": "Skills ergänzen ({{count}})",
+        "featured": "Im Abschnitt „Im Fokus“ anlegen: {{title}}",
+        "cert": "Zertifikat eintragen: {{name}}",
+        "language": "Sprache eintragen: {{name}}",
+        "rec": "Empfehlung anfragen bei: {{to}}",
+        "task": "Aufgabe"
+      }
+    },
+    "versions": {
+      "history": "Verlauf der Importe ({{lang}})",
+      "compare": "Vergleich",
+      "closeCompare": "Vergleich schließen",
+      "same": "unverändert",
+      "total": "Gesamt",
+      "unjudged": "Mindestens eine Version ist ohne KI-Urteil bewertet – die KI-Punkte fehlen dort im Maximum.",
+      "allLangs": "Alle Sprachen",
+      "pickHint": "Wähle zwei Versionen zum Vergleichen.",
+      "pickedHint": "Der Vergleich steht oben.",
+      "pickOne": "Noch eine Version wählen.",
+      "pick": "Zum Vergleich wählen",
+      "current": "aktuell",
+      "delete": "Import löschen",
+      "deleteConfirm": "Endgültig löschen",
+      "cancel": "Abbrechen",
+      "deleteHint": "Löschen geht nur bei Importen (z. B. einem Duplikat). Entwürfe verwaltest du in den KI-Werkzeugen.",
+      "stat": {
+        "positionsWithText": "Stationen mit Text",
+        "skills": "Skills",
+        "certifications": "Zertifikate",
+        "languages": "Sprachen",
+        "recommendations": "Empfehlungen",
+        "posts": "Beiträge",
+        "comments": "Kommentare",
+        "connections": "Kontakte"
+      }
     }
   }
 }

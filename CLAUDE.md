@@ -439,6 +439,16 @@ Rules — don't "fix" them:
 
 Draft card zoom is owned by the page: enlarging a card also enlarges the panel; the card button, the panel button and Escape shrink both (if the panel was large before, closing the card keeps it large).
 
+The generator prompt repeats the language directive at the **end** (`head()` + `LANG_FIELDS`), naming the free-text fields (`why`, `reason`, …) explicitly — otherwise the German prompt body drags those fields to German in an English draft.
+
+**Checklist (phase 4, `backend/src/linkedin-checklist.ts`, no AI)**, self-check `npx tsx backend/src/linkedin-checklist.check.ts`. `buildLiChecklist()` returns `{ items, done, total }` for the shown language in five sections: `transfer` (draft headline / About / each position description / skills / Featured), `basics` (every `self` checkpoint), `documents` (certificates and languages from `sources`), `network` (recommendation requests), `plan` (4-week plan). `GET /api/linkedin/check` returns it as `checklist`; manual ticks go through `PATCH /api/linkedin/state { checklistToggle: { key, done } }` into `state.checklist` (last 200 keys). Rules — don't "fix" them:
+- Application-Pal never writes to LinkedIn: an item is **auto**-done only with evidence from an import (same text after normalising, certificate/language `inProfile`, skills only from an import that has the full SKILLS domain) — never from the draft alone. Auto items of other kinds can't be unticked by hand.
+- A `basics` item ticks the **self-report** (`setSelf(checkId, max)` / `null`), not the checklist — score and checklist stay one truth.
+- A draft field containing `[X]` is `blocked`: it can't be ticked, and a stored manual tick is ignored while it is blocked.
+- Keys are stable and ≤ 60 chars (`liChecklistKey`); ticks for items that no longer exist are ignored.
+
+**Versions tab**: `GET /api/linkedin/versions?uiLang=` scores every import and draft on read (`scoreLiVersion`, a draft's judgement only while fresh) → `{ total, areas, stats, judged, parentId, … }`; `GET /api/linkedin/versions/:id` returns profile + result for the side-by-side compare (two picked versions, older = A). `DELETE /api/linkedin/versions/:id` deletes **imports only** (drafts via `/drafts/:id`); `parent_id` has no FK, so a draft whose import is gone just shows no delta. Area deltas are shown only when both ratable maxima match — otherwise only the normalised total is comparable.
+
 Generator rules — don't "fix" them:
 - `guardNumbers()` turns any figure not found in the sources (profile, CV, documents, answers — **not** the job ad) into `[X]`. New companies/schools not found in the sources become `[X]` with a warning; Featured URLs survive only if they appear in the sources.
 - Groups are proposed only as criteria + search terms, never as invented group names.

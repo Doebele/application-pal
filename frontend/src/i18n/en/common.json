@@ -1267,7 +1267,9 @@
       "score": "Score",
       "tools": "AI tools",
       "source": "Source & goal",
-      "scoreDraft": "Score (draft)"
+      "scoreDraft": "Score (draft)",
+      "checklist": "Checklist",
+      "versions": "Versions"
     },
     "view": {
       "label": "View",
@@ -1531,6 +1533,70 @@
         "elementary": "Elementary proficiency"
       },
       "docSource": "Document “{{name}}”"
+    },
+    "checklist": {
+      "title": "What's left to do",
+      "progress": "{{done}} of {{total}} done",
+      "hint": "Application-Pal never changes anything on LinkedIn – you transfer every item yourself. Whatever a new import can prove ticks itself afterwards.",
+      "reimport": "Re-import profile",
+      "hideDone": "Hide done",
+      "noDraft": "No draft in this language yet – create one in the AI tools and the transfer steps appear here.",
+      "section": {
+        "transfer": "Transfer the draft",
+        "basics": "Check yourself",
+        "documents": "From your documents",
+        "network": "Network",
+        "plan": "4-week plan"
+      },
+      "openDraft": "Show draft",
+      "basicsHint": "No import shows these (e.g. photo, banner). Ticking one sets your self-report – the score follows.",
+      "allDone": "All done.",
+      "week": "Week {{n}}",
+      "empty": "Nothing to do yet: import a profile or create a draft.",
+      "blocked": "Still contains [X] placeholders – fill them in first, otherwise “[X]” ends up on LinkedIn.",
+      "autoHint": "Proven by the latest import.",
+      "reported": "Self-report",
+      "detected": "Found in import",
+      "fillX": "Fill in [X]",
+      "kind": {
+        "headline": "Copy the headline",
+        "about": "Copy the About text",
+        "position": "Copy the description: {{title}} · {{company}}",
+        "skills": "Add skills ({{count}})",
+        "featured": "Add to Featured: {{title}}",
+        "cert": "Add certification: {{name}}",
+        "language": "Add language: {{name}}",
+        "rec": "Ask for a recommendation: {{to}}",
+        "task": "Task"
+      }
+    },
+    "versions": {
+      "history": "Import history ({{lang}})",
+      "compare": "Comparison",
+      "closeCompare": "Close comparison",
+      "same": "unchanged",
+      "total": "Total",
+      "unjudged": "At least one version is scored without an AI judgement – its AI points are left out of the maximum.",
+      "allLangs": "All languages",
+      "pickHint": "Pick two versions to compare.",
+      "pickedHint": "The comparison is shown above.",
+      "pickOne": "Pick one more version.",
+      "pick": "Pick for comparison",
+      "current": "current",
+      "delete": "Delete import",
+      "deleteConfirm": "Delete for good",
+      "cancel": "Cancel",
+      "deleteHint": "Only imports can be deleted here (e.g. a duplicate). Drafts are managed in the AI tools.",
+      "stat": {
+        "positionsWithText": "Positions with text",
+        "skills": "Skills",
+        "certifications": "Certifications",
+        "languages": "Languages",
+        "recommendations": "Recommendations",
+        "posts": "Posts",
+        "comments": "Comments",
+        "connections": "Connections"
+      }
     }
   }
 }

@@ -7,7 +7,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { StatsReport, Sparks, Database, ViewGrid, Page, User, EditPencil } from "iconoir-react";
+import { StatsReport, Sparks, Database, ViewGrid, Page, User, EditPencil, TaskList, ClockRotateRight } from "iconoir-react";
+import { ChecklistTab } from "../components/linkedin/ChecklistTab";
+import { VersionsTab } from "../components/linkedin/VersionsTab";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 import { PdfViewer, type PdfHighlight } from "../components/check/PdfViewer";
@@ -19,7 +21,7 @@ import { DraftCards } from "../components/linkedin/DraftCards";
 import { SourcesCard } from "../components/linkedin/SourceSuggestions";
 import { useLinkedInCheck, ScoreTab, ToolsTab, SourceTab, draftMode, LI_LANGS, type LiResult, type LiCheckState } from "./LinkedInCheckTabs";
 
-type SideTab = "score" | "tools" | "source";
+type SideTab = "score" | "tools" | "checklist" | "versions" | "source";
 type View = "cards" | "draft" | "pdf";
 
 /** PDF highlights: the headline and the About opening when their checks have open points. */
@@ -157,10 +159,14 @@ export function LinkedInCheckPage() {
           <CheckSide<SideTab> tab={tab} onTab={setTab} large={large === "side"} onLarge={() => toggleLarge("side")} tabs={[
             { id: "score", label: t(eff === "draft" ? "linkedinCheck.tabs.scoreDraft" : "linkedinCheck.tabs.score"), icon: <StatsReport width={13} height={13} /> },
             { id: "tools", label: t("linkedinCheck.tabs.tools"), icon: <Sparks width={13} height={13} /> },
+            { id: "checklist", label: t("linkedinCheck.tabs.checklist"), icon: <TaskList width={13} height={13} /> },
+            { id: "versions", label: t("linkedinCheck.tabs.versions"), icon: <ClockRotateRight width={13} height={13} /> },
             { id: "source", label: t("linkedinCheck.tabs.source"), icon: <Database width={13} height={13} /> },
           ]}>
             {tab === "score" && <ScoreTab s={s} focusGroup={focus} draft={eff === "draft"} extra={<SourcesCard s={s} />} />}
             {tab === "tools" && <ToolsTab s={s} onShowDraft={() => setView("draft")} />}
+            {tab === "checklist" && <ChecklistTab s={s} onOpenSource={() => openTab("source")} onShowDraft={() => setView("draft")} />}
+            {tab === "versions" && <VersionsTab s={s} />}
             {tab === "source" && <SourceTab s={s} persona={profile?.persona ?? null} />}
           </CheckSide>
         )}
