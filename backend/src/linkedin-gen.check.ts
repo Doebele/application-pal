@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { linkedInProfileSchema } from "@application-pal/shared";
 import {
+  wrongLangTexts, liTranslatePrompt, draftTranslationPayload, applyDraftTranslation, emptyDraftRaw,
   normalizePositioning, normalizeIntro, normalizePositionsAnswer, normalizeSkillsAnswer, normalizeActivityAnswer,
   initialDraftProfile, applyDraftParts, liGenInput, liAnswersText, placeholderCount, liPositionsPrompt, liIntroPrompt,
 } from "./linkedin-gen.js";
@@ -128,5 +129,43 @@ assert.equal(beg.positions.length, 0);
 assert.equal(beg.education?.[0].notes, "Abschlussarbeit über Barrierefreiheit.");
 assert.equal(beg.volunteering?.[0].organization, "Pfadi Zürich");
 assert.equal(beg.volunteering?.[1].organization, "[X]", "organisation not in the sources");
+
+// Language guard: the stored English positioning that came back in German
+const DE_POS = "Head of Design für matrixartige Organisationen, der komplexe Nutzerbedürfnisse in klare Interaktionskonzepte zerlegt und multidisziplinäre Teams zu messbarem Business-Impact führt.";
+const EN_POS = "Head of Design for matrix organisations who breaks complex user needs into clear interaction concepts and leads teams to measurable business impact.";
+assert.equal(wrongLangTexts({ options: [{ text: DE_POS, angle: "Ergebnis" }] }, "en").length, 1);
+assert.equal(wrongLangTexts({ options: [{ text: EN_POS, angle: "Outcome" }] }, "en").length, 0);
+assert.equal(wrongLangTexts({ options: [{ text: DE_POS }] }, "de").length, 0);
+// verbatim evidence from a German CV does not count against an English draft
+assert.equal(wrongLangTexts({ skills: [{ name: "Figma", evidence: "Ich habe mit Figma und mit der Designsystem-Bibliothek für die Teams bei der Bank gearbeitet und das ist gut" }] }, "en").length, 0);
+// short German fields together are caught
+assert.equal(wrongLangTexts({ plan: [{ week: 1, tasks: ["Profil fertigstellen und die Headline mit der Zielrolle ergänzen", "Kontakte aus dem Studium mit einer Nachricht anfragen"] }] }, "en").length, 1);
+assert.match(liTranslatePrompt("en"), /strictly in English/);
+
+// Draft translation: structure kept, companies/dates untouched, no new figures, missing texts flagged
+{
+  const prof = linkedInProfileSchema.parse({
+    basics: { headline: "Head of Design | Banking", summary: "I lead 12 designers." },
+    positions: [{ id: "p1", title: "Head of Design", company: "Acme Bank", description: "– Led 12 designers", start: "2020-01", end: null }],
+    meta: { source: "builder", fetchedAt: "2026-01-01T00:00:00Z" },
+  });
+  const raw = { ...emptyDraftRaw("en", null), positioning: "Head of Design for banks", plan: [{ week: 1, tasks: ["Finish profile", "Ask 3 people"] }] };
+  const pl = draftTranslationPayload(prof, raw);
+  assert.equal(pl.positions[0].ref, "p1");
+  assert.equal((pl.positions[0] as Record<string, unknown>).company, undefined, "company is not sent");
+  const out = applyDraftTranslation({ id: "d1", profile: prof, raw }, {
+    headline: "Head of Design | Banking", about: "Ich führe 12 Designer und 40 Entwickler.",
+    positions: [{ ref: "p1", title: "Leiter Design", description: "– Führte 12 Designer" }],
+    plan: [{ week: 1, tasks: ["Profil fertigstellen"] }],
+  }, "de", new Date("2026-02-01T00:00:00Z"));
+  assert.equal(out.profile.positions[0].title, "Leiter Design");
+  assert.equal(out.profile.positions[0].company, "Acme Bank");
+  assert.equal(out.profile.basics.summary, "Ich führe 12 Designer und [X] Entwickler.", "no new figure");
+  assert.deepEqual(out.raw.plan[0].tasks, ["Profil fertigstellen", "Ask 3 people"]);
+  assert.equal(out.raw.positioning, "Head of Design for banks", "missing → source text kept");
+  assert.ok(out.raw.warnings.includes("translate|untranslated:2"));
+  assert.equal(out.raw.lang, "de");
+  assert.deepEqual(out.raw.translatedFrom, { id: "d1", lang: "en", at: "2026-02-01T00:00:00.000Z" });
+}
 
 console.log("linkedin-gen: all assertions passed");

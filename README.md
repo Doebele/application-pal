@@ -103,7 +103,8 @@ Scores your CV VMock-style (Impact 40 · Presentation 20 · Competencies 40, +10
 ### LinkedIn-Check `/linkedin`
 Scores your LinkedIn profile out of 100 (First impression 25 · Content 35 · Evidence 20 · Activity 20, plus separate AI-visibility points), one profile per language (DE/EN/FR). Import via the API connection, the LinkedIn ZIP export, the profile PDF or pasted page text. Everything runs with your configured local AI; nothing is ever written to LinkedIn, and what a source doesn't deliver is "not rated" instead of guessed.
 - **Score:** biggest levers with point gains, self-report for what no import shows (photo, banner, Featured), AI judgement of headline, About and posts
-- **AI tools:** a few questions → 3 positioning options → headline, About, positions, skills, Featured, recommendation requests and a 4-week plan as a draft per language; numbers only from your sources, otherwise `[X]`
+- **AI tools:** a few questions → 3 positioning options → headline, About, positions, skills, Featured, recommendation requests and a 4-week plan as a draft per language; numbers only from your sources, otherwise `[X]`. Every text is checked against the selected profile language and translated if the model drifts
+- **Translations:** one click translates the finished draft into the other profile languages, so the language switch shows each version
 - **Suggestions:** skills, certificates and languages from your CV and Documents, one click into the draft
 - **Checklist:** what's left to do on LinkedIn: copy the draft field by field, self-checks with how-to tips, documents, recommendation requests, the plan. Items tick themselves once a re-import proves them
 - **Versions:** every import and draft scored, history and side-by-side comparison

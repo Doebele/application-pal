@@ -17,7 +17,7 @@
 // - Groups: criteria and search terms only, never group names.
 
 import { linkedInProfileSchema, type LinkedInProfile, type LinkedInLang } from "@application-pal/shared";
-import { phrasesIn } from "./linkedin-rules.js";
+import { phrasesIn, detectTextLang } from "./linkedin-rules.js";
 import { guardNumbers, type LiHeadlineVariant } from "./linkedin-llm.js";
 import { LI_CRITERIA } from "./linkedin-criteria.js";
 
@@ -53,6 +53,8 @@ export type LiDraftRaw = {
   plan: LiPlanWeek[];
   ndaHints: string[];
   warnings: string[];
+  /** Set when the draft was translated from the draft of another language (not generated). */
+  translatedFrom?: { id: string; lang: string; at: string };
 };
 
 // Questions of the build/sharpen step (keys stored in linkedin_state.answers).
@@ -119,6 +121,50 @@ const BEGINNER_TASK = {
   activity: `${BEGINNER} Empfehlungen: Praktikumsbetreuung, Dozent:innen, Projektleitung, Ehrenamts-Leitung. Plan: Woche 1 Profil fertigstellen; dann Kontakte aus Studium, Praktika und Ehrenamt mit persönlicher Nachricht, Zielunternehmen folgen, Karriere-Events und Alumni-Netzwerk; Beiträge über Projekte und Gelerntes.`,
 } as const;
 const withBeginner = (task: string, part: keyof typeof BEGINNER_TASK, beginner: boolean) => (beginner ? `${task}\n\n${BEGINNER_TASK[part]}` : task);
+
+// ── language guard ──────────────────────────────────────────────
+// The prompt bodies and often the user's answers are German, so a local model drifts back
+// to German in an English or French draft despite the directive. Every answer is checked;
+// a wrong-language answer gets one translation pass (see liTranslatePrompt).
+// Keys whose values are verbatim from the sources or not prose: never checked, never translated.
+const LANG_KEEP_KEYS = new Set(["evidence", "url", "ref", "start", "end", "company", "school", "organization", "kind", "type", "ndaHints", "week", "name"]);
+
+function langTexts(v: unknown, key = "", out: string[] = []): string[] {
+  if (LANG_KEEP_KEYS.has(key)) return out;
+  if (typeof v === "string") out.push(v);
+  else if (Array.isArray(v)) v.forEach(x => langTexts(x, key, out));
+  else if (v && typeof v === "object") Object.entries(v).forEach(([k, x]) => langTexts(x, k, out));
+  return out;
+}
+const wordCount = (s: string) => s.split(/\s+/).filter(Boolean).length;
+
+/** Texts of a model answer written in another language than `lang`. Long texts are checked one
+ *  by one; short ones ("why", "angle", "to", plan tasks) together, since one is too short to tell. */
+export function wrongLangTexts(answer: unknown, lang: LinkedInLang): string[] {
+  const texts = langTexts(answer).map(s => s.trim()).filter(Boolean);
+  const long = texts.filter(s => wordCount(s) >= 12);
+  const wrong = long.filter(s => { const l = detectTextLang(s); return !!l && l !== lang; });
+  const short = texts.filter(s => wordCount(s) < 12).join("\n");
+  const shortLang = detectTextLang(short);
+  if (shortLang && shortLang !== lang) wrong.push(short.slice(0, 200));
+  return wrong;
+}
+
+/** Translation pass: for an answer that came back (partly) in the wrong language, and for
+ *  translating a whole draft into another profile language. */
+export function liTranslatePrompt(lang: LinkedInLang): string {
+  return `${LANG_DIRECTIVE[lang]}
+
+Du erhältst eine JSON-Antwort mit Texten für ein LinkedIn-Profil. Übersetze jeden Textwert in die Zielsprache (Werte, die schon in der Zielsprache sind, bleiben) und gib dasselbe JSON zurück.
+- Sinngemäss und natürlich, wie ein Muttersprachler es auf LinkedIn schreiben würde, nicht Wort für Wort. Gängige englische Fachbegriffe (z. B. „Design System", „UX") bleiben, wenn man sie in der Zielsprache so verwendet.
+- Schlüssel, Struktur, Reihenfolge und Zeilenumbrüche bleiben exakt gleich. Aufzählungszeichen („– ") bleiben.
+- Inhalt, Zahlen, Namen, Firmen, Daten, URLs und Platzhalter wie [X], [Name], [Projekt] bleiben unverändert. Nichts hinzufügen, nichts weglassen.
+- "headline" und Headline-Varianten höchstens 220 Zeichen.
+- Die Werte von ${[...LANG_KEEP_KEYS].map(k => `"${k}"`).join(", ")} bleiben wörtlich, wie sie sind.
+- Antworte NUR mit JSON.
+
+${LANG_DIRECTIVE[lang]} ${LANG_FIELDS[lang]}`;
+}
 
 // ── prompts ─────────────────────────────────────────────────────
 export function liPositioningPrompt(lang: LinkedInLang, beginner = false): string {
@@ -390,6 +436,69 @@ export function emptyDraftRaw(lang: LinkedInLang, base: { id: string; lang: stri
     updatedAt: now.toISOString(), generated: {}, errors: {}, headlineVariants: [], skills: [], positionSkills: {},
     featured: [], recRequests: [], pillars: [], groups: null, plan: [], ndaHints: [], warnings: [],
   };
+}
+
+// ── translation of a draft into another profile language ───────
+/** The translatable texts of a draft, as one JSON for the model. Companies, schools, dates and
+ *  skill names are not part of it: they stay as they are. */
+export function draftTranslationPayload(p: LinkedInProfile, raw: LiDraftRaw) {
+  return {
+    positioning: raw.positioning,
+    headline: p.basics.headline,
+    about: p.basics.summary,
+    positions: p.positions.map(x => ({ ref: x.id, title: x.title, description: x.description })),
+    education: p.education.map(x => ({ ref: x.id, degree: x.degree, notes: x.notes })),
+    volunteering: p.volunteering.map(x => ({ ref: x.id, role: x.role, description: x.description })),
+    headlineVariants: raw.headlineVariants.map(v => ({ type: v.type, text: v.text })),
+    featured: raw.featured.map(f => ({ title: f.title, why: f.why })),
+    recommendationRequests: raw.recRequests.map(r => ({ to: r.to, text: r.text })),
+    pillars: raw.pillars.map(x => ({ title: x.title, why: x.why, ideas: x.ideas })),
+    groups: raw.groups ? { criteria: raw.groups.criteria, searchTerms: raw.groups.searchTerms } : null,
+    plan: raw.plan.map(w => ({ week: w.week, tasks: w.tasks })),
+  };
+}
+
+/** Builds the draft of `lang` from a draft and the model's translation of its payload.
+ *  Anything missing in the answer keeps the source text (flagged as `untranslated`); figures not
+ *  in the source draft become [X], so a translation never adds a number. */
+export function applyDraftTranslation(src: { profile: LinkedInProfile; raw: LiDraftRaw; id: string }, answer: unknown, lang: LinkedInLang, now = new Date()) {
+  const a = obj(answer);
+  const source = JSON.stringify(draftTranslationPayload(src.profile, src.raw));
+  let missing = 0;
+  const tr = (v: unknown, orig: string | null | undefined, max = 4000): string | null => {
+    if (!orig) return orig ?? null;
+    const t = str(v, max);
+    if (!t) { missing++; return orig; }
+    return guardNumbers(t, source);
+  };
+  const byRef = (key: string) => new Map(arr(a[key]).map(x => [str(obj(x).ref, 80) ?? "", obj(x)] as const));
+  const pos = byRef("positions"), edu = byRef("education"), vol = byRef("volunteering");
+  const p = structuredClone(src.profile);
+  p.basics.headline = tr(a.headline, p.basics.headline, 220);
+  p.basics.summary = tr(a.about, p.basics.summary, 2600);
+  p.positions = p.positions.map(x => { const t = pos.get(x.id) ?? {}; return { ...x, title: tr(t.title, x.title, 160), description: tr(t.description, x.description, 2000) }; });
+  p.education = p.education.map(x => { const t = edu.get(x.id) ?? {}; return { ...x, degree: tr(t.degree, x.degree, 200), notes: tr(t.notes, x.notes, 1000) }; });
+  p.volunteering = p.volunteering.map(x => { const t = vol.get(x.id) ?? {}; return { ...x, role: tr(t.role, x.role, 160), description: tr(t.description, x.description, 2000) }; });
+  p.meta = { ...p.meta, fetchedAt: now.toISOString() };
+  const at = (key: string, i: number) => obj(arr(a[key])[i]);
+  const list = (v: unknown, orig: string[]) => orig.map((o, i) => tr(arr(v)[i], o, 300) ?? o);
+  const g = obj(a.groups);
+  const raw: LiDraftRaw = {
+    ...structuredClone(src.raw),
+    lang, updatedAt: now.toISOString(),
+    positioning: tr(a.positioning, src.raw.positioning, 300),
+    headlineVariants: src.raw.headlineVariants.map((v, i) => ({ ...v, text: tr(at("headlineVariants", i).text, v.text, 220) ?? v.text })),
+    featured: src.raw.featured.map((f, i) => ({ ...f, title: tr(at("featured", i).title, f.title, 160) ?? f.title, why: tr(at("featured", i).why, f.why, 400) })),
+    recRequests: src.raw.recRequests.map((r, i) => ({ to: tr(at("recommendationRequests", i).to, r.to, 160) ?? r.to, text: tr(at("recommendationRequests", i).text, r.text, 700) ?? r.text })),
+    pillars: src.raw.pillars.map((x, i) => ({ title: tr(at("pillars", i).title, x.title, 120) ?? x.title, why: tr(at("pillars", i).why, x.why, 400), ideas: list(at("pillars", i).ideas, x.ideas) })),
+    groups: src.raw.groups ? { criteria: list(g.criteria, src.raw.groups.criteria), searchTerms: list(g.searchTerms, src.raw.groups.searchTerms) } : null,
+    plan: src.raw.plan.map((w, i) => ({ week: w.week, tasks: list(at("plan", i).tasks, w.tasks) })),
+    errors: {},
+    warnings: src.raw.warnings.filter(w => !w.endsWith("|wrongLang") && !w.startsWith("translate|")),
+    translatedFrom: { id: src.id, lang: src.raw.lang, at: now.toISOString() },
+  };
+  if (missing) raw.warnings.push(`translate|untranslated:${missing}`);
+  return { profile: p, raw };
 }
 
 /** Number of [X] placeholders left in the draft texts (shown before copying). */

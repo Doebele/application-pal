@@ -85,7 +85,7 @@ import {
   type LiJudgeExtras,
 } from "./linkedin-llm.js";
 import {
-  LI_GEN_PARTS, liGenInput, liPositioningPrompt, liIntroPrompt, liPositionsPrompt, liSkillsPrompt, liActivityPrompt,
+  LI_GEN_PARTS, liGenInput, wrongLangTexts, draftTranslationPayload, applyDraftTranslation, liTranslatePrompt, liPositioningPrompt, liIntroPrompt, liPositionsPrompt, liSkillsPrompt, liActivityPrompt,
   normalizePositioning, normalizeIntro, normalizePositionsAnswer, normalizeSkillsAnswer, normalizeActivityAnswer,
   initialDraftProfile, applyDraftParts, emptyDraftRaw, placeholderCount, type LiDraftRaw, type LiGenPart,
 } from "./linkedin-gen.js";
@@ -5004,10 +5004,14 @@ app.get("/api/linkedin/check", async (c) => {
   const imports = all.filter(r => r.origin === "import");
   const drafts = all.filter(r => r.origin === "draft");
   const langKey = (l: string | null) => (l ? l : "unknown");
+  // Which drafts are translations of another language's draft (raw.translatedFrom); drafts only, imports' raw is large.
+  const draftRaws = drafts.length ? await db.select({ id: linkedinVersions.id, raw: linkedinVersions.raw }).from(linkedinVersions)
+    .where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "draft"))) : [];
+  const translatedFrom = new Map(draftRaws.map(r => { try { return [r.id, (JSON.parse(r.raw ?? "{}") as LiDraftRaw).translatedFrom ?? null] as const; } catch { return [r.id, null] as const; } }));
   const langs = [...new Set([...imports.map(r => langKey(r.lang)), ...drafts.map(r => langKey(r.lang))])].map(l => {
     const imp = imports.find(r => langKey(r.lang) === l);
     const dr = drafts.find(r => langKey(r.lang) === l);
-    return { lang: l, importId: imp?.id ?? null, importedAt: imp?.createdAt.toISOString() ?? null, source: imp?.source ?? null, draftId: dr?.id ?? null, draftAt: dr?.createdAt.toISOString() ?? null };
+    return { lang: l, importId: imp?.id ?? null, importedAt: imp?.createdAt.toISOString() ?? null, source: imp?.source ?? null, draftId: dr?.id ?? null, draftAt: dr?.createdAt.toISOString() ?? null, draftTranslatedFrom: (dr && translatedFrom.get(dr.id)) || null };
   });
   const qLang = c.req.query("lang");
   const newest = imports[0] ?? drafts[0];
@@ -5103,7 +5107,7 @@ const liGoalOf = (s: LinkedInState) => (s.goal
 // re-runs on every GET. Background job because local models exceed the nginx timeout.
 type LiCheckStored = { checkedAt: string; uiLang: UiLang; llm: LiLlmJudgement | null; llmError?: string; cvUsed: boolean; extras: LiJudgeExtras };
 type LiJob = {
-  id: string; userId: string; kind: "check" | "import" | "positioning" | "generate"; status: "running" | "done" | "error"; step: string;
+  id: string; userId: string; kind: "check" | "import" | "positioning" | "generate" | "translate"; status: "running" | "done" | "error"; step: string;
   startedAt: string; finishedAt?: string; error?: string; versionId?: string; warnings?: string[]; changed?: boolean;
   lang?: string | null; parts?: string[]; done?: string[]; failed?: string[];
 };
@@ -5354,6 +5358,20 @@ async function liGenSources(userId: string, lang: LinkedInLang, applicationId?: 
 }
 const NO_GEN_SOURCE = "Keine Quellen: Profil importieren, Lebenslauf hinterlegen oder die Fragen beantworten";
 
+/** Calls the model for one generator step and enforces the profile language: an answer with
+ *  texts in another language gets one translation pass. `wrongLang` = still wrong afterwards. */
+async function callLiInLang(system: string, input: string, ai: AiConfig, lang: LinkedInLang): Promise<{ json: unknown; wrongLang: boolean }> {
+  const json = extractJson(await callAi(system, input, ai));
+  if (!wrongLangTexts(json, lang).length) return { json, wrongLang: false };
+  try {
+    const fixed = extractJson(await callAi(liTranslatePrompt(lang), JSON.stringify(json), ai));
+    if (fixed && typeof fixed === "object") return { json: fixed, wrongLang: wrongLangTexts(fixed, lang).length > 0 };
+  } catch (err) {
+    console.error("linkedin language fix failed:", err);
+  }
+  return { json, wrongLang: true };
+}
+
 app.post("/api/linkedin/positioning", async (c) => {
   const userId = getUserId(c);
   const { ai, lang: rawLang, applicationId } = await c.req.json<{ ai: AiConfig; lang?: string; applicationId?: string | null }>();
@@ -5367,8 +5385,11 @@ app.post("/api/linkedin/positioning", async (c) => {
     if (!src.hasSource) return void finish({ status: "error", error: NO_GEN_SOURCE });
     job.step = "llm";
     try {
-      const options = normalizePositioning(extractJson(await callAi(liPositioningPrompt(lang, src.beginner), src.input, ai)), src.guardSource);
-      if (!options.length) throw new Error("Die KI-Antwort enthielt keine Positionierung");
+      const { json } = await callLiInLang(liPositioningPrompt(lang, src.beginner), src.input, ai, lang);
+      // An option still in the wrong language is dropped: it would end up in the draft.
+      const all = normalizePositioning(json, src.guardSource);
+      const options = all.filter(o => !wrongLangTexts({ text: o.text }, lang).length);
+      if (!options.length) throw new Error(all.length ? "Die KI hat nicht in der gewählten Profilsprache geantwortet, bitte nochmals versuchen" : "Die KI-Antwort enthielt keine Positionierung");
       const state = await readLinkedInState(userId);   // re-read: the user may have edited meanwhile
       const prev = state.positioning?.[lang];
       await writeLinkedInState(userId, { ...state, positioning: { ...(state.positioning ?? {}), [lang]: { options, chosen: prev?.chosen ?? null, createdAt: new Date().toISOString() } } });
@@ -5410,15 +5431,17 @@ async function runLinkedInGenerate(job: LiJob, userId: string, lang: LinkedInLan
   const addNda = (xs: string[]) => { raw.ndaHints = [...new Set([...raw.ndaHints, ...xs])].slice(0, 10); };
   for (const part of parts) {
     job.step = part;
+    let wrongLang = false;
+    const ask = async (system: string) => { const r = await callLiInLang(system, src.input, ai, lang); wrongLang = r.wrongLang; return r.json; };
     try {
       if (part === "intro") {
-        const out = normalizeIntro(extractJson(await callAi(prose(liIntroPrompt(lang, src.beginner)), src.input, ai)), src.guardSource);
+        const out = normalizeIntro(await ask(prose(liIntroPrompt(lang, src.beginner))), src.guardSource);
         if (!out.headline && !out.about) throw new Error("Die KI-Antwort enthielt keine Texte");
         profile = applyDraftParts(profile, { headline: out.headline ?? profile.basics.headline, summary: out.about ?? profile.basics.summary });
         raw.headlineVariants = out.headlineVariants; addNda(out.ndaHints); setWarnings(part, out.warnings);
       } else if (part === "positions") {
         const mode = src.base.profile && profile.positions.length ? (src.base.sameLang ? "rewrite" : "translate") : "build";
-        const out = normalizePositionsAnswer(extractJson(await callAi(prose(liPositionsPrompt(lang, mode, src.beginner)), src.input, ai)), src.guardSource, {
+        const out = normalizePositionsAnswer(await ask(prose(liPositionsPrompt(lang, mode, src.beginner))), src.guardSource, {
           positions: mode === "build" ? [] : profile.positions, education: mode === "build" ? [] : profile.education, translate: mode === "translate",
         });
         // A career starter may have no job yet — education or volunteering is enough then.
@@ -5426,17 +5449,18 @@ async function runLinkedInGenerate(job: LiJob, userId: string, lang: LinkedInLan
         profile = applyDraftParts(profile, { positions: out.positions, education: out.education, volunteering: out.volunteering });
         raw.positionSkills = out.positionSkills; addNda(out.ndaHints); setWarnings(part, out.warnings);
       } else if (part === "skills") {
-        const out = normalizeSkillsAnswer(extractJson(await callAi(liSkillsPrompt(lang, src.beginner), src.input, ai)), src.guardSource);
+        const out = normalizeSkillsAnswer(await ask(liSkillsPrompt(lang, src.beginner)), src.guardSource);
         if (!out.skills.length) throw new Error("Die KI-Antwort enthielt keine Kenntnisse");
         profile = applyDraftParts(profile, { skills: out.skills });
         raw.skills = out.skills; raw.featured = out.featured;
         const unverified = out.skills.filter(s => !s.verified).length;
         setWarnings(part, unverified ? [`unverifiedSkills:${unverified}`] : []);
       } else {
-        const out = normalizeActivityAnswer(extractJson(await callAi(prose(liActivityPrompt(lang, src.beginner)), src.input, ai)), src.guardSource);
+        const out = normalizeActivityAnswer(await ask(prose(liActivityPrompt(lang, src.beginner))), src.guardSource);
         if (!out.recRequests.length && !out.pillars.length && !out.plan.length) throw new Error("Die KI-Antwort enthielt keine Vorschläge");
         Object.assign(raw, { recRequests: out.recRequests, pillars: out.pillars, groups: out.groups, plan: out.plan });
       }
+      raw.warnings = [...raw.warnings.filter(w => w !== `${part}|wrongLang`), ...(wrongLang ? [`${part}|wrongLang`] : [])];
       raw.generated[part] = new Date().toISOString();
       delete raw.errors[part];
       job.done!.push(part);
@@ -5505,6 +5529,56 @@ app.delete("/api/linkedin/drafts/:id", async (c) => {
     .returning({ id: linkedinVersions.id });
   if (!res.length) return c.json({ error: "Entwurf nicht gefunden" }, 404);
   return c.json({ deleted: res[0].id });
+});
+
+// Prepares the drafts of other profile languages by translating a draft (not a new generation):
+// body { ai, langs }. Each target gets its draft replaced, or created, with raw.translatedFrom set.
+// The target's positioning is taken over only when none is confirmed there yet.
+app.post("/api/linkedin/drafts/:id/translate", async (c) => {
+  const userId = getUserId(c);
+  const { ai, langs: rawLangs } = await c.req.json<{ ai: AiConfig; langs?: string[] }>();
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Anbieter konfiguriert" }, 400);
+  const [srcRow] = await db.select().from(linkedinVersions)
+    .where(and(eq(linkedinVersions.id, c.req.param("id")), eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "draft"))).limit(1);
+  if (!srcRow) return c.json({ error: "Entwurf nicht gefunden" }, 404);
+  const targets = [...new Set((rawLangs ?? []).map(asLiLang).filter((l): l is LinkedInLang => !!l && l !== srcRow.lang))];
+  if (!targets.length) return c.json({ error: "Keine Zielsprache gewählt" }, 400);
+  const job = startLiJob(userId, "translate", targets[0], async job => {
+    Object.assign(job, { lang: srcRow.lang, parts: targets, done: [], failed: [] });
+    const src = { id: srcRow.id, profile: linkedInProfileSchema.parse(JSON.parse(srcRow.data)), raw: JSON.parse(srcRow.raw ?? "{}") as LiDraftRaw };
+    const payload = JSON.stringify(draftTranslationPayload(src.profile, src.raw));
+    for (const lang of targets) {
+      job.step = lang;
+      try {
+        const { json, wrongLang } = await callLiInLang(liTranslatePrompt(lang), payload, ai, lang);
+        const out = applyDraftTranslation(src, json, lang);
+        if (wrongLang) out.raw.warnings.push("translate|wrongLang");
+        const [existing] = await db.select({ id: linkedinVersions.id }).from(linkedinVersions)
+          .where(and(eq(linkedinVersions.userId, userId), eq(linkedinVersions.origin, "draft"), eq(linkedinVersions.lang, lang)))
+          .orderBy(desc(linkedinVersions.createdAt)).limit(1);
+        if (existing) {
+          await db.update(linkedinVersions).set({ data: JSON.stringify(out.profile), raw: JSON.stringify(out.raw) }).where(eq(linkedinVersions.id, existing.id));
+        } else {
+          await db.insert(linkedinVersions).values({
+            userId, origin: "draft", source: "builder", lang, parentId: srcRow.parentId,
+            data: JSON.stringify(out.profile), raw: JSON.stringify(out.raw), note: "Entwurf",
+          });
+        }
+        const state = await readLinkedInState(userId);
+        if (out.raw.positioning && !state.positioning?.[lang]?.chosen) {
+          await writeLinkedInState(userId, { ...state, positioning: { ...(state.positioning ?? {}), [lang]: { options: state.positioning?.[lang]?.options ?? [], chosen: out.raw.positioning, createdAt: state.positioning?.[lang]?.createdAt ?? null } } });
+        }
+        job.done!.push(lang);
+      } catch (err) {
+        console.error(`linkedin translate ${lang} error:`, err);
+        job.failed!.push(lang);
+      }
+    }
+    Object.assign(job, job.done!.length
+      ? { status: "done", finishedAt: new Date().toISOString() }
+      : { status: "error", error: "Übersetzung fehlgeschlagen", finishedAt: new Date().toISOString() });
+  });
+  return c.json(liJobOut(job), 202);
 });
 
 app.get("/api/linkedin/versions/:id/pdf", async (c) => {

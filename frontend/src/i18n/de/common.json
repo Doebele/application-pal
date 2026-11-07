@@ -1444,7 +1444,9 @@
           "company": "Firma",
           "school": "Schule",
           "organization": "Organisation"
-        }
+        },
+        "wrongLang": "Ein Teil der Texte kam in einer anderen Sprache zurück und liess sich nicht übersetzen. Bitte prüfen oder diesen Teil neu erzeugen.",
+        "untranslated": "Ein Teil der Übersetzung blieb in der Ausgangssprache und wurde übernommen, wie er war ({{v}} Texte). Bitte prüfen."
       },
       "kw": {
         "remove": "„{{k}}“ entfernen",
@@ -1453,7 +1455,21 @@
         "more": "{{count}} weitere",
         "less": "Weniger"
       },
-      "questionsHintBeginner": "Ohne viel Berufserfahrung tragen Ausbildung, Praktika und Projekte dein Profil. Je konkreter deine Antworten, desto besser die Texte – erfunden wird nichts."
+      "questionsHintBeginner": "Ohne viel Berufserfahrung tragen Ausbildung, Praktika und Projekte dein Profil. Je konkreter deine Antworten, desto besser die Texte – erfunden wird nichts.",
+      "positioningWrongLang": "Die Positionierung ist auf {{found}} geschrieben, das Profil auf {{lang}}. Erzeuge neue Vorschläge oder formuliere den Satz auf {{lang}}, sonst geraten die Texte in die falsche Sprache.",
+      "translate": {
+        "title": "Übersetzungen",
+        "hint": "Übersetzt diesen {{lang}}-Entwurf in die anderen Profilsprachen. Danach zeigt der Sprachumschalter oben die jeweilige Fassung. Firmen, Daten und Skills bleiben, Zahlen kommen nur aus dem Entwurf.",
+        "none": "noch kein Entwurf",
+        "own": "eigener Entwurf vorhanden",
+        "from": "übersetzt aus {{lang}} am {{date}}",
+        "stale": "übersetzt aus {{lang}}, der Entwurf wurde seither geändert",
+        "replaceOwn": "Für {{langs}} gibt es einen eigenen Entwurf. Die Übersetzung ersetzt ihn.",
+        "run": "Übersetzungen vorbereiten",
+        "running": "Übersetze {{lang}} …",
+        "done": "Fertig: {{langs}}. Mit dem Sprachumschalter oben ansehen.",
+        "failed": "Nicht übersetzt: {{langs}}. Bitte nochmals versuchen."
+      }
     },
     "draft": {
       "title": "Entwurf ({{lang}})",

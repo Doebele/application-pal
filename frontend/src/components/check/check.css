@@ -119,6 +119,7 @@
 .chk-note { font-size: 11px; line-height: 1.5; padding: 8px 10px; border-radius: 8px; background: var(--score-mid-bg); color: var(--fg-1); border: 1px solid var(--score-mid-border); }
 .chk-note[data-tone="info"] { background: var(--surface-2); border-color: var(--border); color: var(--fg-2); }
 .chk-note[data-tone="error"] { background: var(--score-low-bg); border-color: var(--score-low-border); }
+.chk-note[data-tone="warn"] { background: var(--score-mid-bg); border-color: var(--score-mid-border); }
 
 /* ── PDF viewer (pdf.js) with highlight overlay ── */
 .pdf-viewer { display: flex; flex-direction: column; height: 100%; min-height: 0; }
