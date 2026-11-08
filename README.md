@@ -110,6 +110,12 @@ Scores your LinkedIn profile out of 100 (First impression 25 · Content 35 · Ev
 - **Versions:** every import and draft scored, history and side-by-side comparison
 - **Career starters:** without a profile, a set-up guide (account, visibility, URL, education, "Open to", first contacts) and starter questions; the generator puts education, internships, projects and volunteering first
 
+![LinkedIn-Check score](docs/screenshots/linkedin-score.png)
+
+| AI tools & translations | Checklist |
+|---|---|
+| ![LinkedIn-Check AI tools](docs/screenshots/linkedin-tools.png) | ![LinkedIn-Check checklist](docs/screenshots/linkedin-checklist.png) |
+
 ### Cover Letter `/letter-coach`
 Personal, reusable cover-letter guidance the AI applies to **every** generated letter: structure, values, core strengths, preferred phrasing, style & tone, no-gos, and a reference letter. Configure once, refine over time. → Full guide: [docs/cover-letter.md](docs/cover-letter.md)
 
