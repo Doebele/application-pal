@@ -1444,7 +1444,9 @@
           "company": "Entreprise",
           "school": "École",
           "organization": "Organisation"
-        }
+        },
+        "wrongLang": "Une partie des textes est revenue dans une autre langue et n’a pas pu être traduite. Vérifie-les ou régénère cette partie.",
+        "untranslated": "Une partie de la traduction est restée dans la langue d’origine et a été conservée telle quelle ({{v}} textes). Vérifie-la."
       },
       "kw": {
         "remove": "Retirer « {{k}} »",
@@ -1453,7 +1455,21 @@
         "more": "{{count}} de plus",
         "less": "Moins"
       },
-      "questionsHintBeginner": "Sans beaucoup d'expérience, ta formation, tes stages et tes projets portent le profil. Plus tes réponses sont concrètes, meilleurs sont les textes – rien n'est inventé."
+      "questionsHintBeginner": "Sans beaucoup d'expérience, ta formation, tes stages et tes projets portent le profil. Plus tes réponses sont concrètes, meilleurs sont les textes – rien n'est inventé.",
+      "positioningWrongLang": "Le positionnement est rédigé en {{found}}, le profil en {{lang}}. Génère de nouvelles propositions ou rédige la phrase en {{lang}}, sinon les textes partent dans la mauvaise langue.",
+      "translate": {
+        "title": "Traductions",
+        "hint": "Traduit ce brouillon {{lang}} dans les autres langues du profil. Le sélecteur de langue en haut affiche ensuite chaque version. Entreprises, dates et compétences restent, les chiffres viennent uniquement du brouillon.",
+        "none": "pas encore de brouillon",
+        "own": "brouillon propre existant",
+        "from": "traduit de l’{{lang}} le {{date}}",
+        "stale": "traduit de l’{{lang}}, le brouillon a changé depuis",
+        "replaceOwn": "{{langs}} a son propre brouillon. La traduction le remplace.",
+        "run": "Préparer les traductions",
+        "running": "Traduction {{lang}} …",
+        "done": "Terminé : {{langs}}. Affiche-les avec le sélecteur de langue en haut.",
+        "failed": "Non traduit : {{langs}}. Réessaie."
+      }
     },
     "draft": {
       "title": "Brouillon ({{lang}})",

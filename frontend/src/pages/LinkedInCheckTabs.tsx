@@ -42,7 +42,7 @@ export type LiVersion = { id: string; source: string; note: string | null; lang:
 type Extras = { headlineVariants: Array<{ type: string; text: string }>; cv: { titleConflicts: Array<{ linkedin: string; cv: string }>; missingInLinkedIn: string[] } | null; ndaHints: string[] };
 type Judge = { checkedAt: string; error: string | null; cvUsed: boolean; extras: Extras };
 /** One LinkedIn profile language: newest import and/or draft (LinkedIn keeps one profile per language). */
-export type LiLangInfo = { lang: string; importId: string | null; importedAt: string | null; source: string | null; draftId: string | null; draftAt: string | null };
+export type LiLangInfo = { lang: string; importId: string | null; importedAt: string | null; source: string | null; draftId: string | null; draftAt: string | null; draftTranslatedFrom: { id: string; lang: string; at: string } | null };
 export const GEN_PARTS = ["intro", "positions", "skills", "activity"] as const;
 export type GenPart = typeof GEN_PARTS[number];
 export type LiDraftRaw = {
@@ -55,6 +55,7 @@ export type LiDraftRaw = {
   groups: { criteria: string[]; searchTerms: string[] } | null;
   plan: Array<{ week: number; tasks: string[] }>;
   ndaHints: string[]; warnings: string[];
+  translatedFrom?: { id: string; lang: string; at: string };
 };
 export type LiDraft = {
   id: string; lang: string; raw: LiDraftRaw; profile: LinkedInProfile; placeholders: number; result: LiResult;
@@ -80,7 +81,7 @@ type CheckResponse = {
   draft: LiDraft | null; sources?: LiSources | null; checklist?: LiChecklist | null;
 };
 type Job = {
-  id: string; kind: "check" | "import" | "positioning" | "generate"; status: "running" | "done" | "error"; step: string; startedAt: string; finishedAt?: string;
+  id: string; kind: "check" | "import" | "positioning" | "generate" | "translate"; status: "running" | "done" | "error"; step: string; startedAt: string; finishedAt?: string;
   error?: string; versionId?: string; warnings?: string[]; changed?: boolean; lang?: string | null; parts?: string[]; done?: string[]; failed?: string[];
 };
 export type DraftPatch = { headline?: string | null; summary?: string | null; positions?: Array<{ id: string; title?: string | null; description?: string | null }>; skills?: string[] };
@@ -125,7 +126,7 @@ export function useLinkedInCheck() {
       setNow(Date.now());
       const list = await loadJobs();
       // The generator saves after every part → show each part as soon as it is there.
-      if (!list.some(j => j.status === "running") || list.some(j => j.kind === "generate" && j.status === "running")) load();
+      if (!list.some(j => j.status === "running") || list.some(j => (j.kind === "generate" || j.kind === "translate") && j.status === "running")) load();
     }, 3000);
     return () => clearInterval(iv);
   }, [anyRunning, loadJobs, load]);
@@ -163,6 +164,8 @@ export function useLinkedInCheck() {
   // Generator: positioning first, then the texts — both for the shown profile language.
   const runPositioning = (applicationId?: string | null) => startJob(api.post<Job>("/api/linkedin/positioning", { ai, lang, applicationId: applicationId || null }));
   const runGenerate = (parts: GenPart[], applicationId?: string | null) => startJob(api.post<Job>("/api/linkedin/generate", { ai, lang, parts, applicationId: applicationId || null }));
+  /** Translate the shown draft into other profile languages (their drafts are created or replaced). */
+  const runTranslate = (langs: string[]) => data?.draft && startJob(api.post<Job>(`/api/linkedin/drafts/${data.draft.id}/translate`, { ai, langs }));
   const patchDraft = async (patch: DraftPatch) => {
     const id = data?.draft?.id;
     if (!id) return;
@@ -203,14 +206,15 @@ export function useLinkedInCheck() {
   const importJob = jobs.find(j => j.kind === "import") ?? null;
   const positioningJob = jobs.find(j => j.kind === "positioning") ?? null;
   const generateJob = jobs.find(j => j.kind === "generate") ?? null;
+  const translateJob = jobs.find(j => j.kind === "translate") ?? null;
   return {
-    data, loadErr, error, busyKey, now, judgeJob, importJob, positioningJob, generateJob, load,
+    data, loadErr, error, busyKey, now, judgeJob, importJob, positioningJob, generateJob, translateJob, load,
     lang, setLang, langs: data?.langs ?? [], draft: data?.draft ?? null, sources: data?.sources ?? null, checklist: data?.checklist ?? null,
     toggleChecklist,
     judgeRunning: judgeJob?.status === "running", importRunning: importJob?.status === "running",
-    positioningRunning: positioningJob?.status === "running", generateRunning: generateJob?.status === "running",
+    positioningRunning: positioningJob?.status === "running", generateRunning: generateJob?.status === "running", translateRunning: translateJob?.status === "running",
     runJudge, importPdf, importText, importZip, setVersionLang, setSelf, setGoal, toggleWaiver,
-    setAnswers, choosePositioning, runPositioning, runGenerate, patchDraft, deleteDraft,
+    setAnswers, choosePositioning, runPositioning, runGenerate, runTranslate, patchDraft, deleteDraft,
     aiReady: ai.provider !== "none", cloud: CLOUD.includes(ai.provider) ? ai.provider : null,
   };
 }
@@ -507,6 +511,68 @@ function draftWarnings(raw: LiDraftRaw, t: (k: string, o?: Record<string, unknow
   });
 }
 
+// Same heuristic as detectTextLang() in backend/src/linkedin-rules.ts: language of a longer text, else null.
+const LANG_WORDS: Record<string, string[]> = {
+  de: ["und", "der", "die", "das", "ich", "mit", "fur", "ist", "nicht", "eine", "auf", "von", "zu", "bei"],
+  en: ["and", "the", "with", "for", "is", "my", "of", "to", "in", "at", "who", "that", "on"],
+  fr: ["et", "le", "la", "les", "des", "pour", "avec", "est", "je", "une", "dans", "du", "sur"],
+};
+function textLang(text: string): string | null {
+  const w = text.toLocaleLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").split(/[^\p{L}]+/u);
+  if (w.length < 12) return null;
+  const best = Object.entries(LANG_WORDS).map(([l, list]) => [l, w.filter(x => list.includes(x)).length] as const).sort((a, b) => b[1] - a[1])[0];
+  return best[1] >= 2 ? best[0] : null;
+}
+
+/** Step 4: prepare the drafts of the other profile languages by translating this draft, so the
+ *  language switch shows them right away. A target with its own (not translated) draft is
+ *  unchecked by default, since translating replaces it. */
+function TranslateCard({ s, lang }: { s: LiCheckState; lang: string }) {
+  const { t, i18n } = useTranslation();
+  const others = LI_LANGS.filter(l => l !== lang);
+  const infoOf = (l: string) => s.langs.find(x => x.lang === l);
+  const ownDraft = (l: string) => { const i = infoOf(l); return !!i?.draftId && !i.draftTranslatedFrom; };
+  const [sel, setSel] = useState<string[]>(() => others.filter(l => !ownDraft(l)));
+  const job = s.translateJob?.lang === lang ? s.translateJob : null;
+  const name = (l: string) => t(`linkedinCheck.lang.${l}`);
+  const draftAt = s.draft ? Date.parse(s.draft.raw.updatedAt) : 0;
+  return (
+    <div className="chk-card chk-stack" style={{ gap: 10 }}>
+      <div className="chk-h" style={{ margin: 0 }}><span className="li-stepno">4</span>{t("linkedinCheck.gen.translate.title")}</div>
+      <div className="chk-muted">{t("linkedinCheck.gen.translate.hint", { lang: name(lang) })}</div>
+      <div className="li-parts" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+        {others.map(l => {
+          const i = infoOf(l);
+          const tf = i?.draftTranslatedFrom;
+          const status = !i?.draftId ? t("linkedinCheck.gen.translate.none")
+            : tf ? (tf.lang === lang && Date.parse(tf.at) < draftAt ? t("linkedinCheck.gen.translate.stale", { lang: name(tf.lang) })
+              : t("linkedinCheck.gen.translate.from", { lang: name(tf.lang), date: new Date(tf.at).toLocaleDateString(i18n.language) }))
+            : t("linkedinCheck.gen.translate.own");
+          return (
+            <label key={l} className="li-check">
+              <input type="checkbox" checked={sel.includes(l)} onChange={e => setSel(xs => e.target.checked ? [...xs, l] : xs.filter(x => x !== l))} />
+              <span>{name(l)}</span>
+              <span className="chk-muted">· {status}</span>
+              {job?.done?.includes(l) && <Check width={10} height={10} className="li-gen-ok" />}
+            </label>
+          );
+        })}
+      </div>
+      {sel.some(ownDraft) && <div className="chk-note" data-tone="warn">{t("linkedinCheck.gen.translate.replaceOwn", { langs: sel.filter(ownDraft).map(name).join(", ") })}</div>}
+      <div className="li-actions">
+        <button className="btn btn-primary li-btn" disabled={!s.aiReady || !sel.length || s.translateRunning || s.generateRunning} onClick={() => s.runTranslate(sel)}>
+          {s.translateRunning ? <RefreshCircle width={11} height={11} className="chk-spin" /> : <Sparks width={11} height={11} />}
+          {t("linkedinCheck.gen.translate.run")}
+        </button>
+        {s.translateRunning && job && <span className="chk-muted">{t("linkedinCheck.gen.translate.running", { lang: name(job.step) })} {elapsedOf(job, s.now)}</span>}
+      </div>
+      {job?.status === "done" && !s.translateRunning && <div className="chk-note" data-tone="info">{t("linkedinCheck.gen.translate.done", { langs: (job.done ?? []).map(name).join(", ") })}</div>}
+      {job?.status === "error" && job.error && <div className="chk-note" data-tone="error">{job.error}</div>}
+      {!!job?.failed?.length && job.status !== "running" && <div className="chk-note" data-tone="error">{t("linkedinCheck.gen.translate.failed", { langs: job.failed.map(name).join(", ") })}</div>}
+    </div>
+  );
+}
+
 /** KI-Werkzeuge: the text generator for the shown profile language (questions → positioning → texts)
  *  plus the headline variants of the judge run. */
 export function ToolsTab({ s, onShowDraft, persona }: { s: LiCheckState; onShowDraft: () => void; persona?: string | null }) {
@@ -535,6 +601,9 @@ export function ToolsTab({ s, onShowDraft, persona }: { s: LiCheckState; onShowD
   const draft = s.draft;
   const langName = lang ? t(`linkedinCheck.lang.${lang}`) : "";
   const baseLang = s.langs.find(l => l.importId && l.lang !== s.lang && l.lang !== "unknown")?.lang;
+  // Positioning written in another language than the profile (older runs, or typed by hand):
+  // it feeds every generated text, so the user should replace it.
+  const posWrongLang = [chosen, ...(pos?.options.map(o => o.text) ?? [])].map(textLang).find(l => !!l && l !== lang) ?? null;
 
   if (!lang) {
     return <div className="chk-note" data-tone="info">{t("linkedinCheck.gen.unknownLang")}</div>;
@@ -578,6 +647,7 @@ export function ToolsTab({ s, onShowDraft, persona }: { s: LiCheckState; onShowD
           {s.positioningRunning && posJob && <span className="chk-muted">{elapsedOf(posJob, s.now)}</span>}
         </div>
         {posJob?.status === "error" && posJob.error && <div className="chk-note" data-tone="error">{posJob.error}</div>}
+        {posWrongLang && <div className="chk-note" data-tone="warn">{t("linkedinCheck.gen.positioningWrongLang", { found: t(`linkedinCheck.lang.${posWrongLang}`), lang: langName })}</div>}
         {!!pos?.options.length && (
           <div className="li-options" role="radiogroup" aria-label={t("linkedinCheck.gen.positioning")}>
             {pos.options.map((o, i) => (
@@ -629,6 +699,8 @@ export function ToolsTab({ s, onShowDraft, persona }: { s: LiCheckState; onShowD
         {genJob?.status === "error" && genJob.error && <div className="chk-note" data-tone="error">{genJob.error}</div>}
         <div className="li-privacy"><InfoCircle width={11} height={11} /> {t("linkedinCheck.gen.rules")}</div>
       </div>
+
+      {draft && <TranslateCard s={s} lang={lang} />}
 
       {draft && (
         <div className="chk-card chk-stack" style={{ gap: 8 }}>

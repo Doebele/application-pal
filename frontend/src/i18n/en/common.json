@@ -1444,7 +1444,9 @@
           "company": "Company",
           "school": "School",
           "organization": "Organisation"
-        }
+        },
+        "wrongLang": "Some texts came back in another language and could not be translated. Check them or regenerate this part.",
+        "untranslated": "Part of the translation stayed in the source language and was kept as it was ({{v}} texts). Please check."
       },
       "kw": {
         "remove": "Remove “{{k}}”",
@@ -1453,7 +1455,21 @@
         "more": "{{count}} more",
         "less": "Fewer"
       },
-      "questionsHintBeginner": "Without much work experience, your education, internships and projects carry the profile. The more specific your answers, the better the texts – nothing is made up."
+      "questionsHintBeginner": "Without much work experience, your education, internships and projects carry the profile. The more specific your answers, the better the texts – nothing is made up.",
+      "positioningWrongLang": "The positioning is written in {{found}}, the profile in {{lang}}. Generate new options or write the sentence in {{lang}}, otherwise the texts drift into the wrong language.",
+      "translate": {
+        "title": "Translations",
+        "hint": "Translates this {{lang}} draft into the other profile languages. The language switch at the top then shows each version. Companies, dates and skills stay, figures only come from the draft.",
+        "none": "no draft yet",
+        "own": "own draft exists",
+        "from": "translated from {{lang}} on {{date}}",
+        "stale": "translated from {{lang}}, the draft has changed since",
+        "replaceOwn": "{{langs}} has its own draft. The translation replaces it.",
+        "run": "Prepare translations",
+        "running": "Translating {{lang}} …",
+        "done": "Done: {{langs}}. Use the language switch at the top to view them.",
+        "failed": "Not translated: {{langs}}. Please try again."
+      }
     },
     "draft": {
       "title": "Draft ({{lang}})",
