@@ -1446,7 +1446,8 @@
           "organization": "Organisation"
         },
         "wrongLang": "Ein Teil der Texte kam in einer anderen Sprache zurück und liess sich nicht übersetzen. Bitte prüfen oder diesen Teil neu erzeugen.",
-        "untranslated": "Ein Teil der Übersetzung blieb in der Ausgangssprache und wurde übernommen, wie er war ({{v}} Texte). Bitte prüfen."
+        "untranslated": "Ein Teil der Übersetzung blieb in der Ausgangssprache und wurde übernommen, wie er war ({{v}} Texte). Bitte prüfen.",
+        "headlineShort": "Headline ist kurz ({{v}} Zeichen): ein Teil der Varianten liegt unter 160. Ergänze sie oder erzeuge diesen Teil neu."
       },
       "kw": {
         "remove": "„{{k}}“ entfernen",
@@ -1526,7 +1527,8 @@
       "xHint": "Platzhalter: vor dem Kopieren durch echte Werte ersetzen",
       "volunteering": "Ehrenamt",
       "role": "Rolle",
-      "organization": "Organisation"
+      "organization": "Organisation",
+      "headlineTarget": "Ziel: {{min}}–{{max}} Zeichen"
     },
     "sources": {
       "title": "Aus deinen Unterlagen",

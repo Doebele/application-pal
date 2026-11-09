@@ -18,7 +18,7 @@
 
 import { linkedInProfileSchema, type LinkedInProfile, type LinkedInLang } from "@application-pal/shared";
 import { phrasesIn, detectTextLang } from "./linkedin-rules.js";
-import { guardNumbers, type LiHeadlineVariant } from "./linkedin-llm.js";
+import { guardNumbers, clipHeadline, type LiHeadlineVariant } from "./linkedin-llm.js";
 import { LI_CRITERIA } from "./linkedin-criteria.js";
 
 export const LI_GEN_PARTS = ["intro", "positions", "skills", "activity"] as const;
@@ -159,7 +159,7 @@ Du erhältst eine JSON-Antwort mit Texten für ein LinkedIn-Profil. Übersetze j
 - Sinngemäss und natürlich, wie ein Muttersprachler es auf LinkedIn schreiben würde, nicht Wort für Wort. Gängige englische Fachbegriffe (z. B. „Design System", „UX") bleiben, wenn man sie in der Zielsprache so verwendet.
 - Schlüssel, Struktur, Reihenfolge und Zeilenumbrüche bleiben exakt gleich. Aufzählungszeichen („– ") bleiben.
 - Inhalt, Zahlen, Namen, Firmen, Daten, URLs und Platzhalter wie [X], [Name], [Projekt] bleiben unverändert. Nichts hinzufügen, nichts weglassen.
-- "headline" und Headline-Varianten höchstens 220 Zeichen.
+- "headline" und Headline-Varianten höchstens ${LI_CRITERIA.headlineChars.max} Zeichen; nur kürzen, wenn es nötig ist, möglichst nicht unter ${LI_CRITERIA.headlineChars.min}.
 - Die Werte von ${[...LANG_KEEP_KEYS].map(k => `"${k}"`).join(", ")} bleiben wörtlich, wie sie sind.
 - Antworte NUR mit JSON.
 
@@ -177,7 +177,7 @@ Format: {"options":[{"text":"…","angle":"…"}]}`, "positioning", beginner));
 export function liIntroPrompt(lang: LinkedInLang, beginner = false): string {
   const a = LI_CRITERIA.about;
   return head(lang, withBeginner(`Schreibe Headline und Info-Text (About) für LinkedIn. Grundlage ist die bestätigte Positionierung.
-"headlineVariants": genau 3, je max. 220 Zeichen, Zielrolle in den ersten ${LI_CRITERIA.headlineMobileChars} Zeichen, höchstens ${LI_CRITERIA.headlineMaxParts} Teile mit „|", Suchbegriffe der Zielrolle, nicht nur „Titel bei Firma":
+"headlineVariants": genau 3, je ${LI_CRITERIA.headlineChars.min}–${LI_CRITERIA.headlineChars.max} Zeichen, zähle nach. Nutze den Platz für Suchbegriffe, Spezialgebiet, Zielgruppe oder Nutzen, aber nur aus den Quellen. Zielrolle in den ersten ${LI_CRITERIA.headlineMobileChars} Zeichen, höchstens ${LI_CRITERIA.headlineMaxParts} Teile mit „|", Suchbegriffe der Zielrolle, nicht nur „Titel bei Firma":
   {"type":"authority"} = Rolle + Erfahrung/Referenzen · {"type":"result"} = Rolle + Ergebnis für eine Zielgruppe · {"type":"niche"} = Rolle + Spezialgebiet.
 "about": ${a.minChars}–2000 Zeichen, 3–6 kurze Absätze mit Leerzeile dazwischen:
   1. Hook in den ersten ${a.hookChars} Zeichen: wer, für wen, was daraus wird.
@@ -187,6 +187,40 @@ export function liIntroPrompt(lang: LinkedInLang, beginner = false): string {
   Nicht mit dem Namen beginnen („Mein Name ist …"), jede Aussage nur einmal (den Hook am Ende nicht wiederholen), Anrede (du/Sie) wie im bisherigen Profil.
 "ndaHints": Kundennamen, die du verwendet hast (sonst leere Liste).
 Format: {"headlineVariants":[{"type":"authority","text":"…"},{"type":"result","text":"…"},{"type":"niche","text":"…"}],"about":"…","ndaHints":[]}`, "intro", beginner));
+}
+
+// Local models rarely hit a length on the first try. Too long is clipped in code (clipHeadline);
+// too short gets one pass that may only add what the sources carry.
+const shortHeadlines = (variants: LiHeadlineVariant[]) => variants.filter(v => v.text.length < LI_CRITERIA.headlineChars.min);
+
+export function liHeadlineFixPrompt(lang: LinkedInLang): string {
+  const { min, max } = LI_CRITERIA.headlineChars;
+  return head(lang, `Du erhältst LinkedIn-Headlines, die zu kurz sind, mit ihrer aktuellen Zeichenzahl. Verlängere jede auf ${min}–${max} Zeichen.
+Der Anfang mit der Zielrolle bleibt. Ergänze Suchbegriffe, Spezialgebiet, Zielgruppe oder Nutzen, nur was die Quellen tragen. Höchstens ${LI_CRITERIA.headlineMaxParts} Teile mit „|". Keine neuen Zahlen.
+Format: {"headlineVariants":[{"type":"…","text":"…"}]}`);
+}
+
+export function liHeadlineFixInput(variants: LiHeadlineVariant[], sources: string): string {
+  const list = shortHeadlines(variants).map(v => ({ type: v.type, text: v.text, zeichen: v.text.length }));
+  return `## Zu kurze Headlines\n${JSON.stringify(list)}\n\n${sources}`;
+}
+
+/** Takes a lengthened headline only if it really is longer, adds no buzzwords and stays within the parts limit. */
+export function applyHeadlineFix(variants: LiHeadlineVariant[], answer: unknown, source: string): LiHeadlineVariant[] {
+  const fixed = new Map(arr(obj(answer).headlineVariants).map(x => [String(obj(x).type), str(obj(x).text, 400)] as const));
+  return variants.map(v => {
+    const raw = fixed.get(v.type);
+    if (!raw || v.text.length >= LI_CRITERIA.headlineChars.min) return v;
+    const text = clipHeadline(guardNumbers(raw, source));
+    const parts = text.split(/\s*[|•·▪/]\s*|\s+[–—-]\s+/).filter(Boolean).length;
+    return text.length > v.text.length && !phrasesIn(text, "all").length && parts <= LI_CRITERIA.headlineMaxParts ? { ...v, text } : v;
+  });
+}
+
+/** Draft warning when a variant stayed under the target length. */
+export function headlineLenWarnings(variants: LiHeadlineVariant[]): string[] {
+  const short = shortHeadlines(variants);
+  return short.length ? [`headlineShort:${Math.min(...short.map(v => v.text.length))}`] : [];
 }
 
 export function liPositionsPrompt(lang: LinkedInLang, mode: "rewrite" | "translate" | "build", beginner = false): string {
@@ -270,8 +304,8 @@ export function normalizeIntro(raw: unknown, source: string) {
   const variants: LiHeadlineVariant[] = arr(r.headlineVariants).map((x, i) => {
     const o = obj(x);
     const type = (HEADLINE_TYPES as readonly string[]).includes(String(o.type)) ? o.type as LiHeadlineVariant["type"] : HEADLINE_TYPES[i] ?? "niche";
-    const text = guard(str(o.text, 220), source);
-    return text ? { type, text } : null;
+    const text = guard(str(o.text, 400), source);
+    return text ? { type, text: clipHeadline(text) } : null;
   }).filter((x): x is LiHeadlineVariant => !!x).slice(0, 3);
   const about = guard(str(r.about, LI_CRITERIA.about.maxChars), source);
   const warnings: string[] = [];
@@ -474,7 +508,8 @@ export function applyDraftTranslation(src: { profile: LinkedInProfile; raw: LiDr
   const byRef = (key: string) => new Map(arr(a[key]).map(x => [str(obj(x).ref, 80) ?? "", obj(x)] as const));
   const pos = byRef("positions"), edu = byRef("education"), vol = byRef("volunteering");
   const p = structuredClone(src.profile);
-  p.basics.headline = tr(a.headline, p.basics.headline, 220);
+  const headline = tr(a.headline, p.basics.headline, 400);
+  p.basics.headline = headline ? clipHeadline(headline) : headline;
   p.basics.summary = tr(a.about, p.basics.summary, 2600);
   p.positions = p.positions.map(x => { const t = pos.get(x.id) ?? {}; return { ...x, title: tr(t.title, x.title, 160), description: tr(t.description, x.description, 2000) }; });
   p.education = p.education.map(x => { const t = edu.get(x.id) ?? {}; return { ...x, degree: tr(t.degree, x.degree, 200), notes: tr(t.notes, x.notes, 1000) }; });
@@ -487,7 +522,7 @@ export function applyDraftTranslation(src: { profile: LinkedInProfile; raw: LiDr
     ...structuredClone(src.raw),
     lang, updatedAt: now.toISOString(),
     positioning: tr(a.positioning, src.raw.positioning, 300),
-    headlineVariants: src.raw.headlineVariants.map((v, i) => ({ ...v, text: tr(at("headlineVariants", i).text, v.text, 220) ?? v.text })),
+    headlineVariants: src.raw.headlineVariants.map((v, i) => ({ ...v, text: clipHeadline(tr(at("headlineVariants", i).text, v.text, 400) ?? v.text) })),
     featured: src.raw.featured.map((f, i) => ({ ...f, title: tr(at("featured", i).title, f.title, 160) ?? f.title, why: tr(at("featured", i).why, f.why, 400) })),
     recRequests: src.raw.recRequests.map((r, i) => ({ to: tr(at("recommendationRequests", i).to, r.to, 160) ?? r.to, text: tr(at("recommendationRequests", i).text, r.text, 700) ?? r.text })),
     pillars: src.raw.pillars.map((x, i) => ({ title: tr(at("pillars", i).title, x.title, 120) ?? x.title, why: tr(at("pillars", i).why, x.why, 400), ideas: list(at("pillars", i).ideas, x.ideas) })),

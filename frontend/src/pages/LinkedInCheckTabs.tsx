@@ -727,7 +727,7 @@ export function ToolsTab({ s, onShowDraft, persona }: { s: LiCheckState; onShowD
               <div className="chk-muted">{t("linkedinCheck.tools.placeholderHint")}</div>
               {variants.map((v, i) => (
                 <div key={i} className="chk-rewrite">
-                  <div className="chk-rewrite-label"><span>{t(`linkedinCheck.tools.variant.${v.type}`, v.type)} · {v.text.length}/220</span><CopyBtn text={v.text} /></div>
+                  <div className="chk-rewrite-label"><span>{t(`linkedinCheck.tools.variant.${v.type}`, v.type)} · {v.text.length} / 160–220</span><CopyBtn text={v.text} /></div>
                   <div className="chk-rewrite-text">{withPlaceholders(v.text)}</div>
                 </div>
               ))}

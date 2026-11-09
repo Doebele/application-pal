@@ -81,11 +81,11 @@ import {
 } from "./linkedin.js";
 import { runLinkedInCheck, profileLang, type LiLlmJudgement, type LiCheckResult } from "./linkedin-rules.js";
 import {
-  liJudgePrompt, liJudgeInput, normalizeLiJudgement, LI_IMPORT_SYSTEM_PROMPT, normalizeImportedProfile, liVerbatimWarnings,
+  type LiHeadlineVariant, liJudgePrompt, liJudgeInput, normalizeLiJudgement, LI_IMPORT_SYSTEM_PROMPT, normalizeImportedProfile, liVerbatimWarnings,
   type LiJudgeExtras,
 } from "./linkedin-llm.js";
 import {
-  LI_GEN_PARTS, liGenInput, wrongLangTexts, draftTranslationPayload, applyDraftTranslation, liTranslatePrompt, liPositioningPrompt, liIntroPrompt, liPositionsPrompt, liSkillsPrompt, liActivityPrompt,
+  LI_GEN_PARTS, liGenInput, wrongLangTexts, liHeadlineFixPrompt, liHeadlineFixInput, applyHeadlineFix, headlineLenWarnings, draftTranslationPayload, applyDraftTranslation, liTranslatePrompt, liPositioningPrompt, liIntroPrompt, liPositionsPrompt, liSkillsPrompt, liActivityPrompt,
   normalizePositioning, normalizeIntro, normalizePositionsAnswer, normalizeSkillsAnswer, normalizeActivityAnswer,
   initialDraftProfile, applyDraftParts, emptyDraftRaw, placeholderCount, type LiDraftRaw, type LiGenPart,
 } from "./linkedin-gen.js";
@@ -5158,6 +5158,8 @@ app.post("/api/linkedin/check", async (c) => {
       const input = liJudgeInput(profile, { targetRole: state.goal?.targetRole, market: state.goal?.market, cvText });
       const raw = await callAi(liJudgePrompt(uiLang, !!cvText), input, ai);
       const n = normalizeLiJudgement(extractJson(raw), { hasCv: !!cvText, source: input });
+      const profLang = asLiLang(row.lang ?? undefined);
+      if (profLang) n.extras.headlineVariants = await lengthenHeadlines(n.extras.headlineVariants, input, input, ai, profLang);
       stored.llm = n.llm; stored.extras = n.extras;
       if (!Object.keys(n.llm).length) stored.llmError = "Die KI-Antwort enthielt keine Bewertung";
     } catch (err) {
@@ -5372,6 +5374,18 @@ async function callLiInLang(system: string, input: string, ai: AiConfig, lang: L
   return { json, wrongLang: true };
 }
 
+/** One pass over headline variants under the target length; on any failure the originals stay. */
+async function lengthenHeadlines(variants: LiHeadlineVariant[], sources: string, guardSource: string, ai: AiConfig, lang: LinkedInLang): Promise<LiHeadlineVariant[]> {
+  if (!headlineLenWarnings(variants).length) return variants;
+  try {
+    const { json, wrongLang } = await callLiInLang(liHeadlineFixPrompt(lang), liHeadlineFixInput(variants, sources), ai, lang);
+    return wrongLang ? variants : applyHeadlineFix(variants, json, guardSource);
+  } catch (err) {
+    console.error("linkedin headline fix failed:", err);
+    return variants;
+  }
+}
+
 app.post("/api/linkedin/positioning", async (c) => {
   const userId = getUserId(c);
   const { ai, lang: rawLang, applicationId } = await c.req.json<{ ai: AiConfig; lang?: string; applicationId?: string | null }>();
@@ -5437,8 +5451,9 @@ async function runLinkedInGenerate(job: LiJob, userId: string, lang: LinkedInLan
       if (part === "intro") {
         const out = normalizeIntro(await ask(prose(liIntroPrompt(lang, src.beginner))), src.guardSource);
         if (!out.headline && !out.about) throw new Error("Die KI-Antwort enthielt keine Texte");
-        profile = applyDraftParts(profile, { headline: out.headline ?? profile.basics.headline, summary: out.about ?? profile.basics.summary });
-        raw.headlineVariants = out.headlineVariants; addNda(out.ndaHints); setWarnings(part, out.warnings);
+        const variants = await lengthenHeadlines(out.headlineVariants, src.input, src.guardSource, ai, lang);
+        profile = applyDraftParts(profile, { headline: variants[0]?.text ?? profile.basics.headline, summary: out.about ?? profile.basics.summary });
+        raw.headlineVariants = variants; addNda(out.ndaHints); setWarnings(part, [...out.warnings, ...headlineLenWarnings(variants)]);
       } else if (part === "positions") {
         const mode = src.base.profile && profile.positions.length ? (src.base.sameLang ? "rewrite" : "translate") : "build";
         const out = normalizePositionsAnswer(await ask(prose(liPositionsPrompt(lang, mode, src.beginner))), src.guardSource, {

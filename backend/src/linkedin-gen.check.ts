@@ -4,6 +4,7 @@ import { linkedInProfileSchema } from "@application-pal/shared";
 import {
   wrongLangTexts, liTranslatePrompt, draftTranslationPayload, applyDraftTranslation, emptyDraftRaw,
   normalizePositioning, normalizeIntro, normalizePositionsAnswer, normalizeSkillsAnswer, normalizeActivityAnswer,
+  liHeadlineFixPrompt, liHeadlineFixInput, applyHeadlineFix, headlineLenWarnings,
   initialDraftProfile, applyDraftParts, liGenInput, liAnswersText, placeholderCount, liPositionsPrompt, liIntroPrompt,
 } from "./linkedin-gen.js";
 import { runLinkedInCheck, profileLang } from "./linkedin-rules.js";
@@ -29,6 +30,24 @@ assert.equal(intro.headlineVariants[1].type, "result");
 assert.equal(intro.headlineVariants[2].text.length, 220);
 assert.ok(intro.warnings.some(w => w.startsWith("phrases:") && w.includes("leidenschaftlicher")));
 assert.ok(intro.warnings.some(w => w.startsWith("aboutShort:")));
+
+// headline length: too long is clipped at a boundary, too short gets one checked pass
+const part = "Design Systems and Governance";
+const long = normalizeIntro({ headlineVariants: [{ type: "niche", text: Array(9).fill(part).join(" | ") }] }, SRC).headlineVariants[0].text;
+assert.ok(long.length >= 160 && long.length <= 220 && long.endsWith(part), long);
+const words = normalizeIntro({ headlineVariants: [{ type: "niche", text: "Design Lead ".repeat(30) }] }, SRC).headlineVariants[0].text;
+assert.ok(words.length <= 220 && words.endsWith("Lead"), words);
+const short = [{ type: "authority" as const, text: "Design Lead | Design Systems" }, { type: "result" as const, text: "x".repeat(170) }];
+assert.ok(liHeadlineFixInput(short, "Q").includes("\"zeichen\":28") && !liHeadlineFixInput(short, "Q").includes("xxx"));
+assert.ok(liHeadlineFixPrompt("en").includes("160–220"), "fix prompt names the range");
+const good = "Design Lead | Design Systems | Governance across product teams and accessibility standards for complex digital products in regulated industries such as banking and insurance";
+assert.equal(applyHeadlineFix(short, { headlineVariants: [{ type: "authority", text: good }] }, SRC)[0].text, good);
+assert.equal(applyHeadlineFix(short, { headlineVariants: [{ type: "result", text: "y".repeat(200) }] }, SRC)[1].text, short[1].text, "a variant in range stays");
+assert.equal(applyHeadlineFix(short, { headlineVariants: [{ type: "authority", text: `Passionate leader ${good}` }] }, SRC)[0].text, short[0].text, "no buzzword padding");
+assert.equal(applyHeadlineFix(short, { headlineVariants: [{ type: "authority", text: "a | b | c | d | e and more text" }] }, SRC)[0].text, short[0].text, "parts limit");
+assert.ok(applyHeadlineFix(short, { headlineVariants: [{ type: "authority", text: `${good} | 77 teams` }] }, SRC)[0].text.includes("[X] teams"), "new numbers become [X]");
+assert.deepEqual(headlineLenWarnings(short), ["headlineShort:28"]);
+assert.deepEqual(headlineLenWarnings([short[1]]), []);
 
 // positions, rewrite: titles/companies/dates stay, descriptions guarded, matched by ref
 const base = [

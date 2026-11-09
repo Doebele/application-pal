@@ -15,11 +15,12 @@ import "./linkedin.css";
 
 // LinkedIn's input limits.
 const LIMIT = { headline: 220, about: 2600, title: 100, description: 2000 } as const;
+const HEADLINE_MIN = 160; // target length of a headline (LI_CRITERIA.headlineChars)
 const xCount = (s: string) => (s.match(/\[X\]/g) ?? []).length;
 
 /** One editable field: label, counters, copy; saves on blur when changed. */
-function CopyField({ label, value, limit, rows = 3, onSave, busy }: {
-  label: string; value: string; limit: number; rows?: number; onSave: (v: string) => void; busy: boolean;
+function CopyField({ label, value, limit, min, rows = 3, onSave, busy }: {
+  label: string; value: string; limit: number; min?: number; rows?: number; onSave: (v: string) => void; busy: boolean;
 }) {
   const { t } = useTranslation();
   const [text, setText] = useState(value);
@@ -32,7 +33,7 @@ function CopyField({ label, value, limit, rows = 3, onSave, busy }: {
       <div className="lid-field-head">
         <span className="lid-label">{label}</span>
         {xs > 0 && <span className="lid-x" title={t("linkedinCheck.draft.xHint")}>{xs} × [X]</span>}
-        <span className="lid-count" data-over={over}>{text.length} / {limit}</span>
+        <span className="lid-count" data-over={over} data-short={!!min && !!text && text.length < min} title={min ? t("linkedinCheck.draft.headlineTarget", { min, max: limit }) : undefined}>{text.length} / {min ? `${min}–${limit}` : limit}</span>
         <CopyBtn text={text} />
       </div>
       <textarea className="lid-input" rows={lines} value={text} disabled={busy} onChange={e => setText(e.target.value)}
@@ -111,13 +112,14 @@ export function DraftCards({ draft, before, busy, onPatch, sources, zoom, onZoom
 
       <DCard id="headline" title={t("linkedinCheck.draft.headline")} icon={<User width={13} height={13} />} groups={["headline"]} {...common}
         missing={!gen("intro") && !p.basics.headline ? notYet("intro") : null} before={plain(before?.basics.headline)}>
-        <CopyField label={t("linkedinCheck.draft.headline")} value={p.basics.headline ?? ""} limit={LIMIT.headline} rows={2} busy={busy} onSave={v => onPatch({ headline: v })} />
+        <CopyField label={t("linkedinCheck.draft.headline")} value={p.basics.headline ?? ""} limit={LIMIT.headline} min={HEADLINE_MIN} rows={2} busy={busy} onSave={v => onPatch({ headline: v })} />
         {raw.headlineVariants.length > 1 && (
           <div className="lid-variants">
             <div className="lid-label">{t("linkedinCheck.draft.variants")}</div>
             {raw.headlineVariants.map((v, i) => (
               <div key={i} className="lid-variant" data-active={v.text === p.basics.headline}>
                 <span className="li-kind" style={{ marginLeft: 0 }}>{t(`linkedinCheck.tools.variant.${v.type}`, v.type)}</span>
+                <span className="lid-count" data-short={v.text.length < HEADLINE_MIN}>{v.text.length}</span>
                 <span className="lid-variant-text">{withPlaceholders(v.text)}</span>
                 {v.text === p.basics.headline
                   ? <Check width={12} height={12} className="li-gen-ok" />
