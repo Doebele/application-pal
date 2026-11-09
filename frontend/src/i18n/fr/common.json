@@ -1470,6 +1470,9 @@
         "running": "Traduction {{lang}} …",
         "done": "Terminé : {{langs}}. Affiche-les avec le sélecteur de langue en haut.",
         "failed": "Non traduit : {{langs}}. Réessaie."
+      },
+      "err": {
+        "invalidJson": "La réponse de l'IA était techniquement illisible, même après un second essai. Le texte précédent est conservé. Merci de régénérer cette partie."
       }
     },
     "draft": {

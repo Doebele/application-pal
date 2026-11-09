@@ -1470,6 +1470,9 @@
         "running": "Übersetze {{lang}} …",
         "done": "Fertig: {{langs}}. Mit dem Sprachumschalter oben ansehen.",
         "failed": "Nicht übersetzt: {{langs}}. Bitte nochmals versuchen."
+      },
+      "err": {
+        "invalidJson": "Die KI-Antwort war technisch unlesbar, auch nach einem zweiten Versuch. Der bisherige Text bleibt. Bitte diesen Teil nochmals erzeugen."
       }
     },
     "draft": {

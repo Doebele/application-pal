@@ -1,4 +1,5 @@
 // Self-check for linkedin-gen.ts — run: npx tsx backend/src/linkedin-gen.check.ts
+import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import assert from "node:assert/strict";
 import { linkedInProfileSchema } from "@application-pal/shared";
 import {
@@ -30,6 +31,13 @@ assert.equal(intro.headlineVariants[1].type, "result");
 assert.equal(intro.headlineVariants[2].text.length, 220);
 assert.ok(intro.warnings.some(w => w.startsWith("phrases:") && w.includes("leidenschaftlicher")));
 assert.ok(intro.warnings.some(w => w.startsWith("aboutShort:")));
+
+// model JSON: an unescaped quote inside a long text no longer loses the whole part
+assert.deepEqual(parseModelJson('<think>x</think>```json\n{"a":"ok"}\n```'), { a: "ok" });
+const broken = parseModelJson('{"positions":[{"ref":"p1","description":"– Launched "My Way" for EMEA\n– Led the team","skills":["Figma",]}],"ndaHints":[]}') as { positions: { description: string; skills: string[] }[] };
+assert.ok(broken.positions[0].description.includes("My Way") && broken.positions[0].description.includes("Led the team"), JSON.stringify(broken));
+assert.deepEqual(broken.positions[0].skills, ["Figma"]);
+assert.throws(() => parseModelJson("no json here"), ModelJsonError);
 
 // headline length: too long is clipped at a boundary, too short gets one checked pass
 const part = "Design Systems and Governance";

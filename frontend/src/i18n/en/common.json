@@ -1470,6 +1470,9 @@
         "running": "Translating {{lang}} …",
         "done": "Done: {{langs}}. Use the language switch at the top to view them.",
         "failed": "Not translated: {{langs}}. Please try again."
+      },
+      "err": {
+        "invalidJson": "The AI's answer was technically unreadable, even on a second try. The previous text stays. Please regenerate this part."
       }
     },
     "draft": {
