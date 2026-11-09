@@ -184,6 +184,8 @@ export const LI_CRITERIA = {
   // ── Thresholds ─────────────────────────────────────────────
   headlineMobileChars: 60,
   headlineMaxParts: 4,
+  // Target length of generated headlines (LinkedIn's limit is the upper bound). Generator only, not scored.
+  headlineChars: { min: 160, max: 220 },
   about: { minChars: 1200, maxChars: 2600, minParagraphs: 3, hookChars: 250, phrasePenalty: 0.5 },
   experience: { minResults: 3, gapMonths: 6, olderMaxChars: 600 },
   skills: { full: 30, half: 15, topN: 5, endorsementsPerTop: 5 },

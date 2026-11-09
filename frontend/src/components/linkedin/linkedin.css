@@ -163,6 +163,7 @@
 .lid-field-head .lid-label { flex: 1; }
 .lid-count { font-size: 10px; color: var(--fg-3); font-variant-numeric: tabular-nums; }
 .lid-count[data-over="true"] { color: var(--score-low); font-weight: 700; }
+.lid-count[data-short="true"] { color: var(--score-mid); }
 .lid-x { font-size: 10px; font-weight: 600; color: var(--score-mid); border: 1px solid var(--score-mid-border); background: var(--score-mid-bg); border-radius: 999px; padding: 0 7px; }
 .lid-input { resize: vertical; font: inherit; font-size: 12px; line-height: 1.55; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border);
   background: var(--surface-2); color: var(--fg-1); outline: none; width: 100%; box-sizing: border-box; }

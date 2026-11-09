@@ -1446,7 +1446,8 @@
           "organization": "Organisation"
         },
         "wrongLang": "Une partie des textes est revenue dans une autre langue et n’a pas pu être traduite. Vérifie-les ou régénère cette partie.",
-        "untranslated": "Une partie de la traduction est restée dans la langue d’origine et a été conservée telle quelle ({{v}} textes). Vérifie-la."
+        "untranslated": "Une partie de la traduction est restée dans la langue d’origine et a été conservée telle quelle ({{v}} textes). Vérifie-la.",
+        "headlineShort": "Titre court ({{v}} caractères) : certaines variantes font moins de 160. Complète-les ou régénère cette partie."
       },
       "kw": {
         "remove": "Retirer « {{k}} »",
@@ -1526,7 +1527,8 @@
       "xHint": "Espace réservé : à remplacer par des valeurs réelles avant de copier",
       "volunteering": "Bénévolat",
       "role": "Rôle",
-      "organization": "Organisation"
+      "organization": "Organisation",
+      "headlineTarget": "Objectif : {{min}}–{{max}} caractères"
     },
     "sources": {
       "title": "D’après tes documents",

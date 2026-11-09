@@ -9,6 +9,7 @@
 import { randomUUID } from "node:crypto";
 import { linkedInProfileSchema, type LinkedInProfile } from "@application-pal/shared";
 import type { LiLlmJudgement, LiCvFacts, UiLang } from "./linkedin-rules.js";
+import { LI_CRITERIA } from "./linkedin-criteria.js";
 
 const LANG_NAME: Record<UiLang, string> = { de: "Deutsch", en: "English", fr: "Français" };
 const shortId = () => randomUUID().replace(/-/g, "").slice(0, 10);
@@ -49,7 +50,7 @@ ${hasCv ? `
   "titleConflicts": [{"linkedin": "Titel auf LinkedIn", "cv": "Titel im CV für dieselbe Station"}] — nur echte Widersprüche derselben Station, keine Übersetzungen.
   "missingInLinkedIn": Ergebnisse oder Stationen aus dem CV, die auf LinkedIn fehlen (max. 5, wörtlich kurz zitiert).` : ""}
 
-"headlineVariants": genau 3 Vorschläge, je max. 220 Zeichen, Zielrolle vorne, höchstens 4 Teile mit „|":
+"headlineVariants": genau 3 Vorschläge, je ${LI_CRITERIA.headlineChars.min}–${LI_CRITERIA.headlineChars.max} Zeichen (den Platz für Suchbegriffe, Spezialgebiet, Zielgruppe oder Nutzen nutzen), Zielrolle vorne, höchstens 4 Teile mit „|":
   {"type":"authority"} = Rolle + Erfahrung/Referenzen, {"type":"result"} = Rolle + Ergebnis für eine Zielgruppe, {"type":"niche"} = Rolle + Spezialgebiet.
   ERFINDE NICHTS: Zahlen, Namen, Firmen nur aus Profil${hasCv ? " oder CV" : ""}, sonst Platzhalter [X]. Keine Floskeln (leidenschaftlich, passionate, ergebnisorientiert …).
 "ndaHints": Kundennamen im Profil, die unter Vertraulichkeit stehen könnten (nur Namen, max. 5; keine = leere Liste).
@@ -83,6 +84,17 @@ export function guardNumbers(text: string, source: string): string {
   const digits = (s: string) => s.replace(/[^\d]/g, "");
   const known = new Set((source.match(/\d+(?:[.,'’]\d+)*/g) ?? []).map(digits));
   return text.replace(/\d+(?:[.,'’]\d+)*/g, m => (known.has(digits(m)) ? m : "[X]"));
+}
+
+/** Fits a headline into LinkedIn's limit without cutting a word: at the last „|" part if enough
+ *  text remains, else at the last word. */
+export function clipHeadline(text: string, max: number = LI_CRITERIA.headlineChars.max): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  const part = t.slice(0, max).lastIndexOf(" | ");
+  if (part >= LI_CRITERIA.headlineChars.min) return t.slice(0, part).trim();
+  const space = t.slice(0, max + 1).lastIndexOf(" ");
+  return (space > 0 ? t.slice(0, space) : t.slice(0, max)).replace(/[\s|,;:&·•–—-]+$/, "");
 }
 
 /** Model answer → per-check judgements (only for points the model may decide) + extras.
@@ -126,9 +138,9 @@ export function normalizeLiJudgement(raw: unknown, ctx: { hasCv: boolean; source
     .map((x, i) => {
       const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
       const type = types.includes(o.type as typeof types[number]) ? (o.type as LiHeadlineVariant["type"]) : types[i] ?? "niche";
-      const raw = str(o.text, 240);
+      const raw = str(o.text, 400);
       const text = raw && ctx.source !== undefined ? guardNumbers(raw, ctx.source) : raw;
-      return text ? { type, text } : null;
+      return text ? { type, text: clipHeadline(text) } : null;
     }).filter((x): x is LiHeadlineVariant => !!x).slice(0, 3);
   return { llm, extras: { headlineVariants: variants, cv, ndaHints: strList(r.ndaHints, 5, 80) } };
 }

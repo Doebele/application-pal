@@ -1446,7 +1446,8 @@
           "organization": "Organisation"
         },
         "wrongLang": "Some texts came back in another language and could not be translated. Check them or regenerate this part.",
-        "untranslated": "Part of the translation stayed in the source language and was kept as it was ({{v}} texts). Please check."
+        "untranslated": "Part of the translation stayed in the source language and was kept as it was ({{v}} texts). Please check.",
+        "headlineShort": "Headline is short ({{v}} characters): some variants are under 160. Extend them or regenerate this part."
       },
       "kw": {
         "remove": "Remove “{{k}}”",
@@ -1526,7 +1527,8 @@
       "xHint": "Placeholder: replace with real values before copying",
       "volunteering": "Volunteering",
       "role": "Role",
-      "organization": "Organisation"
+      "organization": "Organisation",
+      "headlineTarget": "Target: {{min}}–{{max}} characters"
     },
     "sources": {
       "title": "From your documents",
