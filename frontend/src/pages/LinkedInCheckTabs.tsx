@@ -492,7 +492,7 @@ function GenStatus({ s }: { s: LiCheckState }) {
             {running ? <RefreshCircle width={11} height={11} className="chk-spin" /> : failed ? <WarningTriangle width={11} height={11} /> : done ? <Check width={11} height={11} /> : <Clock width={11} height={11} />}
             <span>{t(`linkedinCheck.gen.part.${p}`)}</span>
             {running && job && <span className="chk-muted">{elapsedOf(job, s.now)}</span>}
-            {failed && raw?.errors[p] && <span className="chk-muted">{raw.errors[p]}</span>}
+            {failed && raw?.errors[p] && <span className="chk-muted">{t(`linkedinCheck.gen.err.${raw.errors[p]}`, { defaultValue: raw.errors[p] })}</span>}
           </li>
         );
       })}

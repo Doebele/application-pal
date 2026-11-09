@@ -1,3 +1,4 @@
+import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
@@ -2554,13 +2555,7 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
 }
 
 /** Strip <think> block + markdown fences, extract JSON object */
-function extractJson(raw: string): unknown {
-  let s = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
-  s = s.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-  const m = s.match(/\{[\s\S]*\}/);
-  if (!m) throw new Error("No JSON found in response");
-  return JSON.parse(m[0]);
-}
+const extractJson = parseModelJson;
 
 // ── AI Result Cache Helper ───────────────────────────────────────
 async function persistAiResult(appId: string, key: string, data: Record<string, unknown>) {
@@ -5363,7 +5358,14 @@ const NO_GEN_SOURCE = "Keine Quellen: Profil importieren, Lebenslauf hinterlegen
 /** Calls the model for one generator step and enforces the profile language: an answer with
  *  texts in another language gets one translation pass. `wrongLang` = still wrong afterwards. */
 async function callLiInLang(system: string, input: string, ai: AiConfig, lang: LinkedInLang): Promise<{ json: unknown; wrongLang: boolean }> {
-  const json = extractJson(await callAi(system, input, ai));
+  let json: unknown;
+  try {
+    json = extractJson(await callAi(system, input, ai));
+  } catch (err) {
+    if (!(err instanceof ModelJsonError)) throw err;
+    console.error("linkedin: unreadable model JSON, asking once more:", err.message);
+    json = extractJson(await callAi(system, input, ai));
+  }
   if (!wrongLangTexts(json, lang).length) return { json, wrongLang: false };
   try {
     const fixed = extractJson(await callAi(liTranslatePrompt(lang), JSON.stringify(json), ai));
@@ -5481,8 +5483,26 @@ async function runLinkedInGenerate(job: LiJob, userId: string, lang: LinkedInLan
       job.done!.push(part);
     } catch (err) {
       console.error(`linkedin generate ${part} error:`, err);
-      raw.errors[part] = (err as Error).message.slice(0, 200);
+      raw.errors[part] = err instanceof ModelJsonError ? "invalidJson" : (err as Error).message.slice(0, 200);
       job.failed!.push(part);
+    }
+    raw.updatedAt = new Date().toISOString();
+    await db.update(linkedinVersions).set({ data: JSON.stringify(profile), raw: JSON.stringify(raw) }).where(eq(linkedinVersions.id, row.id));
+  }
+  // Parts not regenerated or failed keep their old text, which may be in another language
+  // (an English draft built on a German base): the draft as a whole has to match its language.
+  raw.warnings = raw.warnings.filter(w => w !== "draft|wrongLang");
+  const payload = draftTranslationPayload(profile, raw);
+  if (job.done!.length && wrongLangTexts(payload, lang).length) {
+    job.step = "language";
+    try {
+      const { json, wrongLang } = await callLiInLang(liTranslatePrompt(lang), JSON.stringify(payload), ai, lang);
+      const t = applyDraftTranslation({ profile, raw, id: row.id }, json, lang);
+      profile = t.profile;
+      raw = { ...t.raw, translatedFrom: raw.translatedFrom, errors: raw.errors, warnings: [...t.raw.warnings, ...(wrongLang ? ["draft|wrongLang"] : [])] };
+    } catch (err) {
+      console.error("linkedin draft language pass failed:", err);
+      raw.warnings.push("draft|wrongLang");
     }
     raw.updatedAt = new Date().toISOString();
     await db.update(linkedinVersions).set({ data: JSON.stringify(profile), raw: JSON.stringify(raw) }).where(eq(linkedinVersions.id, row.id));
