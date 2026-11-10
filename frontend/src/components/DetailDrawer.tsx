@@ -76,6 +76,7 @@ const STAGES = STAGE_ORDER.map((id) => ({
 }));
 
 export const ARCHIVE_REASON_LABELS: Record<string, string> = {
+  rejected:    "Abgelehnt",
   unavailable: "Stelle nicht mehr verfügbar",
   irrelevant:  "Nicht relevant",
   taken:       "Bereits vergeben",
@@ -5454,6 +5455,7 @@ function ConfirmModal({ title, description, confirmLabel, confirmColor = "var(--
 
 // ─── Archive Reason Modal ─────────────────────────────────────
 const ARCHIVE_REASONS = [
+  { id: "rejected",    label: "Abgelehnt",                     emoji: "✋" },
   { id: "unavailable", label: "Stelle nicht mehr verfügbar",   emoji: "🚫" },
   { id: "irrelevant",  label: "Nicht relevant für mich",       emoji: "👎" },
   { id: "taken",       label: "Stelle bereits vergeben",       emoji: "🔒" },
@@ -5805,6 +5807,11 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
               <StagePicker value={stage} onChange={handleStageChange} />
+              {stage === "rejected" && (freshApp ?? app).archived !== "true" && (
+                <button className="btn btn-secondary" onClick={() => handleArchive("rejected")} title={tCommon("archive.title")}>
+                  <Archive width={13} height={13} /> {tCommon("archive.moveRejected")}
+                </button>
+              )}
               {url && <a href={url} target="_blank" rel="noreferrer" className="btn btn-secondary"><OpenNewWindow width={13} height={13} /> Job</a>}
               <MoreMenu archived={(freshApp ?? app).archived === "true"} onArchive={() => setShowArchiveModal(true)} onUnarchive={handleUnarchive} onDelete={() => setShowDeleteModal(true)} />
               <button className="btn btn-ghost btn-icon" onClick={onClose}><Xmark width={16} height={16} /></button>

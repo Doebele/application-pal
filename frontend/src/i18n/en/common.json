@@ -423,6 +423,8 @@
     "autosave": "Saved on field exit."
   },
   "archive": {
+    "rejected": "Rejected",
+    "moveRejected": "To archive",
     "title": "Archive application",
     "unavailable": "Position no longer available",
     "irrelevant": "Not relevant for me",

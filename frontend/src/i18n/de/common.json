@@ -423,6 +423,8 @@
     "autosave": "Wird beim Verlassen gespeichert."
   },
   "archive": {
+    "rejected": "Abgelehnt",
+    "moveRejected": "Ins Archiv",
     "title": "Bewerbung archivieren",
     "unavailable": "Stelle nicht mehr verfügbar",
     "irrelevant": "Nicht relevant für mich",

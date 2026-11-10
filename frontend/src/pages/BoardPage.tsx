@@ -46,7 +46,7 @@ function matchesTimeFilter(app: Application, timeFilter: TimeFilter): boolean {
 }
 
 // ─── Archive reason filter options ────────────────────────────
-const ARCHIVE_REASON_OPTION_IDS = ["all", "unavailable", "irrelevant", "taken", "other", "none"] as const;
+const ARCHIVE_REASON_OPTION_IDS = ["all", "rejected", "unavailable", "irrelevant", "taken", "other", "none"] as const;
 type ReasonFilter = typeof ARCHIVE_REASON_OPTION_IDS[number];
 
 // ─── Filter Dropdown (main board: stages + time) ──────────────
@@ -204,6 +204,7 @@ function ArchiveFilterDropdown({
 
 // ─── Archive columns (by rejection reason) ────────────────────
 const ARCHIVE_COLS = [
+  { id: "rejected",    color: "#f43f5e" },
   { id: "unavailable", color: "#f87171" },
   { id: "irrelevant",  color: "#fbbf24" },
   { id: "taken",       color: "#94a3b8" },

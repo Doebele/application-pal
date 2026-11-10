@@ -423,6 +423,8 @@
     "autosave": "Enregistré en quittant le champ."
   },
   "archive": {
+    "rejected": "Refusée",
+    "moveRejected": "Archiver",
     "title": "Archiver la candidature",
     "unavailable": "Poste plus disponible",
     "irrelevant": "Non pertinent pour moi",
