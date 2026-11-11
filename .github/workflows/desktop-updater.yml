@@ -1,0 +1,34 @@
+# Sobald ein Desktop-Release veröffentlicht wird (Entwurf → „Publish“), kopiert dieser
+# Workflow dessen latest.json in den festen Release `desktop-updater`. Dort fragen die
+# installierten Apps nach (tauri.conf.json → plugins.updater.endpoints). So bekommt
+# niemand ein Update aus einem Entwurf, und Web-Releases (Tags `v*`) stören nicht.
+name: Desktop Updater
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  publish-latest-json:
+    if: startsWith(github.event.release.tag_name, 'desktop-v')
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: latest.json holen
+        run: gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p latest.json -D out
+      - name: Prüfen
+        run: |
+          VERSION=$(jq -r .version out/latest.json)
+          [ "desktop-v$VERSION" = "$TAG" ] || { echo "::error::latest.json ($VERSION) passt nicht zu $TAG"; exit 1; }
+          jq -e '.platforms | length > 0' out/latest.json
+      - name: In den Release desktop-updater legen
+        run: |
+          gh release view desktop-updater -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create desktop-updater -R "$GITHUB_REPOSITORY" --title "Desktop-Updater (intern)" \
+              --notes "Enthält nur latest.json für die automatische Aktualisierung der Desktop-App. Nicht löschen." --latest=false
+          gh release upload desktop-updater out/latest.json -R "$GITHUB_REPOSITORY" --clobber

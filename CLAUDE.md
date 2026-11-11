@@ -39,6 +39,9 @@ Full guide incl. Google Cloud setup: `docs/desktop/m2-google.md`. `APP_MODE=desk
 ## Desktop setup wizard (M3, branch `desktop`)
 Guide: `docs/desktop/m3-einrichtung.md`. New desktop profiles get `ui_settings.onboarding = "pending"`; `MainApp` then renders `SetupWizard` (persona → AI with LM Studio/Ollama auto-detect + `POST /api/ai/test` → Google loopback → LinkedIn) instead of the shell; finishing PATCHes `onboarding: "done"`. The wizard keeps no state of its own — it writes the same store/settings/secrets as the Settings page. In desktop mode `resolveHostUrl()` returns the URL unchanged (no Docker host rewrite).
 
+## Desktop release, signing, updater (M4, branch `desktop`)
+Guide incl. required secrets: `docs/desktop/m4-release.md`. Release = tag `desktop-vX.Y.Z` (never `v*`, that is the Docker workflow) → `.github/workflows/desktop-release.yml` builds a draft; publishing it runs `desktop-updater.yml`, which copies `latest.json` into the fixed release `desktop-updater` that installed apps poll. The sidecar needs the three entitlements in `desktop/src-tauri/sidecar.entitlements` under Hardened Runtime (no `--` inside XML comments). Cross-building a sidecar needs the target's `@napi-rs/canvas-<platform>` package — `build-sidecar.sh` fetches it. Updater artifacts only via `--config src-tauri/tauri.release.conf.json` (needs `TAURI_SIGNING_PRIVATE_KEY`).
+
 ## Critical Pitfalls
 
 **Docker working directory**: Always `cd /Users/clausmedvesek/Developer/projects/application-pal` before any Docker command. The CWD persists between Bash calls and may drift to a worktree. Building from a worktree compiles the wrong source with no error.

@@ -23,16 +23,51 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["app", "dmg"],
-    "externalBin": ["binaries/app-pal-backend"],
+    "targets": [
+      "app",
+      "dmg",
+      "nsis"
+    ],
+    "externalBin": [
+      "binaries/app-pal-backend"
+    ],
     "resources": {
       "../../frontend/dist/": "frontend/",
       "../../backend/drizzle-pglite/": "migrations/",
       "resources/pglite/": "pglite/"
     },
-    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
     "macOS": {
-      "minimumSystemVersion": "11.0"
+      "minimumSystemVersion": "11.0",
+      "entitlements": "sidecar.entitlements",
+      "hardenedRuntime": true
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "German",
+          "English",
+          "French"
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFFNUNBRDJDNTYwQkNCMEEKUldRS3l3dFdMSzFjcmlWejhJSVpjVlFMWmNndWsrMFdnbC8rWWlIcFpNWjZpc0UvZENZNzBRNWIK",
+      "endpoints": [
+        "https://github.com/Doebele/application-pal/releases/download/desktop-updater/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

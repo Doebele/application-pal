@@ -24,9 +24,12 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use tauri::{Manager, RunEvent};
+use tauri::{AppHandle, Manager, RunEvent};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_updater::UpdaterExt;
 
-const KEYCHAIN_SERVICE: &str = "com.medvesek.d2603";
+// Dienst = App-Kennung (com.medvesek.d2603); Test-Builds mit eigener Kennung bekommen so
+// einen eigenen Eintrag statt den der installierten App (und deren Freigabe-Dialog).
 const KEYCHAIN_ACCOUNT: &str = "secrets-key";
 
 #[derive(Default)]
@@ -63,8 +66,8 @@ fn jwt_secret(data_dir: &Path) -> std::io::Result<String> {
 /// Schlüssel für die verschlüsselten API-Keys aus dem Schlüsselbund; beim ersten
 /// Start erzeugen. Ohne Schlüsselbund (sollte nicht vorkommen) bleibt er leer —
 /// dann leitet der Sidecar ihn aus dem JWT-Secret ab.
-fn secrets_key(data_dir: &Path) -> String {
-    let entry = match keyring::Entry::new(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) {
+fn secrets_key(service: &str, data_dir: &Path) -> String {
+    let entry = match keyring::Entry::new(service, KEYCHAIN_ACCOUNT) {
         Ok(e) => e,
         Err(e) => {
             log_line(data_dir, &format!("Schlüsselbund nicht verfügbar: {e}"));
@@ -158,6 +161,68 @@ fn stop_sidecar(state: &SidecarState) {
     }
 }
 
+/// Beim Start im Hintergrund nach einem Update suchen (GitHub Release `desktop-updater`,
+/// Datei `latest.json`, signiert mit dem Updater-Schlüssel). Gibt es eines, fragt ein
+/// nativer Dialog; nach dem Herunterladen wird erst der Sidecar beendet (unter Windows
+/// muss der Installer dessen .exe ersetzen können), dann installiert und neu gestartet.
+/// `D2603_UPDATE_URL` ersetzt die Adresse (lokaler Test).
+fn check_for_update(app: AppHandle, data_dir: PathBuf) {
+    tauri::async_runtime::spawn(async move {
+        let mut builder = app.updater_builder();
+        if let Some(url) = std::env::var("D2603_UPDATE_URL").ok().and_then(|u| u.parse().ok()) {
+            builder = match builder.endpoints(vec![url]) {
+                Ok(b) => b,
+                Err(e) => return log_line(&data_dir, &format!("Update-Adresse ungültig: {e}")),
+            };
+        }
+        let update = match builder.build() {
+            Ok(updater) => match updater.check().await {
+                Ok(Some(update)) => update,
+                Ok(None) => return log_line(&data_dir, "Kein Update verfügbar"),
+                Err(e) => return log_line(&data_dir, &format!("Update-Prüfung fehlgeschlagen: {e}")),
+            },
+            Err(e) => return log_line(&data_dir, &format!("Updater nicht verfügbar: {e}")),
+        };
+        log_line(&data_dir, &format!("Update {} gefunden (installiert {})", update.version, update.current_version));
+
+        let notes = update.body.clone().unwrap_or_default();
+        let text = format!(
+            "Application-Pal {} ist verfügbar (installiert: {}).\n\n{}\n\nJetzt aktualisieren? Die App startet danach neu – deine Daten bleiben erhalten.",
+            update.version, update.current_version, notes.trim()
+        );
+        let handle = app.clone();
+        app.dialog()
+            .message(text)
+            .title("Update verfügbar")
+            .kind(MessageDialogKind::Info)
+            .buttons(MessageDialogButtons::OkCancelCustom("Aktualisieren".into(), "Später".into()))
+            .show(move |yes| {
+                if !yes {
+                    return log_line(&data_dir, "Update auf später verschoben");
+                }
+                tauri::async_runtime::spawn(async move {
+                    let bytes = match update.download(|_, _| {}, || {}).await {
+                        Ok(b) => b,
+                        Err(e) => {
+                            log_line(&data_dir, &format!("Update-Download fehlgeschlagen: {e}"));
+                            handle.dialog().message(format!("Das Update konnte nicht geladen werden:\n{e}"))
+                                .title("Update").kind(MessageDialogKind::Error).show(|_| {});
+                            return;
+                        }
+                    };
+                    stop_sidecar(&handle.state::<SidecarState>());
+                    if let Err(e) = update.install(bytes) {
+                        log_line(&data_dir, &format!("Update-Installation fehlgeschlagen: {e}"));
+                    } else {
+                        log_line(&data_dir, &format!("Update {} installiert, Neustart", update.version));
+                    }
+                    // Auch nach einem Fehler neu starten: der Sidecar ist schon beendet.
+                    handle.restart();
+                });
+            });
+    });
+}
+
 pub fn run() {
     let t0 = Instant::now();
     let app = tauri::Builder::default()
@@ -168,6 +233,8 @@ pub fn run() {
                 let _ = win.set_focus();
             }
         }))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .manage(SidecarState(Mutex::new(Sidecar::default())))
         .setup(move |app| {
             let data_dir = app.path().app_data_dir()?;
@@ -187,7 +254,7 @@ pub fn run() {
                 .env("STATIC_DIR", res_dir.join("frontend"))
                 .env("KB_BASE_PATH", data_dir.join("knowledge-base"))
                 .env("JWT_SECRET", jwt_secret(&data_dir)?)
-                .env("SECRETS_KEY", secrets_key(&data_dir))
+                .env("SECRETS_KEY", secrets_key(&app.config().identifier, &data_dir))
                 .env("DESKTOP_TOKEN", &token)
                 .env("DESKTOP_PARENT_PIPE", "1")
                 .env("HOST", "127.0.0.1")
@@ -223,6 +290,7 @@ pub fn run() {
                             let url = format!("http://127.0.0.1:{port}/__desktop/enter?token={token}");
                             let _ = win.eval(format!("window.location.replace({url:?})"));
                         }
+                        check_for_update(handle.clone(), data_dir.clone());
                         return;
                     }
                     std::thread::sleep(Duration::from_millis(50));
