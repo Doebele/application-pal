@@ -54,9 +54,10 @@ export function SettingsSync({ userId }: { userId: string }) {
       const store = useUiStore.getState();
 
       // 1. Settings: apply the server copy, or seed the server from this device.
-      //    `{}` = account created after M1 → start from defaults, never from the previous
+      //    No synced key yet (`{}` or only `onboarding`) = new account → start from defaults, never from the previous
       //    profile's local state. `null` = older account → seed from this device (migration).
-      if (data.settings && Object.keys(data.settings).length === 0) {
+      const isFresh = !!data.settings && !("ai" in data.settings) && !SYNCED_KEYS.some(k => k in data.settings!);
+      if (isFresh) {
         const init = useUiStore.getInitialState();
         const defaults: Record<string, unknown> = {};
         for (const k of SYNCED_KEYS) defaults[k] = init[k];

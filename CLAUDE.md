@@ -36,6 +36,9 @@ Full guide: `docs/desktop/m1-profile-einstellungen.md`. UI + AI-provider setting
 ## Google on the desktop (M2, branch `desktop`)
 Full guide incl. Google Cloud setup: `docs/desktop/m2-google.md`. `APP_MODE=desktop` → scopes `drive.file` + `calendar.readonly` only, **no shared Google token** (`getDriveAccessToken`/status ignore `user_id IS NULL`), sign-in via `POST /api/google/connect` (system browser, loopback `http://127.0.0.1:<PORT>/api/google/callback`, PKCE, single-use in-memory `state`; the sidecar guard lets only that route through without cookie, and only with `state`). With `drive.file` the app sees only files it created or the user picked — every "choose an existing file/folder" must offer `GooglePickerButton` (`frontend/src/lib/googlePicker.tsx`, needs `GOOGLE_API_KEY` + `GOOGLE_APP_ID`); a picked template is copied into the user's own "Pal-Templates" (`POST /api/drive/templates/import`). Credentials reach the sidecar from `D2603_GOOGLE_*` at build time or `google-client.json` in the app data dir.
 
+## Desktop setup wizard (M3, branch `desktop`)
+Guide: `docs/desktop/m3-einrichtung.md`. New desktop profiles get `ui_settings.onboarding = "pending"`; `MainApp` then renders `SetupWizard` (persona → AI with LM Studio/Ollama auto-detect + `POST /api/ai/test` → Google loopback → LinkedIn) instead of the shell; finishing PATCHes `onboarding: "done"`. The wizard keeps no state of its own — it writes the same store/settings/secrets as the Settings page. In desktop mode `resolveHostUrl()` returns the URL unchanged (no Docker host rewrite).
+
 ## Critical Pitfalls
 
 **Docker working directory**: Always `cd /Users/clausmedvesek/Developer/projects/application-pal` before any Docker command. The CWD persists between Bash calls and may drift to a worktree. Building from a worktree compiles the wrong source with no error.

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Download, Upload, Database, Shield, Key, LogOut, Trash, Folder, OpenNewWindow, Calendar, InfoCircle, Table2Columns } from "iconoir-react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
 import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, type AiSecretProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
@@ -1266,6 +1267,7 @@ function InviteSection() {
 function ProfileProtectionSection() {
   const { t } = useTranslation();
   const { user, refetch } = useAuth();
+  const queryClient = useQueryClient();
   const [name, setName] = useState(user?.name ?? "");
   const [mode, setMode] = useState<"none" | "pin" | "password">(user?.authMode ?? "none");
   const [current, setCurrent] = useState("");
@@ -1364,6 +1366,18 @@ function ProfileProtectionSection() {
               {t("profiles.saveProtection")}
             </button>
           </div>
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("wizard.reopenLabel")}</div>
+          <div className="settings-row-sub">{t("wizard.reopenSub")}</div>
+        </div>
+        <div className="settings-row-right">
+          <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={async () => {
+            await api.patch("/api/settings", { onboarding: "pending" }).catch(() => {});
+            queryClient.setQueryData(["onboarding", user?.id], "pending");
+          }}>{t("wizard.reopen")}</button>
         </div>
       </div>
     </div>

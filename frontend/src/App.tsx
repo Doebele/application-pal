@@ -1,5 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import type { Application } from "@application-pal/shared";
@@ -7,6 +7,7 @@ import { useUiStore } from "./lib/store";
 import { api } from "./lib/api";
 import { AuthProvider, useAuth } from "./lib/auth";
 import { SettingsSync } from "./lib/settingsSync";
+import { SetupWizard } from "./components/SetupWizard";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Rail } from "./components/Rail";
 import { BoardPage } from "./pages/BoardPage";
@@ -63,6 +64,22 @@ function MainApp() {
   }, [ai.provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { user } = useAuth();
+  // Desktop setup wizard: new profiles start with ui_settings.onboarding = "pending".
+  const { data: onboarding } = useQuery({
+    queryKey: ["onboarding", user?.id],
+    enabled: user?.mode === "desktop",
+    queryFn: async () => (await api.get<{ settings: { onboarding?: string } | null }>("/api/settings")).data.settings?.onboarding ?? null,
+    staleTime: Infinity,
+  });
+  const queryClient = useQueryClient();
+  if (onboarding === "pending") {
+    return (
+      <>
+        {user?.id && <SettingsSync key={user.id} userId={user.id} />}
+        <SetupWizard onClose={() => queryClient.setQueryData(["onboarding", user?.id], "done")} />
+      </>
+    );
+  }
   return (
     <div className="app-shell">
       {user?.id && <SettingsSync key={user.id} userId={user.id} />}

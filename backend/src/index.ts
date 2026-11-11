@@ -294,9 +294,10 @@ app.post("/api/auth/profiles", async (c) => {
   if (dup) return c.json({ error: "E-Mail bereits vergeben" }, 409);
   const passwordHash = mode === "none" ? null : await bcrypt.hash(secret!, 12);
   const [user] = await db.insert(users).values({ email: mail, passwordHash, displayName, authMode: mode }).returning();
-  // uiSettings "{}" = new account → client starts from defaults instead of copying the
-  // previous profile's local state (null is reserved for pre-M1 accounts to migrate).
-  await db.insert(userProfile).values({ userId: user.id, name: displayName, uiSettings: "{}" }).onConflictDoNothing();
+  // uiSettings without synced keys = new account → client starts from defaults instead of
+  // copying the previous profile's local state (null = pre-M1 account to migrate).
+  // `onboarding: "pending"` opens the setup wizard after the first login (M3).
+  await db.insert(userProfile).values({ userId: user.id, name: displayName, uiSettings: JSON.stringify({ onboarding: "pending" }) }).onConflictDoNothing();
   issueTokens(c, user.id, true, await getSessionTimeout(user.id));
   return c.json(meBody(user), 201);
 });
@@ -910,6 +911,8 @@ async function isReachable(url: string): Promise<boolean> {
 }
 
 async function resolveHostUrl(url: string): Promise<string> {
+  // The desktop sidecar runs on the host itself: localhost is localhost.
+  if (env.APP_MODE === "desktop") return url;
   const direct = url.replace(/^(https?:\/\/)localhost(:\d+)?/, "$1host.docker.internal$2");
   const m = direct.match(PRIVATE_HOST);
   if (!m) return direct;
@@ -1861,6 +1864,24 @@ app.get("/api/lm-studio/models", async (c) => {
     return c.json({ models });
   } catch {
     return c.json({ models: [] });
+  }
+});
+
+// Setup wizard / settings: one tiny round trip to check the chosen AI really answers.
+// Local models can take a while to load on first use, hence the generous limit.
+app.post("/api/ai/test", async (c) => {
+  const { ai } = await c.req.json<{ ai?: AiConfig }>();
+  if (!ai || ai.provider === "none") return c.json({ ok: false, error: "Kein KI-Anbieter gewählt" }, 400);
+  const started = Date.now();
+  try {
+    const reply = await Promise.race([
+      callAi("Du bist ein Verbindungstest. Antworte nur mit dem Wort OK.", "Test", ai),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Keine Antwort innerhalb von 90 s")), 90_000)),
+    ]);
+    const text = reply.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    return c.json({ ok: true, reply: text.slice(0, 80), ms: Date.now() - started });
+  } catch (err) {
+    return c.json({ ok: false, error: (err as Error).message.slice(0, 300), ms: Date.now() - started });
   }
 });
 
