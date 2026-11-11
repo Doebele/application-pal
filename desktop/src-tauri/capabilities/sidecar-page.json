@@ -10,5 +10,8 @@
       "http://127.0.0.1:*"
     ]
   },
-  "permissions": []
+  "permissions": [
+    "allow-check-update",
+    "allow-app-version"
+  ]
 }
