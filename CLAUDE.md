@@ -148,7 +148,7 @@ Single Hono app. All routes in one file. Uses `drizzle-orm/node-postgres`. No au
 | `google_oauth_tokens` | OAuth token; `user_id` NULL = shared admin token | nullable `user_id` | ❌ credentials |
 | `kb_*` | Knowledge-base cache (shared across users) | ❌ shared | ❌ auto-generated |
 
-**Archive pattern**: `applications.archived = "true"` — default filter is `archived != "true"`. `archiveReason`: `unavailable | irrelevant | taken | other` or free text.
+**Archive pattern**: `applications.archived = "true"` — default filter is `archived != "true"`. `archiveReason`: `rejected | unavailable | irrelevant | taken | other` or free text. Stage `rejected` shows a direct "Ins Archiv" button in the drawer header (reason `rejected`). Drawer tab and zoom states use `useSticky()` (module-level map in `DetailDrawer.tsx`) so they survive switching applications.
 
 **New application fields** (added via `ALTER TABLE`):
 - `job_type` — work pensum as percentage string: `"100%"`, `"80–100%"`, `"80%"`, `"60–80%"`, `"60%"`, `"50%"`, `"40%"`, or custom. Auto-detected on import.
