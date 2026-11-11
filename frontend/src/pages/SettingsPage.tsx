@@ -6,6 +6,7 @@ import { Topbar } from "../components/Topbar";
 import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, type AiSecretProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { GooglePickerButton } from "../lib/googlePicker";
 import { startRegistration } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 
@@ -656,11 +657,12 @@ function RavSheetSubSection({ onReconnect }: { onReconnect: () => void }) {
       }).catch(() => {});
   }, []);
 
-  const link = async () => {
-    if (!input.trim()) return;
+  const link = async (picked?: string) => {
+    const target = (picked ?? input).trim();
+    if (!target) return;
     setChecking(true); setErr(null);
     try {
-      const r = await api.get<RavSheet>(`/api/rav/sheet-info?spreadsheetId=${encodeURIComponent(input.trim())}`);
+      const r = await api.get<RavSheet>(`/api/rav/sheet-info?spreadsheetId=${encodeURIComponent(target)}`);
       await api.patch("/api/profile", { ravSheetId: r.data.id });
       setSheet(r.data); setInput("");
     } catch (e: unknown) {
@@ -724,9 +726,10 @@ function RavSheetSubSection({ onReconnect }: { onReconnect: () => void }) {
                 placeholder={t("rav.placeholder")} style={{ fontSize: 12 }} />
             </div>
             <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
-              disabled={checking || !input.trim()} onClick={link}>
+              disabled={checking || !input.trim()} onClick={() => link()}>
               {checking ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : t("rav.confirm")}
             </button>
+            <GooglePickerButton kind="spreadsheet" label={t("picker.chooseSheet")} onPicked={f => link(f.id)} />
             <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
               onClick={() => setShowCreate(v => !v)}>{t("rav.create")}</button>
           </div>
@@ -777,6 +780,9 @@ function RavSheetSubSection({ onReconnect }: { onReconnect: () => void }) {
 // ─── Google OAuth section ─────────────────────────────────────
 function GoogleSection() {
   const { t } = useTranslation();
+  const desktop = useAuth().user?.mode === "desktop";
+  const [waiting, setWaiting] = useState(false);
+  const [connectErr, setConnectErr] = useState<string | null>(null);
   // driveApplicationsFolderId now lives in user_profile (per-user), not Zustand
   const [driveApplicationsFolderId, setDriveApplicationsFolderIdState] = useState("");
   const [status, setStatus] = useState<"loading" | "connected" | "disconnected">("loading");
@@ -844,7 +850,26 @@ function GoogleSection() {
     await saveFolderIdToProfile("");
   };
 
+  // Desktop: consent runs in the system browser (Google blocks embedded web views);
+  // the sidecar receives the loopback redirect, we poll until the token is there.
+  useEffect(() => {
+    if (!waiting) return;
+    const started = Date.now();
+    const timer = setInterval(async () => {
+      const r = await api.get<{ connected: boolean }>("/api/google/status").catch(() => null);
+      if (r?.data.connected) { setWaiting(false); setStatus("connected"); }
+      else if (Date.now() - started > 5 * 60 * 1000) { setWaiting(false); setConnectErr(t("settings.googleTimeout")); }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [waiting, t]);
+
   const connect = async () => {
+    if (desktop) {
+      setConnectErr(null);
+      try { await api.post("/api/google/connect"); setWaiting(true); }
+      catch (e: unknown) { setConnectErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("settings.googleConnectFailed")); }
+      return;
+    }
     const res = await api.get<{ url: string }>("/api/google/auth-url").catch(() => null);
     if (res?.data.url) window.location.href = res.data.url;
     else alert("Google credentials are not configured on the server.");
@@ -890,12 +915,16 @@ function GoogleSection() {
             </>
           )}
           {status === "disconnected" && (
-            <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} onClick={connect}>
-              <Link width={12} height={12} /> {t("settings.connectGoogle")}
+            <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} onClick={connect} disabled={waiting}>
+              {waiting
+                ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("settings.googleWaiting")}</>
+                : <><Link width={12} height={12} /> {t("settings.connectGoogle")}</>}
             </button>
           )}
         </div>
       </div>
+      {waiting && <div style={{ fontSize: 12, color: "var(--fg-3)" }}>{t("settings.googleBrowserHint")}</div>}
+      {connectErr && <div style={{ fontSize: 11, color: "#f87171" }}>{connectErr}</div>}
 
       {/* Folder picker — only when connected */}
       {status === "connected" && (
@@ -938,8 +967,15 @@ function GoogleSection() {
                 disabled={checkingFolder || !folderInput.trim()} onClick={validateFolder}>
                 {checkingFolder ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : t("settings.confirmFolder")}
               </button>
+              <GooglePickerButton kind="folder" label={t("picker.chooseFolder")} onPicked={async f => {
+                setFolderErr(null);
+                setFolderInfo({ id: f.id, name: f.name, url: f.url });
+                setFolderInput(f.id);
+                await saveFolderIdToProfile(f.id);
+              }} />
             </div>
           )}
+          {!folderInfo && desktop && <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 6 }}>{t("picker.driveFileHint")}</div>}
           {folderErr && <div style={{ fontSize: 11, color: "#f87171", marginTop: 6 }}>{folderErr}</div>}
           {!folderInfo && !folderInput && (
             <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 6 }}>

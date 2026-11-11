@@ -614,7 +614,11 @@
     "keyStored": "Enregistrée (chiffrée)",
     "keyStoredHint": "La clé est enregistrée chiffrée pour ce profil. Saisis une nouvelle clé pour la remplacer.",
     "keyRemove": "Supprimer",
-    "keySaveFailed": "Impossible d'enregistrer la clé"
+    "keySaveFailed": "Impossible d'enregistrer la clé",
+    "googleWaiting": "En attente du navigateur …",
+    "googleBrowserHint": "La connexion Google s’est ouverte dans le navigateur. Après autorisation, l’app se connecte automatiquement.",
+    "googleTimeout": "Pas de réponse de Google. Veuillez vous reconnecter.",
+    "googleConnectFailed": "Impossible de démarrer la connexion Google."
   },
   "templates": {
     "title": "Modèles",
@@ -1723,5 +1727,13 @@
     "saveProtection": "Enregistrer la protection",
     "protectionSaved": "Protection enregistrée",
     "saveFailed": "Échec de l'enregistrement"
+  },
+  "picker": {
+    "choose": "Choisir dans Drive …",
+    "chooseFolder": "Choisir un dossier dans Drive …",
+    "chooseSheet": "Choisir un tableau dans Drive …",
+    "importTemplate": "Importer un modèle depuis Google Drive …",
+    "templateImported": "« {{name}} » importé comme modèle",
+    "driveFileHint": "L’app de bureau ne voit que les fichiers qu’elle a créés ou que tu choisis ici dans Drive. Les liens collés vers d’autres fichiers ne fonctionnent pas."
   }
 }

@@ -614,7 +614,11 @@
     "keyStored": "Gespeichert (verschlüsselt)",
     "keyStoredHint": "Der Schlüssel ist für dieses Profil verschlüsselt gespeichert. Neuen Schlüssel eingeben, um ihn zu ersetzen.",
     "keyRemove": "Entfernen",
-    "keySaveFailed": "Schlüssel konnte nicht gespeichert werden"
+    "keySaveFailed": "Schlüssel konnte nicht gespeichert werden",
+    "googleWaiting": "Warte auf Browser …",
+    "googleBrowserHint": "Die Google-Anmeldung ist im Browser geöffnet. Nach der Freigabe verbindet sich die App automatisch.",
+    "googleTimeout": "Keine Antwort von Google. Bitte erneut verbinden.",
+    "googleConnectFailed": "Google-Verbindung konnte nicht gestartet werden."
   },
   "templates": {
     "title": "Vorlagen",
@@ -1723,5 +1727,13 @@
     "saveProtection": "Schutz speichern",
     "protectionSaved": "Schutz gespeichert",
     "saveFailed": "Speichern fehlgeschlagen"
+  },
+  "picker": {
+    "choose": "In Drive wählen …",
+    "chooseFolder": "Ordner in Drive wählen …",
+    "chooseSheet": "Tabelle in Drive wählen …",
+    "importTemplate": "Vorlage aus Google Drive übernehmen …",
+    "templateImported": "„{{name}}“ als Vorlage übernommen",
+    "driveFileHint": "Die Desktop-App sieht nur Dateien, die sie selbst angelegt hat oder die du hier in Drive auswählst. Eingefügte Links auf andere Dateien funktionieren nicht."
   }
 }

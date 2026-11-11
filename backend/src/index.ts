@@ -7,6 +7,7 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer";
@@ -120,6 +121,9 @@ if (env.DESKTOP_TOKEN) {
   });
   app.use("*", async (c, next) => {
     if (c.req.path === "/__desktop/enter" || c.req.path === "/health") return next();
+    // Google's loopback redirect arrives in the system browser, which has no cookie.
+    // It is only accepted with a pending single-use `state` (checked in the route).
+    if (c.req.path === "/api/google/callback" && c.req.query("state")) return next();
     if (!same(getCookie(c, "desktop_token"))) return c.text("Forbidden", 403);
     return next();
   });
@@ -4041,11 +4045,90 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
 const GOOGLE_REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI ?? "http://localhost/api/google/callback";
 const GOOGLE_FRONTEND_URL  = process.env.GOOGLE_FRONTEND_URL ?? "http://localhost";
 // Scopes include openid+email so Google Sign-In + Drive work in one consent
-const GOOGLE_SCOPES = (process.env.GOOGLE_SCOPES ?? "") ||
-  "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets";
+const IS_DESKTOP = env.APP_MODE === "desktop";
+// Desktop: `drive.file` instead of the restricted `drive` scope (no Google security
+// assessment needed). The app then sees only files it created itself or the user picked
+// in the Google Picker. Docs and Sheets APIs accept drive.file for those files, so
+// `documents`/`spreadsheets` are not requested either.
+const GOOGLE_SCOPES = IS_DESKTOP
+  ? "openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.readonly"
+  : (process.env.GOOGLE_SCOPES ?? "") ||
+    "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets";
+// Google Picker (desktop, and web if configured): browser API key + Cloud project number.
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY ?? "";
+const GOOGLE_APP_ID  = process.env.GOOGLE_APP_ID ?? "";
+
+// ── Desktop loopback flow (RFC 8252): system browser → http://127.0.0.1:<port>/api/google/callback
+// Google blocks sign-in inside embedded web views, so the consent page opens in the
+// default browser. PKCE + a random single-use `state` bind the answer to the profile
+// that started it; the callback is the only route the sidecar guard lets through
+// without its cookie (and only with a `state`).
+type PendingGoogleAuth = { userId: string; verifier: string; redirectUri: string; createdAt: number };
+const pendingGoogleAuth = new Map<string, PendingGoogleAuth>();
+const GOOGLE_AUTH_TTL = 10 * 60 * 1000;
+
+function b64url(buf: Buffer): string {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function desktopGoogleAuthUrl(userId: string): string {
+  for (const [k, v] of pendingGoogleAuth) if (Date.now() - v.createdAt > GOOGLE_AUTH_TTL) pendingGoogleAuth.delete(k);
+  const state = b64url(crypto.randomBytes(24));
+  const verifier = b64url(crypto.randomBytes(48));
+  const challenge = b64url(crypto.createHash("sha256").update(verifier).digest());
+  const redirectUri = `http://127.0.0.1:${env.PORT}/api/google/callback`;
+  pendingGoogleAuth.set(state, { userId, verifier, redirectUri, createdAt: Date.now() });
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.searchParams.set("client_id", GOOGLE_CLIENT_ID);
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", GOOGLE_SCOPES);
+  url.searchParams.set("access_type", "offline");
+  url.searchParams.set("prompt", "consent");
+  url.searchParams.set("include_granted_scopes", "true");
+  url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", challenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  return url.toString();
+}
+
+/** Open a URL in the user's default browser (desktop sidecar only). */
+function openInSystemBrowser(url: string): void {
+  const [cmd, args] = process.platform === "darwin" ? ["open", [url]]
+    : process.platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url]]
+    : ["xdg-open", [url]];
+  const child = spawn(cmd as string, args as string[], { detached: true, stdio: "ignore" });
+  child.on("error", err => console.error("[google] Browser konnte nicht geöffnet werden:", err.message));
+  child.unref();
+}
+
+function loopbackPage(ok: boolean, text: string): string {
+  const color = ok ? "#16a34a" : "#dc2626";
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Application-Pal</title>
+<style>body{font-family:-apple-system,system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0;background:#f7f7f5;color:#222}
+div{max-width:420px;text-align:center;padding:32px;border-radius:14px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+h1{font-size:18px;color:${color};margin:0 0 8px}p{margin:0;line-height:1.5;color:#555}</style></head>
+<body><div><h1>${ok ? "Google verbunden" : "Verbindung fehlgeschlagen"}</h1><p>${text}</p></div></body></html>`;
+}
+
+app.post("/api/google/connect", (c) => {
+  if (!IS_DESKTOP) return c.json({ error: "Nur in der Desktop-App" }, 404);
+  if (!GOOGLE_CLIENT_ID) return c.json({ error: "Google ist in dieser App-Version nicht eingerichtet" }, 503);
+  const url = desktopGoogleAuthUrl(getUserId(c));
+  openInSystemBrowser(url);
+  return c.json({ url });
+});
+
+app.get("/api/google/picker-config", async (c) => {
+  if (!GOOGLE_API_KEY || !GOOGLE_APP_ID) return c.json({ available: false });
+  const accessToken = await getDriveAccessToken(getUserId(c));
+  if (!accessToken) return c.json({ available: false, error: "Google Drive nicht verbunden" });
+  return c.json({ available: true, apiKey: GOOGLE_API_KEY, appId: GOOGLE_APP_ID, accessToken });
+});
 
 app.get("/api/google/auth-url", (c) => {
   if (!GOOGLE_CLIENT_ID) return c.json({ error: "Google credentials not configured" }, 503);
+  if (IS_DESKTOP) return c.json({ error: "Desktop: POST /api/google/connect verwenden" }, 400);
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", GOOGLE_CLIENT_ID);
   url.searchParams.set("redirect_uri", GOOGLE_REDIRECT_URI);
@@ -4057,6 +4140,50 @@ app.get("/api/google/auth-url", (c) => {
 });
 
 app.get("/api/google/callback", async (c) => {
+  if (IS_DESKTOP) {
+    // Loopback answer from the system browser. Never stores a shared token, never logs in.
+    const state = c.req.query("state") ?? "";
+    const pending = pendingGoogleAuth.get(state);
+    pendingGoogleAuth.delete(state);
+    if (!pending || Date.now() - pending.createdAt > GOOGLE_AUTH_TTL) {
+      return c.html(loopbackPage(false, "Diese Anmeldung ist abgelaufen oder wurde schon verwendet. Bitte in der App erneut auf „Google verbinden“ klicken."), 400);
+    }
+    const code = c.req.query("code");
+    if (!code) {
+      const denied = c.req.query("error") === "access_denied";
+      return c.html(loopbackPage(false, denied ? "Der Zugriff wurde nicht erlaubt. Du kannst dieses Fenster schliessen." : "Google hat keinen Code geliefert."), 400);
+    }
+    try {
+      const res = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code, client_id: GOOGLE_CLIENT_ID,
+          ...(GOOGLE_CLIENT_SECRET ? { client_secret: GOOGLE_CLIENT_SECRET } : {}),
+          redirect_uri: pending.redirectUri, grant_type: "authorization_code",
+          code_verifier: pending.verifier,
+        }),
+      });
+      const data = await res.json() as { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; error_description?: string };
+      if (!data.access_token) {
+        console.error("[google] Token-Tausch fehlgeschlagen:", data.error_description ?? res.status);
+        return c.html(loopbackPage(false, "Google hat die Anmeldung nicht bestätigt. Bitte erneut versuchen."), 502);
+      }
+      await db.delete(googleOAuthTokens).where(eq(googleOAuthTokens.userId, pending.userId));
+      await db.insert(googleOAuthTokens).values({
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token ?? null,
+        expiresAt: data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null,
+        scope: data.scope ?? GOOGLE_SCOPES,
+        userId: pending.userId,
+      });
+      return c.html(loopbackPage(true, "Du kannst dieses Fenster schliessen und zu Application-Pal zurückkehren."));
+    } catch (err) {
+      console.error("[google] callback error:", err);
+      return c.html(loopbackPage(false, "Unerwarteter Fehler. Bitte erneut versuchen."), 500);
+    }
+  }
+
   const code = c.req.query("code");
   if (!code) return c.redirect(`${GOOGLE_FRONTEND_URL}/?google_error=no_code`);
   try {
@@ -4126,10 +4253,12 @@ app.get("/api/google/callback", async (c) => {
 
 app.get("/api/google/status", async (c) => {
   const userId = getUserId(c);
-  const tokens = await db.select().from(googleOAuthTokens)
-    .where(or(eq(googleOAuthTokens.userId, userId), isNull(googleOAuthTokens.userId)))
-    .limit(1);
-  if (tokens.length === 0) return c.json({ connected: false });
+  // Own token first; the shared admin token (user_id NULL) only in the web version.
+  const [own] = await db.select().from(googleOAuthTokens).where(eq(googleOAuthTokens.userId, userId)).limit(1);
+  const tokens = own ? [own] : IS_DESKTOP ? [] : await db.select().from(googleOAuthTokens)
+    .where(isNull(googleOAuthTokens.userId)).limit(1);
+  const extra = { configured: !!GOOGLE_CLIENT_ID, scopeMode: IS_DESKTOP ? "drive.file" : "drive", pickerAvailable: !!(GOOGLE_API_KEY && GOOGLE_APP_ID) };
+  if (tokens.length === 0) return c.json({ connected: false, ...extra });
   const token = tokens[0];
   // Connected as long as we have a refresh token (can always renew) OR a non-expired access token
   const hasRefreshToken = !!token.refreshToken;
@@ -4140,8 +4269,10 @@ app.get("/api/google/status", async (c) => {
     // The Sheets API accepts the full `drive` scope for read, write and create —
     // `spreadsheets` is only the narrower, explicit alternative. Checking for the
     // latter alone falsely fails every token issued before it was requested.
-    hasSheetsScope: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-      .some(scope => (token.scope ?? "").split(/\s+/).includes(scope))
+    // drive.file (desktop) covers sheets the app created or the user picked.
+    hasSheetsScope: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/drive.file"]
+      .some(scope => (token.scope ?? "").split(/\s+/).includes(scope)),
+    ...extra,
   });
 });
 
@@ -4183,8 +4314,9 @@ async function getDriveAccessToken(userId?: string): Promise<string | null> {
       .where(eq(googleOAuthTokens.userId, userId)).limit(1);
     token = userToken;
   }
-  // Fallback to shared token (user_id IS NULL, set by admin)
-  if (!token) {
+  // Fallback to shared token (user_id IS NULL, set by admin) — web only. On the desktop
+  // every profile is a different person; one must never write into another's Drive.
+  if (!token && !IS_DESKTOP) {
     const [shared] = await db.select().from(googleOAuthTokens)
       .where(isNull(googleOAuthTokens.userId)).limit(1);
     token = shared;
@@ -6093,11 +6225,37 @@ app.post("/api/drive/templates/create", async (c) => {
   }
 });
 
-app.get("/api/drive/templates", async (c) => {
-  const masterFolderId = env.GOOGLE_MASTER_FOLDER_ID;
-  if (!masterFolderId) return c.json({ error: "GOOGLE_MASTER_FOLDER_ID nicht konfiguriert" }, 400);
+app.post("/api/drive/templates/import", async (c) => {
+  // A file the user picked in the Google Picker becomes a template: copied into the
+  // user's own "Pal-Templates" folder, so the copy stays reachable with drive.file
+  // (the Picker grant covers the original, a copy belongs to the app).
+  const { fileId } = await c.req.json<{ fileId?: string }>();
+  if (!fileId || !/^[\w-]+$/.test(fileId)) return c.json({ error: "Datei fehlt" }, 400);
   const accessToken = await getDriveAccessToken(getUserId(c));
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const auth = { Authorization: `Bearer ${accessToken}` };
+  const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType`, { headers: auth });
+  if (!metaRes.ok) return c.json({ error: "Datei nicht gefunden oder kein Zugriff" }, 404);
+  const meta = await metaRes.json() as { name: string; mimeType: string };
+  if (!TEMPLATE_MIME_ALLOWLIST.has(meta.mimeType)) return c.json({ error: "Dieser Dateityp eignet sich nicht als Vorlage" }, 400);
+  const folderId = await findOrCreateDriveFolder(accessToken, "Pal-Templates", env.GOOGLE_MASTER_FOLDER_ID || undefined);
+  const copyRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/copy?fields=id,name,mimeType,webViewLink`, {
+    method: "POST",
+    headers: { ...auth, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: meta.name, parents: [folderId] }),
+  });
+  if (!copyRes.ok) return c.json({ error: "Kopieren fehlgeschlagen" }, 502);
+  return c.json(await copyRes.json());
+});
+
+app.get("/api/drive/templates", async (c) => {
+  const accessToken = await getDriveAccessToken(getUserId(c));
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  // Without a configured master folder (always on the desktop) templates live in the
+  // user's own "Pal-Templates" folder, which "Neu erstellen" and the import fill.
+  const masterFolderId = env.GOOGLE_MASTER_FOLDER_ID
+    || await findOrCreateDriveFolder(accessToken, "Pal-Templates").catch(() => "");
+  if (!masterFolderId) return c.json([]);
 
   const allFiles = await listDriveFiles(accessToken, masterFolderId);
   const docFiles = allFiles.filter(f => TEMPLATE_MIME_ALLOWLIST.has(f.mimeType));

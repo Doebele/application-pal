@@ -96,6 +96,30 @@ fn secrets_key(data_dir: &Path) -> String {
     }
 }
 
+/// Google-Zugang der App (Desktop-OAuth-Client + Picker-Schlüssel). Beim Bauen über
+/// `D2603_GOOGLE_CLIENT_ID` usw. eingebettet; `google-client.json` im Datenordner
+/// überschreibt das (zum Testen ohne Neubau). Ein Desktop-Client-Secret ist laut
+/// Google nicht geheim — Schutz kommt von PKCE und der Loopback-Umleitung.
+fn google_env(data_dir: &Path) -> Vec<(&'static str, String)> {
+    let file: serde_json::Value = fs::read_to_string(data_dir.join("google-client.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or(serde_json::Value::Null);
+    let pick = |key: &str, built: Option<&'static str>| -> String {
+        file.get(key)
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .or_else(|| built.map(str::to_string))
+            .unwrap_or_default()
+    };
+    vec![
+        ("GOOGLE_CLIENT_ID", pick("clientId", option_env!("D2603_GOOGLE_CLIENT_ID"))),
+        ("GOOGLE_CLIENT_SECRET", pick("clientSecret", option_env!("D2603_GOOGLE_CLIENT_SECRET"))),
+        ("GOOGLE_API_KEY", pick("apiKey", option_env!("D2603_GOOGLE_API_KEY"))),
+        ("GOOGLE_APP_ID", pick("appId", option_env!("D2603_GOOGLE_APP_ID"))),
+    ]
+}
+
 fn sidecar_path() -> std::io::Result<PathBuf> {
     // Tauri legt externalBin ohne Ziel-Suffix neben die Haupt-Binary (Contents/MacOS/).
     let dir = std::env::current_exe()?
@@ -171,6 +195,7 @@ pub fn run() {
                 .env("APP_URL", format!("http://127.0.0.1:{port}"))
                 .stdout(log.try_clone()?)
                 .stderr(log)
+                .envs(google_env(&data_dir))
                 .stdin(Stdio::piped())
                 .spawn()?;
             log_line(&data_dir, &format!("Sidecar gestartet (pid {}, Port {port})", child.id()));

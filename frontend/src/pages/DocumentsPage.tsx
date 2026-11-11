@@ -7,6 +7,7 @@ import {
 } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
+import { GooglePickerButton } from "../lib/googlePicker";
 import { useUiStore } from "../lib/store";
 
 // Categories whose content feeds AI prompts (mirrors CONTEXT_DOC_CATEGORIES in the backend)
@@ -264,9 +265,12 @@ function AddDocForm({ category, onSave, onCancel }: {
               <span style={{ fontSize: 10, color: "var(--fg-3)", whiteSpace: "nowrap" }}>{t("documents.orLinkExisting")}</span>
               <div style={{ flex: 1, height: 1, background: "var(--border)" }} />
             </div>
-            <input className="input-line" value={url} onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://docs.google.com/document/d/…"
-              style={{ fontFamily: "var(--font-mono)", fontSize: 11 }} />
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <input className="input-line" value={url} onChange={(e) => setUrl(e.target.value)}
+                placeholder="https://docs.google.com/document/d/…"
+                style={{ fontFamily: "var(--font-mono)", fontSize: 11, flex: 1 }} />
+              <GooglePickerButton kind="document" onPicked={f => { setUrl(f.url); if (!name.trim()) setName(f.name); }} />
+            </div>
           </div>
         )
       ) : fileType === "pdf" ? (

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Xmark, Table2Columns, RefreshCircle, Download, OpenNewWindow, Refresh } from "iconoir-react";
 import { api } from "../lib/api";
+import { GooglePickerButton } from "../lib/googlePicker";
 import { useUiStore } from "../lib/store";
 
 type LinkedSheet = { id: string; title: string; url: string; lang: string; entries: number };
@@ -84,11 +85,12 @@ export function RavReportDialog({ applicationIds, count, onClose }: {
     finally { setBusy(null); }
   };
 
-  const linkExisting = async () => {
-    if (!linkInput.trim()) return;
+  const linkExisting = async (picked?: string) => {
+    const target = (picked ?? linkInput).trim();
+    if (!target) return;
     setBusy("link"); setResult(null);
     try {
-      const r = await api.get<LinkedSheet>(`/api/rav/sheet-info?spreadsheetId=${encodeURIComponent(linkInput.trim())}`);
+      const r = await api.get<LinkedSheet>(`/api/rav/sheet-info?spreadsheetId=${encodeURIComponent(target)}`);
       await api.patch("/api/profile", { ravSheetId: r.data.id });
       setLinked(r.data); setLinkInput("");
     } catch (e) { setResult({ ok: false, text: errText(e, t("rav.notFound")) }); }
@@ -165,9 +167,10 @@ export function RavReportDialog({ applicationIds, count, onClose }: {
                     placeholder={t("rav.placeholder")} style={{ fontSize: 12 }} />
                 </div>
                 <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
-                  onClick={linkExisting} disabled={busy !== null || !linkInput.trim()}>
+                  onClick={() => linkExisting()} disabled={busy !== null || !linkInput.trim()}>
                   {busy === "link" ? spin : t("rav.confirm")}
                 </button>
+                <GooglePickerButton kind="spreadsheet" label={t("picker.chooseSheet")} onPicked={f => linkExisting(f.id)} />
                 <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
                   onClick={createTarget} disabled={busy !== null} title={t("rav.createTargetHint")}>
                   {busy === "create" ? spin : t("rav.create")}

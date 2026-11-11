@@ -11,6 +11,7 @@ import deFlagUrl from "round-flag-icons/flags/de.svg?url";
 import gbFlagUrl from "round-flag-icons/flags/gb.svg?url";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
+import { GooglePickerButton } from "../lib/googlePicker";
 
 // ─── Round flag icon (round-flag-icons library) ───────────────
 function FlagIcon({ lang, size = 20 }: { lang: "de" | "en"; size?: number }) {
@@ -543,6 +544,17 @@ export function TemplatesPage() {
         }}>
           <strong style={{ color: "var(--fg-1)" }}>{t("templates.howItWorks")}</strong>{" "}
           {t("templates.howItWorksDesc")}
+          {googleConnected && (
+            <div style={{ marginTop: 10 }}>
+              <GooglePickerButton kind="template" label={t("picker.importTemplate")} onPicked={async f => {
+                try {
+                  await api.post("/api/drive/templates/import", { fileId: f.id });
+                  queryClient.invalidateQueries({ queryKey: ["drive-templates"] });
+                  showToast(t("picker.templateImported", { name: f.name }));
+                } catch { showToast(t("templates.createError")); }
+              }} />
+            </div>
+          )}
         </div>
 
         {isLoading ? (

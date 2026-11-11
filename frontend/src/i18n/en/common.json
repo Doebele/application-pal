@@ -614,7 +614,11 @@
     "keyStored": "Stored (encrypted)",
     "keyStoredHint": "The key is stored encrypted for this profile. Enter a new key to replace it.",
     "keyRemove": "Remove",
-    "keySaveFailed": "Could not save the key"
+    "keySaveFailed": "Could not save the key",
+    "googleWaiting": "Waiting for browser …",
+    "googleBrowserHint": "Google sign-in opened in your browser. Once you allow access, the app connects automatically.",
+    "googleTimeout": "No answer from Google. Please connect again.",
+    "googleConnectFailed": "Could not start the Google connection."
   },
   "templates": {
     "title": "Templates",
@@ -1723,5 +1727,13 @@
     "saveProtection": "Save protection",
     "protectionSaved": "Protection saved",
     "saveFailed": "Saving failed"
+  },
+  "picker": {
+    "choose": "Choose in Drive …",
+    "chooseFolder": "Choose folder in Drive …",
+    "chooseSheet": "Choose sheet in Drive …",
+    "importTemplate": "Import template from Google Drive …",
+    "templateImported": "“{{name}}” imported as template",
+    "driveFileHint": "The desktop app only sees files it created itself or that you choose in Drive here. Pasted links to other files do not work."
   }
 }
