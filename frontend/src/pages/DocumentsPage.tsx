@@ -11,8 +11,14 @@ import { useUiStore } from "../lib/store";
 
 // Categories whose content feeds AI prompts (mirrors CONTEXT_DOC_CATEGORIES in the backend)
 const SUMMARY_CATEGORIES = ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"];
+// Mirrors fetchDocumentText in the backend: Drive PDFs, Google Docs and public web pages
+// (any other http link except Figma). Drive images and folder links have no readable text.
+const hostOf = (url: string) => { try { return new URL(url).hostname; } catch { return ""; } };
+const isWebsite = (url: string) => /^https?:\/\//i.test(url)
+  && !/^(docs|drive)\.google\.com$/i.test(hostOf(url)) && !/(^|\.)figma\.com$/i.test(hostOf(url));
 const isSummarizable = (d: UserDocument) =>
-  SUMMARY_CATEGORIES.includes(d.category) && !!d.url && !d.url.includes("/folders/") && (d.fileType === "pdf" || d.fileType === "gdoc");
+  SUMMARY_CATEGORIES.includes(d.category) && !!d.url && !d.url.includes("/folders/")
+  && (d.fileType === "pdf" || d.fileType === "gdoc" || isWebsite(d.url));
 
 
 // ─── Hook: drive folder ID from user profile (per-user, server-side) ─────────
