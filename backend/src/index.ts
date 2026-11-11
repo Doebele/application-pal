@@ -1,3 +1,4 @@
+import "./sidecar-polyfill.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
@@ -7,7 +8,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer";
 import {
   generateRegistrationOptions,
@@ -93,7 +94,7 @@ import {
 import { liSourceSuggestions, liSourceFactsText, type LiSourceSuggestions } from "./linkedin-sources.js";
 import { buildLiChecklist } from "./linkedin-checklist.js";
 import { unzipSync } from "fflate";
-import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, getTableColumns, type SQL, type Table } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
 import { env, KB_BASE_PATH } from "./env.js";
@@ -6669,6 +6670,25 @@ app.post("/api/import", async (c) => {
     await db.delete(userProfile).where(eq(userProfile.userId, userId));
   }
 
+  // JSON-Exporte enthalten Zeitstempel als ISO-Strings; Drizzle-Timestamp-Spalten
+  // (mode "date") erwarten Date-Objekte, sonst "value.toISOString is not a function".
+  const revive = <T extends Record<string, unknown>>(table: Table, row: T): T => {
+    const out: Record<string, unknown> = { ...row };
+    for (const [key, col] of Object.entries(getTableColumns(table))) {
+      const v = out[key];
+      if (col.columnType === "PgTimestamp" && typeof v === "string") out[key] = new Date(v);
+    }
+    return out as T;
+  };
+  for (const [table, rows] of [
+    [applications, data.applications], [applicationDocuments, data.applicationDocuments],
+    [applicationActivities, data.applicationActivities], [applicationContacts, data.applicationContacts],
+    [userDocuments, data.userDocuments], [cvVersions, data.cvVersions], [linkedinVersions, data.linkedinVersions],
+  ] as const) {
+    rows?.forEach((r, i) => { rows[i] = revive(table, r); });
+  }
+  if (data.userProfile) data.userProfile = revive(userProfile, data.userProfile);
+
   // Insert all records — add userId, skip duplicates on conflict (for merge mode)
   if (data.applications?.length) {
     for (const row of data.applications) {
@@ -6735,6 +6755,30 @@ app.post("/api/import", async (c) => {
   }});
 });
 
+// Desktop-Spike (M0): ohne nginx liefert der Sidecar das gebaute Frontend selbst aus
+// (gleiche Origin wie /api → Cookies funktionieren ohne CORS). Nur aktiv mit STATIC_DIR.
+if (env.STATIC_DIR) {
+  const staticRoot = path.resolve(env.STATIC_DIR);
+  const MIME: Record<string, string> = {
+    ".html": "text/html; charset=utf-8", ".js": "application/javascript", ".mjs": "application/javascript",
+    ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png",
+    ".jpg": "image/jpeg", ".ico": "image/x-icon", ".woff2": "font/woff2", ".woff": "font/woff",
+    ".wasm": "application/wasm", ".map": "application/json", ".txt": "text/plain",
+  };
+  app.get("*", async (c, next) => {
+    const p = c.req.path;
+    if (p.startsWith("/api/") || p === "/health") return next();
+    const rel = path.normalize(decodeURIComponent(p)).replace(/^(\.\.[/\\])+/, "");
+    let file = path.join(staticRoot, rel);
+    if (!file.startsWith(staticRoot)) return c.notFound();
+    let body = await readFile(file).catch(() => null);
+    if (!body) { file = path.join(staticRoot, "index.html"); body = await readFile(file).catch(() => null); }
+    if (!body) return c.notFound();
+    const type = MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream";
+    return c.body(new Uint8Array(body), 200, { "content-type": type });
+  });
+}
+
 void ensureKbTree()
   .then(regenerateKbIndex)
   .catch((error) => console.warn("Knowledge base bootstrap failed:", error));
@@ -6744,7 +6788,7 @@ serve(
     fetch: app.fetch,
     port: env.PORT,
     // In Docker muss der Server auf allen Interfaces lauschen (Nginx im Compose-Netz).
-    hostname: "0.0.0.0"
+    hostname: env.HOST
   },
   (info) => {
     console.log(`backend listening on http://localhost:${info.port}`);

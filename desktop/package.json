@@ -1,0 +1,15 @@
+{
+  "name": "@application-pal/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Desktop-Hülle (Tauri) für Application-Pal — M0-Spike, Projektcode d2603",
+  "scripts": {
+    "sidecar": "sh scripts/build-sidecar.sh",
+    "tauri": "tauri",
+    "dev": "npm run sidecar && tauri dev",
+    "build": "npm run sidecar && tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4"
+  }
+}

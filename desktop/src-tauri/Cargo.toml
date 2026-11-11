@@ -1,0 +1,23 @@
+[package]
+name = "d2603"
+description = "Application-Pal Desktop (M0-Spike)"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "d2603_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+getrandom = "0.2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true
