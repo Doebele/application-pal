@@ -11,6 +11,9 @@ const envSchema = z.object({
   MIGRATIONS_DIR:  z.string().optional(),    // Default: backend/drizzle-pglite relativ zum CWD
   HOST:         z.string().default("0.0.0.0"), // Desktop-Sidecar: 127.0.0.1
   STATIC_DIR:   z.string().default(""),        // Desktop-Sidecar: gebautes Frontend ausliefern
+  APP_MODE:     z.enum(["web", "desktop"]).default("web"), // desktop: Profilauswahl, PIN/ohne Schutz, keine Einladungen
+  DESKTOP_TOKEN: z.string().default(""),       // Desktop-Sidecar: Start-Token der Tauri-Hülle (leer = kein Schutz)
+  SECRETS_KEY:  z.string().default(""),        // Schlüssel für ai_secrets (Desktop: aus dem Schlüsselbund); leer = aus JWT_SECRET abgeleitet
   JWT_SECRET:   z.string().default(""),   // auto-generated if empty
   PORT:         z.coerce.number().default(3000),
   APP_URL:      z.string().default("http://localhost:8070"),

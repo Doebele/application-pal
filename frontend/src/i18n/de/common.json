@@ -610,7 +610,11 @@
     "folderColorsSync": "Ordnerfarben aktualisieren",
     "folderColorsSyncing": "Aktualisiere…",
     "folderColorsResult": "{{updated}} Ordner gefärbt, {{failed}} fehlgeschlagen",
-    "folderColorsError": "Fehler beim Aktualisieren der Ordnerfarben"
+    "folderColorsError": "Fehler beim Aktualisieren der Ordnerfarben",
+    "keyStored": "Gespeichert (verschlüsselt)",
+    "keyStoredHint": "Der Schlüssel ist für dieses Profil verschlüsselt gespeichert. Neuen Schlüssel eingeben, um ihn zu ersetzen.",
+    "keyRemove": "Entfernen",
+    "keySaveFailed": "Schlüssel konnte nicht gespeichert werden"
   },
   "templates": {
     "title": "Vorlagen",
@@ -1678,5 +1682,46 @@
         "connections": "Kontakte"
       }
     }
+  },
+  "profiles": {
+    "whoIsThere": "Wer bist du?",
+    "createTitle": "Neues Profil",
+    "add": "Neues Profil",
+    "back": "Zurück",
+    "unlock": "Öffnen",
+    "loginFailed": "Anmeldung fehlgeschlagen",
+    "createFailed": "Profil konnte nicht erstellt werden",
+    "name": "Name",
+    "namePlaceholder": "z. B. Lea",
+    "nameSub": "So erscheint das Profil in der Auswahl beim Start.",
+    "nameMissing": "Bitte einen Namen eingeben",
+    "nameSaved": "Name gespeichert",
+    "protection": "Schutz",
+    "pin": "PIN",
+    "password": "Passwort",
+    "repeat": "Wiederholen",
+    "email": "E-Mail",
+    "optional": "(optional)",
+    "pinRule": "4–8 Ziffern",
+    "passwordRule": "Mindestens 8 Zeichen",
+    "mismatch": "Die Eingaben stimmen nicht überein",
+    "create": "Profil erstellen",
+    "mode": {
+      "none": "Ohne Schutz",
+      "pin": "PIN",
+      "password": "Passwort"
+    },
+    "modeHint": {
+      "none": "Jede Person an diesem Mac kann das Profil öffnen.",
+      "pin": "Eine kurze Zahl schützt vor neugierigen Geschwistern.",
+      "password": "Stärkerer Schutz, empfohlen für sensible Unterlagen."
+    },
+    "sectionTitle": "Profil & Schutz",
+    "current": "Aktuelle PIN bzw. aktuelles Passwort",
+    "newPin": "Neue PIN",
+    "newPassword": "Neues Passwort",
+    "saveProtection": "Schutz speichern",
+    "protectionSaved": "Schutz gespeichert",
+    "saveFailed": "Speichern fehlgeschlagen"
   }
 }

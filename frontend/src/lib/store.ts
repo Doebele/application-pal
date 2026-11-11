@@ -83,7 +83,14 @@ type UiState = {
   startAiJob: (appId: string, kind: AiJobKind) => void;
   finishAiJob: (appId: string, kind: AiJobKind) => void;
   markAiJobsSeen: (appId: string) => void;
+  // Server-side API keys (see SettingsSync). Per session, never persisted.
+  secretsAvailable: boolean;
+  serverSecrets: Record<AiSecretProvider, boolean>;
+  setServerSecrets: (available: boolean, flags: Record<AiSecretProvider, boolean>) => void;
 };
+
+export type AiSecretProvider = "anthropic" | "openai" | "gemini" | "openrouter";
+export const NO_SERVER_SECRETS: Record<AiSecretProvider, boolean> = { anthropic: false, openai: false, gemini: false, openrouter: false };
 
 export const useUiStore = create<UiState>()(
   persist(
@@ -135,6 +142,9 @@ export const useUiStore = create<UiState>()(
       setDriveNameFolder: (driveNameFolder) => set({ driveNameFolder }),
       setDriveNameDoc:    (driveNameDoc)    => set({ driveNameDoc }),
       aiJobs: {},
+      secretsAvailable: false,
+      serverSecrets: NO_SERVER_SECRETS,
+      setServerSecrets: (secretsAvailable, serverSecrets) => set({ secretsAvailable, serverSecrets }),
       startAiJob: (appId, kind) => set((s) => ({
         aiJobs: { ...s.aiJobs, [appId]: { ...s.aiJobs[appId], [kind]: { status: "running", seen: true, at: Date.now() } } },
       })),
@@ -156,6 +166,8 @@ export const useUiStore = create<UiState>()(
       partialize: (state) => {
         const rest = { ...state } as Partial<UiState>;
         delete rest.aiJobs;
+        delete rest.secretsAvailable;
+        delete rest.serverSecrets;
         return rest;
       },
       migrate: (persisted: unknown) => {

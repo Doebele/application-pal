@@ -3,6 +3,7 @@ import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { ProfilePicker } from "../components/ProfilePicker";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 
 type Mode = "setup" | "login";
@@ -29,7 +30,19 @@ export function getRememberedToken(email: string): string | null {
   } catch { return null; }
 }
 
+// Desktop app (APP_MODE=desktop) → profile picker; web → e-mail/Google/passkey login.
 export function SetupPage() {
+  const [appMode, setAppMode] = useState<"web" | "desktop" | null>(null);
+  useEffect(() => {
+    api.get<{ mode?: "web" | "desktop" }>("/api/auth/status")
+      .then(r => setAppMode(r.data.mode ?? "web"))
+      .catch(() => setAppMode("web"));
+  }, []);
+  if (appMode === null) return null;
+  return appMode === "desktop" ? <ProfilePicker /> : <WebSetupPage />;
+}
+
+function WebSetupPage() {
   const { refetch } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

@@ -19,6 +19,7 @@ import {
   type AuthenticationResponseJSON,
 } from "@simplewebauthn/server";
 import {
+  AI_SECRET_FIELDS, AI_SECRET_PROVIDERS, type AiSecretProvider, type UserSettingsResponse, type DesktopProfile, type AuthMode,
   applicationImportRequestSchema,
   applicationInsertSchema,
   applicationPatchSchema,
@@ -96,10 +97,33 @@ import { buildLiChecklist } from "./linkedin-checklist.js";
 import { unzipSync } from "fflate";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, getTableColumns, type SQL, type Table } from "drizzle-orm";
 import { ZodError } from "zod";
-import { db } from "./db.js";
+import { db, closeDb } from "./db.js";
+import { aiKey, requestCtx, encryptSecrets, decryptSecrets, secretFlags, masterKey, type AiSecrets } from "./secrets.js";
 import { env, KB_BASE_PATH } from "./env.js";
 
 const app = new Hono();
+
+// ─── Desktop sidecar guard ───────────────────────────────────
+// In the desktop app the backend listens on 127.0.0.1, where any local program
+// could reach it. The Tauri shell passes a random DESKTOP_TOKEN and opens
+// /__desktop/enter?token=… once; that sets an httpOnly cookie, and every other
+// request without the cookie is refused. Unset (web/Docker) = no guard.
+if (env.DESKTOP_TOKEN) {
+  const expected = Buffer.from(env.DESKTOP_TOKEN);
+  const same = (v: string | undefined) => !!v && v.length === expected.length && crypto.timingSafeEqual(Buffer.from(v), expected);
+  app.get("/__desktop/enter", (c) => {
+    if (!same(c.req.query("token"))) return c.text("Forbidden", 403);
+    // Lax, not Strict: the first navigation comes from the tauri:// loading page (another origin),
+    // and WKWebView drops Strict cookies on the redirect that follows.
+    setCookie(c, "desktop_token", env.DESKTOP_TOKEN, { httpOnly: true, sameSite: "Lax", path: "/" });
+    return c.redirect("/", 302);
+  });
+  app.use("*", async (c, next) => {
+    if (c.req.path === "/__desktop/enter" || c.req.path === "/health") return next();
+    if (!same(getCookie(c, "desktop_token"))) return c.text("Forbidden", 403);
+    return next();
+  });
+}
 
 // ─── JWT Secret (auto-generate if not set in env) ─────────────
 let _jwtSecret: string | null = null;
@@ -170,6 +194,17 @@ async function sendOtpEmail(to: string, code: string) {
 const webauthnChallenges = new Map<string, string>();
 
 // ─── Auth Middleware ──────────────────────────────────────────
+// Runs the rest of the request with the user's decrypted API keys in scope (see secrets.ts).
+// Only for non-GET requests — every AI call is a POST.
+async function withUserCtx(method: string, userId: string, next: () => Promise<void>) {
+  let secrets: AiSecrets = {};
+  if (method !== "GET" && masterKey()) {
+    const [p] = await db.select({ s: userProfile.aiSecrets }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+    secrets = decryptSecrets(p?.s);
+  }
+  return requestCtx.run({ userId, secrets }, next);
+}
+
 app.use("/api/*", async (c, next) => {
   const p = c.req.path;
   // Public routes: auth endpoints + google/linkedin OAuth callbacks + health
@@ -181,7 +216,7 @@ app.use("/api/*", async (c, next) => {
   try {
     const payload = jwt.verify(token, getJwtSecret()) as { userId: string };
     c.set("userId" as never, payload.userId);
-    return next();
+    return withUserCtx(c.req.method, payload.userId, next);
   } catch {
     // Try refresh token silently
     const refresh = getCookie(c, "refresh_token");
@@ -190,7 +225,7 @@ app.use("/api/*", async (c, next) => {
         const rp = jwt.verify(refresh, getJwtSecret()) as { userId: string; rememberMe?: boolean };
         issueTokens(c, rp.userId, rp.rememberMe === true, await getSessionTimeout(rp.userId));
         c.set("userId" as never, rp.userId);
-        return next();
+        return withUserCtx(c.req.method, rp.userId, next);
       } catch { /* fall through */ }
     }
     return c.json({ error: "Unauthorized" }, 401);
@@ -199,10 +234,84 @@ app.use("/api/*", async (c, next) => {
 
 // ─── Auth Routes ──────────────────────────────────────────────
 
-// Check if first-run setup is needed
+// Check if first-run setup is needed; `mode: "desktop"` switches the login screen to the profile picker.
 app.get("/api/auth/status", async (c) => {
   const [u] = await db.select({ id: users.id }).from(users).limit(1);
-  return c.json({ setup: !!u });
+  return c.json({ setup: !!u, mode: env.APP_MODE });
+});
+
+const ME_FIELDS = { id: users.id, email: users.email, displayName: users.displayName, authMode: users.authMode };
+function meBody(u: { id: string; email: string; displayName: string | null; authMode: string }) {
+  return { id: u.id, email: u.email, name: u.displayName || u.email, authMode: u.authMode as AuthMode, mode: env.APP_MODE };
+}
+
+// ─── Desktop profiles (APP_MODE=desktop) ─────────────────────
+// Several family members share one Mac: a profile picker instead of e-mail login,
+// and each profile chooses its own protection: password, PIN or none.
+// PIN/none are refused in web mode — there the server is reachable by others.
+const PIN_RE = /^\d{4,8}$/;
+function validateSecret(mode: AuthMode, secret: string | undefined): string | null {
+  if (mode === "none") return null;
+  if (mode === "pin") return secret && PIN_RE.test(secret) ? null : "PIN: 4–8 Ziffern";
+  return secret && secret.length >= 8 ? null : "Passwort: mindestens 8 Zeichen";
+}
+function isAuthMode(v: unknown): v is AuthMode { return v === "password" || v === "pin" || v === "none"; }
+
+// Simple brute-force brake per profile: 5 wrong tries → 60 s lock.
+const loginFails = new Map<string, { n: number; until: number }>();
+function lockedFor(id: string): number {
+  const f = loginFails.get(id);
+  return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0;
+}
+function noteFail(id: string) {
+  const f = loginFails.get(id) ?? { n: 0, until: 0 };
+  f.n += 1;
+  if (f.n >= 5) { f.n = 0; f.until = Date.now() + 60_000; }
+  loginFails.set(id, f);
+}
+
+app.get("/api/auth/profiles", async (c) => {
+  if (env.APP_MODE !== "desktop") return c.json({ error: "Nur in der Desktop-App" }, 404);
+  const rows = await db.select(ME_FIELDS).from(users).orderBy(users.createdAt);
+  return c.json(rows.map((u): DesktopProfile => ({ id: u.id, name: u.displayName || u.email, authMode: u.authMode as AuthMode })));
+});
+
+app.post("/api/auth/profiles", async (c) => {
+  if (env.APP_MODE !== "desktop") return c.json({ error: "Nur in der Desktop-App" }, 404);
+  const { name, authMode, secret, email } = await c.req.json<{ name?: string; authMode?: AuthMode; secret?: string; email?: string }>();
+  const displayName = (name ?? "").trim();
+  if (!displayName || displayName.length > 60) return c.json({ error: "Name fehlt (max. 60 Zeichen)" }, 400);
+  const mode: AuthMode = isAuthMode(authMode) ? authMode : "none";
+  const bad = validateSecret(mode, secret);
+  if (bad) return c.json({ error: bad }, 400);
+  // users.email is unique and required; a profile without e-mail gets a local placeholder.
+  const mail = (email ?? "").trim().toLowerCase() || `profil-${crypto.randomBytes(5).toString("hex")}@profile.local`;
+  const [dup] = await db.select({ id: users.id }).from(users).where(eq(users.email, mail)).limit(1);
+  if (dup) return c.json({ error: "E-Mail bereits vergeben" }, 409);
+  const passwordHash = mode === "none" ? null : await bcrypt.hash(secret!, 12);
+  const [user] = await db.insert(users).values({ email: mail, passwordHash, displayName, authMode: mode }).returning();
+  // uiSettings "{}" = new account → client starts from defaults instead of copying the
+  // previous profile's local state (null is reserved for pre-M1 accounts to migrate).
+  await db.insert(userProfile).values({ userId: user.id, name: displayName, uiSettings: "{}" }).onConflictDoNothing();
+  issueTokens(c, user.id, true, await getSessionTimeout(user.id));
+  return c.json(meBody(user), 201);
+});
+
+app.post("/api/auth/profile-login", async (c) => {
+  if (env.APP_MODE !== "desktop") return c.json({ error: "Nur in der Desktop-App" }, 404);
+  const { id, secret } = await c.req.json<{ id?: string; secret?: string }>();
+  if (!id) return c.json({ error: "Profil fehlt" }, 400);
+  const wait = lockedFor(id);
+  if (wait) return c.json({ error: `Zu viele Versuche — bitte ${wait} s warten`, retryAfter: wait }, 429);
+  const [user] = await db.select({ ...ME_FIELDS, passwordHash: users.passwordHash }).from(users).where(eq(users.id, id)).limit(1);
+  if (!user) return c.json({ error: "Profil nicht gefunden" }, 404);
+  if (user.authMode !== "none") {
+    const ok = !!secret && !!user.passwordHash && await bcrypt.compare(secret, user.passwordHash);
+    if (!ok) { noteFail(id); return c.json({ error: user.authMode === "pin" ? "Falsche PIN" : "Falsches Passwort" }, 401); }
+  }
+  loginFails.delete(id);
+  issueTokens(c, user.id, true, await getSessionTimeout(user.id));
+  return c.json(meBody(user));
 });
 
 // Public: list all registered user emails (for user-picker on login/switch screen)
@@ -240,8 +349,8 @@ app.post("/api/auth/setup", async (c) => {
 
   const passwordHash = await bcrypt.hash(password, 12);
   const [user] = await db.insert(users).values({ email: email.toLowerCase().trim(), passwordHash }).returning();
-  // Create empty profile for new user
-  await db.insert(userProfile).values({ userId: user.id }).onConflictDoNothing();
+  // Create empty profile for new user ("{}" = start from default settings, see settingsSync)
+  await db.insert(userProfile).values({ userId: user.id, uiSettings: "{}" }).onConflictDoNothing();
   const timeout = await getSessionTimeout(user.id);
   const refreshToken = issueTokens(c, user.id, rememberMe === true, timeout);
   return c.json({ email: user.email, ...(rememberMe ? { autoLoginToken: refreshToken } : {}) });
@@ -313,8 +422,8 @@ app.get("/api/auth/me", async (c) => {
   if (token) {
     try {
       const { userId } = jwt.verify(token, getJwtSecret()) as { userId: string };
-      const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
-      if (user) return c.json({ email: user.email });
+      const [user] = await db.select(ME_FIELDS).from(users).where(eq(users.id, userId)).limit(1);
+      if (user) return c.json(meBody(user));
     } catch { /* expired — fall through to refresh */ }
   }
   // 2. access_token missing/expired → try refresh_token (silent refresh)
@@ -322,11 +431,11 @@ app.get("/api/auth/me", async (c) => {
   if (refresh) {
     try {
       const rp = jwt.verify(refresh, getJwtSecret()) as { userId: string; rememberMe?: boolean };
-      const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, rp.userId)).limit(1);
+      const [user] = await db.select(ME_FIELDS).from(users).where(eq(users.id, rp.userId)).limit(1);
       if (user) {
         const timeout = await getSessionTimeout(rp.userId);
         issueTokens(c, rp.userId, rp.rememberMe === true, timeout);
-        return c.json({ email: user.email });
+        return c.json(meBody(user));
       }
     } catch { /* refresh invalid or expired */ }
   }
@@ -848,7 +957,7 @@ async function extractWithLmStudio(text: string, ai: AiConfig): Promise<LlmExtra
 }
 
 async function extractWithAnthropic(text: string, ai: AiConfig): Promise<LlmExtracted | null> {
-  const apiKey = ai.anthropicApiKey;
+  const apiKey = aiKey(ai, "anthropic");
   if (!apiKey) return null;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -974,7 +1083,7 @@ async function extractWithOpenAiCompat(text: string, ai: AiConfig, baseUrl: stri
 }
 
 async function extractWithGemini(text: string, ai: AiConfig): Promise<LlmExtracted | null> {
-  const apiKey = ai.geminiApiKey;
+  const apiKey = aiKey(ai, "gemini");
   if (!apiKey) return null;
   const model = (ai as AiConfig & { geminiModel?: string }).geminiModel || "gemini-2.0-flash";
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -997,15 +1106,15 @@ async function extractWithAi(text: string, ai: AiConfig): Promise<LlmExtracted |
   if (ai.provider === "lm-studio") return extractWithLmStudio(cleaned, ai);
   if (ai.provider === "anthropic") return extractWithAnthropic(cleaned, ai);
   if (ai.provider === "openai") {
-    if (!ai.openaiApiKey) return null;
+    if (!aiKey(ai, "openai")) return null;
     const model = (ai as AiConfig & { openaiModel?: string }).openaiModel || "gpt-4o-mini";
-    return extractWithOpenAiCompat(cleaned, ai, "https://api.openai.com", ai.openaiApiKey, model);
+    return extractWithOpenAiCompat(cleaned, ai, "https://api.openai.com", aiKey(ai, "openai"), model);
   }
   if (ai.provider === "gemini") return extractWithGemini(cleaned, ai);
   if (ai.provider === "openrouter") {
-    if (!ai.openrouterApiKey) return null;
+    if (!aiKey(ai, "openrouter")) return null;
     const model = (ai as AiConfig & { openrouterModel?: string }).openrouterModel || "anthropic/claude-haiku-4-5";
-    return extractWithOpenAiCompat(cleaned, ai, "https://openrouter.ai/api", ai.openrouterApiKey, model, { "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" });
+    return extractWithOpenAiCompat(cleaned, ai, "https://openrouter.ai/api", aiKey(ai, "openrouter"), model, { "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" });
   }
   if (ai.provider === "ollama") {
     const baseUrl = await resolveHostUrl((ai.ollamaUrl ?? "http://localhost:11434").replace(/\/$/, ""));
@@ -1089,7 +1198,7 @@ function parseKbJsonResponse(raw: string): KbExtracted | null {
 }
 
 async function extractKnowledgeBaseWithAnthropic(text: string, ai?: AiConfig): Promise<KbExtracted | null> {
-  const apiKey = ai?.anthropicApiKey ?? process.env.ANTHROPIC_API_KEY;
+  const apiKey = (aiKey(ai, "anthropic") || process.env.ANTHROPIC_API_KEY);
   if (!apiKey) return null;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1786,24 +1895,25 @@ app.get("/api/profile", async (c) => {
   if (rows.length === 0) {
     // Auto-create empty profile for this user
     const [created] = await db.insert(userProfile).values({ userId }).returning();
-    return c.json(created);
+    return c.json(publicProfile(created));
   }
-  return c.json(rows[0]);
+  return c.json(publicProfile(rows[0]));
 });
 
 app.put("/api/profile", zValidator("json", userProfileInsertSchema), async (c) => {
   const userId = getUserId(c);
   const payload = c.req.valid("json");
+  delete (payload as Record<string, unknown>).aiSecrets;   // only via PUT /api/settings/secrets
   const existing = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   if (existing.length === 0) {
     const [created] = await db.insert(userProfile).values({ ...payload, userId }).returning();
-    return c.json(created, 201);
+    return c.json(publicProfile(created), 201);
   }
   const [updated] = await db.update(userProfile)
     .set({ ...payload, updatedAt: new Date() })
     .where(eq(userProfile.userId, userId))
     .returning();
-  return c.json(updated);
+  return c.json(publicProfile(updated));
 });
 
 // PATCH /api/profile — partial update (subset of fields, no full-schema validation)
@@ -1814,17 +1924,112 @@ app.patch("/api/profile", async (c) => {
   // Ensure userId is never overwritten via the patch body
   delete (patch as Record<string, unknown>).userId;
   delete (patch as Record<string, unknown>).id;
+  delete (patch as Record<string, unknown>).aiSecrets;   // only via PUT /api/settings/secrets
 
   const existing = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   if (existing.length === 0) {
     const [created] = await db.insert(userProfile).values({ ...patch, userId }).returning();
-    return c.json(created, 201);
+    return c.json(publicProfile(created), 201);
   }
   const [updated] = await db.update(userProfile)
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(userProfile.userId, userId))
     .returning();
-  return c.json(updated);
+  return c.json(publicProfile(updated));
+});
+
+// Profile name + protection of the logged-in account.
+app.patch("/api/account", async (c) => {
+  const userId = getUserId(c);
+  const { name } = await c.req.json<{ name?: string }>();
+  const displayName = (name ?? "").trim();
+  if (!displayName || displayName.length > 60) return c.json({ error: "Name fehlt (max. 60 Zeichen)" }, 400);
+  const [u] = await db.update(users).set({ displayName }).where(eq(users.id, userId)).returning(ME_FIELDS);
+  return c.json(meBody(u));
+});
+
+// Body: { authMode, secret?, current? } — `current` is required unless the profile is unprotected.
+app.put("/api/account/protection", async (c) => {
+  const userId = getUserId(c);
+  const { authMode, secret, current } = await c.req.json<{ authMode?: AuthMode; secret?: string; current?: string }>();
+  if (!isAuthMode(authMode)) return c.json({ error: "Ungültiger Schutz" }, 400);
+  if (authMode !== "password" && env.APP_MODE !== "desktop") return c.json({ error: "PIN oder kein Schutz nur in der Desktop-App" }, 400);
+  const bad = validateSecret(authMode, secret);
+  if (bad) return c.json({ error: bad }, 400);
+  const [user] = await db.select({ authMode: users.authMode, passwordHash: users.passwordHash }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) return c.json({ error: "Profil nicht gefunden" }, 404);
+  if (user.authMode !== "none" && user.passwordHash) {
+    const wait = lockedFor(userId);
+    if (wait) return c.json({ error: `Zu viele Versuche — bitte ${wait} s warten` }, 429);
+    if (!current || !(await bcrypt.compare(current, user.passwordHash))) { noteFail(userId); return c.json({ error: "Aktuelle PIN bzw. aktuelles Passwort falsch" }, 401); }
+  }
+  const passwordHash = authMode === "none" ? null : await bcrypt.hash(secret!, 12);
+  const [u] = await db.update(users).set({ authMode, passwordHash }).where(eq(users.id, userId)).returning(ME_FIELDS);
+  return c.json(meBody(u));
+});
+
+function publicProfile<T extends { aiSecrets?: string | null }>(row: T): Omit<T, "aiSecrets"> {
+  const { aiSecrets: _omit, ...rest } = row;
+  return rest;
+}
+
+// ─── Per-user settings (UI + AI provider) and encrypted API keys ─────────────
+async function ensureProfileRow(userId: string) {
+  const [row] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  if (row) return row;
+  const [created] = await db.insert(userProfile).values({ userId }).returning();
+  return created;
+}
+
+const MAX_SETTINGS_BYTES = 64 * 1024;
+
+app.get("/api/settings", async (c) => {
+  const row = await ensureProfileRow(getUserId(c));
+  let settings: Record<string, unknown> | null = null;
+  try { settings = row.uiSettings ? JSON.parse(row.uiSettings) : null; } catch { settings = null; }
+  const body: UserSettingsResponse = {
+    settings,
+    secrets: secretFlags(decryptSecrets(row.aiSecrets)),
+    secretsAvailable: !!masterKey(),
+  };
+  return c.json(body);
+});
+
+// Shallow merge; the nested `ai` object is merged one level deeper. Key fields are dropped.
+app.patch("/api/settings", async (c) => {
+  const userId = getUserId(c);
+  const patch = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) return c.json({ error: "Ungültige Einstellungen" }, 400);
+  const row = await ensureProfileRow(userId);
+  let current: Record<string, unknown> = {};
+  try { current = row.uiSettings ? JSON.parse(row.uiSettings) : {}; } catch { current = {}; }
+  const next: Record<string, unknown> = { ...current, ...patch };
+  if (patch.ai && typeof patch.ai === "object") {
+    const ai = { ...(current.ai as Record<string, unknown> ?? {}), ...(patch.ai as Record<string, unknown>) };
+    for (const f of Object.values(AI_SECRET_FIELDS)) delete ai[f];
+    next.ai = ai;
+  }
+  const json = JSON.stringify(next);
+  if (json.length > MAX_SETTINGS_BYTES) return c.json({ error: "Einstellungen zu gross" }, 413);
+  await db.update(userProfile).set({ uiSettings: json, updatedAt: new Date() }).where(eq(userProfile.userId, userId));
+  return c.json({ ok: true });
+});
+
+// Body: { keys: { anthropic?: string, … } } — "" removes a key, missing = unchanged.
+app.put("/api/settings/secrets", async (c) => {
+  if (!masterKey()) return c.json({ error: "Kein Schlüssel konfiguriert (SECRETS_KEY oder JWT_SECRET)" }, 503);
+  const userId = getUserId(c);
+  const { keys } = await c.req.json<{ keys?: Partial<Record<AiSecretProvider, string>> }>().catch(() => ({ keys: undefined }));
+  if (!keys || typeof keys !== "object") return c.json({ error: "keys fehlt" }, 400);
+  const row = await ensureProfileRow(userId);
+  const secrets = decryptSecrets(row.aiSecrets);
+  for (const p of AI_SECRET_PROVIDERS) {
+    const v = keys[p];
+    if (typeof v !== "string") continue;
+    if (v.trim()) secrets[p] = v.trim(); else delete secrets[p];
+  }
+  await db.update(userProfile).set({ aiSecrets: encryptSecrets(secrets), updatedAt: new Date() }).where(eq(userProfile.userId, userId));
+  return c.json({ secrets: secretFlags(secrets) });
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -2135,10 +2340,10 @@ app.post("/api/applications/:id/match-score", async (c) => {
       const json = await res.json() as { choices?: { message?: { content?: string } }[] };
       raw = json.choices?.[0]?.message?.content ?? "";
     } else if (aiConfig.provider === "anthropic") {
-      if (!aiConfig.anthropicApiKey) return c.json({ error: "Anthropic API Key fehlt" }, 400);
+      if (!aiKey(aiConfig, "anthropic")) return c.json({ error: "Anthropic API Key fehlt" }, 400);
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
-        headers: { "x-api-key": aiConfig.anthropicApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        headers: { "x-api-key": aiKey(aiConfig, "anthropic"), "anthropic-version": "2023-06-01", "content-type": "application/json" },
         body: JSON.stringify({
           model: "claude-haiku-4-5-20251001",
           max_tokens: 2048,
@@ -2484,10 +2689,10 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
     if (!res.ok) throw new Error(`LM Studio error: ${res.status} ${(await res.text().catch(() => "")).slice(0, 400)}`);
     return readChatCompletionStream(res);
   } else if (ai.provider === "anthropic") {
-    if (!ai.anthropicApiKey) throw new Error("Anthropic API Key fehlt");
+    if (!aiKey(ai, "anthropic")) throw new Error("Anthropic API Key fehlt");
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "x-api-key": ai.anthropicApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      headers: { "x-api-key": aiKey(ai, "anthropic"), "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 8192, system, messages: [{ role: "user", content: fullUser }] }),
       signal: AbortSignal.timeout(120_000)
     });
@@ -2495,11 +2700,11 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
     const json = await res.json() as { content?: { type: string; text: string }[] };
     return json.content?.find((b) => b.type === "text")?.text ?? "";
   } else if (ai.provider === "openai") {
-    if (!ai.openaiApiKey) throw new Error("OpenAI API Key fehlt");
+    if (!aiKey(ai, "openai")) throw new Error("OpenAI API Key fehlt");
     const model = (ai as AiConfig & { openaiModel?: string }).openaiModel || "gpt-4o-mini";
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${ai.openaiApiKey}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${aiKey(ai, "openai")}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: fullUser }], temperature: 0.15, max_tokens: 8192 }),
       signal: AbortSignal.timeout(120_000)
     });
@@ -2507,9 +2712,9 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
     const json = await res.json() as { choices?: { message?: { content?: string } }[] };
     return json.choices?.[0]?.message?.content ?? "";
   } else if (ai.provider === "gemini") {
-    if (!ai.geminiApiKey) throw new Error("Gemini API Key fehlt");
+    if (!aiKey(ai, "gemini")) throw new Error("Gemini API Key fehlt");
     const model = (ai as AiConfig & { geminiModel?: string }).geminiModel || "gemini-2.0-flash";
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${ai.geminiApiKey}`, {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${aiKey(ai, "gemini")}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2523,11 +2728,11 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
     const json = await res.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     return json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   } else if (ai.provider === "openrouter") {
-    if (!ai.openrouterApiKey) throw new Error("OpenRouter API Key fehlt");
+    if (!aiKey(ai, "openrouter")) throw new Error("OpenRouter API Key fehlt");
     const model = (ai as AiConfig & { openrouterModel?: string }).openrouterModel || "anthropic/claude-haiku-4-5";
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${ai.openrouterApiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" },
+      headers: { "Authorization": `Bearer ${aiKey(ai, "openrouter")}`, "Content-Type": "application/json", "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" },
       body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: fullUser }], temperature: 0.15, max_tokens: 8192 }),
       signal: AbortSignal.timeout(120_000)
     });
@@ -6052,7 +6257,7 @@ async function buildExportPayload(userId: string) {
     applicationDocuments: docs,
     applicationActivities: activities,
     applicationContacts: contacts,
-    userProfile: profiles[0] ?? null,
+    userProfile: profiles[0] ? publicProfile(profiles[0]) : null,   // API keys never leave the install
     userDocuments: userDocs,
     cvVersions: cvRows,
     linkedinVersions: liRows,
@@ -6655,6 +6860,9 @@ app.post("/api/import", async (c) => {
     return c.json({ error: "Ungültige Export-Datei" }, 400);
   }
 
+  // API keys are not part of exports; keep the ones stored for this user across a replace.
+  const [keptSecrets] = await db.select({ s: userProfile.aiSecrets }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+
   if (mode === "replace") {
     // Delete only this user's data in FK-safe order
     const userAppIds = (await db.select({ id: applications.id }).from(applications).where(eq(applications.userId, userId))).map(a => a.id);
@@ -6688,6 +6896,7 @@ app.post("/api/import", async (c) => {
     rows?.forEach((r, i) => { rows[i] = revive(table, r); });
   }
   if (data.userProfile) data.userProfile = revive(userProfile, data.userProfile);
+  if (data.userProfile) delete (data.userProfile as Record<string, unknown>).aiSecrets;
 
   // Insert all records — add userId, skip duplicates on conflict (for merge mode)
   if (data.applications?.length) {
@@ -6742,6 +6951,9 @@ app.post("/api/import", async (c) => {
     const rp = Object.assign({}, data.userProfile, { userId }) as never;
     await db.insert(userProfile).values(rp).onConflictDoUpdate({ target: userProfile.id, set: rp });
   }
+  if (keptSecrets?.s) {
+    await db.update(userProfile).set({ aiSecrets: keptSecrets.s }).where(eq(userProfile.userId, userId));
+  }
 
   return c.json({ ok: true, mode, imported: {
     applications: data.applications?.length ?? 0,
@@ -6782,6 +6994,27 @@ if (env.STATIC_DIR) {
 void ensureKbTree()
   .then(regenerateKbIndex)
   .catch((error) => console.warn("Knowledge base bootstrap failed:", error));
+
+// Desktop sidecar: the Tauri shell holds our stdin open. When the shell exits — or
+// crashes — the pipe closes and we shut down cleanly, so PGlite is flushed and no
+// orphaned backend keeps the database locked.
+if (process.env.DESKTOP_PARENT_PIPE === "1") {
+  let stopping = false;
+  const stop = async (why: string) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[desktop] ${why} — shutting down`);
+    const force = setTimeout(() => process.exit(0), 5000);
+    try { await closeDb(); } catch (e) { console.warn("[desktop] closeDb failed", e); }
+    clearTimeout(force);
+    process.exit(0);
+  };
+  process.stdin.on("end", () => void stop("parent pipe closed"));
+  process.stdin.on("close", () => void stop("parent pipe closed"));
+  process.stdin.resume();
+  process.on("SIGTERM", () => void stop("SIGTERM"));
+  process.on("SIGINT", () => void stop("SIGINT"));
+}
 
 serve(
   {

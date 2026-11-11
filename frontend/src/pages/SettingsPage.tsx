@@ -3,7 +3,7 @@ import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Do
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
-import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
+import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, type AiSecretProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { startRegistration } from "@simplewebauthn/browser";
@@ -125,12 +125,71 @@ function LmStudioSection() {
   );
 }
 
+// ─── API key input ────────────────────────────────────────────
+// With server-side encryption (see lib/settingsSync.tsx) a key is sent once and
+// stored encrypted for the current profile; the field then only shows that a key
+// exists. Without it (web install without SECRETS_KEY/JWT_SECRET) the key stays in
+// the browser as before.
+function ApiKeyInput({ provider, placeholder }: { provider: AiSecretProvider; placeholder: string }) {
+  const { t } = useTranslation();
+  const { ai, setAi, secretsAvailable, serverSecrets, setServerSecrets } = useUiStore();
+  const [show, setShow] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const field = ({ anthropic: "anthropicApiKey", openai: "openaiApiKey", gemini: "geminiApiKey", openrouter: "openrouterApiKey" } as const)[provider];
+  const inputStyle = { ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 };
+
+  if (!secretsAvailable) {
+    return (
+      <>
+        <input type={show ? "text" : "password"} value={ai[field]} onChange={(e) => setAi({ [field]: e.target.value })}
+          placeholder={placeholder} style={inputStyle} />
+        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
+          {show ? t("settings.hide") : t("settings.show")}
+        </button>
+      </>
+    );
+  }
+
+  const save = async (value: string) => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.put<{ secrets: Record<AiSecretProvider, boolean> }>("/api/settings/secrets", { keys: { [provider]: value } });
+      setServerSecrets(true, r.data.secrets);
+      setDraft("");
+    } catch {
+      setErr(t("settings.keySaveFailed"));
+    } finally { setBusy(false); }
+  };
+  const stored = serverSecrets[provider];
+  return (
+    <>
+      <input
+        type={show ? "text" : "password"}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => { if (draft.trim()) void save(draft); }}
+        onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) void save(draft); }}
+        placeholder={stored ? t("settings.keyStored") : placeholder}
+        title={err ?? (stored ? t("settings.keyStoredHint") : undefined)}
+        disabled={busy}
+        style={{ ...inputStyle, ...(err ? { borderColor: "var(--score-low)" } : {}) }}
+      />
+      {stored && !draft
+        ? <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} disabled={busy} onClick={() => void save("")}>
+            {t("settings.keyRemove")}
+          </button>
+        : <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
+            {show ? t("settings.hide") : t("settings.show")}
+          </button>}
+    </>
+  );
+}
+
 // ─── Anthropic section ────────────────────────────────────────
 function AnthropicSection() {
   const { t } = useTranslation();
-  const { ai, setAi } = useUiStore();
-  const [show, setShow] = useState(false);
-
   return (
     <div className="settings-row">
       <div>
@@ -138,20 +197,7 @@ function AnthropicSection() {
         <div className="settings-row-sub">{t("settings.anthropicKeySub")}</div>
       </div>
       <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
-        <input
-          type={show ? "text" : "password"}
-          value={ai.anthropicApiKey}
-          onChange={(e) => setAi({ anthropicApiKey: e.target.value })}
-          placeholder="sk-ant-…"
-          style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
-        />
-        <button
-          className="btn btn-ghost"
-          style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }}
-          onClick={() => setShow((s) => !s)}
-        >
-          {show ? t("settings.hide") : t("settings.show")}
-        </button>
+        <ApiKeyInput provider="anthropic" placeholder="sk-ant-…" />
       </div>
     </div>
   );
@@ -161,7 +207,6 @@ function AnthropicSection() {
 function OpenAiSection() {
   const { t } = useTranslation();
   const { ai, setAi } = useUiStore();
-  const [show, setShow] = useState(false);
   const OPENAI_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"];
 
   return (
@@ -172,16 +217,7 @@ function OpenAiSection() {
           <div className="settings-row-sub">{t("settings.openaiKeySub")}</div>
         </div>
         <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
-          <input
-            type={show ? "text" : "password"}
-            value={ai.openaiApiKey}
-            onChange={(e) => setAi({ openaiApiKey: e.target.value })}
-            placeholder="sk-…"
-            style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
-          />
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
-            {show ? t("settings.hide") : t("settings.show")}
-          </button>
+          <ApiKeyInput provider="openai" placeholder="sk-…" />
         </div>
       </div>
       <div className="settings-row">
@@ -207,7 +243,6 @@ function OpenAiSection() {
 function GeminiSection() {
   const { t } = useTranslation();
   const { ai, setAi } = useUiStore();
-  const [show, setShow] = useState(false);
   const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"];
 
   return (
@@ -218,16 +253,7 @@ function GeminiSection() {
           <div className="settings-row-sub">{t("settings.geminiKeySub")}</div>
         </div>
         <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
-          <input
-            type={show ? "text" : "password"}
-            value={ai.geminiApiKey}
-            onChange={(e) => setAi({ geminiApiKey: e.target.value })}
-            placeholder="AIza…"
-            style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
-          />
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
-            {show ? t("settings.hide") : t("settings.show")}
-          </button>
+          <ApiKeyInput provider="gemini" placeholder="AIza…" />
         </div>
       </div>
       <div className="settings-row">
@@ -253,7 +279,6 @@ function GeminiSection() {
 function OpenRouterSection() {
   const { t } = useTranslation();
   const { ai, setAi } = useUiStore();
-  const [show, setShow] = useState(false);
 
   return (
     <>
@@ -263,16 +288,7 @@ function OpenRouterSection() {
           <div className="settings-row-sub">{t("settings.openrouterKeySub")}</div>
         </div>
         <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
-          <input
-            type={show ? "text" : "password"}
-            value={ai.openrouterApiKey}
-            onChange={(e) => setAi({ openrouterApiKey: e.target.value })}
-            placeholder="sk-or-…"
-            style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
-          />
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
-            {show ? t("settings.hide") : t("settings.show")}
-          </button>
+          <ApiKeyInput provider="openrouter" placeholder="sk-or-…" />
         </div>
       </div>
       <div className="settings-row">
@@ -1210,6 +1226,114 @@ function InviteSection() {
 }
 
 // ─── Security Section ─────────────────────────────────────────
+// ─── Desktop: profile name + protection ───────────────────────
+function ProfileProtectionSection() {
+  const { t } = useTranslation();
+  const { user, refetch } = useAuth();
+  const [name, setName] = useState(user?.name ?? "");
+  const [mode, setMode] = useState<"none" | "pin" | "password">(user?.authMode ?? "none");
+  const [current, setCurrent] = useState("");
+  const [secret, setSecret] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const protectedNow = user?.authMode && user.authMode !== "none";
+  const digits = (v: string) => mode === "pin" ? v.replace(/\D/g, "") : v;
+  const fail = (err: unknown, fallback: string) =>
+    setMsg({ ok: false, text: (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback });
+
+  const saveName = async () => {
+    if (!name.trim() || name.trim() === user?.name) return;
+    try { await api.patch("/api/account", { name: name.trim() }); await refetch(); setMsg({ ok: true, text: t("profiles.nameSaved") }); }
+    catch (err) { fail(err, t("profiles.saveFailed")); }
+  };
+
+  const saveProtection = async () => {
+    setMsg(null);
+    if (mode === "pin" && !/^\d{4,8}$/.test(secret)) return setMsg({ ok: false, text: t("profiles.pinRule") });
+    if (mode === "password" && secret.length < 8) return setMsg({ ok: false, text: t("profiles.passwordRule") });
+    if (mode !== "none" && secret !== confirm) return setMsg({ ok: false, text: t("profiles.mismatch") });
+    setBusy(true);
+    try {
+      await api.put("/api/account/protection", { authMode: mode, secret: mode === "none" ? undefined : secret, current: current || undefined });
+      await refetch();
+      setCurrent(""); setSecret(""); setConfirm("");
+      setMsg({ ok: true, text: t("profiles.protectionSaved") });
+    } catch (err) { fail(err, t("profiles.saveFailed")); }
+    finally { setBusy(false); }
+  };
+
+  const inputStyle = { ...INPUT_STYLE, width: 220 };
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <Shield width={13} height={13} style={{ color: "var(--fg-3)" }} />
+        <div className="eyebrow">{t("profiles.sectionTitle")}</div>
+      </div>
+      <div className="settings-group">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">{t("profiles.name")}</div>
+            <div className="settings-row-sub">{t("profiles.nameSub")}</div>
+          </div>
+          <div className="settings-row-right">
+            <input value={name} onChange={e => setName(e.target.value)} onBlur={saveName} maxLength={60} style={inputStyle} />
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">{t("profiles.protection")}</div>
+            <div className="settings-row-sub">{t(`profiles.modeHint.${mode}`)}</div>
+          </div>
+          <div className="settings-row-right">
+            <select value={mode} onChange={e => { setMode(e.target.value as typeof mode); setSecret(""); setConfirm(""); setMsg(null); }}
+              style={{ ...inputStyle, cursor: "pointer" }}>
+              {(["none", "pin", "password"] as const).map(m => <option key={m} value={m}>{t(`profiles.mode.${m}`)}</option>)}
+            </select>
+          </div>
+        </div>
+        {protectedNow && (
+          <div className="settings-row">
+            <div><div className="settings-row-label">{t("profiles.current")}</div></div>
+            <div className="settings-row-right">
+              <input type="password" value={current} onChange={e => setCurrent(e.target.value)} autoComplete="current-password" style={inputStyle} />
+            </div>
+          </div>
+        )}
+        {mode !== "none" && (
+          <>
+            <div className="settings-row">
+              <div><div className="settings-row-label">{mode === "pin" ? t("profiles.newPin") : t("profiles.newPassword")}</div></div>
+              <div className="settings-row-right">
+                <input type="password" value={secret} onChange={e => setSecret(digits(e.target.value))} inputMode={mode === "pin" ? "numeric" : undefined}
+                  maxLength={mode === "pin" ? 8 : undefined} autoComplete="new-password" style={inputStyle}
+                  placeholder={mode === "pin" ? t("profiles.pinRule") : t("profiles.passwordRule")} />
+              </div>
+            </div>
+            <div className="settings-row">
+              <div><div className="settings-row-label">{t("profiles.repeat")}</div></div>
+              <div className="settings-row-right">
+                <input type="password" value={confirm} onChange={e => setConfirm(digits(e.target.value))} inputMode={mode === "pin" ? "numeric" : undefined}
+                  maxLength={mode === "pin" ? 8 : undefined} autoComplete="new-password" style={inputStyle} />
+              </div>
+            </div>
+          </>
+        )}
+        <div className="settings-row">
+          <div style={{ fontSize: 12, color: msg ? (msg.ok ? "var(--green)" : "var(--score-low)") : "var(--fg-3)" }} role="status">
+            {msg?.text ?? ""}
+          </div>
+          <div className="settings-row-right">
+            <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy} onClick={saveProtection}>
+              {t("profiles.saveProtection")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type PasskeyInfo = { id: string; deviceName: string | null; createdAt: string };
 
 const SESSION_TIMEOUT_VALUES = ["15m", "1h", "6h", "24h", "7d", "30d"] as const;
@@ -1398,6 +1522,7 @@ function SecuritySection() {
 
 export function SettingsPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { theme, setTheme, accent, setAccent, density, setDensity, cardVariant, setCardVariant, ai, setAi } = useUiStore();
 
   return (
@@ -1531,11 +1656,18 @@ export function SettingsPage() {
         {/* Drive Naming */}
         <DriveNamingSection />
 
-        {/* Invite management */}
-        <InviteSection />
+        {user?.mode === "desktop" ? (
+          /* Desktop: profile name + PIN/password/none instead of invites and passkeys */
+          <ProfileProtectionSection />
+        ) : (
+          <>
+            {/* Invite management */}
+            <InviteSection />
 
-        {/* Security */}
-        <SecuritySection />
+            {/* Security */}
+            <SecuritySection />
+          </>
+        )}
 
       </div>
     </>

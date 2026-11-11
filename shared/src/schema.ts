@@ -134,6 +134,8 @@ export const userProfile = pgTable("user_profile", {
   persona: text("persona"),                                        // 'schulabgaenger' | 'berufseinsteiger' | 'berufsumsteiger'
   sessionTimeout: text("session_timeout").default("15m"),
   uiLanguage: text("ui_language").default("de"),    // "de" | "en" — UI display language
+  uiSettings: text("ui_settings"),                  // JSON UiSettings — per-user UI + AI-provider settings (no secrets), synced from the client store
+  aiSecrets: text("ai_secrets"),                    // AES-256-GCM blob of { anthropic?, openai?, gemini?, openrouter? } API keys — never exported, never sent to the client
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -195,6 +197,8 @@ export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash"),
+  displayName: text("display_name"),               // desktop profile name (falls back to email)
+  authMode: text("auth_mode").notNull().default("password"), // "password" | "pin" | "none" — pin/none only in APP_MODE=desktop
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -372,6 +376,27 @@ export const applicationImportRequestSchema = z
   });
 
 export type AiConfig = z.infer<typeof aiConfigSchema>;
+
+// API keys that are stored server-side (encrypted, user_profile.ai_secrets) instead of in the browser.
+export const AI_SECRET_PROVIDERS = ["anthropic", "openai", "gemini", "openrouter"] as const;
+export type AiSecretProvider = typeof AI_SECRET_PROVIDERS[number];
+export const AI_SECRET_FIELDS: Record<AiSecretProvider, "anthropicApiKey" | "openaiApiKey" | "geminiApiKey" | "openrouterApiKey"> = {
+  anthropic: "anthropicApiKey", openai: "openaiApiKey", gemini: "geminiApiKey", openrouter: "openrouterApiKey",
+};
+
+/** GET /api/settings */
+export interface UserSettingsResponse {
+  /** Per-user UI settings (JSON from user_profile.ui_settings); null = never saved → client uploads its local state. */
+  settings: Record<string, unknown> | null;
+  /** Which API keys are stored server-side (values never leave the server). */
+  secrets: Record<AiSecretProvider, boolean>;
+  /** false = no encryption key configured (web without SECRETS_KEY/JWT_SECRET) → keys stay in the browser. */
+  secretsAvailable: boolean;
+}
+
+export type AuthMode = "password" | "pin" | "none";
+/** GET /api/auth/profiles (desktop only) */
+export interface DesktopProfile { id: string; name: string; authMode: AuthMode }
 
 export const applicationImportResponseSchema = z.object({
   company: z.string().nullable(),

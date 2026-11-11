@@ -610,7 +610,11 @@
     "folderColorsSync": "Update folder colors",
     "folderColorsSyncing": "Updating…",
     "folderColorsResult": "{{updated}} folders colored, {{failed}} failed",
-    "folderColorsError": "Failed to update folder colors"
+    "folderColorsError": "Failed to update folder colors",
+    "keyStored": "Stored (encrypted)",
+    "keyStoredHint": "The key is stored encrypted for this profile. Enter a new key to replace it.",
+    "keyRemove": "Remove",
+    "keySaveFailed": "Could not save the key"
   },
   "templates": {
     "title": "Templates",
@@ -1678,5 +1682,46 @@
         "connections": "Connections"
       }
     }
+  },
+  "profiles": {
+    "whoIsThere": "Who's there?",
+    "createTitle": "New profile",
+    "add": "New profile",
+    "back": "Back",
+    "unlock": "Open",
+    "loginFailed": "Sign-in failed",
+    "createFailed": "Could not create the profile",
+    "name": "Name",
+    "namePlaceholder": "e.g. Lea",
+    "nameSub": "How the profile appears in the picker at start.",
+    "nameMissing": "Please enter a name",
+    "nameSaved": "Name saved",
+    "protection": "Protection",
+    "pin": "PIN",
+    "password": "Password",
+    "repeat": "Repeat",
+    "email": "E-mail",
+    "optional": "(optional)",
+    "pinRule": "4–8 digits",
+    "passwordRule": "At least 8 characters",
+    "mismatch": "The entries don't match",
+    "create": "Create profile",
+    "mode": {
+      "none": "No protection",
+      "pin": "PIN",
+      "password": "Password"
+    },
+    "modeHint": {
+      "none": "Anyone using this Mac can open the profile.",
+      "pin": "A short number keeps curious siblings out.",
+      "password": "Stronger protection, recommended for sensitive documents."
+    },
+    "sectionTitle": "Profile & protection",
+    "current": "Current PIN or password",
+    "newPin": "New PIN",
+    "newPassword": "New password",
+    "saveProtection": "Save protection",
+    "protectionSaved": "Protection saved",
+    "saveFailed": "Saving failed"
   }
 }

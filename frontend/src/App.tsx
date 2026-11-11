@@ -6,6 +6,7 @@ import type { Application } from "@application-pal/shared";
 import { useUiStore } from "./lib/store";
 import { api } from "./lib/api";
 import { AuthProvider, useAuth } from "./lib/auth";
+import { SettingsSync } from "./lib/settingsSync";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Rail } from "./components/Rail";
 import { BoardPage } from "./pages/BoardPage";
@@ -61,8 +62,10 @@ function MainApp() {
     api.post("/api/documents/summarize", { ai, daily: true }).catch(() => {});
   }, [ai.provider]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const { user } = useAuth();
   return (
     <div className="app-shell">
+      {user?.id && <SettingsSync key={user.id} userId={user.id} />}
       <Rail applications={applications} />
       <div className="app-main">
         <Routes>

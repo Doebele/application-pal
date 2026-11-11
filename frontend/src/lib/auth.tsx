@@ -1,7 +1,15 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { api } from "./api";
 
-interface AuthUser { email: string }
+export interface AuthUser {
+  id?: string;
+  email: string;
+  /** Desktop profile name (falls back to the e-mail). */
+  name?: string;
+  authMode?: "password" | "pin" | "none";
+  /** "desktop" in the Tauri app: profile picker instead of e-mail login. */
+  mode?: "web" | "desktop";
+}
 interface AuthCtx {
   user: AuthUser | null;
   loading: boolean;

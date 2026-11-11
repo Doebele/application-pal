@@ -36,11 +36,20 @@ async function createPglite(): Promise<Db> {
   const dataDir = env.PGLITE_DATA_DIR;
   const t0 = Date.now();
   const client = await PGlite.create({ dataDir: dataDir || undefined, ...extra });
+  closeHook = () => client.close();
   const pdb = drizzle(client, { schema });
   const migrationsFolder = env.MIGRATIONS_DIR ?? path.resolve(process.cwd(), "backend/drizzle-pglite");
   await migrate(pdb, { migrationsFolder });
   console.log(`[db] PGlite bereit (${dataDir || "in-memory"}) in ${Date.now() - t0} ms`);
   return pdb as unknown as Db;
+}
+
+let closeHook: (() => Promise<void>) | null = null;
+/** Flushes and closes the embedded database (PGlite). No-op for Postgres. */
+export async function closeDb(): Promise<void> {
+  const hook = closeHook;
+  closeHook = null;
+  if (hook) await hook();
 }
 
 async function createPostgres(): Promise<Db> {

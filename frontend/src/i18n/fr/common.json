@@ -610,7 +610,11 @@
     "folderColorsSync": "Mettre à jour les couleurs des dossiers",
     "folderColorsSyncing": "Mise à jour…",
     "folderColorsResult": "{{updated}} dossiers colorés, {{failed}} échecs",
-    "folderColorsError": "Échec de la mise à jour des couleurs des dossiers"
+    "folderColorsError": "Échec de la mise à jour des couleurs des dossiers",
+    "keyStored": "Enregistrée (chiffrée)",
+    "keyStoredHint": "La clé est enregistrée chiffrée pour ce profil. Saisis une nouvelle clé pour la remplacer.",
+    "keyRemove": "Supprimer",
+    "keySaveFailed": "Impossible d'enregistrer la clé"
   },
   "templates": {
     "title": "Modèles",
@@ -1678,5 +1682,46 @@
         "connections": "Relations"
       }
     }
+  },
+  "profiles": {
+    "whoIsThere": "Qui es-tu ?",
+    "createTitle": "Nouveau profil",
+    "add": "Nouveau profil",
+    "back": "Retour",
+    "unlock": "Ouvrir",
+    "loginFailed": "Échec de la connexion",
+    "createFailed": "Impossible de créer le profil",
+    "name": "Nom",
+    "namePlaceholder": "p. ex. Lea",
+    "nameSub": "Nom affiché dans la sélection au démarrage.",
+    "nameMissing": "Merci de saisir un nom",
+    "nameSaved": "Nom enregistré",
+    "protection": "Protection",
+    "pin": "PIN",
+    "password": "Mot de passe",
+    "repeat": "Répéter",
+    "email": "E-mail",
+    "optional": "(facultatif)",
+    "pinRule": "4 à 8 chiffres",
+    "passwordRule": "Au moins 8 caractères",
+    "mismatch": "Les saisies ne correspondent pas",
+    "create": "Créer le profil",
+    "mode": {
+      "none": "Sans protection",
+      "pin": "PIN",
+      "password": "Mot de passe"
+    },
+    "modeHint": {
+      "none": "Toute personne utilisant ce Mac peut ouvrir le profil.",
+      "pin": "Un petit code tient les frères et sœurs curieux à distance.",
+      "password": "Protection plus forte, recommandée pour les documents sensibles."
+    },
+    "sectionTitle": "Profil et protection",
+    "current": "PIN ou mot de passe actuel",
+    "newPin": "Nouveau PIN",
+    "newPassword": "Nouveau mot de passe",
+    "saveProtection": "Enregistrer la protection",
+    "protectionSaved": "Protection enregistrée",
+    "saveFailed": "Échec de l'enregistrement"
   }
 }
