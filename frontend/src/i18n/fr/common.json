@@ -618,7 +618,8 @@
     "googleWaiting": "En attente du navigateur …",
     "googleBrowserHint": "La connexion Google s’est ouverte dans le navigateur. Après autorisation, l’app se connecte automatiquement.",
     "googleTimeout": "Pas de réponse de Google. Veuillez vous reconnecter.",
-    "googleConnectFailed": "Impossible de démarrer la connexion Google."
+    "googleConnectFailed": "Impossible de démarrer la connexion Google.",
+    "exportSavedDownloads": "Enregistré dans le dossier « Téléchargements » : {{file}}"
   },
   "templates": {
     "title": "Modèles",
@@ -1781,5 +1782,16 @@
     "reopenLabel": "Assistant de configuration",
     "reopenSub": "Reconfigurer situation, IA et Google pas à pas.",
     "reopen": "Ouvrir l’assistant"
+  },
+  "appUpdate": {
+    "label": "Version de l’app",
+    "sub": "Mises à jour de l’app de bureau",
+    "installed": "Installée : version {{version}}",
+    "check": "Rechercher des mises à jour",
+    "checking": "Recherche…",
+    "upToDate": "Tu as la dernière version.",
+    "available": "La version {{version}} est disponible – voir la fenêtre.",
+    "busy": "Une vérification est déjà en cours.",
+    "failed": "Échec de la vérification : {{error}}"
   }
 }

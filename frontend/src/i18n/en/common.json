@@ -618,7 +618,8 @@
     "googleWaiting": "Waiting for browser …",
     "googleBrowserHint": "Google sign-in opened in your browser. Once you allow access, the app connects automatically.",
     "googleTimeout": "No answer from Google. Please connect again.",
-    "googleConnectFailed": "Could not start the Google connection."
+    "googleConnectFailed": "Could not start the Google connection.",
+    "exportSavedDownloads": "Saved to your Downloads folder: {{file}}"
   },
   "templates": {
     "title": "Templates",
@@ -1781,5 +1782,16 @@
     "reopenLabel": "Setup wizard",
     "reopenSub": "Set up starting point, AI and Google again step by step.",
     "reopen": "Open wizard"
+  },
+  "appUpdate": {
+    "label": "App version",
+    "sub": "Updates for the desktop app",
+    "installed": "Installed: version {{version}}",
+    "check": "Check for updates",
+    "checking": "Checking…",
+    "upToDate": "You have the latest version.",
+    "available": "Version {{version}} is available – see the dialog.",
+    "busy": "A check is already running.",
+    "failed": "Check failed: {{error}}"
   }
 }

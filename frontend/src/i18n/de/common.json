@@ -618,7 +618,8 @@
     "googleWaiting": "Warte auf Browser …",
     "googleBrowserHint": "Die Google-Anmeldung ist im Browser geöffnet. Nach der Freigabe verbindet sich die App automatisch.",
     "googleTimeout": "Keine Antwort von Google. Bitte erneut verbinden.",
-    "googleConnectFailed": "Google-Verbindung konnte nicht gestartet werden."
+    "googleConnectFailed": "Google-Verbindung konnte nicht gestartet werden.",
+    "exportSavedDownloads": "Gespeichert im Ordner „Downloads“: {{file}}"
   },
   "templates": {
     "title": "Vorlagen",
@@ -1781,5 +1782,16 @@
     "reopenLabel": "Einrichtungsassistent",
     "reopenSub": "Ausgangslage, KI und Google noch einmal Schritt für Schritt einrichten.",
     "reopen": "Assistent öffnen"
+  },
+  "appUpdate": {
+    "label": "App-Version",
+    "sub": "Updates für die Desktop-App",
+    "installed": "Installiert: Version {{version}}",
+    "check": "Nach Updates suchen",
+    "checking": "Suche…",
+    "upToDate": "Du hast die neueste Version.",
+    "available": "Version {{version}} ist verfügbar – siehe Dialog.",
+    "busy": "Die Prüfung läuft bereits.",
+    "failed": "Prüfung fehlgeschlagen: {{error}}"
   }
 }

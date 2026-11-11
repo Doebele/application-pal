@@ -8,6 +8,7 @@ import { useUiStore, type Accent, type Density, type CardVariant, type AiProvide
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { GooglePickerButton } from "../lib/googlePicker";
+import { hasShell, shellInvoke, type UpdateCheck } from "../lib/desktopShell";
 import { startRegistration } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 
@@ -1380,6 +1381,47 @@ function ProfileProtectionSection() {
           }}>{t("wizard.reopen")}</button>
         </div>
       </div>
+      {hasShell() && <AppUpdateRow />}
+    </div>
+  );
+}
+
+// Desktop only: shows the installed version and asks the shell for an update. If one exists,
+// the shell opens its native dialog (in the profile's UI language) and takes over from there.
+function AppUpdateRow() {
+  const { t, i18n } = useTranslation();
+  const [version, setVersion] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => { shellInvoke<string>("app_version").then(setVersion).catch(() => {}); }, []);
+
+  const check = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await shellInvoke<UpdateCheck>("check_update", { lang: i18n.language });
+      setVersion(r.current);
+      setMsg(r.status === "none" ? { ok: true, text: t("appUpdate.upToDate") }
+        : r.status === "available" ? { ok: true, text: t("appUpdate.available", { version: r.version }) }
+        : { ok: true, text: t("appUpdate.busy") });
+    } catch (err) {
+      setMsg({ ok: false, text: t("appUpdate.failed", { error: String(err) }) });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="settings-row">
+      <div>
+        <div className="settings-row-label">{t("appUpdate.label")}</div>
+        <div className="settings-row-sub">{version ? t("appUpdate.installed", { version }) : t("appUpdate.sub")}</div>
+        {msg && (
+          <div role="status" style={{ fontSize: 12, marginTop: 4, color: msg.ok ? "var(--green)" : "var(--score-low)" }}>{msg.text}</div>
+        )}
+      </div>
+      <div className="settings-row-right">
+        <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={busy} onClick={check}>
+          {busy ? t("appUpdate.checking") : t("appUpdate.check")}
+        </button>
+      </div>
     </div>
   );
 }
@@ -1760,7 +1802,10 @@ function BackupSection() {
       a.href     = url;
       a.download = `application-pal-export-${date}.json`;
       a.click();
-      URL.revokeObjectURL(url);
+      // revoke later: WKWebView starts the download asynchronously and would find no blob
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      // Desktop app: no browser download bar — say where the file went.
+      if (hasShell()) setResult({ ok: true, msg: t("settings.exportSavedDownloads", { file: a.download }) });
     } catch {
       setResult({ ok: false, msg: t("settings.exportFailed") });
     } finally {

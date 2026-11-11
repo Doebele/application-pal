@@ -21,9 +21,11 @@ use std::io::Write;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use tauri::webview::DownloadEvent;
 use tauri::{AppHandle, Manager, RunEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_updater::UpdaterExt;
@@ -161,66 +163,149 @@ fn stop_sidecar(state: &SidecarState) {
     }
 }
 
-/// Beim Start im Hintergrund nach einem Update suchen (GitHub Release `desktop-updater`,
-/// Datei `latest.json`, signiert mit dem Updater-Schlüssel). Gibt es eines, fragt ein
-/// nativer Dialog; nach dem Herunterladen wird erst der Sidecar beendet (unter Windows
-/// muss der Installer dessen .exe ersetzen können), dann installiert und neu gestartet.
-/// `D2603_UPDATE_URL` ersetzt die Adresse (lokaler Test).
-fn check_for_update(app: AppHandle, data_dir: PathBuf) {
-    tauri::async_runtime::spawn(async move {
-        let mut builder = app.updater_builder();
-        if let Some(url) = std::env::var("D2603_UPDATE_URL").ok().and_then(|u| u.parse().ok()) {
-            builder = match builder.endpoints(vec![url]) {
-                Ok(b) => b,
-                Err(e) => return log_line(&data_dir, &format!("Update-Adresse ungültig: {e}")),
-            };
-        }
-        let update = match builder.build() {
-            Ok(updater) => match updater.check().await {
-                Ok(Some(update)) => update,
-                Ok(None) => return log_line(&data_dir, "Kein Update verfügbar"),
-                Err(e) => return log_line(&data_dir, &format!("Update-Prüfung fehlgeschlagen: {e}")),
-            },
-            Err(e) => return log_line(&data_dir, &format!("Updater nicht verfügbar: {e}")),
-        };
-        log_line(&data_dir, &format!("Update {} gefunden (installiert {})", update.version, update.current_version));
+/// "de-CH", "fr_FR", "EN" → de / fr / en; jede andere Sprache → en.
+fn norm_lang(tag: &str) -> &'static str {
+    match tag.get(..2).map(str::to_ascii_lowercase).as_deref() {
+        Some("de") => "de",
+        Some("fr") => "fr",
+        _ => "en",
+    }
+}
 
-        let notes = update.body.clone().unwrap_or_default();
-        let text = format!(
-            "Application-Pal {} ist verfügbar (installiert: {}).\n\n{}\n\nJetzt aktualisieren? Die App startet danach neu – deine Daten bleiben erhalten.",
-            update.version, update.current_version, notes.trim()
-        );
-        let handle = app.clone();
-        app.dialog()
-            .message(text)
-            .title("Update verfügbar")
-            .kind(MessageDialogKind::Info)
-            .buttons(MessageDialogButtons::OkCancelCustom("Aktualisieren".into(), "Später".into()))
-            .show(move |yes| {
-                if !yes {
-                    return log_line(&data_dir, "Update auf später verschoben");
-                }
-                tauri::async_runtime::spawn(async move {
-                    let bytes = match update.download(|_, _| {}, || {}).await {
-                        Ok(b) => b,
-                        Err(e) => {
-                            log_line(&data_dir, &format!("Update-Download fehlgeschlagen: {e}"));
-                            handle.dialog().message(format!("Das Update konnte nicht geladen werden:\n{e}"))
-                                .title("Update").kind(MessageDialogKind::Error).show(|_| {});
-                            return;
-                        }
-                    };
-                    stop_sidecar(&handle.state::<SidecarState>());
-                    if let Err(e) = update.install(bytes) {
-                        log_line(&data_dir, &format!("Update-Installation fehlgeschlagen: {e}"));
-                    } else {
-                        log_line(&data_dir, &format!("Update {} installiert, Neustart", update.version));
+/// Bevorzugte Sprache des Betriebssystems, reduziert auf die drei App-Sprachen.
+fn os_lang() -> &'static str {
+    sys_locale::get_locale().map(|l| norm_lang(&l)).unwrap_or("en")
+}
+
+struct UpdateTexts {
+    title: &'static str,
+    body: &'static str, // {new} {cur} {notes}
+    yes: &'static str,
+    later: &'static str,
+    failed: &'static str, // {err}
+}
+
+fn update_texts(lang: &str) -> UpdateTexts {
+    match lang {
+        "de" => UpdateTexts {
+            title: "Update verfügbar",
+            body: "Application-Pal {new} ist verfügbar (installiert: {cur}).\n\n{notes}\n\nJetzt aktualisieren? Die App startet danach neu – deine Daten bleiben erhalten.",
+            yes: "Aktualisieren",
+            later: "Später",
+            failed: "Das Update konnte nicht geladen werden:\n{err}",
+        },
+        "fr" => UpdateTexts {
+            title: "Mise à jour disponible",
+            body: "Application-Pal {new} est disponible (installée : {cur}).\n\n{notes}\n\nMettre à jour maintenant ? L’app redémarre ensuite – tes données sont conservées.",
+            yes: "Mettre à jour",
+            later: "Plus tard",
+            failed: "La mise à jour n’a pas pu être téléchargée :\n{err}",
+        },
+        _ => UpdateTexts {
+            title: "Update available",
+            body: "Application-Pal {new} is available (installed: {cur}).\n\n{notes}\n\nUpdate now? The app restarts afterwards – your data is kept.",
+            yes: "Update",
+            later: "Later",
+            failed: "The update could not be downloaded:\n{err}",
+        },
+    }
+}
+
+/// Läuft gerade eine Prüfung oder ist ein Update-Dialog offen? Verhindert zwei Dialoge,
+/// wenn jemand während der Start-Prüfung auf „Nach Updates suchen“ klickt.
+static UPDATE_BUSY: AtomicBool = AtomicBool::new(false);
+
+/// Nach einem Update suchen (GitHub Release `desktop-updater`, Datei `latest.json`, signiert
+/// mit dem Updater-Schlüssel). Gibt es eines, fragt ein nativer Dialog in `lang`; nach dem
+/// Herunterladen wird erst der Sidecar beendet (unter Windows muss der Installer dessen .exe
+/// ersetzen können), dann installiert und neu gestartet. `D2603_UPDATE_URL` ersetzt die
+/// Adresse (lokaler Test). Antwort für den Knopf in den Einstellungen:
+/// `{ status: "none" | "available" | "busy", current, version? }`.
+async fn run_update_check(app: AppHandle, data_dir: PathBuf, lang: &'static str) -> Result<serde_json::Value, String> {
+    let current = app.package_info().version.to_string();
+    if UPDATE_BUSY.swap(true, Ordering::SeqCst) {
+        return Ok(serde_json::json!({ "status": "busy", "current": current }));
+    }
+    let fail = |msg: String| {
+        UPDATE_BUSY.store(false, Ordering::SeqCst);
+        log_line(&data_dir, &msg);
+        Err(msg)
+    };
+    let mut builder = app.updater_builder();
+    if let Some(url) = std::env::var("D2603_UPDATE_URL").ok().and_then(|u| u.parse().ok()) {
+        builder = match builder.endpoints(vec![url]) {
+            Ok(b) => b,
+            Err(e) => return fail(format!("Update-Adresse ungültig: {e}")),
+        };
+    }
+    let update = match builder.build() {
+        Ok(updater) => match updater.check().await {
+            Ok(Some(update)) => update,
+            Ok(None) => {
+                UPDATE_BUSY.store(false, Ordering::SeqCst);
+                log_line(&data_dir, "Kein Update verfügbar");
+                return Ok(serde_json::json!({ "status": "none", "current": current }));
+            }
+            Err(e) => return fail(format!("Update-Prüfung fehlgeschlagen: {e}")),
+        },
+        Err(e) => return fail(format!("Updater nicht verfügbar: {e}")),
+    };
+    log_line(&data_dir, &format!("Update {} gefunden (installiert {})", update.version, update.current_version));
+
+    let t = update_texts(lang);
+    let notes = update.body.clone().unwrap_or_default();
+    let text = t.body
+        .replace("{new}", &update.version)
+        .replace("{cur}", &update.current_version)
+        .replace("{notes}", notes.trim());
+    let version = update.version.clone();
+    let handle = app.clone();
+    app.dialog()
+        .message(text)
+        .title(t.title)
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::OkCancelCustom(t.yes.into(), t.later.into()))
+        .show(move |yes| {
+            if !yes {
+                UPDATE_BUSY.store(false, Ordering::SeqCst);
+                return log_line(&data_dir, "Update auf später verschoben");
+            }
+            tauri::async_runtime::spawn(async move {
+                let bytes = match update.download(|_, _| {}, || {}).await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        UPDATE_BUSY.store(false, Ordering::SeqCst);
+                        log_line(&data_dir, &format!("Update-Download fehlgeschlagen: {e}"));
+                        handle.dialog().message(t.failed.replace("{err}", &e.to_string()))
+                            .title(t.title).kind(MessageDialogKind::Error).show(|_| {});
+                        return;
                     }
-                    // Auch nach einem Fehler neu starten: der Sidecar ist schon beendet.
-                    handle.restart();
-                });
+                };
+                stop_sidecar(&handle.state::<SidecarState>());
+                if let Err(e) = update.install(bytes) {
+                    log_line(&data_dir, &format!("Update-Installation fehlgeschlagen: {e}"));
+                } else {
+                    log_line(&data_dir, &format!("Update {} installiert, Neustart", update.version));
+                }
+                // Auch nach einem Fehler neu starten: der Sidecar ist schon beendet.
+                handle.restart();
             });
-    });
+        });
+    Ok(serde_json::json!({ "status": "available", "current": current, "version": version }))
+}
+
+/// Knopf „Nach Updates suchen“ in den Einstellungen (Desktop-Profil). `lang` = UI-Sprache
+/// des Profils; fehlt sie, gilt die Systemsprache.
+#[tauri::command]
+async fn check_update(app: AppHandle, lang: Option<String>) -> Result<serde_json::Value, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let lang = lang.as_deref().map(norm_lang).unwrap_or_else(os_lang);
+    run_update_check(app, data_dir, lang).await
+}
+
+#[tauri::command]
+fn app_version(app: AppHandle) -> String {
+    app.package_info().version.to_string()
 }
 
 pub fn run() {
@@ -235,11 +320,34 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![check_update, app_version])
         .manage(SidecarState(Mutex::new(Sidecar::default())))
         .setup(move |app| {
             let data_dir = app.path().app_data_dir()?;
             let res_dir = app.path().resource_dir()?;
             fs::create_dir_all(data_dir.join("logs"))?;
+
+            // Fenster selbst bauen (tauri.conf.json: "create": false), um einen Download-Handler
+            // zu setzen: ohne ihn bricht WKWebView jeden Download ab, z.B. „Daten exportieren“
+            // in den Einstellungen. Ziel ist der Ordner Downloads; wry hängt bei gleichem Namen
+            // „(1)“ an.
+            let dl_dir = data_dir.clone();
+            let win_conf = app.config().app.windows.first().cloned().ok_or("Fensterkonfiguration fehlt")?;
+            tauri::WebviewWindowBuilder::from_config(app.handle(), &win_conf)?
+                .on_download(move |_webview, event| {
+                    match event {
+                        DownloadEvent::Requested { destination, .. } => {
+                            log_line(&dl_dir, &format!("Download nach {}", destination.display()));
+                        }
+                        DownloadEvent::Finished { path, success, .. } => {
+                            let where_ = path.map(|p| p.display().to_string()).unwrap_or_default();
+                            log_line(&dl_dir, &format!("Download {} {where_}", if success { "fertig:" } else { "fehlgeschlagen:" }));
+                        }
+                        _ => {}
+                    }
+                    true
+                })
+                .build()?;
             fs::create_dir_all(data_dir.join("knowledge-base"))?;
 
             let port = free_port()?;
@@ -257,6 +365,7 @@ pub fn run() {
                 .env("SECRETS_KEY", secrets_key(&app.config().identifier, &data_dir))
                 .env("DESKTOP_TOKEN", &token)
                 .env("DESKTOP_PARENT_PIPE", "1")
+                .env("OS_LANG", os_lang())
                 .env("HOST", "127.0.0.1")
                 .env("PORT", port.to_string())
                 .env("APP_URL", format!("http://127.0.0.1:{port}"))
@@ -290,7 +399,10 @@ pub fn run() {
                             let url = format!("http://127.0.0.1:{port}/__desktop/enter?token={token}");
                             let _ = win.eval(format!("window.location.replace({url:?})"));
                         }
-                        check_for_update(handle.clone(), data_dir.clone());
+                        let (h, d) = (handle.clone(), data_dir.clone());
+                        tauri::async_runtime::spawn(async move {
+                            let _ = run_update_check(h, d, os_lang()).await;
+                        });
                         return;
                     }
                     std::thread::sleep(Duration::from_millis(50));

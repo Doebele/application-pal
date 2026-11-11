@@ -13,6 +13,7 @@ const envSchema = z.object({
   STATIC_DIR:   z.string().default(""),        // Desktop-Sidecar: gebautes Frontend ausliefern
   APP_MODE:     z.enum(["web", "desktop"]).default("web"), // desktop: Profilauswahl, PIN/ohne Schutz, keine Einladungen
   DESKTOP_TOKEN: z.string().default(""),       // Desktop-Sidecar: Start-Token der Tauri-Hülle (leer = kein Schutz)
+  OS_LANG:      z.enum(["de", "en", "fr", ""]).catch("").default(""), // Desktop: Systemsprache (Hülle reduziert auf de/en/fr, sonst en)
   SECRETS_KEY:  z.string().default(""),        // Schlüssel für ai_secrets (Desktop: aus dem Schlüsselbund); leer = aus JWT_SECRET abgeleitet
   JWT_SECRET:   z.string().default(""),   // auto-generated if empty
   PORT:         z.coerce.number().default(3000),

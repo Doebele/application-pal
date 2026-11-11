@@ -72,9 +72,19 @@ Ohne Signatur zeigt Windows SmartScreen beim Installieren eine Warnung („Unbek
 
 Sobald entschieden: `bundle.windows.signCommand` in `tauri.conf.json` + Secrets ergänzen.
 
+## Nachtrag: Update-Knopf, Systemsprache, Export/Import
+
+- **Systemsprache**: Die Hülle liest die bevorzugte Sprache des Betriebssystems (`sys-locale`) und reduziert sie auf `de`/`en`/`fr`, jede andere wird `en`. Sie geht als `OS_LANG` an den Sidecar. `GET /api/auth/status` liefert sie als `osLang`: Der Anmeldebildschirm (Profilauswahl) zeigt diese Sprache, und neue Profile starten mit ihr (`user_profile.ui_language`). Nach dem Anmelden gilt die Sprache des Profils.
+- **Update-Dialog** in Systemsprache (beim Start) bzw. in der UI-Sprache des Profils (Knopf).
+- **„Nach Updates suchen“**: Einstellungen → Profil & Schutz, nur in der Desktop-App. Zeigt die installierte Version, ruft den Hüllen-Befehl `check_update` auf (`frontend/src/lib/desktopShell.ts`). Die Capability `sidecar-page` erlaubt der Seite von `http://127.0.0.1:*` nur die App-eigenen Befehle (`check_update`, `app_version`), keine Plugin-Rechte. Während einer Prüfung oder eines offenen Dialogs antwortet ein zweiter Klick mit `busy`.
+- **Export/Import Web ↔ Desktop**: gleiches Format (`meta.version 1`), beide Richtungen mit dem Web-Export vom 11.11.2026 getestet (33 Bewerbungen, 133 Aktivitäten, 17 Dokumente, 5 CV- und 6 LinkedIn-Versionen), alle Felder identisch. Dabei behoben:
+  - Dieselbe Datei in ein **zweites Profil** (oder zweites Web-Konto) importiert, hängte die Zeilen des ersten Profils um, statt sie zu kopieren (Upsert über die Zeilen-ID). Jetzt bekommen Zeilen, deren ID einem anderen Nutzer gehört, eine aus Nutzer + alter ID **abgeleitete** neue ID; Verweise (`applicationId`, `userDocumentId`, `parentId`, `sourceDocumentId`) folgen. Erneutes Importieren ins selbe Profil aktualisiert weiterhin, statt zu verdoppeln.
+  - Das Profil-Datenblatt wird über `user_id` zugeordnet, nicht über die exportierte Zeilen-ID.
+  - CV- und LinkedIn-Versionen verloren beim Import die Millisekunden ihres Zeitstempels.
+- **Download in der Desktop-App**: WKWebView bricht Downloads ohne Handler ab – „Daten exportieren“ tat dort nichts. Die Hülle baut das Fenster jetzt selbst (`"create": false`) mit `on_download`; Ziel ist der Ordner Downloads, die Einstellungen sagen, wohin die Datei ging.
+
 ## Offen
 
-- Update-Dialog ist nur deutsch (die Hülle kennt die UI-Sprache des Profils nicht).
-- Kein „Nach Updates suchen“-Knopf in der App – geprüft wird bei jedem Start.
+- Fehlermeldungen des Servers bei der Anmeldung („Falsche PIN“) sind noch deutsch.
 - Universal-Binary statt zwei Mac-Paketen wäre möglich (`lipo` auf beide Sidecars), spart den Download-Entscheid für Nutzer.
 - Testdaten des lokalen Tests: `~/Library/Application Support/com.medvesek.d2603.test/` kann gelöscht werden.

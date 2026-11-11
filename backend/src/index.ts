@@ -241,7 +241,8 @@ app.use("/api/*", async (c, next) => {
 // Check if first-run setup is needed; `mode: "desktop"` switches the login screen to the profile picker.
 app.get("/api/auth/status", async (c) => {
   const [u] = await db.select({ id: users.id }).from(users).limit(1);
-  return c.json({ setup: !!u, mode: env.APP_MODE });
+  // osLang: the login screen of the desktop app speaks the OS language (profiles then use their own).
+  return c.json({ setup: !!u, mode: env.APP_MODE, ...(env.OS_LANG ? { osLang: env.OS_LANG } : {}) });
 });
 
 const ME_FIELDS = { id: users.id, email: users.email, displayName: users.displayName, authMode: users.authMode };
@@ -297,7 +298,11 @@ app.post("/api/auth/profiles", async (c) => {
   // uiSettings without synced keys = new account → client starts from defaults instead of
   // copying the previous profile's local state (null = pre-M1 account to migrate).
   // `onboarding: "pending"` opens the setup wizard after the first login (M3).
-  await db.insert(userProfile).values({ userId: user.id, name: displayName, uiSettings: JSON.stringify({ onboarding: "pending" }) }).onConflictDoNothing();
+  // A new profile starts in the OS language (de/en/fr, else en), like the login screen.
+  await db.insert(userProfile).values({
+    userId: user.id, name: displayName, uiSettings: JSON.stringify({ onboarding: "pending" }),
+    ...(env.OS_LANG ? { uiLanguage: env.OS_LANG } : {}),
+  }).onConflictDoNothing();
   issueTokens(c, user.id, true, await getSessionTimeout(user.id));
   return c.json(meBody(user), 201);
 });
@@ -7077,6 +7082,45 @@ app.post("/api/import", async (c) => {
   if (data.userProfile) data.userProfile = revive(userProfile, data.userProfile);
   if (data.userProfile) delete (data.userProfile as Record<string, unknown>).aiSecrets;
 
+  // The upserts below key on the row id. If an id already belongs to ANOTHER user — the same
+  // file imported into a second desktop profile on one machine, or into a second web account —
+  // the upsert would move that row over and the original owner would lose it. Such rows (and
+  // the children of a re-keyed application) get fresh ids; references follow the mapping.
+  // Re-importing into the own account still updates in place.
+  const idMap = new Map<string, string>();
+  const idsOf = (rows?: Record<string, unknown>[]) => (rows ?? []).map(r => String(r.id ?? "")).filter(Boolean);
+  // Derived, not random: importing the same file into the same profile again maps to the same
+  // new ids, so a merge updates instead of duplicating.
+  const derivedId = (old: string) => {
+    const h = crypto.createHash("sha256").update(`${userId}:${old}`).digest("hex");
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+  };
+  const claim = async (q: Promise<{ id: string }[]>) => { for (const { id } of await q) idMap.set(id, derivedId(id)); };
+  const foreign = <T extends typeof applications | typeof userDocuments | typeof cvVersions | typeof linkedinVersions>(t: T, rows?: Record<string, unknown>[]) => {
+    const ids = idsOf(rows);
+    const tt = t as unknown as typeof applications;   // all four have id + userId
+    return ids.length ? db.select({ id: tt.id }).from(tt).where(and(inArray(tt.id, ids), ne(tt.userId, userId))) : Promise.resolve([]);
+  };
+  await claim(foreign(applications, data.applications));
+  await claim(foreign(userDocuments, data.userDocuments));
+  await claim(foreign(cvVersions, data.cvVersions));
+  await claim(foreign(linkedinVersions, data.linkedinVersions));
+  for (const rows of [data.applicationDocuments, data.applicationActivities, data.applicationContacts]) {
+    for (const r of rows ?? []) if (idMap.has(String(r.applicationId)) && r.id) idMap.set(String(r.id), derivedId(String(r.id)));
+  }
+  if (idMap.size) {
+    const remap = (rows: Record<string, unknown>[] | undefined, keys: string[]) => rows?.forEach(r => {
+      for (const k of keys) if (typeof r[k] === "string" && idMap.has(r[k] as string)) r[k] = idMap.get(r[k] as string);
+    });
+    remap(data.applications, ["id"]);
+    remap(data.applicationDocuments, ["id", "applicationId", "userDocumentId"]);
+    remap(data.applicationActivities, ["id", "applicationId"]);
+    remap(data.applicationContacts, ["id", "applicationId"]);
+    remap(data.userDocuments, ["id"]);
+    remap(data.cvVersions, ["id", "parentId", "sourceDocumentId", "applicationId"]);
+    remap(data.linkedinVersions, ["id", "parentId"]);
+  }
+
   // Insert all records — add userId, skip duplicates on conflict (for merge mode)
   if (data.applications?.length) {
     for (const row of data.applications) {
@@ -7116,19 +7160,26 @@ app.post("/api/import", async (c) => {
   }
   if (data.cvVersions?.length) {
     for (const row of data.cvVersions) {
-      const r = Object.assign({}, row, { userId, createdAt: row.createdAt ? new Date(String(row.createdAt)) : undefined }) as never;
+      // createdAt is already a Date (revive above); String(Date) would drop the milliseconds.
+      const r = Object.assign({}, row, { userId }) as never;
       await db.insert(cvVersions).values(r).onConflictDoUpdate({ target: cvVersions.id, set: r });
     }
   }
   if (data.linkedinVersions?.length) {
     for (const row of data.linkedinVersions) {
-      const r = Object.assign({}, row, { userId, createdAt: row.createdAt ? new Date(String(row.createdAt)) : undefined }) as never;
+      const r = Object.assign({}, row, { userId }) as never;
       await db.insert(linkedinVersions).values(r).onConflictDoUpdate({ target: linkedinVersions.id, set: r });
     }
   }
   if (data.userProfile) {
-    const rp = Object.assign({}, data.userProfile, { userId }) as never;
-    await db.insert(userProfile).values(rp).onConflictDoUpdate({ target: userProfile.id, set: rp });
+    // One profile row per user: key on userId, never take over the exported row id (it may
+    // be another profile's row on this machine).
+    const { id: _exportedId, ...prof } = data.userProfile;
+    // (user_profile.user_id has no unique index → no ON CONFLICT; update-or-insert instead.)
+    const rp = Object.assign({}, prof, { userId }) as never;
+    const [own] = await db.select({ id: userProfile.id }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+    if (own) await db.update(userProfile).set(rp).where(eq(userProfile.id, own.id));
+    else await db.insert(userProfile).values(rp);
   }
   if (keptSecrets?.s) {
     await db.update(userProfile).set({ aiSecrets: keptSecrets.s }).where(eq(userProfile.userId, userId));
