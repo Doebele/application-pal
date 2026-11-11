@@ -93,7 +93,7 @@ import {
 import { liSourceSuggestions, liSourceFactsText, type LiSourceSuggestions } from "./linkedin-sources.js";
 import { buildLiChecklist } from "./linkedin-checklist.js";
 import { unzipSync } from "fflate";
-import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, getTableColumns, type SQL, type Table } from "drizzle-orm";
 import { ZodError } from "zod";
 import { db } from "./db.js";
 import { env, KB_BASE_PATH } from "./env.js";
@@ -6668,6 +6668,25 @@ app.post("/api/import", async (c) => {
     await db.delete(linkedinVersions).where(eq(linkedinVersions.userId, userId));
     await db.delete(userProfile).where(eq(userProfile.userId, userId));
   }
+
+  // JSON-Exporte enthalten Zeitstempel als ISO-Strings; Drizzle-Timestamp-Spalten
+  // (mode "date") erwarten Date-Objekte, sonst "value.toISOString is not a function".
+  const revive = <T extends Record<string, unknown>>(table: Table, row: T): T => {
+    const out: Record<string, unknown> = { ...row };
+    for (const [key, col] of Object.entries(getTableColumns(table))) {
+      const v = out[key];
+      if (col.columnType === "PgTimestamp" && typeof v === "string") out[key] = new Date(v);
+    }
+    return out as T;
+  };
+  for (const [table, rows] of [
+    [applications, data.applications], [applicationDocuments, data.applicationDocuments],
+    [applicationActivities, data.applicationActivities], [applicationContacts, data.applicationContacts],
+    [userDocuments, data.userDocuments], [cvVersions, data.cvVersions], [linkedinVersions, data.linkedinVersions],
+  ] as const) {
+    rows?.forEach((r, i) => { rows[i] = revive(table, r); });
+  }
+  if (data.userProfile) data.userProfile = revive(userProfile, data.userProfile);
 
   // Insert all records — add userId, skip duplicates on conflict (for merge mode)
   if (data.applications?.length) {
