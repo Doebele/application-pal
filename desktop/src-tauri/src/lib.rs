@@ -226,16 +226,17 @@ async fn run_update_check(app: AppHandle, data_dir: PathBuf, lang: &'static str)
     if UPDATE_BUSY.swap(true, Ordering::SeqCst) {
         return Ok(serde_json::json!({ "status": "busy", "current": current }));
     }
-    let fail = |msg: String| {
+    // Protokoll mit Kontext, an die Seite nur die Ursache (sie setzt „Prüfung fehlgeschlagen:“ davor).
+    let fail = |ctx: &str, err: String| {
         UPDATE_BUSY.store(false, Ordering::SeqCst);
-        log_line(&data_dir, &msg);
-        Err(msg)
+        log_line(&data_dir, &format!("{ctx}: {err}"));
+        Err(err)
     };
     let mut builder = app.updater_builder();
     if let Some(url) = std::env::var("D2603_UPDATE_URL").ok().and_then(|u| u.parse().ok()) {
         builder = match builder.endpoints(vec![url]) {
             Ok(b) => b,
-            Err(e) => return fail(format!("Update-Adresse ungültig: {e}")),
+            Err(e) => return fail("Update-Adresse ungültig", e.to_string()),
         };
     }
     let update = match builder.build() {
@@ -246,9 +247,9 @@ async fn run_update_check(app: AppHandle, data_dir: PathBuf, lang: &'static str)
                 log_line(&data_dir, "Kein Update verfügbar");
                 return Ok(serde_json::json!({ "status": "none", "current": current }));
             }
-            Err(e) => return fail(format!("Update-Prüfung fehlgeschlagen: {e}")),
+            Err(e) => return fail("Update-Prüfung fehlgeschlagen", e.to_string()),
         },
-        Err(e) => return fail(format!("Updater nicht verfügbar: {e}")),
+        Err(e) => return fail("Updater nicht verfügbar", e.to_string()),
     };
     log_line(&data_dir, &format!("Update {} gefunden (installiert {})", update.version, update.current_version));
 
