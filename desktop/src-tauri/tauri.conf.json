@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Application-Pal",
+  "productName": "Apply-Pal",
   "version": "0.1.0",
   "identifier": "com.medvesek.d2603",
   "build": {
@@ -10,7 +10,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Application-Pal",
+        "title": "Apply-Pal",
         "width": 1400,
         "height": 900,
         "minWidth": 1024,

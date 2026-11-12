@@ -1122,7 +1122,7 @@
     "connected": "Mit LinkedIn verbunden",
     "expired": "Verbindung abgelaufen",
     "notConnected": "Nicht verbunden",
-    "intro": "Verbinde dein LinkedIn-Profil, damit Application-Pal immer den aktuellen Stand kennt.",
+    "intro": "Verbinde dein LinkedIn-Profil, damit {{app}} immer den aktuellen Stand kennt.",
     "expiredHint": "LinkedIn-Zugänge gelten 60 Tage. Bitte neu verbinden.",
     "validUntil": "gültig bis {{date}} (noch {{days}} Tage)",
     "viaOauth": "über deine LinkedIn-App",
@@ -1164,7 +1164,7 @@
     "disconnectKeepApp": "Trennen, App-Daten behalten",
     "disconnectForget": "Trennen und App-Daten löschen",
     "cancel": "Abbrechen",
-    "privacy": "Nur lesend: Application-Pal ändert und sendet nichts auf LinkedIn. Der Zugang bleibt in deiner Datenbank und wird nicht exportiert. Nur für Mitglieder mit Standort EU/EWR oder Schweiz.",
+    "privacy": "Nur lesend: {{app}} ändert und sendet nichts auf LinkedIn. Der Zugang bleibt in deiner Datenbank und wird nicht exportiert. Nur für Mitglieder mit Standort EU/EWR oder Schweiz.",
     "stats": {
       "positions": "{{n}} Positionen ({{withText}} mit Beschreibung)",
       "skills": "{{n}} Kenntnisse",
@@ -1365,7 +1365,7 @@
       "notRatedShort": "n. b.",
       "ptsTitle": "Erreicht / bewertbar (voll: {{full}})"
     },
-    "emptyBuild": "Noch kein LinkedIn-Profil? Application-Pal baut es mit dir auf – aus Lebenslauf, Dokumenten und ein paar Fragen.",
+    "emptyBuild": "Noch kein LinkedIn-Profil? {{app}} baut es mit dir auf – aus Lebenslauf, Dokumenten und ein paar Fragen.",
     "emptyBuildGo": "Profil aufbauen",
     "lang": {
       "de": "Deutsch",
@@ -1531,7 +1531,7 @@
         "media": "Medien"
       },
       "recRequests": "Empfehlungen anfragen",
-      "recHint": "Vorlagen zum Anpassen – Application-Pal sendet nichts. [Name] und [Projekt] selbst ersetzen.",
+      "recHint": "Vorlagen zum Anpassen – {{app}} sendet nichts. [Name] und [Projekt] selbst ersetzen.",
       "pillars": "Themensäulen für Beiträge",
       "groups": "Gruppen finden",
       "groupsHint": "Keine Gruppennamen – mit diesen Kriterien und Suchbegriffen findest du passende Gruppen selbst.",
@@ -1582,7 +1582,7 @@
     "checklist": {
       "title": "Was noch zu tun ist",
       "progress": "{{done}} von {{total}} erledigt",
-      "hint": "Application-Pal ändert nichts auf LinkedIn – du überträgst jeden Punkt selbst. Was ein neuer Import belegen kann, hakt sich danach von selbst ab.",
+      "hint": "{{app}} ändert nichts auf LinkedIn – du überträgst jeden Punkt selbst. Was ein neuer Import belegen kann, hakt sich danach von selbst ab.",
       "reimport": "Profil neu importieren",
       "hideDone": "Erledigte ausblenden",
       "noDraft": "Noch kein Entwurf in dieser Sprache – erstelle ihn in den KI-Werkzeugen, dann erscheinen hier die Übertragungsschritte.",
@@ -1738,7 +1738,7 @@
     "driveFileHint": "Die Desktop-App sieht nur Dateien, die sie selbst angelegt hat oder die du hier in Drive auswählst. Eingefügte Links auf andere Dateien funktionieren nicht."
   },
   "wizard": {
-    "welcomeTitle": "Willkommen bei Application-Pal",
+    "welcomeTitle": "Willkommen bei {{app}}",
     "welcomeText": "In wenigen kurzen Schritten ist die App eingerichtet. Alles lässt sich später in den Einstellungen ändern. Wo stehst du gerade?",
     "aiTitle": "Künstliche Intelligenz",
     "aiText": "Die KI schreibt Anschreiben, prüft Lebensläufe und bereitet Gespräche vor. Du kannst ein Modell auf diesem Rechner nutzen (privat, kostenlos) oder einen Cloud-Dienst (schneller, kostenpflichtig).",
@@ -1766,7 +1766,7 @@
     "liText": "Im LinkedIn-Check bewertet die App dein Profil und schlägt bessere Texte vor. Dazu lädst du dein Profil einmal hoch: als PDF („Mehr → Als PDF speichern“) oder als Datenexport von LinkedIn.",
     "liTextBuild": "Noch kein LinkedIn-Profil? Kein Problem: Der LinkedIn-Check hilft dir Schritt für Schritt, eines aufzubauen.",
     "liOpen": "Nach der Einrichtung den LinkedIn-Check öffnen",
-    "liHint": "Application-Pal schreibt nie selbst auf LinkedIn – du übernimmst Vorschläge von Hand.",
+    "liHint": "{{app}} schreibt nie selbst auf LinkedIn – du übernimmst Vorschläge von Hand.",
     "doneTitle": "Fertig eingerichtet",
     "sumNoPersona": "Keine Ausgangslage gewählt",
     "sumAi": "KI verbunden",

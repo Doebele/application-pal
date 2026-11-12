@@ -83,6 +83,10 @@ Sobald entschieden: `bundle.windows.signCommand` in `tauri.conf.json` + Secrets 
   - CV- und LinkedIn-Versionen verloren beim Import die Millisekunden ihres Zeitstempels.
 - **Download in der Desktop-App**: WKWebView bricht Downloads ohne Handler ab – „Daten exportieren“ tat dort nichts. Die Hülle baut das Fenster jetzt selbst (`"create": false`) mit `on_download`; Ziel ist der Ordner Downloads, die Einstellungen sagen, wohin die Datei ging.
 
+## Produktname Apply-Pal
+
+Die Desktop-App heisst **Apply-Pal** (`productName`, Fenstertitel, Ladeseite, Update-Dialog, Release-Name). So heisst auch die App im Google-Cloud-Projekt `apply-pal-d2603`; Google prüft, dass der Name in App, Website und Zustimmungsbildschirm übereinstimmt. Die Web-/Docker-Version bleibt Application-Pal: Das Frontend wählt den Namen über `hasShell()` (`frontend/src/lib/appName.ts`, in Übersetzungen `{{app}}`), das Backend über `APP_MODE`. Die Kennung `com.medvesek.d2603` bleibt – sonst wären Datenordner und Schlüsselbund-Eintrag weg.
+
 ## App-Icon
 
 Vorlage: Figma „macOS Preview“ (Knoten 87:2041, Rahmen „AppIcon-macOS“, 1024 px, Squircle 824 px mit Schatten). Die Quelle liegt transparent in `desktop/app-icon.png`; alle Grössen (`icns`, `ico`, Windows-Store-Logos) erzeugt aus `desktop/`:

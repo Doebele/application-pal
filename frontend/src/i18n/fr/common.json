@@ -1122,7 +1122,7 @@
     "connected": "Connecté à LinkedIn",
     "expired": "Connexion expirée",
     "notConnected": "Non connecté",
-    "intro": "Connecte ton profil LinkedIn pour qu'Application-Pal en connaisse toujours l'état actuel.",
+    "intro": "Connecte ton profil LinkedIn pour qu'{{app}} en connaisse toujours l'état actuel.",
     "expiredHint": "Les accès LinkedIn durent 60 jours. Reconnecte-toi.",
     "validUntil": "valable jusqu'au {{date}} (encore {{days}} jours)",
     "viaOauth": "via ton app LinkedIn",
@@ -1164,7 +1164,7 @@
     "disconnectKeepApp": "Déconnecter, garder l'app",
     "disconnectForget": "Déconnecter et supprimer l'app",
     "cancel": "Annuler",
-    "privacy": "Lecture seule : Application-Pal ne modifie ni ne publie rien sur LinkedIn. L'accès reste dans ta base de données et n'est jamais exporté. Réservé aux membres situés dans l'UE/EEE ou en Suisse.",
+    "privacy": "Lecture seule : {{app}} ne modifie ni ne publie rien sur LinkedIn. L'accès reste dans ta base de données et n'est jamais exporté. Réservé aux membres situés dans l'UE/EEE ou en Suisse.",
     "stats": {
       "positions": "{{n}} postes ({{withText}} avec description)",
       "skills": "{{n}} compétences",
@@ -1365,7 +1365,7 @@
       "notRatedShort": "n. é.",
       "ptsTitle": "Obtenus / évaluables (total : {{full}})"
     },
-    "emptyBuild": "Pas encore de profil LinkedIn ? Application-Pal le construit avec toi – à partir du CV, des documents et de quelques questions.",
+    "emptyBuild": "Pas encore de profil LinkedIn ? {{app}} le construit avec toi – à partir du CV, des documents et de quelques questions.",
     "emptyBuildGo": "Construire le profil",
     "lang": {
       "de": "Allemand",
@@ -1531,7 +1531,7 @@
         "media": "Média"
       },
       "recRequests": "Demander des recommandations",
-      "recHint": "Modèles à adapter – Application-Pal n'envoie rien. Remplace toi-même [Name] et [Projekt].",
+      "recHint": "Modèles à adapter – {{app}} n'envoie rien. Remplace toi-même [Name] et [Projekt].",
       "pillars": "Piliers thématiques pour les publications",
       "groups": "Trouver des groupes",
       "groupsHint": "Pas de noms de groupes – avec ces critères et mots-clés, tu trouves toi-même des groupes adaptés.",
@@ -1582,7 +1582,7 @@
     "checklist": {
       "title": "Ce qu'il reste à faire",
       "progress": "{{done}} sur {{total}} faits",
-      "hint": "Application-Pal ne modifie rien sur LinkedIn – tu reportes chaque point toi-même. Ce qu'un nouvel import peut prouver se coche ensuite tout seul.",
+      "hint": "{{app}} ne modifie rien sur LinkedIn – tu reportes chaque point toi-même. Ce qu'un nouvel import peut prouver se coche ensuite tout seul.",
       "reimport": "Réimporter le profil",
       "hideDone": "Masquer les points faits",
       "noDraft": "Pas encore de brouillon dans cette langue – crée-le dans les outils IA, les étapes de report apparaîtront ici.",
@@ -1738,7 +1738,7 @@
     "driveFileHint": "L’app de bureau ne voit que les fichiers qu’elle a créés ou que tu choisis ici dans Drive. Les liens collés vers d’autres fichiers ne fonctionnent pas."
   },
   "wizard": {
-    "welcomeTitle": "Bienvenue dans Application-Pal",
+    "welcomeTitle": "Bienvenue dans {{app}}",
     "welcomeText": "Quelques étapes courtes et l’app est prête. Tout se modifie plus tard dans les réglages. Où en es-tu ?",
     "aiTitle": "Intelligence artificielle",
     "aiText": "L’IA rédige les lettres de motivation, vérifie les CV et prépare les entretiens. Tu peux utiliser un modèle sur cet ordinateur (privé, gratuit) ou un service cloud (plus rapide, payant).",
@@ -1766,7 +1766,7 @@
     "liText": "Le check LinkedIn évalue ton profil et propose de meilleurs textes. Importe ton profil une fois : en PDF (« Plus → Enregistrer au format PDF ») ou via l’export de données LinkedIn.",
     "liTextBuild": "Pas encore de profil LinkedIn ? Le check LinkedIn t’aide à en créer un pas à pas.",
     "liOpen": "Ouvrir le check LinkedIn après la configuration",
-    "liHint": "Application-Pal ne publie jamais sur LinkedIn – tu reprends les propositions à la main.",
+    "liHint": "{{app}} ne publie jamais sur LinkedIn – tu reprends les propositions à la main.",
     "doneTitle": "Tout est prêt",
     "sumNoPersona": "Aucune situation choisie",
     "sumAi": "IA connectée",

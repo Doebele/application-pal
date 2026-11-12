@@ -122,9 +122,9 @@ jobs:
           tauriScript: npx tauri
           args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
           tagName: ${{ github.ref_name }}
-          releaseName: Application-Pal Desktop ${{ github.ref_name }}
+          releaseName: Apply-Pal ${{ github.ref_name }}
           releaseBody: |
-            Mac: `.dmg` öffnen und Application-Pal in „Programme“ ziehen (aarch64 = Apple Silicon, x64 = Intel).
+            Mac: `.dmg` öffnen und Apply-Pal in „Programme“ ziehen (aarch64 = Apple Silicon, x64 = Intel).
             Windows: `-setup.exe` ausführen.
             Installierte Apps aktualisieren sich selbst, sobald dieser Release veröffentlicht ist.
           releaseDraft: true

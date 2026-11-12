@@ -1122,7 +1122,7 @@
     "connected": "Connected to LinkedIn",
     "expired": "Connection expired",
     "notConnected": "Not connected",
-    "intro": "Connect your LinkedIn profile so Application-Pal always knows its current state.",
+    "intro": "Connect your LinkedIn profile so {{app}} always knows its current state.",
     "expiredHint": "LinkedIn access lasts 60 days. Please reconnect.",
     "validUntil": "valid until {{date}} ({{days}} days left)",
     "viaOauth": "via your LinkedIn app",
@@ -1164,7 +1164,7 @@
     "disconnectKeepApp": "Disconnect, keep app details",
     "disconnectForget": "Disconnect and delete app details",
     "cancel": "Cancel",
-    "privacy": "Read-only: Application-Pal never changes or posts anything on LinkedIn. The access stays in your database and is never exported. Only for members located in the EU/EEA or Switzerland.",
+    "privacy": "Read-only: {{app}} never changes or posts anything on LinkedIn. The access stays in your database and is never exported. Only for members located in the EU/EEA or Switzerland.",
     "stats": {
       "positions": "{{n}} positions ({{withText}} with description)",
       "skills": "{{n}} skills",
@@ -1365,7 +1365,7 @@
       "notRatedShort": "n/r",
       "ptsTitle": "Earned / ratable (full: {{full}})"
     },
-    "emptyBuild": "No LinkedIn profile yet? Application-Pal builds it with you – from your CV, documents and a few questions.",
+    "emptyBuild": "No LinkedIn profile yet? {{app}} builds it with you – from your CV, documents and a few questions.",
     "emptyBuildGo": "Build profile",
     "lang": {
       "de": "German",
@@ -1531,7 +1531,7 @@
         "media": "Media"
       },
       "recRequests": "Ask for recommendations",
-      "recHint": "Templates to adapt – Application-Pal sends nothing. Replace [Name] and [Projekt] yourself.",
+      "recHint": "Templates to adapt – {{app}} sends nothing. Replace [Name] and [Projekt] yourself.",
       "pillars": "Topic pillars for posts",
       "groups": "Finding groups",
       "groupsHint": "No group names – use these criteria and search terms to find fitting groups yourself.",
@@ -1582,7 +1582,7 @@
     "checklist": {
       "title": "What's left to do",
       "progress": "{{done}} of {{total}} done",
-      "hint": "Application-Pal never changes anything on LinkedIn – you transfer every item yourself. Whatever a new import can prove ticks itself afterwards.",
+      "hint": "{{app}} never changes anything on LinkedIn – you transfer every item yourself. Whatever a new import can prove ticks itself afterwards.",
       "reimport": "Re-import profile",
       "hideDone": "Hide done",
       "noDraft": "No draft in this language yet – create one in the AI tools and the transfer steps appear here.",
@@ -1738,7 +1738,7 @@
     "driveFileHint": "The desktop app only sees files it created itself or that you choose in Drive here. Pasted links to other files do not work."
   },
   "wizard": {
-    "welcomeTitle": "Welcome to Application-Pal",
+    "welcomeTitle": "Welcome to {{app}}",
     "welcomeText": "A few short steps and the app is ready. You can change everything later in Settings. Where are you right now?",
     "aiTitle": "Artificial intelligence",
     "aiText": "The AI writes cover letters, checks CVs and prepares interviews. You can use a model on this computer (private, free) or a cloud service (faster, paid).",
@@ -1766,7 +1766,7 @@
     "liText": "The LinkedIn check rates your profile and suggests better texts. Upload your profile once: as a PDF (“More → Save to PDF”) or as LinkedIn’s data export.",
     "liTextBuild": "No LinkedIn profile yet? No problem: the LinkedIn check helps you build one step by step.",
     "liOpen": "Open the LinkedIn check after setup",
-    "liHint": "Application-Pal never posts to LinkedIn – you copy suggestions by hand.",
+    "liHint": "{{app}} never posts to LinkedIn – you copy suggestions by hand.",
     "doneTitle": "All set",
     "sumNoPersona": "No starting point chosen",
     "sumAi": "AI connected",

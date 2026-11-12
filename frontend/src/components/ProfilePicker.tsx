@@ -9,6 +9,7 @@ import { Lock, Plus, NavArrowLeft, User } from "iconoir-react";
 import type { AuthMode, DesktopProfile } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { APP_NAME } from "../lib/appName";
 
 type View = { kind: "list" } | { kind: "unlock"; profile: DesktopProfile } | { kind: "create" };
 
@@ -58,7 +59,7 @@ export function ProfilePicker() {
     <div className="profile-picker">
       <div className="profile-picker-card">
         <div className="profile-picker-head">
-          <div className="profile-picker-title">Application Pal</div>
+          <div className="profile-picker-title">{APP_NAME}</div>
           <div className="profile-picker-sub">
             {view.kind === "create" ? t("profiles.createTitle") : view.kind === "unlock" ? view.profile.name : t("profiles.whoIsThere")}
           </div>

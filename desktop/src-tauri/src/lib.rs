@@ -1,4 +1,4 @@
-//! Application-Pal Desktop (`d2603`).
+//! Apply-Pal – Desktop-App von Application-Pal (`d2603`).
 //!
 //! Die Hülle startet das kompilierte Backend als Sidecar auf einem freien Port an
 //! 127.0.0.1, zeigt solange eine Ladeseite und lädt dann das Frontend, das der
@@ -189,21 +189,21 @@ fn update_texts(lang: &str) -> UpdateTexts {
     match lang {
         "de" => UpdateTexts {
             title: "Update verfügbar",
-            body: "Application-Pal {new} ist verfügbar (installiert: {cur}).\n\n{notes}\n\nJetzt aktualisieren? Die App startet danach neu – deine Daten bleiben erhalten.",
+            body: "Apply-Pal {new} ist verfügbar (installiert: {cur}).\n\n{notes}\n\nJetzt aktualisieren? Die App startet danach neu – deine Daten bleiben erhalten.",
             yes: "Aktualisieren",
             later: "Später",
             failed: "Das Update konnte nicht geladen werden:\n{err}",
         },
         "fr" => UpdateTexts {
             title: "Mise à jour disponible",
-            body: "Application-Pal {new} est disponible (installée : {cur}).\n\n{notes}\n\nMettre à jour maintenant ? L’app redémarre ensuite – tes données sont conservées.",
+            body: "Apply-Pal {new} est disponible (installée : {cur}).\n\n{notes}\n\nMettre à jour maintenant ? L’app redémarre ensuite – tes données sont conservées.",
             yes: "Mettre à jour",
             later: "Plus tard",
             failed: "La mise à jour n’a pas pu être téléchargée :\n{err}",
         },
         _ => UpdateTexts {
             title: "Update available",
-            body: "Application-Pal {new} is available (installed: {cur}).\n\n{notes}\n\nUpdate now? The app restarts afterwards – your data is kept.",
+            body: "Apply-Pal {new} is available (installed: {cur}).\n\n{notes}\n\nUpdate now? The app restarts afterwards – your data is kept.",
             yes: "Update",
             later: "Later",
             failed: "The update could not be downloaded:\n{err}",

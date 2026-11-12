@@ -518,6 +518,8 @@ app.post("/api/auth/change-password", async (c) => {
 
 // ─── WebAuthn / Passkey Routes ────────────────────────────────
 const RP_NAME = "Application Pal";
+// Product name shown to users: the desktop app is "Apply-Pal" (Google OAuth brand), web stays "Application-Pal".
+const APP_NAME = env.APP_MODE === "desktop" ? "Apply-Pal" : "Application-Pal";
 function getRpId(): string {
   try { return new URL(env.APP_URL).hostname; } catch { return "localhost"; }
 }
@@ -4130,7 +4132,7 @@ function openInSystemBrowser(url: string): void {
 
 function loopbackPage(ok: boolean, text: string): string {
   const color = ok ? "#16a34a" : "#dc2626";
-  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>Application-Pal</title>
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${APP_NAME}</title>
 <style>body{font-family:-apple-system,system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0;background:#f7f7f5;color:#222}
 div{max-width:420px;text-align:center;padding:32px;border-radius:14px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.08)}
 h1{font-size:18px;color:${color};margin:0 0 8px}p{margin:0;line-height:1.5;color:#555}</style></head>
@@ -4203,7 +4205,7 @@ app.get("/api/google/callback", async (c) => {
         scope: data.scope ?? GOOGLE_SCOPES,
         userId: pending.userId,
       });
-      return c.html(loopbackPage(true, "Du kannst dieses Fenster schliessen und zu Application-Pal zurückkehren."));
+      return c.html(loopbackPage(true, `Du kannst dieses Fenster schliessen und zu ${APP_NAME} zurückkehren.`));
     } catch (err) {
       console.error("[google] callback error:", err);
       return c.html(loopbackPage(false, "Unerwarteter Fehler. Bitte erneut versuchen."), 500);
@@ -6073,7 +6075,7 @@ app.post("/api/drive/templates/create", async (c) => {
         { text: "Meine Rückfragen an das Unternehmen", heading: "HEADING_2" },
         { text: "{{RUECKFRAGEN}}" },
         { text: "" },
-        { text: `Erstellt mit Application Pal · ${date}`, gray: true, italic: true },
+        { text: `Erstellt mit ${APP_NAME} · ${date}`, gray: true, italic: true },
       ]
     },
     "cv": {

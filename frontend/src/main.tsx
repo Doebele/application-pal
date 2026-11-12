@@ -5,6 +5,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { App } from "./App";
 import "./i18n";
 import "./index.css";
+import { APP_NAME } from "./lib/appName";
+
+document.title = APP_NAME;
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 1000 * 60 } }

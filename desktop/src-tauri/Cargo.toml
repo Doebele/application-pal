@@ -1,6 +1,6 @@
 [package]
 name = "d2603"
-description = "Application-Pal Desktop (M0-Spike)"
+description = "Apply-Pal (Desktop-App von Application-Pal)"
 version = "0.1.0"
 edition = "2021"
 publish = false
