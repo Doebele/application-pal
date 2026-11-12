@@ -1745,7 +1745,10 @@
     "chooseSheet": "Choisir un tableau dans Drive …",
     "importTemplate": "Importer un modèle depuis Google Drive …",
     "templateImported": "« {{name}} » importé comme modèle",
-    "driveFileHint": "L’app de bureau ne voit que les fichiers qu’elle a créés ou que tu choisis ici dans Drive. Les liens collés vers d’autres fichiers ne fonctionnent pas."
+    "driveFileHint": "L’app de bureau ne voit que les fichiers qu’elle a créés ou que tu choisis ici dans Drive. Les liens collés vers d’autres fichiers ne fonctionnent pas.",
+    "waitingBrowser": "Choix dans le navigateur …",
+    "browserHint": "Fais ton choix dans Google Drive dans ton navigateur.",
+    "cancel": "Annuler"
   },
   "wizard": {
     "welcomeTitle": "Bienvenue dans {{app}}",

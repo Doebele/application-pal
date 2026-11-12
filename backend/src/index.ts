@@ -125,6 +125,8 @@ if (env.DESKTOP_TOKEN) {
     // Google's loopback redirect arrives in the system browser, which has no cookie.
     // It is only accepted with a pending single-use `state` (checked in the route).
     if (c.req.path === "/api/google/callback" && c.req.query("state")) return next();
+    // Same for the Drive picker page opened in the system browser: only with a pending session id.
+    if ((c.req.path === "/api/google/picker-page" || c.req.path === "/api/google/picker-result") && c.req.query("s")) return next();
     if (!same(getCookie(c, "desktop_token"))) return c.text("Forbidden", 403);
     return next();
   });
@@ -213,7 +215,8 @@ async function withUserCtx(method: string, userId: string, next: () => Promise<v
 app.use("/api/*", async (c, next) => {
   const p = c.req.path;
   // Public routes: auth endpoints + google/linkedin OAuth callbacks + health
-  if (p.startsWith("/api/auth/") || p === "/api/google/callback" || p === "/api/linkedin/callback" || p === "/health") {
+  if (p.startsWith("/api/auth/") || p === "/api/google/callback" || p === "/api/linkedin/callback" || p === "/health"
+      || (IS_DESKTOP && (p === "/api/google/picker-page" || p === "/api/google/picker-result"))) {
     return next();
   }
   const token = getCookie(c, "access_token");
@@ -4173,6 +4176,136 @@ app.get("/api/google/picker-config", async (c) => {
   const accessToken = await getDriveAccessToken(getUserId(c));
   if (!accessToken) return c.json({ available: false, error: "Google Drive nicht verbunden" });
   return c.json({ available: true, apiKey: GOOGLE_API_KEY, appId: GOOGLE_APP_ID, accessToken });
+});
+
+// ── Desktop: Drive picker in the system browser ──
+// The Google Picker is an iframe from docs.google.com that needs the user's Google
+// cookies. WKWebView blocks those (“Can't access your Google Account”), so on the
+// desktop the picker runs on a small page of this server opened in the default
+// browser, where the user is signed in to Google. The page posts the pick back;
+// the app polls the session. A session is single-use, bound to the profile that
+// started it, and expires after 10 minutes; only with its id does the sidecar
+// guard let the two browser routes through.
+type PickerKindB = "folder" | "document" | "spreadsheet" | "template" | "any";
+type PickerSession = {
+  userId: string; kind: PickerKindB; title: string; lang: "de" | "en" | "fr"; createdAt: number;
+  status: "pending" | "done" | "cancelled"; file?: { id: string; name: string; mimeType: string; url: string };
+};
+const pickerSessions = new Map<string, PickerSession>();
+const PICKER_TTL = 10 * 60 * 1000;
+const PICKER_MIME: Record<Exclude<PickerKindB, "any">, string> = {
+  folder: "application/vnd.google-apps.folder",
+  document: "application/vnd.google-apps.document",
+  spreadsheet: "application/vnd.google-apps.spreadsheet",
+  template: [
+    "application/vnd.google-apps.document",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.google-apps.spreadsheet",
+    "application/vnd.google-apps.presentation",
+  ].join(","),
+};
+const PICKER_TEXT = {
+  de: { loading: "Google Drive wird geöffnet …", done: "Übernommen", doneText: `Du kannst dieses Fenster schliessen und zu ${APP_NAME} zurückkehren.`, cancel: "Abgebrochen", cancelText: "Es wurde nichts ausgewählt. Du kannst dieses Fenster schliessen.", expired: "Diese Auswahl ist abgelaufen. Starte sie in der App neu.", failed: "Google Drive konnte nicht geladen werden" },
+  en: { loading: "Opening Google Drive …", done: "Done", doneText: `You can close this window and return to ${APP_NAME}.`, cancel: "Cancelled", cancelText: "Nothing was selected. You can close this window.", expired: "This selection has expired. Start it again in the app.", failed: "Google Drive could not be loaded" },
+  fr: { loading: "Ouverture de Google Drive …", done: "C’est fait", doneText: `Tu peux fermer cette fenêtre et revenir à ${APP_NAME}.`, cancel: "Annulé", cancelText: "Rien n’a été sélectionné. Tu peux fermer cette fenêtre.", expired: "Cette sélection a expiré. Relance-la dans l’app.", failed: "Impossible de charger Google Drive" },
+};
+function livePickerSession(id: string | undefined): PickerSession | null {
+  for (const [k, v] of pickerSessions) if (Date.now() - v.createdAt > PICKER_TTL) pickerSessions.delete(k);
+  return id ? pickerSessions.get(id) ?? null : null;
+}
+
+app.post("/api/google/picker-session", async (c) => {
+  if (!IS_DESKTOP) return c.json({ error: "Nur in der Desktop-App" }, 404);
+  if (!GOOGLE_API_KEY || !GOOGLE_APP_ID) return c.json({ error: "Google-Picker ist nicht eingerichtet" }, 503);
+  const userId = getUserId(c);
+  if (!(await getDriveAccessToken(userId))) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const body = await c.req.json<{ kind?: string; title?: string; lang?: string }>().catch(() => ({} as { kind?: string; title?: string; lang?: string }));
+  const kind = (["folder", "document", "spreadsheet", "template", "any"].includes(body.kind ?? "") ? body.kind : "any") as PickerKindB;
+  const lang = (["de", "en", "fr"].includes(body.lang ?? "") ? body.lang : "de") as PickerSession["lang"];
+  livePickerSession(undefined);
+  const id = b64url(crypto.randomBytes(24));
+  pickerSessions.set(id, { userId, kind, title: String(body.title ?? "").slice(0, 120), lang, createdAt: Date.now(), status: "pending" });
+  openInSystemBrowser(`http://127.0.0.1:${env.PORT}/api/google/picker-page?s=${id}`);
+  return c.json({ id });
+});
+
+app.get("/api/google/picker-session/:id", (c) => {
+  const s = livePickerSession(c.req.param("id"));
+  if (!s || s.userId !== getUserId(c)) return c.json({ status: "expired" });
+  if (s.status !== "pending") pickerSessions.delete(c.req.param("id"));
+  return c.json({ status: s.status, file: s.file ?? null });
+});
+
+// Explicit cancel from the app (user gave up waiting) — the browser page then shows "expired".
+app.delete("/api/google/picker-session/:id", (c) => {
+  const s = livePickerSession(c.req.param("id"));
+  if (s && s.userId === getUserId(c)) pickerSessions.delete(c.req.param("id"));
+  return c.json({ ok: true });
+});
+
+app.get("/api/google/picker-page", async (c) => {
+  if (!IS_DESKTOP) return c.text("Not found", 404);
+  const id = c.req.query("s") ?? "";
+  const s = livePickerSession(id);
+  const tx = PICKER_TEXT[s?.lang ?? "de"];
+  if (!s || s.status !== "pending") return c.html(loopbackPage(false, tx.expired), 410);
+  const accessToken = await getDriveAccessToken(s.userId);
+  if (!accessToken) return c.html(loopbackPage(false, "Google Drive nicht verbunden"), 400);
+  c.header("Cache-Control", "no-store");
+  c.header("Referrer-Policy", "no-referrer");
+  const cfg = JSON.stringify({
+    id, kind: s.kind, title: s.title, mime: s.kind === "any" ? "" : PICKER_MIME[s.kind],
+    token: accessToken, apiKey: GOOGLE_API_KEY, appId: GOOGLE_APP_ID, tx,
+  }).replace(/</g, "\\u003c");
+  return c.html(`<!doctype html><html lang="${s.lang}"><head><meta charset="utf-8"><title>${APP_NAME} · Google Drive</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:-apple-system,system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0;background:#f7f7f5;color:#222}
+#box{max-width:440px;text-align:center;padding:32px;border-radius:14px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+h1{font-size:18px;margin:0 0 8px}p{margin:0;line-height:1.5;color:#555}.ok{color:#16a34a}.bad{color:#dc2626}</style></head>
+<body><div id="box"><h1 id="h">${tx.loading}</h1><p id="p"></p></div>
+<script>
+const C = ${cfg};
+const show = (cls, h, p) => { const e = document.getElementById("h"); e.className = cls; e.textContent = h; document.getElementById("p").textContent = p; };
+const report = (body) => fetch("/api/google/picker-result?s=" + encodeURIComponent(C.id), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+function start() {
+  const p = google.picker;
+  let view;
+  if (C.kind === "folder") view = new p.DocsView(p.ViewId.FOLDERS).setIncludeFolders(true).setSelectFolderEnabled(true).setMimeTypes(C.mime);
+  else { view = new p.DocsView(p.ViewId.DOCS).setIncludeFolders(true); if (C.mime) view.setMimeTypes(C.mime); }
+  const b = new p.PickerBuilder().addView(view).setOAuthToken(C.token).setDeveloperKey(C.apiKey).setAppId(C.appId)
+    .setOrigin(location.origin).setSize(Math.min(1051, innerWidth - 40), Math.min(650, innerHeight - 40))
+    .setCallback(async (d) => {
+      const a = d[p.Response.ACTION];
+      if (a === p.Action.PICKED) {
+        const f = d[p.Response.DOCUMENTS][0];
+        await report({ action: "picked", file: { id: f[p.Document.ID], name: f[p.Document.NAME], mimeType: f[p.Document.MIME_TYPE], url: f[p.Document.URL] } });
+        show("ok", C.tx.done, C.tx.doneText); setTimeout(() => window.close(), 1500);
+      } else if (a === p.Action.CANCEL) {
+        await report({ action: "cancel" });
+        show("", C.tx.cancel, C.tx.cancelText);
+      }
+    });
+  if (C.title) b.setTitle(C.title);
+  b.build().setVisible(true);
+}
+</script>
+<script src="https://apis.google.com/js/api.js" onload="gapi.load('picker', { callback: start, onerror: () => show('bad', C.tx.failed, '') })" onerror="show('bad', C.tx.failed, '')"></script>
+</body></html>`);
+});
+
+app.post("/api/google/picker-result", async (c) => {
+  if (!IS_DESKTOP) return c.json({ error: "Not found" }, 404);
+  const s = livePickerSession(c.req.query("s"));
+  if (!s || s.status !== "pending") return c.json({ error: "expired" }, 410);
+  const body = await c.req.json<{ action?: string; file?: { id?: string; name?: string; mimeType?: string; url?: string } }>().catch(() => ({} as { action?: string; file?: undefined }));
+  const f = body.file;
+  if (body.action === "picked" && f?.id && /^[\w-]{10,200}$/.test(f.id)) {
+    s.status = "done";
+    s.file = { id: f.id, name: String(f.name ?? "").slice(0, 300), mimeType: String(f.mimeType ?? "").slice(0, 200), url: String(f.url ?? "").slice(0, 500) };
+  } else {
+    s.status = "cancelled";
+  }
+  return c.json({ ok: true });
 });
 
 app.get("/api/google/auth-url", (c) => {

@@ -1745,7 +1745,10 @@
     "chooseSheet": "Choose sheet in Drive …",
     "importTemplate": "Import template from Google Drive …",
     "templateImported": "“{{name}}” imported as template",
-    "driveFileHint": "The desktop app only sees files it created itself or that you choose in Drive here. Pasted links to other files do not work."
+    "driveFileHint": "The desktop app only sees files it created itself or that you choose in Drive here. Pasted links to other files do not work.",
+    "waitingBrowser": "Choosing in browser …",
+    "browserHint": "Make your choice in Google Drive in your browser.",
+    "cancel": "Cancel"
   },
   "wizard": {
     "welcomeTitle": "Welcome to {{app}}",

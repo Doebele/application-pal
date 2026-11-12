@@ -1745,7 +1745,10 @@
     "chooseSheet": "Tabelle in Drive wählen …",
     "importTemplate": "Vorlage aus Google Drive übernehmen …",
     "templateImported": "„{{name}}“ als Vorlage übernommen",
-    "driveFileHint": "Die Desktop-App sieht nur Dateien, die sie selbst angelegt hat oder die du hier in Drive auswählst. Eingefügte Links auf andere Dateien funktionieren nicht."
+    "driveFileHint": "Die Desktop-App sieht nur Dateien, die sie selbst angelegt hat oder die du hier in Drive auswählst. Eingefügte Links auf andere Dateien funktionieren nicht.",
+    "waitingBrowser": "Auswahl im Browser …",
+    "browserHint": "Wähle in deinem Browser in Google Drive aus.",
+    "cancel": "Abbrechen"
   },
   "wizard": {
     "welcomeTitle": "Willkommen bei {{app}}",

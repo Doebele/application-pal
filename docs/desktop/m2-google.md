@@ -66,6 +66,16 @@ Mit dem gebauten Sidecar (Platzhalter-Client-ID, Browserstart unterdrückt) und 
 
 **Nicht getestet** (braucht die echten Zugangsdaten aus Schritt 1–5): der erfolgreiche Token-Tausch, ob der **Picker in WKWebView** lädt (er bettet ein `docs.google.com`-iframe ein; Safari blockiert Drittanbieter-Cookies – mit `setOAuthToken` sollte er ohne Cookies auskommen, das ist aber das grösste offene Risiko), und die Drive-Funktionen mit `drive.file`.
 
+## Nachtrag: Picker im Standardbrowser
+
+Im App-Fenster zeigte der Picker „Can't access your Google Account“: Sein iframe von `docs.google.com` braucht die Google-Cookies des Nutzers, und WKWebView blockiert sie. In der Desktop-App läuft er deshalb auf einer Seite des Sidecars im Standardbrowser:
+
+1. `POST /api/google/picker-session { kind, title, lang }` legt eine Sitzung an (zufällige ID, einmalig, 10 min, an das Profil gebunden) und öffnet `http://127.0.0.1:<Port>/api/google/picker-page?s=<id>`.
+2. Die Seite lädt den Picker mit Token, API-Schlüssel und Projektnummer und meldet die Wahl an `POST /api/google/picker-result?s=<id>` (Abbruch ebenso).
+3. Die App fragt `GET /api/google/picker-session/:id` alle 1,5 s ab; „Abbrechen“ im Knopf löscht die Sitzung (`DELETE`).
+
+Sidecar-Sperre und Auth-Middleware lassen die beiden Browser-Routen nur mit `s` bzw. nur im Desktop-Modus durch; die Routen prüfen die Sitzung selbst. Im Web bleibt der eingebettete Picker.
+
 ## Offen
 
 - **LinkedIn-Callback** auf dem Desktop: LinkedIn verlangt eine fest registrierte Redirect-URL, der Sidecar-Port wechselt. Bis dahin bleibt der Weg „Token einfügen“ (funktioniert ohne Callback). Möglichkeit: fester Zusatz-Port nur für den Callback.
