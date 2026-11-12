@@ -144,6 +144,10 @@
 /* Density — low = more whitespace, high = more info */
 [data-density="low"]  { --pad-card:18px; --pad-row:14px; --gap-stack:14px; }
 [data-density="high"] { --pad-card:12px; --pad-row:10px; --gap-stack:8px; }
+/* One header height for rail and topbar, so both bottom borders sit on one line.
+   Low density zooms the whole UI, so the line stays aligned there too. */
+:root { --header-h: 64px; }
+[data-density="high"] { --header-h: 56px; }
 
 /* Low density: zoom the whole UI for more breathing room.
    app-shell counters the zoom so it stays exactly 1 screen tall. */
@@ -235,7 +239,7 @@ body {
 
 /* Rail header — brand + toggle */
 .rail-header {
-  height: 56px;
+  height: var(--header-h);
   flex-shrink: 0;
   display: flex;
   align-items: center;
@@ -283,6 +287,13 @@ body {
   letter-spacing: -0.04em;
   box-shadow: 0 3px 10px var(--accent-35);
   flex-shrink: 0;
+}
+.brand-icon {
+  width: 28px;
+  height: 28px;
+  display: block;
+  flex-shrink: 0;
+  object-fit: contain;
 }
 .brand-name {
   font-family: var(--font-serif);
@@ -428,7 +439,8 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 24px;
+  height: var(--header-h);
+  padding: 0 24px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;

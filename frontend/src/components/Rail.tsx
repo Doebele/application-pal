@@ -19,6 +19,8 @@ import deFlagUrl from "round-flag-icons/flags/de.svg?url";
 import gbFlagUrl from "round-flag-icons/flags/gb.svg?url";
 // @ts-ignore
 import frFlagUrl from "round-flag-icons/flags/fr.svg?url";
+import { APP_NAME } from "../lib/appName";
+import appIcon from "../assets/brand/app-icon.png";
 
 const FLAG_URLS: Record<string, string> = { de: deFlagUrl, en: gbFlagUrl, fr: frFlagUrl };
 
@@ -526,10 +528,10 @@ export function Rail({ applications }: Props) {
         {/* ── Header ── */}
         <div className="rail-header">
           {railOpen && (
-            <div className="brand" style={{ flex: 1, minWidth: 0 }}>
-              <div className="brand-mark">A</div>
-              <div className="brand-name" style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
-                App<em>·</em>Pal
+            <div className="brand" style={{ flex: 1, minWidth: 0, gap: 8 }}>
+              <img className="brand-icon" src={appIcon} alt="" />
+              <div className="brand-name" style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontSize: APP_NAME.length > 10 ? 15 : undefined }}>
+                {APP_NAME}
               </div>
             </div>
           )}
