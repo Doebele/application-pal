@@ -17,7 +17,7 @@ import { api } from "./api";
 import { hasShell } from "./desktopShell";
 import i18n from "../i18n";
 
-export type PickerKind = "folder" | "document" | "spreadsheet" | "template" | "any";
+export type PickerKind = "folder" | "document" | "spreadsheet" | "template" | "readable" | "any";
 export type PickedFile = { id: string; name: string; mimeType: string; url: string };
 
 type PickerConfig = { available: boolean; apiKey?: string; appId?: string; accessToken?: string; error?: string };
@@ -49,6 +49,7 @@ const MIME = {
     "application/vnd.google-apps.spreadsheet",
     "application/vnd.google-apps.presentation",
   ].join(","),
+  readable: "application/vnd.google-apps.document,application/pdf",
 };
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));

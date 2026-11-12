@@ -4186,7 +4186,7 @@ app.get("/api/google/picker-config", async (c) => {
 // the app polls the session. A session is single-use, bound to the profile that
 // started it, and expires after 10 minutes; only with its id does the sidecar
 // guard let the two browser routes through.
-type PickerKindB = "folder" | "document" | "spreadsheet" | "template" | "any";
+type PickerKindB = "folder" | "document" | "spreadsheet" | "template" | "readable" | "any";
 type PickerSession = {
   userId: string; kind: PickerKindB; title: string; lang: "de" | "en" | "fr"; createdAt: number;
   status: "pending" | "done" | "cancelled"; file?: { id: string; name: string; mimeType: string; url: string };
@@ -4203,6 +4203,8 @@ const PICKER_MIME: Record<Exclude<PickerKindB, "any">, string> = {
     "application/vnd.google-apps.spreadsheet",
     "application/vnd.google-apps.presentation",
   ].join(","),
+  // Files the app can read text from (CVs, certificates): Google Docs and PDFs
+  readable: "application/vnd.google-apps.document,application/pdf",
 };
 const PICKER_TEXT = {
   de: { loading: "Google Drive wird geöffnet …", done: "Übernommen", doneText: `Du kannst dieses Fenster schliessen und zu ${APP_NAME} zurückkehren.`, cancel: "Abgebrochen", cancelText: "Es wurde nichts ausgewählt. Du kannst dieses Fenster schliessen.", expired: "Diese Auswahl ist abgelaufen. Starte sie in der App neu.", failed: "Google Drive konnte nicht geladen werden" },
@@ -4220,7 +4222,7 @@ app.post("/api/google/picker-session", async (c) => {
   const userId = getUserId(c);
   if (!(await getDriveAccessToken(userId))) return c.json({ error: "Google Drive nicht verbunden" }, 400);
   const body = await c.req.json<{ kind?: string; title?: string; lang?: string }>().catch(() => ({} as { kind?: string; title?: string; lang?: string }));
-  const kind = (["folder", "document", "spreadsheet", "template", "any"].includes(body.kind ?? "") ? body.kind : "any") as PickerKindB;
+  const kind = (["folder", "document", "spreadsheet", "template", "readable", "any"].includes(body.kind ?? "") ? body.kind : "any") as PickerKindB;
   const lang = (["de", "en", "fr"].includes(body.lang ?? "") ? body.lang : "de") as PickerSession["lang"];
   livePickerSession(undefined);
   const id = b64url(crypto.randomBytes(24));

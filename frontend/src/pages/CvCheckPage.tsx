@@ -5,6 +5,7 @@ import { RefreshCircle, InfoCircle, Folder, OpenNewWindow, CheckCircle, WarningC
 import type { CvDocument, CvLanguage } from "@application-pal/shared";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
+import { GooglePickerButton, type PickedFile } from "../lib/googlePicker";
 import { useUiStore } from "../lib/store";
 import { useCvCheck, ScoreTab, ImproveTab, cvHighlights } from "./CvCheckTabs";
 import { PdfViewer } from "../components/check/PdfViewer";
@@ -85,6 +86,14 @@ export function CvCheckPage() {
   const setMaster = async (l: CvLanguage) => {
     setCurrent(c => c ? { ...c, masterLang: l } : c);
     await api.patch("/api/profile", { cvMasterLang: l }).catch(() => {});
+  };
+
+  // Desktop (drive.file): a CV linked only by URL is invisible to the app until the
+  // user picks it once in the Google Picker — that grants access to exactly this file.
+  const relink = async (documentId: string, f: PickedFile) => {
+    await api.patch(`/api/documents/${documentId}`, { url: f.url, fileType: f.mimeType === "application/pdf" ? "pdf" : "gdoc" });
+    setPdfNonce(n => n + 1);
+    await load();
   };
 
   const runImport = async (l: CvLanguage, documentId: string) => {
@@ -176,8 +185,14 @@ export function CvCheckPage() {
                 highlights={highlights} activeId={activeId}
                 onPick={id => { setActiveId(id); if (sidebarOpen && !id.includes(":")) setTab("improve"); }} />
             ) : (
-              <EmptyState icon={<Page width={22} height={22} />} text={src ? t("cvCheck.unreachable") : t("cvCheck.noSourceHint", { lang: activeLang.toUpperCase() })}>
-                <Link to="/documents" className="btn btn-secondary" style={{ fontSize: 12, gap: 5, textDecoration: "none" }}><Folder width={12} height={12} /> {t("cvCheck.linkDocuments")}</Link>
+              <EmptyState icon={<Page width={22} height={22} />} text={src ? t("cvCheck.unreachableHint", { name: src.name }) : t("cvCheck.noSourceHint", { lang: activeLang.toUpperCase() })}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", alignItems: "flex-start" }}>
+                  {src && sources.driveConnected && (
+                    <GooglePickerButton kind="readable" title={src.name} label={t("cvCheck.repick")} className="btn btn-primary"
+                      onPicked={f => relink(src.documentId, f)} />
+                  )}
+                  <Link to="/documents" className="btn btn-secondary" style={{ fontSize: 12, gap: 5, textDecoration: "none" }}><Folder width={12} height={12} /> {t("cvCheck.linkDocuments")}</Link>
+                </div>
               </EmptyState>
             )}
           </CheckFrame>

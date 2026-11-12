@@ -8,6 +8,7 @@ import {
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 import { GooglePickerButton } from "../lib/googlePicker";
+import { hasShell } from "../lib/desktopShell";
 import { useUiStore } from "../lib/store";
 
 // Categories whose content feeds AI prompts (mirrors CONTEXT_DOC_CATEGORIES in the backend)
@@ -649,12 +650,26 @@ function EditModal({ doc, onSave, onClose }: {
           ))}
         </div>
 
-        {([ ["Name *", name, setName, { fontWeight: 600 }], ["URL / Google Docs Link", url, setUrl, { fontFamily: "var(--font-mono)", fontSize: 12 }] ] as [string, string, React.Dispatch<React.SetStateAction<string>>, React.CSSProperties][]).map(([label, val, setter, style]) => (
-          <div key={label}>
-            <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>{label}</div>
-            <input className="input-line" value={val} onChange={(e) => setter(e.target.value)} style={style} />
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>Name *</div>
+          <input className="input-line" value={name} onChange={(e) => setName(e.target.value)} style={{ fontWeight: 600 }} />
+        </div>
+
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>URL / Google Docs Link</div>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+            <input className="input-line" value={url} onChange={(e) => setUrl(e.target.value)} style={{ fontFamily: "var(--font-mono)", fontSize: 12, flex: 1 }} />
+            {(fileType === "gdoc" || fileType === "pdf") && (
+              <GooglePickerButton kind="readable" title={name} onPicked={f => {
+                setUrl(f.url);
+                setFileType(f.mimeType === "application/pdf" ? "pdf" : isGoogleCat ? "gdoc" : fileType);
+              }} />
+            )}
           </div>
-        ))}
+          {hasShell() && (fileType === "gdoc" || fileType === "pdf") && (
+            <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 4, lineHeight: 1.45 }}>{t("picker.driveFileHint")}</div>
+          )}
+        </div>
 
         <div>
           <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>{t("documents.extraUrl")}</div>

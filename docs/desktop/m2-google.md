@@ -81,3 +81,11 @@ Sidecar-Sperre und Auth-Middleware lassen die beiden Browser-Routen nur mit `s` 
 - **LinkedIn-Callback** auf dem Desktop: LinkedIn verlangt eine fest registrierte Redirect-URL, der Sidecar-Port wechselt. Bis dahin bleibt der Weg „Token einfügen“ (funktioniert ohne Callback). Möglichkeit: fester Zusatz-Port nur für den Callback.
 - Google-Refresh-Tokens liegen unverschlüsselt in `google_oauth_tokens` (wie im Web). Könnte mit dem Schlüssel aus M1 verschlüsselt werden.
 - Picker für die CV-Quellen und „Google Doc kopieren“ in Bewerbungen nutzen bisher die Dokument-Bibliothek; die Links dort kommen auf dem Desktop jetzt aus dem Picker, sind also erreichbar.
+
+## Nachtrag: bestehende Dokumente neu verknüpfen
+
+Dokumente, die nur per Link verknüpft sind (z. B. aus der Web-Version importiert), kann die Desktop-App mit `drive.file` nicht lesen — der CV-Check zeigt dann „nicht erreichbar“. Abhilfe ohne neuen Scope: die Datei einmal im Picker wählen.
+
+- CV-Check: im leeren Zustand „Datei in Drive auswählen …“ — patcht `url` (und `fileType` gdoc/pdf) des verknüpften `user_documents`-Eintrags und lädt die Quellen neu.
+- Dokumente → Bearbeiten: Picker-Knopf neben dem URL-Feld (bei Google Doc und PDF), mit Hinweis `picker.driveFileHint`.
+- Picker-Art `readable` = Google Docs + PDF (`PICKER_MIME` im Backend, `MIME` in `googlePicker.tsx`).

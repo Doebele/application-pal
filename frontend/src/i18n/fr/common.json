@@ -1075,7 +1075,9 @@
       "competencyEvidence": "Preuves des compétences",
       "noEvidence": "Aucune preuve trouvée",
       "placeholderHint": "[X] = chiffre manquant — à compléter soi-même, ne rien inventer."
-    }
+    },
+    "unreachableHint": "« {{name}} » est lié, mais l’app n’y a pas encore accès. Sélectionne le fichier une fois dans Google Drive – ensuite il pourra être lu.",
+    "repick": "Choisir le fichier dans Drive …"
   },
   "check": {
     "status": {

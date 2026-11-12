@@ -1075,7 +1075,9 @@
       "competencyEvidence": "Belege für Kompetenzen",
       "noEvidence": "Kein Beleg gefunden",
       "placeholderHint": "[X] = Zahl fehlt – bitte selbst einsetzen, nichts erfinden."
-    }
+    },
+    "unreachableHint": "„{{name}}“ ist verknüpft, aber die App hat noch keinen Zugriff darauf. Wähle die Datei einmal in Google Drive aus – danach kann sie gelesen werden.",
+    "repick": "Datei in Drive auswählen …"
   },
   "check": {
     "status": {
