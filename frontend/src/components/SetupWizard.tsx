@@ -79,8 +79,10 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
               ] as [Persona, string, string, string][]).map(([v, img, label, sub]) => (
                 <button key={v} type="button" className={"wizard-persona" + (persona === v ? " active" : "")} onClick={() => choosePersona(v)}>
                   <img src={img} alt="" />
-                  <span className="wizard-persona-label">{label}</span>
-                  <span className="wizard-persona-sub">{sub}</span>
+                  <span className="wizard-persona-text">
+                    <span className="wizard-persona-label">{label}</span>
+                    <span className="wizard-persona-sub">{sub}</span>
+                  </span>
                 </button>
               ))}
             </div>

@@ -1621,14 +1621,16 @@ textarea {
 .wizard-hint a, a.wizard-hint { color: var(--accent); }
 .wizard-personas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .wizard-persona {
-  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 10px;
+  display: flex; flex-direction: column; align-items: stretch; padding: 0; overflow: hidden;
   border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2);
   cursor: pointer; text-align: center; color: var(--fg-1);
 }
-.wizard-persona img { width: 72px; height: 72px; object-fit: contain; }
+/* Bild randlos über die volle Kartenbreite (Figma „Persona card“), beschnitten statt verkleinert. */
+.wizard-persona img { display: block; width: 100%; height: 96px; object-fit: cover; }
 .wizard-persona.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
-.wizard-persona-label { font-size: 13px; font-weight: 700; }
-.wizard-persona-sub { font-size: 11px; color: var(--fg-3); line-height: 1.4; }
+.wizard-persona-text { display: flex; flex-direction: column; gap: 8px; padding: 12px; }
+.wizard-persona-label { font-size: 13px; font-weight: 700; line-height: 17px; letter-spacing: -0.005em; }
+.wizard-persona-sub { font-size: 11px; color: var(--fg-3); line-height: 15px; }
 .wizard-group-label {
   font-size: 11px; font-weight: 700; color: var(--fg-3); text-transform: uppercase;
   letter-spacing: 0.06em; margin-top: 6px;
