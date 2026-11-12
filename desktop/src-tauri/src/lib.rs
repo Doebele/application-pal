@@ -25,7 +25,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use tauri::webview::DownloadEvent;
+use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{AppHandle, Manager, RunEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_updater::UpdaterExt;
@@ -164,6 +164,19 @@ fn stop_sidecar(state: &SidecarState) {
 }
 
 /// "de-CH", "fr_FR", "EN" → de / fr / en; jede andere Sprache → en.
+/// URL im Standardbrowser bzw. Mailprogramm des Systems öffnen.
+fn open_external(url: &str) {
+    #[cfg(target_os = "macos")]
+    let r = Command::new("open").arg(url).spawn();
+    #[cfg(target_os = "windows")]
+    let r = Command::new("rundll32").args(["url.dll,FileProtocolHandler", url]).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let r = Command::new("xdg-open").arg(url).spawn();
+    if let Err(e) = r {
+        eprintln!("Link konnte nicht geöffnet werden: {e}");
+    }
+}
+
 fn norm_lang(tag: &str) -> &'static str {
     match tag.get(..2).map(str::to_ascii_lowercase).as_deref() {
         Some("de") => "de",
@@ -347,6 +360,15 @@ pub fn run() {
                         _ => {}
                     }
                     true
+                })
+                // Links mit target="_blank" / window.open (Original-Stellenanzeige, Drive-Ordner,
+                // Schlüssel-Seiten …): WKWebView öffnet sie ohne Handler gar nicht. Sie gehören in
+                // den Standardbrowser, nicht in ein zweites App-Fenster.
+                .on_new_window(move |url, _features| {
+                    if matches!(url.scheme(), "http" | "https" | "mailto") {
+                        open_external(url.as_str());
+                    }
+                    NewWindowResponse::Deny
                 })
                 .build()?;
             fs::create_dir_all(data_dir.join("knowledge-base"))?;
