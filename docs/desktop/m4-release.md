@@ -83,6 +83,16 @@ Sobald entschieden: `bundle.windows.signCommand` in `tauri.conf.json` + Secrets 
   - CV- und LinkedIn-Versionen verloren beim Import die Millisekunden ihres Zeitstempels.
 - **Download in der Desktop-App**: WKWebView bricht Downloads ohne Handler ab – „Daten exportieren“ tat dort nichts. Die Hülle baut das Fenster jetzt selbst (`"create": false`) mit `on_download`; Ziel ist der Ordner Downloads, die Einstellungen sagen, wohin die Datei ging.
 
+## App-Icon
+
+Vorlage: Figma „macOS Preview“ (Knoten 87:2041, Rahmen „AppIcon-macOS“, 1024 px, Squircle 824 px mit Schatten). Die Quelle liegt transparent in `desktop/app-icon.png`; alle Grössen (`icns`, `ico`, Windows-Store-Logos) erzeugt aus `desktop/`:
+
+```bash
+npx tauri icon app-icon.png -o src-tauri/icons && rm -rf src-tauri/icons/android src-tauri/icons/ios
+```
+
+Der Figma-Export hat einen grauen Hintergrund; für `app-icon.png` wurde er entfernt (Schatten als schwarze Transparenz, Kanten entmischt).
+
 ## Offen
 
 - Fehlermeldungen des Servers bei der Anmeldung („Falsche PIN“) sind noch deutsch.
