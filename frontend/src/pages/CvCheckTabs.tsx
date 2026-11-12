@@ -18,7 +18,7 @@ const errMsg = (e: unknown, fallback: string) =>
   (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
 
 /** Latest check for one language, the running job (polled) and waiver toggling. */
-export function useCvCheck(lang: CvLanguage) {
+export function useCvCheck(lang: CvLanguage, versionId?: string | null) {
   const { i18n, t } = useTranslation();
   const { ai } = useUiStore();
   const uiLang = (["de", "en", "fr"].includes(i18n.language) ? i18n.language : "de");
@@ -38,7 +38,9 @@ export function useCvCheck(lang: CvLanguage) {
     setJob(j);
     return j;
   }, [lang]);
-  useEffect(() => { setData(null); load(); loadJob(); }, [load, loadJob]);
+  // versionId: a finished (re-)import creates a new version — reload its check data,
+  // otherwise score and PDF highlights keep describing the old text.
+  useEffect(() => { setData(null); load(); loadJob(); }, [load, loadJob, versionId]);
 
   const running = job?.status === "running";
   useEffect(() => {

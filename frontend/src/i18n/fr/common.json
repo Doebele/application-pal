@@ -1077,7 +1077,9 @@
       "placeholderHint": "[X] = chiffre manquant — à compléter soi-même, ne rien inventer."
     },
     "unreachableHint": "« {{name}} » est lié, mais l’app n’y a pas encore accès. Sélectionne le fichier une fois dans Google Drive – ensuite il pourra être lu.",
-    "repick": "Choisir le fichier dans Drive …"
+    "repick": "Choisir le fichier dans Drive …",
+    "sourceNewer": "Le CV a été modifié le {{source}}, la version de l’app date du {{app}}. Les points et les surlignages portent donc encore sur l’ancien texte – réimporte-le.",
+    "sourceNewerRunning": "Réimport en cours – relance ensuite la vérification pour que les points et les surlignages correspondent au texte actuel."
   },
   "check": {
     "status": {

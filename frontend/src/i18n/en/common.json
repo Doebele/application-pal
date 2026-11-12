@@ -1077,7 +1077,9 @@
       "placeholderHint": "[X] = number missing — fill it in yourself, never invent."
     },
     "unreachableHint": "“{{name}}” is linked, but the app can't access it yet. Pick the file once in Google Drive — after that it can be read.",
-    "repick": "Choose file in Drive …"
+    "repick": "Choose file in Drive …",
+    "sourceNewer": "The CV was changed on {{source}}, the app version is from {{app}}. Score and highlights still refer to the old text — please re-import.",
+    "sourceNewerRunning": "Re-import running — afterwards run the check again so score and highlights match the current text."
   },
   "check": {
     "status": {

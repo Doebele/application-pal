@@ -116,7 +116,7 @@ export function CvCheckPage() {
     ?? (sources?.languages.find(l => l.lang === current?.masterLang && l.documentId) ? current!.masterLang : null)
     ?? sources?.languages.find(l => l.documentId)?.lang
     ?? current?.masterLang ?? "en";
-  const check = useCvCheck(activeLang);
+  const check = useCvCheck(activeLang, current?.current[activeLang]?.id ?? null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const checkResult = check.data?.result;
   const highlights = useMemo(() => cvHighlights(checkResult), [checkResult]);
@@ -135,6 +135,10 @@ export function CvCheckPage() {
   const src = sources.sources.find(s => s.documentId === status.documentId) ?? null;
   const ver = current.current[activeLang];
   const job = jobs.find(j => j.lang === activeLang);
+  // The source document changed after the app version was imported: score and PDF
+  // highlights then refer to the old text, so say so and offer the re-import.
+  const sourceNewer = !!(src && ver && src.modifiedTime && Date.parse(src.modifiedTime) > Date.parse(ver.createdAt));
+  const importRunning = job?.status === "running";
 
   const langSwitch = (
     <div style={{ display: "flex", gap: 2, padding: 2, borderRadius: 8, background: "var(--surface-2)" }} role="tablist" aria-label={t("cvCheck.language")}>
@@ -179,6 +183,19 @@ export function CvCheckPage() {
               {src.url && <a className="btn btn-ghost btn-icon chk-icon-btn" style={{ display: "inline-flex" }} href={src.url} target="_blank" rel="noreferrer" title={t("cvCheck.openSource")}><OpenNewWindow width={13} height={13} /></a>}
             </>}
           />
+          {sourceNewer && src && src.reachable && (
+            <div className="chk-note" role="status" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "0 0 8px" }}>
+              <WarningCircle width={14} height={14} style={{ color: "var(--score-mid)", flexShrink: 0 }} />
+              <span style={{ flex: 1, minWidth: 200 }}>
+                {importRunning ? t("cvCheck.sourceNewerRunning") : t("cvCheck.sourceNewer", { source: fmt(src.modifiedTime), app: fmt(ver!.createdAt) })}
+              </span>
+              {!importRunning && (
+                <button className="btn btn-secondary" style={{ fontSize: 12, gap: 5 }} disabled={ai.provider === "none"} onClick={() => runImport(activeLang, src.documentId)}>
+                  <Download width={11} height={11} /> {t("cvCheck.reimport")}
+                </button>
+              )}
+            </div>
+          )}
           <CheckFrame>
             {src && src.reachable ? (
               <PdfViewer url={`/api/cv/pdf?documentId=${encodeURIComponent(src.documentId)}`} reloadKey={pdfNonce}

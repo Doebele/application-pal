@@ -1077,7 +1077,9 @@
       "placeholderHint": "[X] = Zahl fehlt – bitte selbst einsetzen, nichts erfinden."
     },
     "unreachableHint": "„{{name}}“ ist verknüpft, aber die App hat noch keinen Zugriff darauf. Wähle die Datei einmal in Google Drive aus – danach kann sie gelesen werden.",
-    "repick": "Datei in Drive auswählen …"
+    "repick": "Datei in Drive auswählen …",
+    "sourceNewer": "Der Lebenslauf wurde am {{source}} geändert, die App-Version stammt vom {{app}}. Punkte und Markierungen beziehen sich deshalb noch auf die alte Fassung – bitte neu importieren.",
+    "sourceNewerRunning": "Neuer Import läuft – danach die Prüfung neu starten, damit Punkte und Markierungen zur aktuellen Fassung passen."
   },
   "check": {
     "status": {
