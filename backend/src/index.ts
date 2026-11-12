@@ -5099,22 +5099,40 @@ async function runCvCheckJob(job: CvCheckJob, ai: AiConfig, uiLang: UiLang) {
   const cv = cvDocumentSchema.parse(JSON.parse(row.data));
   const inputs: CvCheckStored["inputs"] = { layout: null, headerText: null, llm: null, sourceDocumentId: row.sourceDocumentId ?? null };
 
-  // 1) PDF layout + Doc header from the source document
-  const [doc] = row.sourceDocumentId
-    ? await db.select().from(userDocuments).where(and(eq(userDocuments.id, row.sourceDocumentId), eq(userDocuments.userId, job.userId))).limit(1)
-    : [];
+  // 1) PDF layout + Doc header from the source document. Candidates: the document the
+  // version was imported from, then the current CV of that language in Documents (the
+  // one the page shows). On the desktop (drive.file) the import source may be a file
+  // the app was never granted — the re-picked current source then still works.
   const token = await getDriveAccessToken(job.userId);
-  const driveId = doc?.url ? driveFileId(doc.url) : undefined;
-  if (doc && driveId && token) {
+  const candidates: UserDocument[] = [];
+  if (row.sourceDocumentId) {
+    const [d] = await db.select().from(userDocuments).where(and(eq(userDocuments.id, row.sourceDocumentId), eq(userDocuments.userId, job.userId))).limit(1);
+    if (d) candidates.push(d);
+  }
+  const cvDocs = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.userId, job.userId), eq(userDocuments.category, "lebenslauf")))
+    .orderBy(desc(userDocuments.updatedAt));
+  const current = cvDocs.find(d => detectCvLang(d.name, d.tags) === job.lang);
+  if (current && !candidates.some(d => d.id === current.id)) candidates.push(current);
+  const readable = candidates.filter(d => d.url && driveFileId(d.url));
+  if (!token) inputs.layoutError = "Google Drive nicht verbunden";
+  else if (!readable.length) inputs.layoutError = "Keine Quelldatei";
+  for (const doc of token ? readable : []) {
+    const driveId = driveFileId(doc.url!)!;
     const isGDoc = doc.fileType === "gdoc" || doc.url!.includes("docs.google.com/document");
     try {
       const url = isGDoc ? `https://www.googleapis.com/drive/v3/files/${driveId}/export?mimeType=application/pdf` : `https://www.googleapis.com/drive/v3/files/${driveId}?alt=media`;
       const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
-      if (!r.ok) throw new Error(`Drive HTTP ${r.status}`);
+      if (!r.ok) throw new Error(r.status === 403 || r.status === 404
+        ? `kein Zugriff auf „${doc.name}“ (Drive HTTP ${r.status}) – Datei im CV-Check oder unter Dokumente neu in Drive auswählen`
+        : `Drive HTTP ${r.status}`);
       inputs.layout = await analyzePdfLayout(new Uint8Array(await r.arrayBuffer()));
-    } catch (err) { inputs.layoutError = (err as Error).message.slice(0, 200); }
-    if (isGDoc) inputs.headerText = await fetchDocHeaderText(driveId, token).catch(() => null);
-  } else inputs.layoutError = !token ? "Google Drive nicht verbunden" : "Keine Quelldatei";
+      inputs.layoutError = undefined;
+      inputs.sourceDocumentId = doc.id;
+      if (isGDoc) inputs.headerText = await fetchDocHeaderText(driveId, token!).catch(() => null);
+      break;
+    } catch (err) { inputs.layoutError ??= (err as Error).message.slice(0, 200); }
+  }
 
   // 2) LLM judgement
   job.step = "llm";
