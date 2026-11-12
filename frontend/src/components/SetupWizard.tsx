@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { CheckCircle, WarningCircle, RefreshCircle, NavArrowLeft, NavArrowRight } from "iconoir-react";
 import { api } from "../lib/api";
 import { useUiStore, type AiProvider, type AiSecretProvider } from "../lib/store";
+import { AI_SECRET_FIELDS, COMPAT_PROVIDERS, COMPAT_PROVIDER_IDS, isCompatProvider } from "@application-pal/shared";
 import imgSchulabgaenger   from "../assets/personas/schulabgaenger.png";
 import imgBerufseinsteiger from "../assets/personas/berufseinsteiger.png";
 import imgBerufsumsteiger  from "../assets/personas/berufsumsteiger.png";
@@ -17,11 +18,16 @@ import imgBerufsumsteiger  from "../assets/personas/berufsumsteiger.png";
 type Persona = "schulabgaenger" | "berufseinsteiger" | "berufsumsteiger";
 type Step = "welcome" | "ai" | "google" | "linkedin" | "done";
 
-const CLOUD: { id: AiSecretProvider; label: string; placeholder: string; url: string }[] = [
-  { id: "anthropic",  label: "Anthropic (Claude)", placeholder: "sk-ant-…", url: "https://console.anthropic.com/settings/keys" },
-  { id: "openai",     label: "OpenAI",             placeholder: "sk-…",     url: "https://platform.openai.com/api-keys" },
-  { id: "gemini",     label: "Google Gemini",      placeholder: "AIza…",    url: "https://aistudio.google.com/apikey" },
-  { id: "openrouter", label: "OpenRouter",         placeholder: "sk-or-…",  url: "https://openrouter.ai/keys" },
+// `keyId` = whose stored key the provider uses (GLM Coding Plan shares the z.ai key).
+const CLOUD: { id: AiProvider; keyId: AiSecretProvider; label: string; placeholder: string; url: string }[] = [
+  { id: "anthropic",  keyId: "anthropic",  label: "Anthropic (Claude)", placeholder: "sk-ant-…", url: "https://console.anthropic.com/settings/keys" },
+  { id: "openai",     keyId: "openai",     label: "OpenAI",             placeholder: "sk-…",     url: "https://platform.openai.com/api-keys" },
+  { id: "gemini",     keyId: "gemini",     label: "Google Gemini",      placeholder: "AIza…",    url: "https://aistudio.google.com/apikey" },
+  { id: "openrouter", keyId: "openrouter", label: "OpenRouter",         placeholder: "sk-or-…",  url: "https://openrouter.ai/keys" },
+  ...COMPAT_PROVIDER_IDS.map(id => {
+    const p = COMPAT_PROVIDERS[id];
+    return { id, keyId: p.keyOf, label: p.label, placeholder: p.placeholder, url: p.keyUrl };
+  }),
 ];
 
 export function finishOnboarding() {
@@ -153,6 +159,7 @@ function AiStep({ onReady }: { onReady: (ok: boolean) => void }) {
   const [lm, setLm] = useState<Local | "loading">("loading");
   const [ollama, setOllama] = useState<Local | "loading">("loading");
   const [key, setKey] = useState("");
+  const [cloudModels, setCloudModels] = useState<string[]>([]);
   const [test, setTest] = useState<{ state: "idle" | "running" | "ok" | "fail"; text?: string }>({ state: "idle" });
 
   const detect = () => {
@@ -173,14 +180,30 @@ function AiStep({ onReady }: { onReady: (ok: boolean) => void }) {
   };
 
   const cloud = CLOUD.find(c => c.id === ai.provider);
-  const hasKey = cloud ? !!serverSecrets[cloud.id] : false;
+  const hasKey = cloud ? !!serverSecrets[cloud.keyId] || !!ai[AI_SECRET_FIELDS[cloud.keyId]] : false;
 
   const saveKey = async () => {
     if (!cloud || !key.trim()) return;
-    if (!secretsAvailable) { setAi({ [`${cloud.id}ApiKey`]: key.trim() }); setKey(""); return; }
-    const r = await api.put<{ secrets: typeof serverSecrets }>("/api/settings/secrets", { keys: { [cloud.id]: key.trim() } }).catch(() => null);
+    if (!secretsAvailable) { setAi({ [AI_SECRET_FIELDS[cloud.keyId]]: key.trim() }); setKey(""); return; }
+    const r = await api.put<{ secrets: typeof serverSecrets }>("/api/settings/secrets", { keys: { [cloud.keyId]: key.trim() } }).catch(() => null);
     if (r) { setServerSecrets(true, r.data.secrets); setKey(""); }
   };
+
+  // OpenAI-compatible providers: once a key exists, offer the provider's live model list.
+  const compatId = isCompatProvider(ai.provider) ? ai.provider : null;
+  useEffect(() => {
+    setCloudModels([]);
+    if (!compatId || !hasKey) return;
+    api.post<{ models: string[] }>("/api/ai/cloud-models", { provider: compatId, ai: useUiStore.getState().ai })
+      .then(r => {
+        setCloudModels(r.data.models);
+        const cur = useUiStore.getState().ai.cloudModels ?? {};
+        const def = COMPAT_PROVIDERS[compatId].defaultModel;
+        if (!cur[compatId] && r.data.models.length && !r.data.models.includes(def))
+          setAi({ cloudModels: { ...cur, [compatId]: r.data.models[0] } });
+      }).catch(() => {});
+  }, [compatId, hasKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const compatModel = compatId ? (ai.cloudModels?.[compatId] || COMPAT_PROVIDERS[compatId].defaultModel) : "";
 
   const runTest = async () => {
     setTest({ state: "running" });
@@ -217,10 +240,16 @@ function AiStep({ onReady }: { onReady: (ok: boolean) => void }) {
       {localOption("lm-studio", "LM Studio", lm, "lmStudioModel", "lmStudioUrl")}
       {localOption("ollama", "Ollama", ollama, "ollamaModel", "ollamaUrl")}
       {lm === null && ollama === null && (
-        <p className="wizard-hint">
-          {t("wizard.aiLocalMissing")} <a href="https://lmstudio.ai" target="_blank" rel="noreferrer">lmstudio.ai</a> ·{" "}
-          <button type="button" className="link-btn" onClick={detect}>{t("wizard.aiRetry")}</button>
-        </p>
+        <div className="wizard-hint">
+          <p style={{ margin: "0 0 4px" }}>{t("wizard.aiLocalMissing")}</p>
+          <ul className="wizard-local-howto">
+            <li><a href="https://lmstudio.ai/download" target="_blank" rel="noreferrer">LM Studio</a> – {t("wizard.aiLocalLmStudio")}</li>
+            <li><a href="https://ollama.com/download" target="_blank" rel="noreferrer">Ollama</a> – {t("wizard.aiLocalOllama")}</li>
+          </ul>
+          <p style={{ margin: "4px 0 0" }}>
+            {t("wizard.aiLocalThen")} <button type="button" className="link-btn" onClick={detect}>{t("wizard.aiRetry")}</button>
+          </p>
+        </div>
       )}
 
       <div className="wizard-group-label">{t("wizard.aiCloud")}</div>
@@ -243,10 +272,17 @@ function AiStep({ onReady }: { onReady: (ok: boolean) => void }) {
           <a className="wizard-hint" href={cloud.url} target="_blank" rel="noreferrer">{t("wizard.aiGetKey")}</a>
         </div>
       )}
+      {compatId && COMPAT_PROVIDERS[compatId].note && <p className="wizard-hint">{t(`settings.compatNote.${COMPAT_PROVIDERS[compatId].note}`)}</p>}
+      {compatId && cloudModels.length > 0 && (
+        <select className="wizard-model" value={compatModel}
+          onChange={e => { setAi({ cloudModels: { ...(ai.cloudModels ?? {}), [compatId]: e.target.value } }); setTest({ state: "idle" }); }}>
+          {(cloudModels.includes(compatModel) ? cloudModels : [compatModel, ...cloudModels]).map(m => <option key={m} value={m}>{m}</option>)}
+        </select>
+      )}
 
       {ai.provider !== "none" && (
         <div className="wizard-test">
-          <button className="btn btn-secondary" onClick={runTest} disabled={test.state === "running" || (!!cloud && !hasKey && !ai[`${cloud.id}ApiKey` as const])}>
+          <button className="btn btn-secondary" onClick={runTest} disabled={test.state === "running" || (!!cloud && !hasKey)}>
             {test.state === "running" ? <><RefreshCircle width={13} height={13} className="spin" /> {t("wizard.aiTesting")}</> : t("wizard.aiTest")}
           </button>
           {test.state === "ok" && <span className="wizard-ok"><CheckCircle width={14} height={14} /> {test.text}</span>}

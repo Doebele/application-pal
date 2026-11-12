@@ -11,7 +11,7 @@
 // once for the current user and then removed from the browser. Without server-side
 // encryption (web install without SECRETS_KEY/JWT_SECRET) keys stay local as before.
 import { useEffect, useRef } from "react";
-import type { UserSettingsResponse } from "@application-pal/shared";
+import { AI_SECRET_FIELDS, type UserSettingsResponse } from "@application-pal/shared";
 import { api } from "./api";
 import { useUiStore, type AiConfig, type AiSecretProvider } from "./store";
 
@@ -23,9 +23,7 @@ const SYNCED_KEYS = [
   "tableColumnOrder", "tableColumnVisibility", "tableColumnPinning", "tableColumnSizing",
 ] as const;
 
-const KEY_FIELDS: Record<AiSecretProvider, keyof AiConfig> = {
-  anthropic: "anthropicApiKey", openai: "openaiApiKey", gemini: "geminiApiKey", openrouter: "openrouterApiKey",
-};
+const KEY_FIELDS: Record<AiSecretProvider, keyof AiConfig> = AI_SECRET_FIELDS;
 
 function aiWithoutKeys(ai: AiConfig): Partial<AiConfig> {
   const out: Partial<AiConfig> = { ...ai };

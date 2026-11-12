@@ -245,7 +245,7 @@ export function ImportDrawer({ onClose }: Props) {
       api.post<ExtractedRaw>("/api/applications/import", {
         url:  mode === "url"  ? url       : undefined,
         text: mode === "text" ? pasteText : undefined,
-        ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel }
+        ai: { ...ai }
       }).then((r) => r.data)
   });
 

@@ -619,7 +619,17 @@
     "googleBrowserHint": "Die Google-Anmeldung ist im Browser geöffnet. Nach der Freigabe verbindet sich die App automatisch.",
     "googleTimeout": "Keine Antwort von Google. Bitte erneut verbinden.",
     "googleConnectFailed": "Google-Verbindung konnte nicht gestartet werden.",
-    "exportSavedDownloads": "Gespeichert im Ordner „Downloads“: {{file}}"
+    "exportSavedDownloads": "Gespeichert im Ordner „Downloads“: {{file}}",
+    "compatKey": "{{name}}: API-Schlüssel",
+    "compatSharedKey": "gleicher Schlüssel wie {{name}}",
+    "compatModelSub": "Liste kommt direkt vom Anbieter",
+    "compatModelsLoad": "Modelle laden",
+    "compatModelsFailed": "Modelle konnten nicht geladen werden",
+    "compatNote": {
+      "usOnly": "zurzeit nur für Entwickler in den USA",
+      "codingPlan": "braucht das Coding-Abo des Anbieters",
+      "china": "Zugang für Konten in Festland-China"
+    }
   },
   "templates": {
     "title": "Vorlagen",
@@ -1746,7 +1756,7 @@
     "aiCloud": "Cloud-Dienst",
     "aiFound": "gefunden · {{count}} Modelle",
     "aiNotFound": "nicht gefunden",
-    "aiLocalMissing": "Kein lokales Modell gefunden. LM Studio installieren und ein Modell laden:",
+    "aiLocalMissing": "Kein lokales Modell gefunden. Installiere eine dieser kostenlosen Apps:",
     "aiRetry": "erneut suchen",
     "aiSaveKey": "Speichern",
     "aiGetKey": "Schlüssel erstellen ↗",
@@ -1781,7 +1791,10 @@
     "start": "Los geht’s",
     "reopenLabel": "Einrichtungsassistent",
     "reopenSub": "Ausgangslage, KI und Google noch einmal Schritt für Schritt einrichten.",
-    "reopen": "Assistent öffnen"
+    "reopen": "Assistent öffnen",
+    "aiLocalLmStudio": "App öffnen, ein Modell herunterladen (z. B. Qwen) und unter „Developer“ den Server starten.",
+    "aiLocalOllama": "App öffnen und ein Modell laden, z. B. „ollama pull qwen3“ im Terminal.",
+    "aiLocalThen": "Danach hier:"
   },
   "appUpdate": {
     "label": "App-Version",

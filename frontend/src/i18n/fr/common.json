@@ -619,7 +619,17 @@
     "googleBrowserHint": "La connexion Google s’est ouverte dans le navigateur. Après autorisation, l’app se connecte automatiquement.",
     "googleTimeout": "Pas de réponse de Google. Veuillez vous reconnecter.",
     "googleConnectFailed": "Impossible de démarrer la connexion Google.",
-    "exportSavedDownloads": "Enregistré dans le dossier « Téléchargements » : {{file}}"
+    "exportSavedDownloads": "Enregistré dans le dossier « Téléchargements » : {{file}}",
+    "compatKey": "{{name}} : clé API",
+    "compatSharedKey": "même clé que {{name}}",
+    "compatModelSub": "Liste fournie directement par le fournisseur",
+    "compatModelsLoad": "Charger les modèles",
+    "compatModelsFailed": "Impossible de charger les modèles",
+    "compatNote": {
+      "usOnly": "actuellement réservé aux développeurs aux États-Unis",
+      "codingPlan": "nécessite l’abonnement coding du fournisseur",
+      "china": "accès pour les comptes de Chine continentale"
+    }
   },
   "templates": {
     "title": "Modèles",
@@ -1746,7 +1756,7 @@
     "aiCloud": "Service cloud",
     "aiFound": "trouvé · {{count}} modèles",
     "aiNotFound": "introuvable",
-    "aiLocalMissing": "Aucun modèle local trouvé. Installe LM Studio et charge un modèle :",
+    "aiLocalMissing": "Aucun modèle local trouvé. Installe l’une de ces apps gratuites :",
     "aiRetry": "chercher à nouveau",
     "aiSaveKey": "Enregistrer",
     "aiGetKey": "Créer une clé ↗",
@@ -1781,7 +1791,10 @@
     "start": "C’est parti",
     "reopenLabel": "Assistant de configuration",
     "reopenSub": "Reconfigurer situation, IA et Google pas à pas.",
-    "reopen": "Ouvrir l’assistant"
+    "reopen": "Ouvrir l’assistant",
+    "aiLocalLmStudio": "ouvre l’app, télécharge un modèle (p. ex. Qwen) et démarre le serveur sous « Developer ».",
+    "aiLocalOllama": "ouvre l’app et charge un modèle, p. ex. « ollama pull qwen3 » dans le Terminal.",
+    "aiLocalThen": "Ensuite ici :"
   },
   "appUpdate": {
     "label": "Version de l’app",

@@ -67,7 +67,8 @@ import {
   type CvDocument,
   type AiConfig,
   type UserDocument,
-  type CvLanguage
+  type CvLanguage,
+  COMPAT_PROVIDERS, isCompatProvider, type CompatProviderId,
 } from "@application-pal/shared";
 import { PDFParse } from "pdf-parse";
 import {
@@ -1135,6 +1136,13 @@ async function extractWithAi(text: string, ai: AiConfig): Promise<LlmExtracted |
     const model = ai.ollamaModel || "";
     return extractWithOpenAiCompat(cleaned, ai, baseUrl, "", model);
   }
+  if (isCompatProvider(ai.provider)) {
+    if (!aiKey(ai, COMPAT_PROVIDERS[ai.provider].keyOf)) return null;
+    try {
+      const raw = await callCompat(ai.provider, ai, [{ role: "system", content: EXTRACTION_PROMPT }, { role: "user", content: EXTRACTION_PROMPT_USER_PREFIX + cleaned.slice(0, 6000) }], { temperature: 0.05, maxTokens: 8192, timeoutMs: 180_000 });
+      return parseJsonResponse(raw);
+    } catch (err) { console.warn("AI extraction failed:", (err as Error).message); return null; }
+  }
   return null;
 }
 
@@ -1874,6 +1882,18 @@ app.get("/api/lm-studio/models", async (c) => {
   }
 });
 
+// Settings / wizard: live model list of an OpenAI-compatible cloud provider (uses the stored key).
+// POST because the stored key is only in the request context for non-GET requests.
+app.post("/api/ai/cloud-models", async (c) => {
+  const { provider, ai } = await c.req.json<{ provider?: string; ai?: AiConfig }>();
+  if (!provider || !isCompatProvider(provider)) return c.json({ models: [], error: "Unbekannter Anbieter" }, 400);
+  try {
+    return c.json({ models: await listCompatModels(provider, (ai ?? { provider }) as AiConfig) });
+  } catch (err) {
+    return c.json({ models: [], error: (err as Error).message.slice(0, 300) });
+  }
+});
+
 // Setup wizard / settings: one tiny round trip to check the chosen AI really answers.
 // Local models can take a while to load on first use, hence the generous limit.
 app.post("/api/ai/test", async (c) => {
@@ -2349,45 +2369,10 @@ app.post("/api/applications/:id/match-score", async (c) => {
   const profileText = profileParts.join("\n\n");
   const userMessage = `${profileText}\n\n## Stellenbeschreibung\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\n${app_.description.slice(0, 2000)}`;
 
-  // Call AI
+  // Call AI — every provider via callAi (this route used to handle only LM Studio and Anthropic)
   let raw = "";
   try {
-    if (aiConfig.provider === "lm-studio") {
-      const baseUrl = await resolveHostUrl((aiConfig.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
-      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: aiConfig.lmStudioModel || undefined,
-          messages: [
-            { role: "system", content: MATCH_SCORE_SYSTEM_PROMPT },
-            { role: "user", content: userMessage }
-          ],
-          temperature: 0.1,
-          max_tokens: 32768
-        }),
-        signal: AbortSignal.timeout(480_000)
-      });
-      if (!res.ok) throw new Error(`LM Studio error: ${res.status}`);
-      const json = await res.json() as { choices?: { message?: { content?: string } }[] };
-      raw = json.choices?.[0]?.message?.content ?? "";
-    } else if (aiConfig.provider === "anthropic") {
-      if (!aiKey(aiConfig, "anthropic")) return c.json({ error: "Anthropic API Key fehlt" }, 400);
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": aiKey(aiConfig, "anthropic"), "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 2048,
-          system: MATCH_SCORE_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userMessage }]
-        }),
-        signal: AbortSignal.timeout(480_000)
-      });
-      if (!res.ok) throw new Error(`Anthropic error: ${res.status}`);
-      const json = await res.json() as { content?: { type: string; text: string }[] };
-      raw = json.content?.find((b) => b.type === "text")?.text ?? "";
-    }
+    raw = await callAi(MATCH_SCORE_SYSTEM_PROMPT, userMessage, aiConfig);
   } catch (err) {
     console.error("Match score AI call failed:", err);
     return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
@@ -2700,10 +2685,46 @@ async function readChatCompletionStream(res: Response): Promise<string> {
   return out;
 }
 
+// ── OpenAI-compatible cloud providers (COMPAT_PROVIDERS in shared) ──
+// Kimi Code wants the client to identify itself honestly → own User-Agent instead of node's default.
+function compatHeaders(provider: CompatProviderId, ai: AiConfig): Record<string, string> {
+  const key = aiKey(ai, COMPAT_PROVIDERS[provider].keyOf);
+  if (!key) throw new Error(`${COMPAT_PROVIDERS[provider].label}: API-Schlüssel fehlt`);
+  return { "Authorization": `Bearer ${key}`, "Content-Type": "application/json", "User-Agent": `${APP_NAME.replace(/\s/g, "")}/1.0` };
+}
+const compatModel = (provider: CompatProviderId, ai: AiConfig) =>
+  ai.cloudModels?.[provider]?.trim() || COMPAT_PROVIDERS[provider].defaultModel;
+
+async function callCompat(provider: CompatProviderId, ai: AiConfig, messages: { role: "system" | "user"; content: string }[], opts: { temperature: number; maxTokens: number; timeoutMs: number }): Promise<string> {
+  const { label, baseUrl } = COMPAT_PROVIDERS[provider];
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: compatHeaders(provider, ai),
+    body: JSON.stringify({ model: compatModel(provider, ai), messages, temperature: opts.temperature, max_tokens: opts.maxTokens }),
+    signal: AbortSignal.timeout(opts.timeoutMs),
+  });
+  if (!res.ok) throw new Error(`${label}: ${res.status} ${(await res.text().catch(() => "")).slice(0, 400)}`);
+  const json = await res.json() as { choices?: { message?: { content?: string } }[] };
+  return json.choices?.[0]?.message?.content ?? "";
+}
+
+// Model list for the settings page / wizard: `${baseUrl}/models` with the user's key.
+// Non-chat models (embeddings, speech, images, moderation …) are filtered out.
+const NON_CHAT_MODEL = /embed|tts|whisper|transcri|speech|audio|image|dall-e|moderation|rerank|ocr|realtime/i;
+async function listCompatModels(provider: CompatProviderId, ai: AiConfig): Promise<string[]> {
+  const res = await fetch(`${COMPAT_PROVIDERS[provider].baseUrl}/models`, { headers: compatHeaders(provider, ai), signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`${COMPAT_PROVIDERS[provider].label}: ${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  const json = await res.json() as { data?: { id: string }[] };
+  return [...new Set((json.data ?? []).map(m => m.id).filter(id => id && !NON_CHAT_MODEL.test(id)))].sort();
+}
+
 async function callAi(system: string, user: string, ai: AiConfig, additionalContext?: string): Promise<string> {
   const fullUser = additionalContext?.trim()
     ? `${user}\n\n---\nZusätzliche Hinweise des Nutzers:\n${additionalContext.trim()}`
     : user;
+  if (isCompatProvider(ai.provider)) {
+    return callCompat(ai.provider, ai, [{ role: "system", content: system }, { role: "user", content: fullUser }], { temperature: 0.15, maxTokens: 8192, timeoutMs: 180_000 });
+  }
   if (ai.provider === "lm-studio") {
     const baseUrl = await resolveHostUrl((ai.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {

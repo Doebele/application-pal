@@ -1,11 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { AI_SECRET_PROVIDERS, type AiSecretProvider, type CompatProviderId } from "@application-pal/shared";
 
 export type Theme = "dark" | "light";
 export type Accent = "indigo" | "violet" | "emerald" | "amber" | "rose";
 export type Density = "low" | "high";
 export type CardVariant = "rich" | "compact" | "minimal" | "editorial";
-export type AiProvider = "none" | "lm-studio" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama";
+export type AiProvider = "none" | "lm-studio" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | CompatProviderId;
 export type UiLanguage = "de" | "en" | "fr";
 
 export type AiConfig = {
@@ -27,6 +28,11 @@ export type AiConfig = {
   // Ollama
   ollamaUrl: string;
   ollamaModel: string;
+  // OpenAI-compatible cloud providers (COMPAT_PROVIDERS in shared): keys (only used without
+  // server-side secrets) + the chosen model per provider id
+  xaiApiKey: string; metaApiKey: string; kimiApiKey: string; kimiCnApiKey: string; moonshotApiKey: string;
+  deepseekApiKey: string; zaiApiKey: string; mimoApiKey: string; mistralApiKey: string;
+  cloudModels: Record<string, string>;
 };
 
 export const DEFAULT_FOLDER_RULE = "{firma} – {rolle} – {datum}";
@@ -89,8 +95,8 @@ type UiState = {
   setServerSecrets: (available: boolean, flags: Record<AiSecretProvider, boolean>) => void;
 };
 
-export type AiSecretProvider = "anthropic" | "openai" | "gemini" | "openrouter";
-export const NO_SERVER_SECRETS: Record<AiSecretProvider, boolean> = { anthropic: false, openai: false, gemini: false, openrouter: false };
+export type { AiSecretProvider };
+export const NO_SERVER_SECRETS = Object.fromEntries(AI_SECRET_PROVIDERS.map(p => [p, false])) as Record<AiSecretProvider, boolean>;
 
 export const useUiStore = create<UiState>()(
   persist(
@@ -115,6 +121,9 @@ export const useUiStore = create<UiState>()(
         openrouterModel: "",
         ollamaUrl: "http://localhost:11434",
         ollamaModel: "",
+        xaiApiKey: "", metaApiKey: "", kimiApiKey: "", kimiCnApiKey: "", moonshotApiKey: "",
+        deepseekApiKey: "", zaiApiKey: "", mimoApiKey: "", mistralApiKey: "",
+        cloudModels: {},
       },
       driveNameFolder: DEFAULT_FOLDER_RULE,
       driveNameDoc:    DEFAULT_DOC_RULE,

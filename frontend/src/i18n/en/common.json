@@ -619,7 +619,17 @@
     "googleBrowserHint": "Google sign-in opened in your browser. Once you allow access, the app connects automatically.",
     "googleTimeout": "No answer from Google. Please connect again.",
     "googleConnectFailed": "Could not start the Google connection.",
-    "exportSavedDownloads": "Saved to your Downloads folder: {{file}}"
+    "exportSavedDownloads": "Saved to your Downloads folder: {{file}}",
+    "compatKey": "{{name}}: API key",
+    "compatSharedKey": "same key as {{name}}",
+    "compatModelSub": "List comes straight from the provider",
+    "compatModelsLoad": "Load models",
+    "compatModelsFailed": "Could not load models",
+    "compatNote": {
+      "usOnly": "currently for developers in the US only",
+      "codingPlan": "needs the provider's coding subscription",
+      "china": "access for mainland-China accounts"
+    }
   },
   "templates": {
     "title": "Templates",
@@ -1746,7 +1756,7 @@
     "aiCloud": "Cloud service",
     "aiFound": "found · {{count}} models",
     "aiNotFound": "not found",
-    "aiLocalMissing": "No local model found. Install LM Studio and load a model:",
+    "aiLocalMissing": "No local model found. Install one of these free apps:",
     "aiRetry": "search again",
     "aiSaveKey": "Save",
     "aiGetKey": "Create a key ↗",
@@ -1781,7 +1791,10 @@
     "start": "Let’s go",
     "reopenLabel": "Setup wizard",
     "reopenSub": "Set up starting point, AI and Google again step by step.",
-    "reopen": "Open wizard"
+    "reopen": "Open wizard",
+    "aiLocalLmStudio": "open the app, download a model (e.g. Qwen) and start the server under “Developer”.",
+    "aiLocalOllama": "open the app and pull a model, e.g. “ollama pull qwen3” in the Terminal.",
+    "aiLocalThen": "Then here:"
   },
   "appUpdate": {
     "label": "App version",

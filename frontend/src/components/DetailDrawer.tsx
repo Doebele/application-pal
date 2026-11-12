@@ -1696,7 +1696,7 @@ function buildTileRunner(
   if (!endpoint) return undefined;
   return async () => {
     if (ai.provider === "none") throw new Error("Kein KI-Modell konfiguriert");
-    const aiBody: Record<string, unknown> = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+    const aiBody: Record<string, unknown> = { ai: { ...ai } };
     if (language) aiBody.language = language;
     const r = await api.post<Record<string, unknown>>(`/api/applications/${appId}${endpoint}`, aiBody);
     onRegister(id, r.data);
@@ -2077,7 +2077,7 @@ function TileExpandView({ id, entry, appId, appLanguage, onClose, onRegister }: 
     if (ai.provider === "none") { setErr(t("tileExpand.noAiModel")); return; }
     setErr(null); setRunning(true);
     try {
-      const aiBody: Record<string, unknown> = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel } };
+      const aiBody: Record<string, unknown> = { ai: { ...ai } };
       if (prompt.trim()) aiBody.additionalContext = prompt.trim();
       const r = await api.post<Record<string, unknown>>(`/api/applications/${appId}${endpoint}`, aiBody);
       onRegister?.(id, r.data);
@@ -3728,7 +3728,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
   };
 
   // Always include current language in AI bodies so backends prefer it over potentially-stale DB value
-  const aiBody = { ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel }, language: lang };
+  const aiBody = { ai: { ...ai }, language: lang };
   const queryClient = useQueryClient();
 
   const run = async (key: string, fn: () => Promise<void>) => {
@@ -4531,7 +4531,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     persistInputs(selected, jobNotes, next);
   };
 
-  const aiBody = () => ({ provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel });
+  const aiBody = () => ({ ...ai });
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["applications"] });
     queryClient.invalidateQueries({ queryKey: ["application", app.id] });
@@ -5236,7 +5236,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
     advance(1); advance(2); advance(3);
     try {
       const res = await api.post<MatchResult>(`/api/applications/${app.id}/match-score`, {
-        ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel }
+        ai: { ...ai }
       });
       setResult(res.data);
       setStepN(4);

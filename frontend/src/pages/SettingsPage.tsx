@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
 import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, type AiSecretProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
 import { api } from "../lib/api";
+import { AI_SECRET_FIELDS, COMPAT_PROVIDERS, COMPAT_PROVIDER_IDS, isCompatProvider, type CompatProviderId } from "@application-pal/shared";
 import { useAuth } from "../lib/auth";
 import { GooglePickerButton } from "../lib/googlePicker";
 import { hasShell, shellInvoke, type UpdateCheck } from "../lib/desktopShell";
@@ -140,13 +141,13 @@ function ApiKeyInput({ provider, placeholder }: { provider: AiSecretProvider; pl
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const field = ({ anthropic: "anthropicApiKey", openai: "openaiApiKey", gemini: "geminiApiKey", openrouter: "openrouterApiKey" } as const)[provider];
+  const field = AI_SECRET_FIELDS[provider];
   const inputStyle = { ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 };
 
   if (!secretsAvailable) {
     return (
       <>
-        <input type={show ? "text" : "password"} value={ai[field]} onChange={(e) => setAi({ [field]: e.target.value })}
+        <input type={show ? "text" : "password"} value={ai[field] ?? ""} onChange={(e) => setAi({ [field]: e.target.value })}
           placeholder={placeholder} style={inputStyle} />
         <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
           {show ? t("settings.hide") : t("settings.show")}
@@ -306,6 +307,76 @@ function OpenRouterSection() {
             placeholder={t("settings.openrouterModelPlaceholder")}
             style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
           />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── OpenAI-compatible cloud providers (Grok, Muse, Kimi, DeepSeek, GLM, MiMo, Mistral) ──
+// One section for all of them, driven by COMPAT_PROVIDERS. The model list comes live from
+// the provider (POST /api/ai/cloud-models, uses the stored key); the default from the table
+// is used until the user picks one.
+function CompatSection({ id }: { id: CompatProviderId }) {
+  const { t } = useTranslation();
+  const { ai, setAi, serverSecrets } = useUiStore();
+  const p = COMPAT_PROVIDERS[id];
+  const keyField = AI_SECRET_FIELDS[p.keyOf];
+  const hasKey = !!serverSecrets[p.keyOf] || !!ai[keyField];
+  const model = ai.cloudModels?.[id] || p.defaultModel;
+  const [models, setModels] = useState<string[]>([]);
+  const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [err, setErr] = useState("");
+
+  const load = async () => {
+    setStatus("loading"); setErr("");
+    try {
+      const r = await api.post<{ models: string[]; error?: string }>("/api/ai/cloud-models", { provider: id, ai: useUiStore.getState().ai });
+      setModels(r.data.models);
+      if (r.data.error) { setStatus("error"); setErr(r.data.error); return; }
+      setStatus("ok");
+      // keep the user's choice; otherwise the default if offered, else the first listed model
+      if (!ai.cloudModels?.[id] && r.data.models.length && !r.data.models.includes(p.defaultModel))
+        setAi({ cloudModels: { ...(ai.cloudModels ?? {}), [id]: r.data.models[0] } });
+    } catch { setStatus("error"); setErr(t("settings.compatModelsFailed")); }
+  };
+  useEffect(() => { if (hasKey) void load(); }, [id, hasKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const options = models.includes(model) || !model ? models : [model, ...models];
+  return (
+    <>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.compatKey", { name: p.label })}</div>
+          <div className="settings-row-sub">
+            <a href={p.keyUrl} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>{p.keyUrl.replace("https://", "")}</a>
+            {p.keyOf !== id && <> · {t("settings.compatSharedKey", { name: COMPAT_PROVIDERS[p.keyOf].label })}</>}
+            {p.note && <> · {t(`settings.compatNote.${p.note}`)}</>}
+          </div>
+        </div>
+        <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
+          <ApiKeyInput provider={p.keyOf} placeholder={p.placeholder} />
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.model")}</div>
+          <div className="settings-row-sub">{status === "error" ? <span style={{ color: "var(--score-low)" }}>{err}</span> : t("settings.compatModelSub")}</div>
+        </div>
+        <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
+          {options.length > 0 ? (
+            <select value={model} onChange={(e) => setAi({ cloudModels: { ...(ai.cloudModels ?? {}), [id]: e.target.value } })}
+              style={{ ...INPUT_STYLE, width: 220, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+              {options.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          ) : (
+            <input value={ai.cloudModels?.[id] ?? ""} placeholder={p.defaultModel}
+              onChange={(e) => setAi({ cloudModels: { ...(ai.cloudModels ?? {}), [id]: e.target.value } })}
+              style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }} />
+          )}
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} disabled={!hasKey || status === "loading"} onClick={() => void load()}>
+            {status === "loading" ? <RefreshCircle width={12} height={12} className="spin" /> : t("settings.compatModelsLoad")}
+          </button>
         </div>
       </div>
     </>
@@ -1706,6 +1777,9 @@ export function SettingsPage() {
             <ProviderPill value="openai"      label={t("settings.aiOpenAI")}      color="#74aa9c" active={ai.provider === "openai"}      onClick={() => setAi({ provider: "openai" })} />
             <ProviderPill value="gemini"      label={t("settings.aiGemini")}      color="#4285f4" active={ai.provider === "gemini"}      onClick={() => setAi({ provider: "gemini" })} />
             <ProviderPill value="openrouter"  label={t("settings.aiOpenRouter")}  color="#a855f7" active={ai.provider === "openrouter"}  onClick={() => setAi({ provider: "openrouter" })} />
+            {COMPAT_PROVIDER_IDS.map(id => (
+              <ProviderPill key={id} value={id} label={COMPAT_PROVIDERS[id].label} color="#64748b" active={ai.provider === id} onClick={() => setAi({ provider: id })} />
+            ))}
           </div>
 
           {ai.provider !== "none" && (
@@ -1716,6 +1790,7 @@ export function SettingsPage() {
               {ai.provider === "openai"     && <OpenAiSection />}
               {ai.provider === "gemini"     && <GeminiSection />}
               {ai.provider === "openrouter" && <OpenRouterSection />}
+              {isCompatProvider(ai.provider) && <CompatSection key={ai.provider} id={ai.provider} />}
             </div>
           )}
 
