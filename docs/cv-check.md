@@ -102,3 +102,7 @@ still too generous.
 - Optimisation loop like the cover letter: pick suggestions → new version → check again
 - Language sync (master + translations), Doc/PDF output into the source folder
 - Tailored CV per application
+
+## Neu-Import vor dem Check
+
+`POST /api/cv/check` nimmt `reimport: "auto" | "always" | "never"` (Standard `auto`; mit explizitem `versionId` immer `never`). `auto` importiert den aktuellen CV der Sprache aus Dokumente neu, wenn dessen Drive-`modifiedTime` neuer ist als die neueste App-Version — spätere In-App-Bearbeitungen bleiben so erhalten. `always` = Häkchen „Vorher neu importieren“ im Score-Tab. Der Job zeigt dabei den Schritt `import`, der Import erscheint auch im Struktur-Tab, und `job.reimported` lässt die Seite Quellen, Versionen und PDF neu laden. Bullet-IDs sind pro Import zufällig: akzeptierte Bullet-Ausnahmen (`action:`/`specifics:`) werden auf Bullets mit gleichem Text übertragen (`carryOverBulletWaivers`). Der Layout-Check fällt auf den aktuellen CV der Sprache zurück, wenn die Importquelle nicht lesbar ist (Desktop, `drive.file`).

@@ -3,6 +3,9 @@ import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { startAuthentication } from "@simplewebauthn/browser";
 import { api } from "../lib/api";
 import { useAuth } from "../lib/auth";
+import { useUiStore } from "../lib/store";
+import i18n from "../i18n";
+import { ProfilePicker } from "../components/ProfilePicker";
 import type { PublicKeyCredentialRequestOptionsJSON } from "@simplewebauthn/browser";
 
 type Mode = "setup" | "login";
@@ -29,7 +32,28 @@ export function getRememberedToken(email: string): string | null {
   } catch { return null; }
 }
 
+// Desktop app (APP_MODE=desktop) → profile picker; web → e-mail/Google/passkey login.
 export function SetupPage() {
+  const [appMode, setAppMode] = useState<"web" | "desktop" | null>(null);
+  useEffect(() => {
+    api.get<{ mode?: "web" | "desktop"; osLang?: "de" | "en" | "fr" }>("/api/auth/status")
+      .then(async r => {
+        // Desktop login screen: OS language (shell reduces it to de/en/fr, else en). After login
+        // each profile switches to its own language (App.tsx reads /api/profile).
+        const lang = r.data.osLang;
+        if (r.data.mode === "desktop" && lang) {
+          useUiStore.getState().setUiLanguage(lang);
+          if (i18n.language !== lang) await i18n.changeLanguage(lang);
+        }
+        setAppMode(r.data.mode ?? "web");
+      })
+      .catch(() => setAppMode("web"));
+  }, []);
+  if (appMode === null) return null;
+  return appMode === "desktop" ? <ProfilePicker /> : <WebSetupPage />;
+}
+
+function WebSetupPage() {
   const { refetch } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();

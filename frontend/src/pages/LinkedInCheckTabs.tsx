@@ -2,6 +2,7 @@
 // Reuses the shared check components; LinkedIn-specific bits (self-report rows, effort
 // tags, headline variants) are styled in components/linkedin/linkedin.css.
 import { useState, useEffect, useCallback, useRef, type ReactNode } from "react";
+import { COMPAT_PROVIDER_IDS } from "@application-pal/shared";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { Play, RefreshCircle, Copy, Check, Upload, Page, PasteClipboard, InfoCircle, WarningTriangle, Clock, Link as LinkIcon, Sparks, Xmark, Plus } from "iconoir-react";
@@ -88,7 +89,7 @@ export type DraftPatch = { headline?: string | null; summary?: string | null; po
 export const LI_LANGS = ["de", "en", "fr"] as const;
 
 const errMsg = (e: unknown, fallback: string) => (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
-const CLOUD = ["anthropic", "openai", "gemini", "openrouter"];
+const CLOUD: string[] = ["anthropic", "openai", "gemini", "openrouter", ...COMPAT_PROVIDER_IDS];
 
 /** Latest check, running jobs (polled every 3 s), and every write the page does. */
 export function useLinkedInCheck() {

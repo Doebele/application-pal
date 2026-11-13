@@ -1,11 +1,12 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { AI_SECRET_PROVIDERS, type AiSecretProvider, type CompatProviderId } from "@application-pal/shared";
 
 export type Theme = "dark" | "light";
 export type Accent = "indigo" | "violet" | "emerald" | "amber" | "rose";
 export type Density = "low" | "high";
 export type CardVariant = "rich" | "compact" | "minimal" | "editorial";
-export type AiProvider = "none" | "lm-studio" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama";
+export type AiProvider = "none" | "lm-studio" | "anthropic" | "openai" | "gemini" | "openrouter" | "ollama" | CompatProviderId;
 export type UiLanguage = "de" | "en" | "fr";
 
 export type AiConfig = {
@@ -27,6 +28,11 @@ export type AiConfig = {
   // Ollama
   ollamaUrl: string;
   ollamaModel: string;
+  // OpenAI-compatible cloud providers (COMPAT_PROVIDERS in shared): keys (only used without
+  // server-side secrets) + the chosen model per provider id
+  xaiApiKey: string; metaApiKey: string; kimiApiKey: string; kimiCnApiKey: string; moonshotApiKey: string;
+  deepseekApiKey: string; zaiApiKey: string; mimoApiKey: string; mistralApiKey: string;
+  cloudModels: Record<string, string>;
 };
 
 export const DEFAULT_FOLDER_RULE = "{firma} – {rolle} – {datum}";
@@ -83,7 +89,14 @@ type UiState = {
   startAiJob: (appId: string, kind: AiJobKind) => void;
   finishAiJob: (appId: string, kind: AiJobKind) => void;
   markAiJobsSeen: (appId: string) => void;
+  // Server-side API keys (see SettingsSync). Per session, never persisted.
+  secretsAvailable: boolean;
+  serverSecrets: Record<AiSecretProvider, boolean>;
+  setServerSecrets: (available: boolean, flags: Record<AiSecretProvider, boolean>) => void;
 };
+
+export type { AiSecretProvider };
+export const NO_SERVER_SECRETS = Object.fromEntries(AI_SECRET_PROVIDERS.map(p => [p, false])) as Record<AiSecretProvider, boolean>;
 
 export const useUiStore = create<UiState>()(
   persist(
@@ -108,6 +121,9 @@ export const useUiStore = create<UiState>()(
         openrouterModel: "",
         ollamaUrl: "http://localhost:11434",
         ollamaModel: "",
+        xaiApiKey: "", metaApiKey: "", kimiApiKey: "", kimiCnApiKey: "", moonshotApiKey: "",
+        deepseekApiKey: "", zaiApiKey: "", mimoApiKey: "", mistralApiKey: "",
+        cloudModels: {},
       },
       driveNameFolder: DEFAULT_FOLDER_RULE,
       driveNameDoc:    DEFAULT_DOC_RULE,
@@ -135,6 +151,9 @@ export const useUiStore = create<UiState>()(
       setDriveNameFolder: (driveNameFolder) => set({ driveNameFolder }),
       setDriveNameDoc:    (driveNameDoc)    => set({ driveNameDoc }),
       aiJobs: {},
+      secretsAvailable: false,
+      serverSecrets: NO_SERVER_SECRETS,
+      setServerSecrets: (secretsAvailable, serverSecrets) => set({ secretsAvailable, serverSecrets }),
       startAiJob: (appId, kind) => set((s) => ({
         aiJobs: { ...s.aiJobs, [appId]: { ...s.aiJobs[appId], [kind]: { status: "running", seen: true, at: Date.now() } } },
       })),
@@ -156,6 +175,8 @@ export const useUiStore = create<UiState>()(
       partialize: (state) => {
         const rest = { ...state } as Partial<UiState>;
         delete rest.aiJobs;
+        delete rest.secretsAvailable;
+        delete rest.serverSecrets;
         return rest;
       },
       migrate: (persisted: unknown) => {

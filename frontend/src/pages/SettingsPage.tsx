@@ -1,11 +1,15 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Download, Upload, Database, Shield, Key, LogOut, Trash, Folder, OpenNewWindow, Calendar, InfoCircle, Table2Columns } from "iconoir-react";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
-import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
+import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, type AiSecretProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
 import { api } from "../lib/api";
+import { AI_SECRET_FIELDS, COMPAT_PROVIDERS, COMPAT_PROVIDER_IDS, isCompatProvider, type CompatProviderId } from "@application-pal/shared";
 import { useAuth } from "../lib/auth";
+import { GooglePickerButton } from "../lib/googlePicker";
+import { hasShell, shellInvoke, type UpdateCheck } from "../lib/desktopShell";
 import { startRegistration } from "@simplewebauthn/browser";
 import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 
@@ -125,12 +129,71 @@ function LmStudioSection() {
   );
 }
 
+// ─── API key input ────────────────────────────────────────────
+// With server-side encryption (see lib/settingsSync.tsx) a key is sent once and
+// stored encrypted for the current profile; the field then only shows that a key
+// exists. Without it (web install without SECRETS_KEY/JWT_SECRET) the key stays in
+// the browser as before.
+function ApiKeyInput({ provider, placeholder }: { provider: AiSecretProvider; placeholder: string }) {
+  const { t } = useTranslation();
+  const { ai, setAi, secretsAvailable, serverSecrets, setServerSecrets } = useUiStore();
+  const [show, setShow] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const field = AI_SECRET_FIELDS[provider];
+  const inputStyle = { ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 };
+
+  if (!secretsAvailable) {
+    return (
+      <>
+        <input type={show ? "text" : "password"} value={ai[field] ?? ""} onChange={(e) => setAi({ [field]: e.target.value })}
+          placeholder={placeholder} style={inputStyle} />
+        <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
+          {show ? t("settings.hide") : t("settings.show")}
+        </button>
+      </>
+    );
+  }
+
+  const save = async (value: string) => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.put<{ secrets: Record<AiSecretProvider, boolean> }>("/api/settings/secrets", { keys: { [provider]: value } });
+      setServerSecrets(true, r.data.secrets);
+      setDraft("");
+    } catch {
+      setErr(t("settings.keySaveFailed"));
+    } finally { setBusy(false); }
+  };
+  const stored = serverSecrets[provider];
+  return (
+    <>
+      <input
+        type={show ? "text" : "password"}
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => { if (draft.trim()) void save(draft); }}
+        onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) void save(draft); }}
+        placeholder={stored ? t("settings.keyStored") : placeholder}
+        title={err ?? (stored ? t("settings.keyStoredHint") : undefined)}
+        disabled={busy}
+        style={{ ...inputStyle, ...(err ? { borderColor: "var(--score-low)" } : {}) }}
+      />
+      {stored && !draft
+        ? <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} disabled={busy} onClick={() => void save("")}>
+            {t("settings.keyRemove")}
+          </button>
+        : <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
+            {show ? t("settings.hide") : t("settings.show")}
+          </button>}
+    </>
+  );
+}
+
 // ─── Anthropic section ────────────────────────────────────────
 function AnthropicSection() {
   const { t } = useTranslation();
-  const { ai, setAi } = useUiStore();
-  const [show, setShow] = useState(false);
-
   return (
     <div className="settings-row">
       <div>
@@ -138,20 +201,7 @@ function AnthropicSection() {
         <div className="settings-row-sub">{t("settings.anthropicKeySub")}</div>
       </div>
       <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
-        <input
-          type={show ? "text" : "password"}
-          value={ai.anthropicApiKey}
-          onChange={(e) => setAi({ anthropicApiKey: e.target.value })}
-          placeholder="sk-ant-…"
-          style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
-        />
-        <button
-          className="btn btn-ghost"
-          style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }}
-          onClick={() => setShow((s) => !s)}
-        >
-          {show ? t("settings.hide") : t("settings.show")}
-        </button>
+        <ApiKeyInput provider="anthropic" placeholder="sk-ant-…" />
       </div>
     </div>
   );
@@ -161,7 +211,6 @@ function AnthropicSection() {
 function OpenAiSection() {
   const { t } = useTranslation();
   const { ai, setAi } = useUiStore();
-  const [show, setShow] = useState(false);
   const OPENAI_MODELS = ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"];
 
   return (
@@ -172,16 +221,7 @@ function OpenAiSection() {
           <div className="settings-row-sub">{t("settings.openaiKeySub")}</div>
         </div>
         <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
-          <input
-            type={show ? "text" : "password"}
-            value={ai.openaiApiKey}
-            onChange={(e) => setAi({ openaiApiKey: e.target.value })}
-            placeholder="sk-…"
-            style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
-          />
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
-            {show ? t("settings.hide") : t("settings.show")}
-          </button>
+          <ApiKeyInput provider="openai" placeholder="sk-…" />
         </div>
       </div>
       <div className="settings-row">
@@ -207,7 +247,6 @@ function OpenAiSection() {
 function GeminiSection() {
   const { t } = useTranslation();
   const { ai, setAi } = useUiStore();
-  const [show, setShow] = useState(false);
   const GEMINI_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-1.5-pro", "gemini-1.5-flash"];
 
   return (
@@ -218,16 +257,7 @@ function GeminiSection() {
           <div className="settings-row-sub">{t("settings.geminiKeySub")}</div>
         </div>
         <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
-          <input
-            type={show ? "text" : "password"}
-            value={ai.geminiApiKey}
-            onChange={(e) => setAi({ geminiApiKey: e.target.value })}
-            placeholder="AIza…"
-            style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
-          />
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
-            {show ? t("settings.hide") : t("settings.show")}
-          </button>
+          <ApiKeyInput provider="gemini" placeholder="AIza…" />
         </div>
       </div>
       <div className="settings-row">
@@ -253,7 +283,6 @@ function GeminiSection() {
 function OpenRouterSection() {
   const { t } = useTranslation();
   const { ai, setAi } = useUiStore();
-  const [show, setShow] = useState(false);
 
   return (
     <>
@@ -263,16 +292,7 @@ function OpenRouterSection() {
           <div className="settings-row-sub">{t("settings.openrouterKeySub")}</div>
         </div>
         <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
-          <input
-            type={show ? "text" : "password"}
-            value={ai.openrouterApiKey}
-            onChange={(e) => setAi({ openrouterApiKey: e.target.value })}
-            placeholder="sk-or-…"
-            style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
-          />
-          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} onClick={() => setShow(s => !s)}>
-            {show ? t("settings.hide") : t("settings.show")}
-          </button>
+          <ApiKeyInput provider="openrouter" placeholder="sk-or-…" />
         </div>
       </div>
       <div className="settings-row">
@@ -287,6 +307,76 @@ function OpenRouterSection() {
             placeholder={t("settings.openrouterModelPlaceholder")}
             style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }}
           />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── OpenAI-compatible cloud providers (Grok, Muse, Kimi, DeepSeek, GLM, MiMo, Mistral) ──
+// One section for all of them, driven by COMPAT_PROVIDERS. The model list comes live from
+// the provider (POST /api/ai/cloud-models, uses the stored key); the default from the table
+// is used until the user picks one.
+function CompatSection({ id }: { id: CompatProviderId }) {
+  const { t } = useTranslation();
+  const { ai, setAi, serverSecrets } = useUiStore();
+  const p = COMPAT_PROVIDERS[id];
+  const keyField = AI_SECRET_FIELDS[p.keyOf];
+  const hasKey = !!serverSecrets[p.keyOf] || !!ai[keyField];
+  const model = ai.cloudModels?.[id] || p.defaultModel;
+  const [models, setModels] = useState<string[]>([]);
+  const [status, setStatus] = useState<"idle" | "loading" | "ok" | "error">("idle");
+  const [err, setErr] = useState("");
+
+  const load = async () => {
+    setStatus("loading"); setErr("");
+    try {
+      const r = await api.post<{ models: string[]; error?: string }>("/api/ai/cloud-models", { provider: id, ai: useUiStore.getState().ai });
+      setModels(r.data.models);
+      if (r.data.error) { setStatus("error"); setErr(r.data.error); return; }
+      setStatus("ok");
+      // keep the user's choice; otherwise the default if offered, else the first listed model
+      if (!ai.cloudModels?.[id] && r.data.models.length && !r.data.models.includes(p.defaultModel))
+        setAi({ cloudModels: { ...(ai.cloudModels ?? {}), [id]: r.data.models[0] } });
+    } catch { setStatus("error"); setErr(t("settings.compatModelsFailed")); }
+  };
+  useEffect(() => { if (hasKey) void load(); }, [id, hasKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const options = models.includes(model) || !model ? models : [model, ...models];
+  return (
+    <>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.compatKey", { name: p.label })}</div>
+          <div className="settings-row-sub">
+            <a href={p.keyUrl} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>{p.keyUrl.replace("https://", "")}</a>
+            {p.keyOf !== id && <> · {t("settings.compatSharedKey", { name: COMPAT_PROVIDERS[p.keyOf].label })}</>}
+            {p.note && <> · {t(`settings.compatNote.${p.note}`)}</>}
+          </div>
+        </div>
+        <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
+          <ApiKeyInput provider={p.keyOf} placeholder={p.placeholder} />
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("settings.model")}</div>
+          <div className="settings-row-sub">{status === "error" ? <span style={{ color: "var(--score-low)" }}>{err}</span> : t("settings.compatModelSub")}</div>
+        </div>
+        <div className="settings-row-right" style={{ display: "flex", gap: 6 }}>
+          {options.length > 0 ? (
+            <select value={model} onChange={(e) => setAi({ cloudModels: { ...(ai.cloudModels ?? {}), [id]: e.target.value } })}
+              style={{ ...INPUT_STYLE, width: 220, cursor: "pointer", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+              {options.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          ) : (
+            <input value={ai.cloudModels?.[id] ?? ""} placeholder={p.defaultModel}
+              onChange={(e) => setAi({ cloudModels: { ...(ai.cloudModels ?? {}), [id]: e.target.value } })}
+              style={{ ...INPUT_STYLE, width: 220, fontFamily: "var(--font-mono)", fontSize: 11 }} />
+          )}
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: "4px 8px", flexShrink: 0 }} disabled={!hasKey || status === "loading"} onClick={() => void load()}>
+            {status === "loading" ? <RefreshCircle width={12} height={12} className="spin" /> : t("settings.compatModelsLoad")}
+          </button>
         </div>
       </div>
     </>
@@ -640,11 +730,12 @@ function RavSheetSubSection({ onReconnect }: { onReconnect: () => void }) {
       }).catch(() => {});
   }, []);
 
-  const link = async () => {
-    if (!input.trim()) return;
+  const link = async (picked?: string) => {
+    const target = (picked ?? input).trim();
+    if (!target) return;
     setChecking(true); setErr(null);
     try {
-      const r = await api.get<RavSheet>(`/api/rav/sheet-info?spreadsheetId=${encodeURIComponent(input.trim())}`);
+      const r = await api.get<RavSheet>(`/api/rav/sheet-info?spreadsheetId=${encodeURIComponent(target)}`);
       await api.patch("/api/profile", { ravSheetId: r.data.id });
       setSheet(r.data); setInput("");
     } catch (e: unknown) {
@@ -708,9 +799,10 @@ function RavSheetSubSection({ onReconnect }: { onReconnect: () => void }) {
                 placeholder={t("rav.placeholder")} style={{ fontSize: 12 }} />
             </div>
             <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
-              disabled={checking || !input.trim()} onClick={link}>
+              disabled={checking || !input.trim()} onClick={() => link()}>
               {checking ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : t("rav.confirm")}
             </button>
+            <GooglePickerButton kind="spreadsheet" label={t("picker.chooseSheet")} onPicked={f => link(f.id)} />
             <button className="btn btn-secondary" style={{ fontSize: 12, whiteSpace: "nowrap" }}
               onClick={() => setShowCreate(v => !v)}>{t("rav.create")}</button>
           </div>
@@ -761,6 +853,9 @@ function RavSheetSubSection({ onReconnect }: { onReconnect: () => void }) {
 // ─── Google OAuth section ─────────────────────────────────────
 function GoogleSection() {
   const { t } = useTranslation();
+  const desktop = useAuth().user?.mode === "desktop";
+  const [waiting, setWaiting] = useState(false);
+  const [connectErr, setConnectErr] = useState<string | null>(null);
   // driveApplicationsFolderId now lives in user_profile (per-user), not Zustand
   const [driveApplicationsFolderId, setDriveApplicationsFolderIdState] = useState("");
   const [status, setStatus] = useState<"loading" | "connected" | "disconnected">("loading");
@@ -828,7 +923,26 @@ function GoogleSection() {
     await saveFolderIdToProfile("");
   };
 
+  // Desktop: consent runs in the system browser (Google blocks embedded web views);
+  // the sidecar receives the loopback redirect, we poll until the token is there.
+  useEffect(() => {
+    if (!waiting) return;
+    const started = Date.now();
+    const timer = setInterval(async () => {
+      const r = await api.get<{ connected: boolean }>("/api/google/status").catch(() => null);
+      if (r?.data.connected) { setWaiting(false); setStatus("connected"); }
+      else if (Date.now() - started > 5 * 60 * 1000) { setWaiting(false); setConnectErr(t("settings.googleTimeout")); }
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [waiting, t]);
+
   const connect = async () => {
+    if (desktop) {
+      setConnectErr(null);
+      try { await api.post("/api/google/connect"); setWaiting(true); }
+      catch (e: unknown) { setConnectErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("settings.googleConnectFailed")); }
+      return;
+    }
     const res = await api.get<{ url: string }>("/api/google/auth-url").catch(() => null);
     if (res?.data.url) window.location.href = res.data.url;
     else alert("Google credentials are not configured on the server.");
@@ -874,12 +988,16 @@ function GoogleSection() {
             </>
           )}
           {status === "disconnected" && (
-            <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} onClick={connect}>
-              <Link width={12} height={12} /> {t("settings.connectGoogle")}
+            <button className="btn btn-primary" style={{ fontSize: 12, gap: 5 }} onClick={connect} disabled={waiting}>
+              {waiting
+                ? <><RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> {t("settings.googleWaiting")}</>
+                : <><Link width={12} height={12} /> {t("settings.connectGoogle")}</>}
             </button>
           )}
         </div>
       </div>
+      {waiting && <div style={{ fontSize: 12, color: "var(--fg-3)" }}>{t("settings.googleBrowserHint")}</div>}
+      {connectErr && <div style={{ fontSize: 11, color: "#f87171" }}>{connectErr}</div>}
 
       {/* Folder picker — only when connected */}
       {status === "connected" && (
@@ -922,8 +1040,15 @@ function GoogleSection() {
                 disabled={checkingFolder || !folderInput.trim()} onClick={validateFolder}>
                 {checkingFolder ? <RefreshCircle width={11} height={11} style={{ animation: "spin 1s linear infinite" }} /> : t("settings.confirmFolder")}
               </button>
+              <GooglePickerButton kind="folder" label={t("picker.chooseFolder")} onPicked={async f => {
+                setFolderErr(null);
+                setFolderInfo({ id: f.id, name: f.name, url: f.url });
+                setFolderInput(f.id);
+                await saveFolderIdToProfile(f.id);
+              }} />
             </div>
           )}
+          {!folderInfo && desktop && <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 6 }}>{t("picker.driveFileHint")}</div>}
           {folderErr && <div style={{ fontSize: 11, color: "#f87171", marginTop: 6 }}>{folderErr}</div>}
           {!folderInfo && !folderInput && (
             <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 6 }}>
@@ -1210,6 +1335,168 @@ function InviteSection() {
 }
 
 // ─── Security Section ─────────────────────────────────────────
+// ─── Desktop: profile name + protection ───────────────────────
+function ProfileProtectionSection() {
+  const { t } = useTranslation();
+  const { user, refetch } = useAuth();
+  const queryClient = useQueryClient();
+  const [name, setName] = useState(user?.name ?? "");
+  const [mode, setMode] = useState<"none" | "pin" | "password">(user?.authMode ?? "none");
+  const [current, setCurrent] = useState("");
+  const [secret, setSecret] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const protectedNow = user?.authMode && user.authMode !== "none";
+  const digits = (v: string) => mode === "pin" ? v.replace(/\D/g, "") : v;
+  const fail = (err: unknown, fallback: string) =>
+    setMsg({ ok: false, text: (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback });
+
+  const saveName = async () => {
+    if (!name.trim() || name.trim() === user?.name) return;
+    try { await api.patch("/api/account", { name: name.trim() }); await refetch(); setMsg({ ok: true, text: t("profiles.nameSaved") }); }
+    catch (err) { fail(err, t("profiles.saveFailed")); }
+  };
+
+  const saveProtection = async () => {
+    setMsg(null);
+    if (mode === "pin" && !/^\d{4,8}$/.test(secret)) return setMsg({ ok: false, text: t("profiles.pinRule") });
+    if (mode === "password" && secret.length < 8) return setMsg({ ok: false, text: t("profiles.passwordRule") });
+    if (mode !== "none" && secret !== confirm) return setMsg({ ok: false, text: t("profiles.mismatch") });
+    setBusy(true);
+    try {
+      await api.put("/api/account/protection", { authMode: mode, secret: mode === "none" ? undefined : secret, current: current || undefined });
+      await refetch();
+      setCurrent(""); setSecret(""); setConfirm("");
+      setMsg({ ok: true, text: t("profiles.protectionSaved") });
+    } catch (err) { fail(err, t("profiles.saveFailed")); }
+    finally { setBusy(false); }
+  };
+
+  const inputStyle = { ...INPUT_STYLE, width: 220 };
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+        <Shield width={13} height={13} style={{ color: "var(--fg-3)" }} />
+        <div className="eyebrow">{t("profiles.sectionTitle")}</div>
+      </div>
+      <div className="settings-group">
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">{t("profiles.name")}</div>
+            <div className="settings-row-sub">{t("profiles.nameSub")}</div>
+          </div>
+          <div className="settings-row-right">
+            <input value={name} onChange={e => setName(e.target.value)} onBlur={saveName} maxLength={60} style={inputStyle} />
+          </div>
+        </div>
+        <div className="settings-row">
+          <div>
+            <div className="settings-row-label">{t("profiles.protection")}</div>
+            <div className="settings-row-sub">{t(`profiles.modeHint.${mode}`)}</div>
+          </div>
+          <div className="settings-row-right">
+            <select value={mode} onChange={e => { setMode(e.target.value as typeof mode); setSecret(""); setConfirm(""); setMsg(null); }}
+              style={{ ...inputStyle, cursor: "pointer" }}>
+              {(["none", "pin", "password"] as const).map(m => <option key={m} value={m}>{t(`profiles.mode.${m}`)}</option>)}
+            </select>
+          </div>
+        </div>
+        {protectedNow && (
+          <div className="settings-row">
+            <div><div className="settings-row-label">{t("profiles.current")}</div></div>
+            <div className="settings-row-right">
+              <input type="password" value={current} onChange={e => setCurrent(e.target.value)} autoComplete="current-password" style={inputStyle} />
+            </div>
+          </div>
+        )}
+        {mode !== "none" && (
+          <>
+            <div className="settings-row">
+              <div><div className="settings-row-label">{mode === "pin" ? t("profiles.newPin") : t("profiles.newPassword")}</div></div>
+              <div className="settings-row-right">
+                <input type="password" value={secret} onChange={e => setSecret(digits(e.target.value))} inputMode={mode === "pin" ? "numeric" : undefined}
+                  maxLength={mode === "pin" ? 8 : undefined} autoComplete="new-password" style={inputStyle}
+                  placeholder={mode === "pin" ? t("profiles.pinRule") : t("profiles.passwordRule")} />
+              </div>
+            </div>
+            <div className="settings-row">
+              <div><div className="settings-row-label">{t("profiles.repeat")}</div></div>
+              <div className="settings-row-right">
+                <input type="password" value={confirm} onChange={e => setConfirm(digits(e.target.value))} inputMode={mode === "pin" ? "numeric" : undefined}
+                  maxLength={mode === "pin" ? 8 : undefined} autoComplete="new-password" style={inputStyle} />
+              </div>
+            </div>
+          </>
+        )}
+        <div className="settings-row">
+          <div style={{ fontSize: 12, color: msg ? (msg.ok ? "var(--green)" : "var(--score-low)") : "var(--fg-3)" }} role="status">
+            {msg?.text ?? ""}
+          </div>
+          <div className="settings-row-right">
+            <button className="btn btn-primary" style={{ fontSize: 12 }} disabled={busy} onClick={saveProtection}>
+              {t("profiles.saveProtection")}
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="settings-row">
+        <div>
+          <div className="settings-row-label">{t("wizard.reopenLabel")}</div>
+          <div className="settings-row-sub">{t("wizard.reopenSub")}</div>
+        </div>
+        <div className="settings-row-right">
+          <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={async () => {
+            await api.patch("/api/settings", { onboarding: "pending" }).catch(() => {});
+            queryClient.setQueryData(["onboarding", user?.id], "pending");
+          }}>{t("wizard.reopen")}</button>
+        </div>
+      </div>
+      {hasShell() && <AppUpdateRow />}
+    </div>
+  );
+}
+
+// Desktop only: shows the installed version and asks the shell for an update. If one exists,
+// the shell opens its native dialog (in the profile's UI language) and takes over from there.
+function AppUpdateRow() {
+  const { t, i18n } = useTranslation();
+  const [version, setVersion] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => { shellInvoke<string>("app_version").then(setVersion).catch(() => {}); }, []);
+
+  const check = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await shellInvoke<UpdateCheck>("check_update", { lang: i18n.language });
+      setVersion(r.current);
+      setMsg(r.status === "none" ? { ok: true, text: t("appUpdate.upToDate") }
+        : r.status === "available" ? { ok: true, text: t("appUpdate.available", { version: r.version }) }
+        : { ok: true, text: t("appUpdate.busy") });
+    } catch (err) {
+      setMsg({ ok: false, text: t("appUpdate.failed", { error: String(err) }) });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="settings-row">
+      <div>
+        <div className="settings-row-label">{t("appUpdate.label")}</div>
+        <div className="settings-row-sub">{version ? t("appUpdate.installed", { version }) : t("appUpdate.sub")}</div>
+        {msg && (
+          <div role="status" style={{ fontSize: 12, marginTop: 4, color: msg.ok ? "var(--green)" : "var(--score-low)" }}>{msg.text}</div>
+        )}
+      </div>
+      <div className="settings-row-right">
+        <button className="btn btn-secondary" style={{ fontSize: 12 }} disabled={busy} onClick={check}>
+          {busy ? t("appUpdate.checking") : t("appUpdate.check")}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 type PasskeyInfo = { id: string; deviceName: string | null; createdAt: string };
 
 const SESSION_TIMEOUT_VALUES = ["15m", "1h", "6h", "24h", "7d", "30d"] as const;
@@ -1398,6 +1685,7 @@ function SecuritySection() {
 
 export function SettingsPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const { theme, setTheme, accent, setAccent, density, setDensity, cardVariant, setCardVariant, ai, setAi } = useUiStore();
 
   return (
@@ -1489,6 +1777,9 @@ export function SettingsPage() {
             <ProviderPill value="openai"      label={t("settings.aiOpenAI")}      color="#74aa9c" active={ai.provider === "openai"}      onClick={() => setAi({ provider: "openai" })} />
             <ProviderPill value="gemini"      label={t("settings.aiGemini")}      color="#4285f4" active={ai.provider === "gemini"}      onClick={() => setAi({ provider: "gemini" })} />
             <ProviderPill value="openrouter"  label={t("settings.aiOpenRouter")}  color="#a855f7" active={ai.provider === "openrouter"}  onClick={() => setAi({ provider: "openrouter" })} />
+            {COMPAT_PROVIDER_IDS.map(id => (
+              <ProviderPill key={id} value={id} label={COMPAT_PROVIDERS[id].label} color="#64748b" active={ai.provider === id} onClick={() => setAi({ provider: id })} />
+            ))}
           </div>
 
           {ai.provider !== "none" && (
@@ -1499,6 +1790,7 @@ export function SettingsPage() {
               {ai.provider === "openai"     && <OpenAiSection />}
               {ai.provider === "gemini"     && <GeminiSection />}
               {ai.provider === "openrouter" && <OpenRouterSection />}
+              {isCompatProvider(ai.provider) && <CompatSection key={ai.provider} id={ai.provider} />}
             </div>
           )}
 
@@ -1531,11 +1823,18 @@ export function SettingsPage() {
         {/* Drive Naming */}
         <DriveNamingSection />
 
-        {/* Invite management */}
-        <InviteSection />
+        {user?.mode === "desktop" ? (
+          /* Desktop: profile name + PIN/password/none instead of invites and passkeys */
+          <ProfileProtectionSection />
+        ) : (
+          <>
+            {/* Invite management */}
+            <InviteSection />
 
-        {/* Security */}
-        <SecuritySection />
+            {/* Security */}
+            <SecuritySection />
+          </>
+        )}
 
       </div>
     </>
@@ -1578,7 +1877,10 @@ function BackupSection() {
       a.href     = url;
       a.download = `application-pal-export-${date}.json`;
       a.click();
-      URL.revokeObjectURL(url);
+      // revoke later: WKWebView starts the download asynchronously and would find no blob
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      // Desktop app: no browser download bar — say where the file went.
+      if (hasShell()) setResult({ ok: true, msg: t("settings.exportSavedDownloads", { file: a.download }) });
     } catch {
       setResult({ ok: false, msg: t("settings.exportFailed") });
     } finally {

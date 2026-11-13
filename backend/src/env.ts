@@ -5,7 +5,16 @@ export const KB_BASE_PATH =
   "/Users/clausmedvesek/.paperclip/instances/default/companies/ca0d881e-94db-4279-94d8-198588aaaa34/knowledge-base";
 
 const envSchema = z.object({
-  DATABASE_URL: z.string().min(1),
+  DB_DRIVER:    z.enum(["postgres", "pglite"]).default("postgres"),
+  DATABASE_URL: z.string().default(""),      // Pflicht bei DB_DRIVER=postgres (geprüft in db.ts)
+  PGLITE_DATA_DIR: z.string().default(""),   // leer = in-memory
+  MIGRATIONS_DIR:  z.string().optional(),    // Default: backend/drizzle-pglite relativ zum CWD
+  HOST:         z.string().default("0.0.0.0"), // Desktop-Sidecar: 127.0.0.1
+  STATIC_DIR:   z.string().default(""),        // Desktop-Sidecar: gebautes Frontend ausliefern
+  APP_MODE:     z.enum(["web", "desktop"]).default("web"), // desktop: Profilauswahl, PIN/ohne Schutz, keine Einladungen
+  DESKTOP_TOKEN: z.string().default(""),       // Desktop-Sidecar: Start-Token der Tauri-Hülle (leer = kein Schutz)
+  OS_LANG:      z.enum(["de", "en", "fr", ""]).catch("").default(""), // Desktop: Systemsprache (Hülle reduziert auf de/en/fr, sonst en)
+  SECRETS_KEY:  z.string().default(""),        // Schlüssel für ai_secrets (Desktop: aus dem Schlüsselbund); leer = aus JWT_SECRET abgeleitet
   JWT_SECRET:   z.string().default(""),   // auto-generated if empty
   PORT:         z.coerce.number().default(3000),
   APP_URL:      z.string().default("http://localhost:8070"),

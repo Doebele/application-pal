@@ -610,7 +610,26 @@
     "folderColorsSync": "Ordnerfarben aktualisieren",
     "folderColorsSyncing": "Aktualisiere…",
     "folderColorsResult": "{{updated}} Ordner gefärbt, {{failed}} fehlgeschlagen",
-    "folderColorsError": "Fehler beim Aktualisieren der Ordnerfarben"
+    "folderColorsError": "Fehler beim Aktualisieren der Ordnerfarben",
+    "keyStored": "Gespeichert (verschlüsselt)",
+    "keyStoredHint": "Der Schlüssel ist für dieses Profil verschlüsselt gespeichert. Neuen Schlüssel eingeben, um ihn zu ersetzen.",
+    "keyRemove": "Entfernen",
+    "keySaveFailed": "Schlüssel konnte nicht gespeichert werden",
+    "googleWaiting": "Warte auf Browser …",
+    "googleBrowserHint": "Die Google-Anmeldung ist im Browser geöffnet. Nach der Freigabe verbindet sich die App automatisch.",
+    "googleTimeout": "Keine Antwort von Google. Bitte erneut verbinden.",
+    "googleConnectFailed": "Google-Verbindung konnte nicht gestartet werden.",
+    "exportSavedDownloads": "Gespeichert im Ordner „Downloads“: {{file}}",
+    "compatKey": "{{name}}: API-Schlüssel",
+    "compatSharedKey": "gleicher Schlüssel wie {{name}}",
+    "compatModelSub": "Liste kommt direkt vom Anbieter",
+    "compatModelsLoad": "Modelle laden",
+    "compatModelsFailed": "Modelle konnten nicht geladen werden",
+    "compatNote": {
+      "usOnly": "zurzeit nur für Entwickler in den USA",
+      "codingPlan": "braucht das Coding-Abo des Anbieters",
+      "china": "Zugang für Konten in Festland-China"
+    }
   },
   "templates": {
     "title": "Vorlagen",
@@ -1013,7 +1032,8 @@
       "step": {
         "pdf": "PDF-Layout lesen",
         "llm": "KI bewertet Bullets und Kompetenzen",
-        "score": "Punkte berechnen"
+        "score": "Punkte berechnen",
+        "import": "CV neu importieren"
       },
       "checkedAt": "Geprüft am {{date}}",
       "notChecked": "Dieser CV wurde noch nicht geprüft.",
@@ -1055,8 +1075,15 @@
       "languageIssues": "Sprache",
       "competencyEvidence": "Belege für Kompetenzen",
       "noEvidence": "Kein Beleg gefunden",
-      "placeholderHint": "[X] = Zahl fehlt – bitte selbst einsetzen, nichts erfinden."
-    }
+      "placeholderHint": "[X] = Zahl fehlt – bitte selbst einsetzen, nichts erfinden.",
+      "forceReimport": "Vorher neu importieren",
+      "autoReimportHint": "Sonst nur, wenn der Lebenslauf unter Dokumente seit dem letzten Import geändert wurde.",
+      "reimported": "Vor der Prüfung wurde der aktuelle Lebenslauf neu importiert."
+    },
+    "unreachableHint": "„{{name}}“ ist verknüpft, aber die App hat noch keinen Zugriff darauf. Wähle die Datei einmal in Google Drive aus – danach kann sie gelesen werden.",
+    "repick": "Datei in Drive auswählen …",
+    "sourceNewer": "Der Lebenslauf wurde am {{source}} geändert, die App-Version stammt vom {{app}}. Die nächste Prüfung importiert ihn automatisch neu – oder jetzt neu importieren.",
+    "sourceNewerRunning": "Neuer Import läuft – danach die Prüfung neu starten, damit Punkte und Markierungen zur aktuellen Fassung passen."
   },
   "check": {
     "status": {
@@ -1113,7 +1140,7 @@
     "connected": "Mit LinkedIn verbunden",
     "expired": "Verbindung abgelaufen",
     "notConnected": "Nicht verbunden",
-    "intro": "Verbinde dein LinkedIn-Profil, damit Application-Pal immer den aktuellen Stand kennt.",
+    "intro": "Verbinde dein LinkedIn-Profil, damit {{app}} immer den aktuellen Stand kennt.",
     "expiredHint": "LinkedIn-Zugänge gelten 60 Tage. Bitte neu verbinden.",
     "validUntil": "gültig bis {{date}} (noch {{days}} Tage)",
     "viaOauth": "über deine LinkedIn-App",
@@ -1155,7 +1182,7 @@
     "disconnectKeepApp": "Trennen, App-Daten behalten",
     "disconnectForget": "Trennen und App-Daten löschen",
     "cancel": "Abbrechen",
-    "privacy": "Nur lesend: Application-Pal ändert und sendet nichts auf LinkedIn. Der Zugang bleibt in deiner Datenbank und wird nicht exportiert. Nur für Mitglieder mit Standort EU/EWR oder Schweiz.",
+    "privacy": "Nur lesend: {{app}} ändert und sendet nichts auf LinkedIn. Der Zugang bleibt in deiner Datenbank und wird nicht exportiert. Nur für Mitglieder mit Standort EU/EWR oder Schweiz.",
     "stats": {
       "positions": "{{n}} Positionen ({{withText}} mit Beschreibung)",
       "skills": "{{n}} Kenntnisse",
@@ -1356,7 +1383,7 @@
       "notRatedShort": "n. b.",
       "ptsTitle": "Erreicht / bewertbar (voll: {{full}})"
     },
-    "emptyBuild": "Noch kein LinkedIn-Profil? Application-Pal baut es mit dir auf – aus Lebenslauf, Dokumenten und ein paar Fragen.",
+    "emptyBuild": "Noch kein LinkedIn-Profil? {{app}} baut es mit dir auf – aus Lebenslauf, Dokumenten und ein paar Fragen.",
     "emptyBuildGo": "Profil aufbauen",
     "lang": {
       "de": "Deutsch",
@@ -1522,7 +1549,7 @@
         "media": "Medien"
       },
       "recRequests": "Empfehlungen anfragen",
-      "recHint": "Vorlagen zum Anpassen – Application-Pal sendet nichts. [Name] und [Projekt] selbst ersetzen.",
+      "recHint": "Vorlagen zum Anpassen – {{app}} sendet nichts. [Name] und [Projekt] selbst ersetzen.",
       "pillars": "Themensäulen für Beiträge",
       "groups": "Gruppen finden",
       "groupsHint": "Keine Gruppennamen – mit diesen Kriterien und Suchbegriffen findest du passende Gruppen selbst.",
@@ -1573,7 +1600,7 @@
     "checklist": {
       "title": "Was noch zu tun ist",
       "progress": "{{done}} von {{total}} erledigt",
-      "hint": "Application-Pal ändert nichts auf LinkedIn – du überträgst jeden Punkt selbst. Was ein neuer Import belegen kann, hakt sich danach von selbst ab.",
+      "hint": "{{app}} ändert nichts auf LinkedIn – du überträgst jeden Punkt selbst. Was ein neuer Import belegen kann, hakt sich danach von selbst ab.",
       "reimport": "Profil neu importieren",
       "hideDone": "Erledigte ausblenden",
       "noDraft": "Noch kein Entwurf in dieser Sprache – erstelle ihn in den KI-Werkzeugen, dann erscheinen hier die Übertragungsschritte.",
@@ -1678,5 +1705,117 @@
         "connections": "Kontakte"
       }
     }
+  },
+  "profiles": {
+    "whoIsThere": "Wer bist du?",
+    "createTitle": "Neues Profil",
+    "add": "Neues Profil",
+    "back": "Zurück",
+    "unlock": "Öffnen",
+    "loginFailed": "Anmeldung fehlgeschlagen",
+    "createFailed": "Profil konnte nicht erstellt werden",
+    "name": "Name",
+    "namePlaceholder": "z. B. Lea",
+    "nameSub": "So erscheint das Profil in der Auswahl beim Start.",
+    "nameMissing": "Bitte einen Namen eingeben",
+    "nameSaved": "Name gespeichert",
+    "protection": "Schutz",
+    "pin": "PIN",
+    "password": "Passwort",
+    "repeat": "Wiederholen",
+    "email": "E-Mail",
+    "optional": "(optional)",
+    "pinRule": "4–8 Ziffern",
+    "passwordRule": "Mindestens 8 Zeichen",
+    "mismatch": "Die Eingaben stimmen nicht überein",
+    "create": "Profil erstellen",
+    "mode": {
+      "none": "Ohne Schutz",
+      "pin": "PIN",
+      "password": "Passwort"
+    },
+    "modeHint": {
+      "none": "Jede Person an diesem Mac kann das Profil öffnen.",
+      "pin": "Eine kurze Zahl schützt vor neugierigen Geschwistern.",
+      "password": "Stärkerer Schutz, empfohlen für sensible Unterlagen."
+    },
+    "sectionTitle": "Profil & Schutz",
+    "current": "Aktuelle PIN bzw. aktuelles Passwort",
+    "newPin": "Neue PIN",
+    "newPassword": "Neues Passwort",
+    "saveProtection": "Schutz speichern",
+    "protectionSaved": "Schutz gespeichert",
+    "saveFailed": "Speichern fehlgeschlagen"
+  },
+  "picker": {
+    "choose": "In Drive wählen …",
+    "chooseFolder": "Ordner in Drive wählen …",
+    "chooseSheet": "Tabelle in Drive wählen …",
+    "importTemplate": "Vorlage aus Google Drive übernehmen …",
+    "templateImported": "„{{name}}“ als Vorlage übernommen",
+    "driveFileHint": "Die Desktop-App sieht nur Dateien, die sie selbst angelegt hat oder die du hier in Drive auswählst. Eingefügte Links auf andere Dateien funktionieren nicht.",
+    "waitingBrowser": "Auswahl im Browser …",
+    "browserHint": "Wähle in deinem Browser in Google Drive aus.",
+    "cancel": "Abbrechen"
+  },
+  "wizard": {
+    "welcomeTitle": "Willkommen bei {{app}}",
+    "welcomeText": "In wenigen kurzen Schritten ist die App eingerichtet. Alles lässt sich später in den Einstellungen ändern. Wo stehst du gerade?",
+    "aiTitle": "Künstliche Intelligenz",
+    "aiText": "Die KI schreibt Anschreiben, prüft Lebensläufe und bereitet Gespräche vor. Du kannst ein Modell auf diesem Rechner nutzen (privat, kostenlos) oder einen Cloud-Dienst (schneller, kostenpflichtig).",
+    "aiLocal": "Auf diesem Rechner",
+    "aiCloud": "Cloud-Dienst",
+    "aiFound": "gefunden · {{count}} Modelle",
+    "aiNotFound": "nicht gefunden",
+    "aiLocalMissing": "Kein lokales Modell gefunden. Installiere eine dieser kostenlosen Apps:",
+    "aiRetry": "erneut suchen",
+    "aiSaveKey": "Speichern",
+    "aiGetKey": "Schlüssel erstellen ↗",
+    "aiTest": "Verbindung testen",
+    "aiTesting": "Teste … (lokale Modelle brauchen beim ersten Mal etwas länger)",
+    "aiTestOk": "Antwort nach {{s}} s",
+    "aiTestFail": "Keine Antwort",
+    "aiPrivacy": "Der Schlüssel wird verschlüsselt nur auf diesem Rechner gespeichert. Bei einem Cloud-Dienst gehen deine Texte an diesen Anbieter.",
+    "googleTitle": "Google Drive & Kalender",
+    "googleText": "Optional. Mit Google kann die App:",
+    "googleUse1": "pro Bewerbung einen Ordner anlegen und Anschreiben als Google Doc speichern",
+    "googleUse2": "Vorstellungsgespräche aus deinem Kalender anzeigen",
+    "googleUse3": "den RAV-Nachweis als Google-Tabelle führen",
+    "googleUnavailable": "In dieser App-Version ist Google noch nicht eingerichtet. Du kannst den Schritt überspringen.",
+    "googlePrivacy": "Die App sieht in deinem Drive nur Dateien, die sie selbst anlegt oder die du auswählst.",
+    "liTitle": "LinkedIn",
+    "liText": "Im LinkedIn-Check bewertet die App dein Profil und schlägt bessere Texte vor. Dazu lädst du dein Profil einmal hoch: als PDF („Mehr → Als PDF speichern“) oder als Datenexport von LinkedIn.",
+    "liTextBuild": "Noch kein LinkedIn-Profil? Kein Problem: Der LinkedIn-Check hilft dir Schritt für Schritt, eines aufzubauen.",
+    "liOpen": "Nach der Einrichtung den LinkedIn-Check öffnen",
+    "liHint": "{{app}} schreibt nie selbst auf LinkedIn – du übernimmst Vorschläge von Hand.",
+    "doneTitle": "Fertig eingerichtet",
+    "sumNoPersona": "Keine Ausgangslage gewählt",
+    "sumAi": "KI verbunden",
+    "sumNoAi": "KI noch nicht eingerichtet",
+    "sumGoogle": "Google verbunden",
+    "sumNoGoogle": "Google nicht verbunden",
+    "doneHint": "Offene Punkte findest du jederzeit unter Einstellungen.",
+    "back": "Zurück",
+    "next": "Weiter",
+    "skip": "Überspringen",
+    "skipAll": "Später einrichten",
+    "start": "Los geht’s",
+    "reopenLabel": "Einrichtungsassistent",
+    "reopenSub": "Ausgangslage, KI und Google noch einmal Schritt für Schritt einrichten.",
+    "reopen": "Assistent öffnen",
+    "aiLocalLmStudio": "App öffnen, ein Modell herunterladen (z. B. Qwen) und unter „Developer“ den Server starten.",
+    "aiLocalOllama": "App öffnen und ein Modell laden, z. B. „ollama pull qwen3“ im Terminal.",
+    "aiLocalThen": "Danach hier:"
+  },
+  "appUpdate": {
+    "label": "App-Version",
+    "sub": "Updates für die Desktop-App",
+    "installed": "Installiert: Version {{version}}",
+    "check": "Nach Updates suchen",
+    "checking": "Suche…",
+    "upToDate": "Du hast die neueste Version.",
+    "available": "Version {{version}} ist verfügbar – siehe Dialog.",
+    "busy": "Die Prüfung läuft bereits.",
+    "failed": "Prüfung fehlgeschlagen: {{error}}"
   }
 }

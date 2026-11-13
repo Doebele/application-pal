@@ -19,6 +19,8 @@ import deFlagUrl from "round-flag-icons/flags/de.svg?url";
 import gbFlagUrl from "round-flag-icons/flags/gb.svg?url";
 // @ts-ignore
 import frFlagUrl from "round-flag-icons/flags/fr.svg?url";
+import { APP_NAME } from "../lib/appName";
+import appIcon from "../assets/brand/app-icon.png";
 import { bodyZoom } from "../lib/zoom";
 
 const FLAG_URLS: Record<string, string> = { de: deFlagUrl, en: gbFlagUrl, fr: frFlagUrl };
@@ -148,8 +150,11 @@ function UserModal({
   onLogout,
   onSwitch,
   onAutoSwitch,
+  desktop = false,
 }: {
   email: string;
+  /** Desktop app: switching goes straight to the profile picker (no user list, no remembered tokens). */
+  desktop?: boolean;
   applicationCount: number;
   anchorRef: React.RefObject<HTMLDivElement | null>;
   onClose: () => void;
@@ -245,7 +250,7 @@ function UserModal({
         {/* Switch user — two-step confirmation */}
         {!confirmSwitch ? (
           <button
-            onClick={() => { setConfirmLogout(false); setConfirmSwitch(true); }}
+            onClick={() => { if (desktop) { onSwitch(); return; } setConfirmLogout(false); setConfirmSwitch(true); }}
             style={{
               display: "flex", alignItems: "center", gap: 10,
               width: "100%", padding: "8px 10px", borderRadius: 7,
@@ -457,6 +462,7 @@ export function Rail({ applications }: Props) {
   const handleSwitchUser = async (prefillEmail?: string) => {
     setUserModalOpen(false);
     await logout();
+    if (user?.mode === "desktop") { queryClient.clear(); navigate("/setup"); return; }
     // Without a specific user: go straight to the Register tab
     // With a specific user email: go to Login tab with prefilled email
     navigate(prefillEmail
@@ -507,7 +513,8 @@ export function Rail({ applications }: Props) {
     { to: "/settings",      label: t("nav.settings"),      icon: <Settings     width={15} height={15} /> },
   ];
 
-  const email = user?.email ?? "";
+  // Desktop profiles show their name; web accounts their e-mail.
+  const email = (user?.mode === "desktop" ? user?.name : user?.email) ?? user?.email ?? "";
   const initials = email.slice(0, 2).toUpperCase() || "U";
 
   return (
@@ -524,10 +531,10 @@ export function Rail({ applications }: Props) {
         {/* ── Header ── */}
         <div className="rail-header">
           {railOpen && (
-            <div className="brand" style={{ flex: 1, minWidth: 0 }}>
-              <div className="brand-mark">A</div>
-              <div className="brand-name" style={{ overflow: "hidden", whiteSpace: "nowrap" }}>
-                App<em>·</em>Pal
+            <div className="brand" style={{ flex: 1, minWidth: 0, gap: 8 }}>
+              <img className="brand-icon" src={appIcon} alt="" />
+              <div className="brand-name" style={{ overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", fontSize: APP_NAME.length > 10 ? 15 : undefined }}>
+                {APP_NAME}
               </div>
             </div>
           )}
@@ -727,6 +734,7 @@ export function Rail({ applications }: Props) {
           onLogout={handleLogout}
           onSwitch={handleSwitchUser}
           onAutoSwitch={handleAutoSwitch}
+          desktop={user?.mode === "desktop"}
         />
       )}
     </>

@@ -1,0 +1,132 @@
+# Application-Pal Desktop (d2603): baut, signiert und notarisiert die Mac- und Windows-App
+# und legt einen Release-ENTWURF an. Veröffentlichen von Hand auf GitHub → dann schiebt
+# desktop-updater.yml die latest.json an die Adresse, die installierte Apps abfragen.
+#
+# Auslöser: Tag `desktop-vX.Y.Z` (nicht `v*` — das baut die Docker-Images, siehe docker.yml).
+# Die Version im Tag muss mit desktop/src-tauri/tauri.conf.json übereinstimmen.
+#
+# Secrets (Einrichtung: docs/desktop/m4-release.md). Fehlt ein Apple-Secret, entsteht eine
+# unsignierte Mac-App; fehlt TAURI_SIGNING_PRIVATE_KEY, bricht der Build ab (ohne Signatur
+# keine Updates).
+name: Desktop Release
+
+on:
+  push:
+    tags: ["desktop-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            target: x86_64-apple-darwin
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version prüfen (Tag = tauri.conf.json)
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#desktop-v}"
+          CONF=$(node -p "require('./desktop/src-tauri/tauri.conf.json').version")
+          if [ "$TAG" != "$CONF" ]; then
+            echo "::error::Tag $TAG passt nicht zu tauri.conf.json ($CONF)"; exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+
+      - name: Abhängigkeiten
+        shell: bash
+        run: |
+          npm ci
+          (cd desktop && npm ci)
+
+      - name: Sidecar, Frontend, PGlite-Assets
+        shell: bash
+        env:
+          TARGET_TRIPLE: ${{ matrix.target }}
+        run: sh desktop/scripts/build-sidecar.sh
+
+      # Fehlende Secrets setzt GitHub als leere Variablen; Tauri würde dann ein leeres
+      # Zertifikat importieren wollen. Darum nur gesetzte Werte weiterreichen.
+      - name: Apple-Signierung vorbereiten (falls eingerichtet)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          S_CERT: ${{ secrets.APPLE_CERTIFICATE }}
+          S_CERT_PW: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          S_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          S_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          S_KEY_ID: ${{ secrets.APPLE_API_KEY }}
+          S_KEY_P8: ${{ secrets.APPLE_API_PRIVATE_KEY }}
+        run: |
+          if [ -z "$S_CERT" ] || [ -z "$S_IDENTITY" ]; then
+            echo "::warning::Keine Apple-Zertifikate hinterlegt – die Mac-App wird nicht signiert/notarisiert."
+            exit 0
+          fi
+          {
+            echo "APPLE_CERTIFICATE=$S_CERT"
+            echo "APPLE_CERTIFICATE_PASSWORD=$S_CERT_PW"
+            echo "APPLE_SIGNING_IDENTITY=$S_IDENTITY"
+          } >> "$GITHUB_ENV"
+          if [ -n "$S_KEY_P8" ]; then
+            mkdir -p "$RUNNER_TEMP/apple"
+            printf '%s' "$S_KEY_P8" > "$RUNNER_TEMP/apple/AuthKey.p8"
+            {
+              echo "APPLE_API_ISSUER=$S_ISSUER"
+              echo "APPLE_API_KEY=$S_KEY_ID"
+              echo "APPLE_API_KEY_PATH=$RUNNER_TEMP/apple/AuthKey.p8"
+            } >> "$GITHUB_ENV"
+          else
+            echo "::warning::Kein App-Store-Connect-Schlüssel – signiert, aber nicht notarisiert."
+          fi
+
+      - name: Bauen, signieren, Release-Entwurf
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Updater-Signatur (Pflicht)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # macOS-Signierung: kommt aus dem Schritt „Apple-Signierung vorbereiten“ ($GITHUB_ENV)
+          # Google-Zugang der App (M2), wird in die Hülle eingebettet
+          D2603_GOOGLE_CLIENT_ID: ${{ secrets.D2603_GOOGLE_CLIENT_ID }}
+          D2603_GOOGLE_CLIENT_SECRET: ${{ secrets.D2603_GOOGLE_CLIENT_SECRET }}
+          D2603_GOOGLE_API_KEY: ${{ secrets.D2603_GOOGLE_API_KEY }}
+          D2603_GOOGLE_APP_ID: ${{ secrets.D2603_GOOGLE_APP_ID }}
+        with:
+          projectPath: desktop
+          tauriScript: npx tauri
+          args: --target ${{ matrix.target }} --config src-tauri/tauri.release.conf.json
+          tagName: ${{ github.ref_name }}
+          releaseName: Apply-Pal ${{ github.ref_name }}
+          releaseBody: |
+            Mac: `.dmg` öffnen und Apply-Pal in „Programme“ ziehen (aarch64 = Apple Silicon, x64 = Intel).
+            Windows: `-setup.exe` ausführen.
+            Installierte Apps aktualisieren sich selbst, sobald dieser Release veröffentlicht ist.
+          releaseDraft: true
+          prerelease: false
+          includeUpdaterJson: true

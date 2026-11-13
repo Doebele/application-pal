@@ -17,7 +17,8 @@ type Rect = { x: number; y: number; w: number; h: number };
 type Line = { text: string; norm: string; rect: Rect }; // rect in PDF units, top-left origin
 type PageData = { page: PDFPageProxy; width: number; height: number; lines: Line[] };
 
-const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "")
+// ß → ss: Swiss texts write "ss", German PDFs often keep "ß" (and vice versa).
+const norm = (s: string) => s.toLowerCase().replace(/ß/g, "ss").normalize("NFKD").replace(/[̀-ͯ]/g, "")
   .replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 
 async function readPage(page: PDFPageProxy): Promise<PageData> {

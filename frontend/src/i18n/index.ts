@@ -1,6 +1,7 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import LanguageDetector from "i18next-browser-languagedetector";
+import { APP_NAME } from "../lib/appName";
 
 // DE
 import deCommon  from "./de/common.json";
@@ -32,7 +33,8 @@ i18n
     fallbackLng: "de",
     defaultNS: "common",
     ns: ["common", "stages", "actions"],
-    interpolation: { escapeValue: false }, // React already escapes
+    // React already escapes; {{app}} = product name (Apply-Pal on the desktop, see lib/appName.ts)
+    interpolation: { escapeValue: false, defaultVariables: { app: APP_NAME } },
     detection: {
       // Order of sources — we override with our Zustand store value anyway
       order: ["localStorage", "navigator"],

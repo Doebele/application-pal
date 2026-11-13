@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1794423228999,
+      "tag": "0000_lame_ironclad",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1794425500066,
+      "tag": "0001_m1_profiles_settings",
+      "breakpoints": true
+    }
+  ]
+}

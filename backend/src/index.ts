@@ -1,3 +1,4 @@
+import "./sidecar-polyfill.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
@@ -6,6 +7,7 @@ import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
+import { spawn } from "node:child_process";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer";
@@ -18,6 +20,7 @@ import {
   type AuthenticationResponseJSON,
 } from "@simplewebauthn/server";
 import {
+  AI_SECRET_FIELDS, AI_SECRET_PROVIDERS, type AiSecretProvider, type UserSettingsResponse, type DesktopProfile, type AuthMode,
   applicationImportRequestSchema,
   applicationInsertSchema,
   applicationPatchSchema,
@@ -64,7 +67,8 @@ import {
   type CvDocument,
   type AiConfig,
   type UserDocument,
-  type CvLanguage
+  type CvLanguage,
+  COMPAT_PROVIDERS, isCompatProvider, type CompatProviderId,
 } from "@application-pal/shared";
 import { PDFParse } from "pdf-parse";
 import {
@@ -95,10 +99,38 @@ import { buildLiChecklist } from "./linkedin-checklist.js";
 import { unzipSync } from "fflate";
 import { and, asc, desc, eq, gte, ilike, inArray, lte, ne, or, isNull, lt, getTableColumns, type SQL, type Table } from "drizzle-orm";
 import { ZodError } from "zod";
-import { db } from "./db.js";
+import { db, closeDb } from "./db.js";
+import { aiKey, requestCtx, encryptSecrets, decryptSecrets, secretFlags, masterKey, type AiSecrets } from "./secrets.js";
 import { env, KB_BASE_PATH } from "./env.js";
 
 const app = new Hono();
+
+// ─── Desktop sidecar guard ───────────────────────────────────
+// In the desktop app the backend listens on 127.0.0.1, where any local program
+// could reach it. The Tauri shell passes a random DESKTOP_TOKEN and opens
+// /__desktop/enter?token=… once; that sets an httpOnly cookie, and every other
+// request without the cookie is refused. Unset (web/Docker) = no guard.
+if (env.DESKTOP_TOKEN) {
+  const expected = Buffer.from(env.DESKTOP_TOKEN);
+  const same = (v: string | undefined) => !!v && v.length === expected.length && crypto.timingSafeEqual(Buffer.from(v), expected);
+  app.get("/__desktop/enter", (c) => {
+    if (!same(c.req.query("token"))) return c.text("Forbidden", 403);
+    // Lax, not Strict: the first navigation comes from the tauri:// loading page (another origin),
+    // and WKWebView drops Strict cookies on the redirect that follows.
+    setCookie(c, "desktop_token", env.DESKTOP_TOKEN, { httpOnly: true, sameSite: "Lax", path: "/" });
+    return c.redirect("/", 302);
+  });
+  app.use("*", async (c, next) => {
+    if (c.req.path === "/__desktop/enter" || c.req.path === "/health") return next();
+    // Google's loopback redirect arrives in the system browser, which has no cookie.
+    // It is only accepted with a pending single-use `state` (checked in the route).
+    if (c.req.path === "/api/google/callback" && c.req.query("state")) return next();
+    // Same for the Drive picker page opened in the system browser: only with a pending session id.
+    if ((c.req.path === "/api/google/picker-page" || c.req.path === "/api/google/picker-result") && c.req.query("s")) return next();
+    if (!same(getCookie(c, "desktop_token"))) return c.text("Forbidden", 403);
+    return next();
+  });
+}
 
 // ─── JWT Secret (auto-generate if not set in env) ─────────────
 let _jwtSecret: string | null = null;
@@ -169,10 +201,22 @@ async function sendOtpEmail(to: string, code: string) {
 const webauthnChallenges = new Map<string, string>();
 
 // ─── Auth Middleware ──────────────────────────────────────────
+// Runs the rest of the request with the user's decrypted API keys in scope (see secrets.ts).
+// Only for non-GET requests — every AI call is a POST.
+async function withUserCtx(method: string, userId: string, next: () => Promise<void>) {
+  let secrets: AiSecrets = {};
+  if (method !== "GET" && masterKey()) {
+    const [p] = await db.select({ s: userProfile.aiSecrets }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+    secrets = decryptSecrets(p?.s);
+  }
+  return requestCtx.run({ userId, secrets }, next);
+}
+
 app.use("/api/*", async (c, next) => {
   const p = c.req.path;
   // Public routes: auth endpoints + google/linkedin OAuth callbacks + health
-  if (p.startsWith("/api/auth/") || p === "/api/google/callback" || p === "/api/linkedin/callback" || p === "/health") {
+  if (p.startsWith("/api/auth/") || p === "/api/google/callback" || p === "/api/linkedin/callback" || p === "/health"
+      || (IS_DESKTOP && (p === "/api/google/picker-page" || p === "/api/google/picker-result"))) {
     return next();
   }
   const token = getCookie(c, "access_token");
@@ -180,7 +224,7 @@ app.use("/api/*", async (c, next) => {
   try {
     const payload = jwt.verify(token, getJwtSecret()) as { userId: string };
     c.set("userId" as never, payload.userId);
-    return next();
+    return withUserCtx(c.req.method, payload.userId, next);
   } catch {
     // Try refresh token silently
     const refresh = getCookie(c, "refresh_token");
@@ -189,7 +233,7 @@ app.use("/api/*", async (c, next) => {
         const rp = jwt.verify(refresh, getJwtSecret()) as { userId: string; rememberMe?: boolean };
         issueTokens(c, rp.userId, rp.rememberMe === true, await getSessionTimeout(rp.userId));
         c.set("userId" as never, rp.userId);
-        return next();
+        return withUserCtx(c.req.method, rp.userId, next);
       } catch { /* fall through */ }
     }
     return c.json({ error: "Unauthorized" }, 401);
@@ -198,10 +242,90 @@ app.use("/api/*", async (c, next) => {
 
 // ─── Auth Routes ──────────────────────────────────────────────
 
-// Check if first-run setup is needed
+// Check if first-run setup is needed; `mode: "desktop"` switches the login screen to the profile picker.
 app.get("/api/auth/status", async (c) => {
   const [u] = await db.select({ id: users.id }).from(users).limit(1);
-  return c.json({ setup: !!u });
+  // osLang: the login screen of the desktop app speaks the OS language (profiles then use their own).
+  return c.json({ setup: !!u, mode: env.APP_MODE, ...(env.OS_LANG ? { osLang: env.OS_LANG } : {}) });
+});
+
+const ME_FIELDS = { id: users.id, email: users.email, displayName: users.displayName, authMode: users.authMode };
+function meBody(u: { id: string; email: string; displayName: string | null; authMode: string }) {
+  return { id: u.id, email: u.email, name: u.displayName || u.email, authMode: u.authMode as AuthMode, mode: env.APP_MODE };
+}
+
+// ─── Desktop profiles (APP_MODE=desktop) ─────────────────────
+// Several family members share one Mac: a profile picker instead of e-mail login,
+// and each profile chooses its own protection: password, PIN or none.
+// PIN/none are refused in web mode — there the server is reachable by others.
+const PIN_RE = /^\d{4,8}$/;
+function validateSecret(mode: AuthMode, secret: string | undefined): string | null {
+  if (mode === "none") return null;
+  if (mode === "pin") return secret && PIN_RE.test(secret) ? null : "PIN: 4–8 Ziffern";
+  return secret && secret.length >= 8 ? null : "Passwort: mindestens 8 Zeichen";
+}
+function isAuthMode(v: unknown): v is AuthMode { return v === "password" || v === "pin" || v === "none"; }
+
+// Simple brute-force brake per profile: 5 wrong tries → 60 s lock.
+const loginFails = new Map<string, { n: number; until: number }>();
+function lockedFor(id: string): number {
+  const f = loginFails.get(id);
+  return f && f.until > Date.now() ? Math.ceil((f.until - Date.now()) / 1000) : 0;
+}
+function noteFail(id: string) {
+  const f = loginFails.get(id) ?? { n: 0, until: 0 };
+  f.n += 1;
+  if (f.n >= 5) { f.n = 0; f.until = Date.now() + 60_000; }
+  loginFails.set(id, f);
+}
+
+app.get("/api/auth/profiles", async (c) => {
+  if (env.APP_MODE !== "desktop") return c.json({ error: "Nur in der Desktop-App" }, 404);
+  const rows = await db.select(ME_FIELDS).from(users).orderBy(users.createdAt);
+  return c.json(rows.map((u): DesktopProfile => ({ id: u.id, name: u.displayName || u.email, authMode: u.authMode as AuthMode })));
+});
+
+app.post("/api/auth/profiles", async (c) => {
+  if (env.APP_MODE !== "desktop") return c.json({ error: "Nur in der Desktop-App" }, 404);
+  const { name, authMode, secret, email } = await c.req.json<{ name?: string; authMode?: AuthMode; secret?: string; email?: string }>();
+  const displayName = (name ?? "").trim();
+  if (!displayName || displayName.length > 60) return c.json({ error: "Name fehlt (max. 60 Zeichen)" }, 400);
+  const mode: AuthMode = isAuthMode(authMode) ? authMode : "none";
+  const bad = validateSecret(mode, secret);
+  if (bad) return c.json({ error: bad }, 400);
+  // users.email is unique and required; a profile without e-mail gets a local placeholder.
+  const mail = (email ?? "").trim().toLowerCase() || `profil-${crypto.randomBytes(5).toString("hex")}@profile.local`;
+  const [dup] = await db.select({ id: users.id }).from(users).where(eq(users.email, mail)).limit(1);
+  if (dup) return c.json({ error: "E-Mail bereits vergeben" }, 409);
+  const passwordHash = mode === "none" ? null : await bcrypt.hash(secret!, 12);
+  const [user] = await db.insert(users).values({ email: mail, passwordHash, displayName, authMode: mode }).returning();
+  // uiSettings without synced keys = new account → client starts from defaults instead of
+  // copying the previous profile's local state (null = pre-M1 account to migrate).
+  // `onboarding: "pending"` opens the setup wizard after the first login (M3).
+  // A new profile starts in the OS language (de/en/fr, else en), like the login screen.
+  await db.insert(userProfile).values({
+    userId: user.id, name: displayName, uiSettings: JSON.stringify({ onboarding: "pending" }),
+    ...(env.OS_LANG ? { uiLanguage: env.OS_LANG } : {}),
+  }).onConflictDoNothing();
+  issueTokens(c, user.id, true, await getSessionTimeout(user.id));
+  return c.json(meBody(user), 201);
+});
+
+app.post("/api/auth/profile-login", async (c) => {
+  if (env.APP_MODE !== "desktop") return c.json({ error: "Nur in der Desktop-App" }, 404);
+  const { id, secret } = await c.req.json<{ id?: string; secret?: string }>();
+  if (!id) return c.json({ error: "Profil fehlt" }, 400);
+  const wait = lockedFor(id);
+  if (wait) return c.json({ error: `Zu viele Versuche — bitte ${wait} s warten`, retryAfter: wait }, 429);
+  const [user] = await db.select({ ...ME_FIELDS, passwordHash: users.passwordHash }).from(users).where(eq(users.id, id)).limit(1);
+  if (!user) return c.json({ error: "Profil nicht gefunden" }, 404);
+  if (user.authMode !== "none") {
+    const ok = !!secret && !!user.passwordHash && await bcrypt.compare(secret, user.passwordHash);
+    if (!ok) { noteFail(id); return c.json({ error: user.authMode === "pin" ? "Falsche PIN" : "Falsches Passwort" }, 401); }
+  }
+  loginFails.delete(id);
+  issueTokens(c, user.id, true, await getSessionTimeout(user.id));
+  return c.json(meBody(user));
 });
 
 // Public: list all registered user emails (for user-picker on login/switch screen)
@@ -239,8 +363,8 @@ app.post("/api/auth/setup", async (c) => {
 
   const passwordHash = await bcrypt.hash(password, 12);
   const [user] = await db.insert(users).values({ email: email.toLowerCase().trim(), passwordHash }).returning();
-  // Create empty profile for new user
-  await db.insert(userProfile).values({ userId: user.id }).onConflictDoNothing();
+  // Create empty profile for new user ("{}" = start from default settings, see settingsSync)
+  await db.insert(userProfile).values({ userId: user.id, uiSettings: "{}" }).onConflictDoNothing();
   const timeout = await getSessionTimeout(user.id);
   const refreshToken = issueTokens(c, user.id, rememberMe === true, timeout);
   return c.json({ email: user.email, ...(rememberMe ? { autoLoginToken: refreshToken } : {}) });
@@ -312,8 +436,8 @@ app.get("/api/auth/me", async (c) => {
   if (token) {
     try {
       const { userId } = jwt.verify(token, getJwtSecret()) as { userId: string };
-      const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
-      if (user) return c.json({ email: user.email });
+      const [user] = await db.select(ME_FIELDS).from(users).where(eq(users.id, userId)).limit(1);
+      if (user) return c.json(meBody(user));
     } catch { /* expired — fall through to refresh */ }
   }
   // 2. access_token missing/expired → try refresh_token (silent refresh)
@@ -321,11 +445,11 @@ app.get("/api/auth/me", async (c) => {
   if (refresh) {
     try {
       const rp = jwt.verify(refresh, getJwtSecret()) as { userId: string; rememberMe?: boolean };
-      const [user] = await db.select({ email: users.email }).from(users).where(eq(users.id, rp.userId)).limit(1);
+      const [user] = await db.select(ME_FIELDS).from(users).where(eq(users.id, rp.userId)).limit(1);
       if (user) {
         const timeout = await getSessionTimeout(rp.userId);
         issueTokens(c, rp.userId, rp.rememberMe === true, timeout);
-        return c.json({ email: user.email });
+        return c.json(meBody(user));
       }
     } catch { /* refresh invalid or expired */ }
   }
@@ -398,6 +522,8 @@ app.post("/api/auth/change-password", async (c) => {
 
 // ─── WebAuthn / Passkey Routes ────────────────────────────────
 const RP_NAME = "Application Pal";
+// Product name shown to users: the desktop app is "Apply-Pal" (Google OAuth brand), web stays "Application-Pal".
+const APP_NAME = env.APP_MODE === "desktop" ? "Apply-Pal" : "Application-Pal";
 function getRpId(): string {
   try { return new URL(env.APP_URL).hostname; } catch { return "localhost"; }
 }
@@ -796,6 +922,8 @@ async function isReachable(url: string): Promise<boolean> {
 }
 
 async function resolveHostUrl(url: string): Promise<string> {
+  // The desktop sidecar runs on the host itself: localhost is localhost.
+  if (env.APP_MODE === "desktop") return url;
   const direct = url.replace(/^(https?:\/\/)localhost(:\d+)?/, "$1host.docker.internal$2");
   const m = direct.match(PRIVATE_HOST);
   if (!m) return direct;
@@ -847,7 +975,7 @@ async function extractWithLmStudio(text: string, ai: AiConfig): Promise<LlmExtra
 }
 
 async function extractWithAnthropic(text: string, ai: AiConfig): Promise<LlmExtracted | null> {
-  const apiKey = ai.anthropicApiKey;
+  const apiKey = aiKey(ai, "anthropic");
   if (!apiKey) return null;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -973,7 +1101,7 @@ async function extractWithOpenAiCompat(text: string, ai: AiConfig, baseUrl: stri
 }
 
 async function extractWithGemini(text: string, ai: AiConfig): Promise<LlmExtracted | null> {
-  const apiKey = ai.geminiApiKey;
+  const apiKey = aiKey(ai, "gemini");
   if (!apiKey) return null;
   const model = (ai as AiConfig & { geminiModel?: string }).geminiModel || "gemini-2.0-flash";
   const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -996,20 +1124,27 @@ async function extractWithAi(text: string, ai: AiConfig): Promise<LlmExtracted |
   if (ai.provider === "lm-studio") return extractWithLmStudio(cleaned, ai);
   if (ai.provider === "anthropic") return extractWithAnthropic(cleaned, ai);
   if (ai.provider === "openai") {
-    if (!ai.openaiApiKey) return null;
+    if (!aiKey(ai, "openai")) return null;
     const model = (ai as AiConfig & { openaiModel?: string }).openaiModel || "gpt-4o-mini";
-    return extractWithOpenAiCompat(cleaned, ai, "https://api.openai.com", ai.openaiApiKey, model);
+    return extractWithOpenAiCompat(cleaned, ai, "https://api.openai.com", aiKey(ai, "openai"), model);
   }
   if (ai.provider === "gemini") return extractWithGemini(cleaned, ai);
   if (ai.provider === "openrouter") {
-    if (!ai.openrouterApiKey) return null;
+    if (!aiKey(ai, "openrouter")) return null;
     const model = (ai as AiConfig & { openrouterModel?: string }).openrouterModel || "anthropic/claude-haiku-4-5";
-    return extractWithOpenAiCompat(cleaned, ai, "https://openrouter.ai/api", ai.openrouterApiKey, model, { "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" });
+    return extractWithOpenAiCompat(cleaned, ai, "https://openrouter.ai/api", aiKey(ai, "openrouter"), model, { "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" });
   }
   if (ai.provider === "ollama") {
     const baseUrl = await resolveHostUrl((ai.ollamaUrl ?? "http://localhost:11434").replace(/\/$/, ""));
     const model = ai.ollamaModel || "";
     return extractWithOpenAiCompat(cleaned, ai, baseUrl, "", model);
+  }
+  if (isCompatProvider(ai.provider)) {
+    if (!aiKey(ai, COMPAT_PROVIDERS[ai.provider].keyOf)) return null;
+    try {
+      const raw = await callCompat(ai.provider, ai, [{ role: "system", content: EXTRACTION_PROMPT }, { role: "user", content: EXTRACTION_PROMPT_USER_PREFIX + cleaned.slice(0, 6000) }], { temperature: 0.05, maxTokens: 8192, timeoutMs: 180_000 });
+      return parseJsonResponse(raw);
+    } catch (err) { console.warn("AI extraction failed:", (err as Error).message); return null; }
   }
   return null;
 }
@@ -1088,7 +1223,7 @@ function parseKbJsonResponse(raw: string): KbExtracted | null {
 }
 
 async function extractKnowledgeBaseWithAnthropic(text: string, ai?: AiConfig): Promise<KbExtracted | null> {
-  const apiKey = ai?.anthropicApiKey ?? process.env.ANTHROPIC_API_KEY;
+  const apiKey = (aiKey(ai, "anthropic") || process.env.ANTHROPIC_API_KEY);
   if (!apiKey) return null;
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1750,6 +1885,36 @@ app.get("/api/lm-studio/models", async (c) => {
   }
 });
 
+// Settings / wizard: live model list of an OpenAI-compatible cloud provider (uses the stored key).
+// POST because the stored key is only in the request context for non-GET requests.
+app.post("/api/ai/cloud-models", async (c) => {
+  const { provider, ai } = await c.req.json<{ provider?: string; ai?: AiConfig }>();
+  if (!provider || !isCompatProvider(provider)) return c.json({ models: [], error: "Unbekannter Anbieter" }, 400);
+  try {
+    return c.json({ models: await listCompatModels(provider, (ai ?? { provider }) as AiConfig) });
+  } catch (err) {
+    return c.json({ models: [], error: (err as Error).message.slice(0, 300) });
+  }
+});
+
+// Setup wizard / settings: one tiny round trip to check the chosen AI really answers.
+// Local models can take a while to load on first use, hence the generous limit.
+app.post("/api/ai/test", async (c) => {
+  const { ai } = await c.req.json<{ ai?: AiConfig }>();
+  if (!ai || ai.provider === "none") return c.json({ ok: false, error: "Kein KI-Anbieter gewählt" }, 400);
+  const started = Date.now();
+  try {
+    const reply = await Promise.race([
+      callAi("Du bist ein Verbindungstest. Antworte nur mit dem Wort OK.", "Test", ai),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Keine Antwort innerhalb von 90 s")), 90_000)),
+    ]);
+    const text = reply.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+    return c.json({ ok: true, reply: text.slice(0, 80), ms: Date.now() - started });
+  } catch (err) {
+    return c.json({ ok: false, error: (err as Error).message.slice(0, 300), ms: Date.now() - started });
+  }
+});
+
 app.get("/api/ollama/models", async (c) => {
   const baseUrl = await resolveHostUrl((c.req.query("url") ?? "http://localhost:11434").replace(/\/$/, ""));
   try {
@@ -1785,24 +1950,25 @@ app.get("/api/profile", async (c) => {
   if (rows.length === 0) {
     // Auto-create empty profile for this user
     const [created] = await db.insert(userProfile).values({ userId }).returning();
-    return c.json(created);
+    return c.json(publicProfile(created));
   }
-  return c.json(rows[0]);
+  return c.json(publicProfile(rows[0]));
 });
 
 app.put("/api/profile", zValidator("json", userProfileInsertSchema), async (c) => {
   const userId = getUserId(c);
   const payload = c.req.valid("json");
+  delete (payload as Record<string, unknown>).aiSecrets;   // only via PUT /api/settings/secrets
   const existing = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   if (existing.length === 0) {
     const [created] = await db.insert(userProfile).values({ ...payload, userId }).returning();
-    return c.json(created, 201);
+    return c.json(publicProfile(created), 201);
   }
   const [updated] = await db.update(userProfile)
     .set({ ...payload, updatedAt: new Date() })
     .where(eq(userProfile.userId, userId))
     .returning();
-  return c.json(updated);
+  return c.json(publicProfile(updated));
 });
 
 // PATCH /api/profile — partial update (subset of fields, no full-schema validation)
@@ -1813,17 +1979,112 @@ app.patch("/api/profile", async (c) => {
   // Ensure userId is never overwritten via the patch body
   delete (patch as Record<string, unknown>).userId;
   delete (patch as Record<string, unknown>).id;
+  delete (patch as Record<string, unknown>).aiSecrets;   // only via PUT /api/settings/secrets
 
   const existing = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   if (existing.length === 0) {
     const [created] = await db.insert(userProfile).values({ ...patch, userId }).returning();
-    return c.json(created, 201);
+    return c.json(publicProfile(created), 201);
   }
   const [updated] = await db.update(userProfile)
     .set({ ...patch, updatedAt: new Date() })
     .where(eq(userProfile.userId, userId))
     .returning();
-  return c.json(updated);
+  return c.json(publicProfile(updated));
+});
+
+// Profile name + protection of the logged-in account.
+app.patch("/api/account", async (c) => {
+  const userId = getUserId(c);
+  const { name } = await c.req.json<{ name?: string }>();
+  const displayName = (name ?? "").trim();
+  if (!displayName || displayName.length > 60) return c.json({ error: "Name fehlt (max. 60 Zeichen)" }, 400);
+  const [u] = await db.update(users).set({ displayName }).where(eq(users.id, userId)).returning(ME_FIELDS);
+  return c.json(meBody(u));
+});
+
+// Body: { authMode, secret?, current? } — `current` is required unless the profile is unprotected.
+app.put("/api/account/protection", async (c) => {
+  const userId = getUserId(c);
+  const { authMode, secret, current } = await c.req.json<{ authMode?: AuthMode; secret?: string; current?: string }>();
+  if (!isAuthMode(authMode)) return c.json({ error: "Ungültiger Schutz" }, 400);
+  if (authMode !== "password" && env.APP_MODE !== "desktop") return c.json({ error: "PIN oder kein Schutz nur in der Desktop-App" }, 400);
+  const bad = validateSecret(authMode, secret);
+  if (bad) return c.json({ error: bad }, 400);
+  const [user] = await db.select({ authMode: users.authMode, passwordHash: users.passwordHash }).from(users).where(eq(users.id, userId)).limit(1);
+  if (!user) return c.json({ error: "Profil nicht gefunden" }, 404);
+  if (user.authMode !== "none" && user.passwordHash) {
+    const wait = lockedFor(userId);
+    if (wait) return c.json({ error: `Zu viele Versuche — bitte ${wait} s warten` }, 429);
+    if (!current || !(await bcrypt.compare(current, user.passwordHash))) { noteFail(userId); return c.json({ error: "Aktuelle PIN bzw. aktuelles Passwort falsch" }, 401); }
+  }
+  const passwordHash = authMode === "none" ? null : await bcrypt.hash(secret!, 12);
+  const [u] = await db.update(users).set({ authMode, passwordHash }).where(eq(users.id, userId)).returning(ME_FIELDS);
+  return c.json(meBody(u));
+});
+
+function publicProfile<T extends { aiSecrets?: string | null }>(row: T): Omit<T, "aiSecrets"> {
+  const { aiSecrets: _omit, ...rest } = row;
+  return rest;
+}
+
+// ─── Per-user settings (UI + AI provider) and encrypted API keys ─────────────
+async function ensureProfileRow(userId: string) {
+  const [row] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  if (row) return row;
+  const [created] = await db.insert(userProfile).values({ userId }).returning();
+  return created;
+}
+
+const MAX_SETTINGS_BYTES = 64 * 1024;
+
+app.get("/api/settings", async (c) => {
+  const row = await ensureProfileRow(getUserId(c));
+  let settings: Record<string, unknown> | null = null;
+  try { settings = row.uiSettings ? JSON.parse(row.uiSettings) : null; } catch { settings = null; }
+  const body: UserSettingsResponse = {
+    settings,
+    secrets: secretFlags(decryptSecrets(row.aiSecrets)),
+    secretsAvailable: !!masterKey(),
+  };
+  return c.json(body);
+});
+
+// Shallow merge; the nested `ai` object is merged one level deeper. Key fields are dropped.
+app.patch("/api/settings", async (c) => {
+  const userId = getUserId(c);
+  const patch = await c.req.json<Record<string, unknown>>().catch(() => null);
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) return c.json({ error: "Ungültige Einstellungen" }, 400);
+  const row = await ensureProfileRow(userId);
+  let current: Record<string, unknown> = {};
+  try { current = row.uiSettings ? JSON.parse(row.uiSettings) : {}; } catch { current = {}; }
+  const next: Record<string, unknown> = { ...current, ...patch };
+  if (patch.ai && typeof patch.ai === "object") {
+    const ai = { ...(current.ai as Record<string, unknown> ?? {}), ...(patch.ai as Record<string, unknown>) };
+    for (const f of Object.values(AI_SECRET_FIELDS)) delete ai[f];
+    next.ai = ai;
+  }
+  const json = JSON.stringify(next);
+  if (json.length > MAX_SETTINGS_BYTES) return c.json({ error: "Einstellungen zu gross" }, 413);
+  await db.update(userProfile).set({ uiSettings: json, updatedAt: new Date() }).where(eq(userProfile.userId, userId));
+  return c.json({ ok: true });
+});
+
+// Body: { keys: { anthropic?: string, … } } — "" removes a key, missing = unchanged.
+app.put("/api/settings/secrets", async (c) => {
+  if (!masterKey()) return c.json({ error: "Kein Schlüssel konfiguriert (SECRETS_KEY oder JWT_SECRET)" }, 503);
+  const userId = getUserId(c);
+  const { keys } = await c.req.json<{ keys?: Partial<Record<AiSecretProvider, string>> }>().catch(() => ({ keys: undefined }));
+  if (!keys || typeof keys !== "object") return c.json({ error: "keys fehlt" }, 400);
+  const row = await ensureProfileRow(userId);
+  const secrets = decryptSecrets(row.aiSecrets);
+  for (const p of AI_SECRET_PROVIDERS) {
+    const v = keys[p];
+    if (typeof v !== "string") continue;
+    if (v.trim()) secrets[p] = v.trim(); else delete secrets[p];
+  }
+  await db.update(userProfile).set({ aiSecrets: encryptSecrets(secrets), updatedAt: new Date() }).where(eq(userProfile.userId, userId));
+  return c.json({ secrets: secretFlags(secrets) });
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -2205,45 +2466,10 @@ app.post("/api/applications/:id/match-score", async (c) => {
   const profileText = profileParts.join("\n\n");
   const userMessage = `${profileText}\n\n## Stellenbeschreibung\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\n${app_.description.slice(0, 2000)}`;
 
-  // Call AI
+  // Call AI — every provider via callAi (this route used to handle only LM Studio and Anthropic)
   let raw = "";
   try {
-    if (aiConfig.provider === "lm-studio") {
-      const baseUrl = await resolveHostUrl((aiConfig.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
-      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: aiConfig.lmStudioModel || undefined,
-          messages: [
-            { role: "system", content: MATCH_SCORE_SYSTEM_PROMPT },
-            { role: "user", content: userMessage }
-          ],
-          temperature: 0.1,
-          max_tokens: 32768
-        }),
-        signal: AbortSignal.timeout(480_000)
-      });
-      if (!res.ok) throw new Error(`LM Studio error: ${res.status}`);
-      const json = await res.json() as { choices?: { message?: { content?: string } }[] };
-      raw = json.choices?.[0]?.message?.content ?? "";
-    } else if (aiConfig.provider === "anthropic") {
-      if (!aiConfig.anthropicApiKey) return c.json({ error: "Anthropic API Key fehlt" }, 400);
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "x-api-key": aiConfig.anthropicApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-haiku-4-5-20251001",
-          max_tokens: 2048,
-          system: MATCH_SCORE_SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userMessage }]
-        }),
-        signal: AbortSignal.timeout(480_000)
-      });
-      if (!res.ok) throw new Error(`Anthropic error: ${res.status}`);
-      const json = await res.json() as { content?: { type: string; text: string }[] };
-      raw = json.content?.find((b) => b.type === "text")?.text ?? "";
-    }
+    raw = await callAi(MATCH_SCORE_SYSTEM_PROMPT, userMessage, aiConfig);
   } catch (err) {
     console.error("Match score AI call failed:", err);
     return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
@@ -2556,10 +2782,46 @@ async function readChatCompletionStream(res: Response): Promise<string> {
   return out;
 }
 
+// ── OpenAI-compatible cloud providers (COMPAT_PROVIDERS in shared) ──
+// Kimi Code wants the client to identify itself honestly → own User-Agent instead of node's default.
+function compatHeaders(provider: CompatProviderId, ai: AiConfig): Record<string, string> {
+  const key = aiKey(ai, COMPAT_PROVIDERS[provider].keyOf);
+  if (!key) throw new Error(`${COMPAT_PROVIDERS[provider].label}: API-Schlüssel fehlt`);
+  return { "Authorization": `Bearer ${key}`, "Content-Type": "application/json", "User-Agent": `${APP_NAME.replace(/\s/g, "")}/1.0` };
+}
+const compatModel = (provider: CompatProviderId, ai: AiConfig) =>
+  ai.cloudModels?.[provider]?.trim() || COMPAT_PROVIDERS[provider].defaultModel;
+
+async function callCompat(provider: CompatProviderId, ai: AiConfig, messages: { role: "system" | "user"; content: string }[], opts: { temperature: number; maxTokens: number; timeoutMs: number }): Promise<string> {
+  const { label, baseUrl } = COMPAT_PROVIDERS[provider];
+  const res = await fetch(`${baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: compatHeaders(provider, ai),
+    body: JSON.stringify({ model: compatModel(provider, ai), messages, temperature: opts.temperature, max_tokens: opts.maxTokens }),
+    signal: AbortSignal.timeout(opts.timeoutMs),
+  });
+  if (!res.ok) throw new Error(`${label}: ${res.status} ${(await res.text().catch(() => "")).slice(0, 400)}`);
+  const json = await res.json() as { choices?: { message?: { content?: string } }[] };
+  return json.choices?.[0]?.message?.content ?? "";
+}
+
+// Model list for the settings page / wizard: `${baseUrl}/models` with the user's key.
+// Non-chat models (embeddings, speech, images, moderation …) are filtered out.
+const NON_CHAT_MODEL = /embed|tts|whisper|transcri|speech|audio|image|dall-e|moderation|rerank|ocr|realtime/i;
+async function listCompatModels(provider: CompatProviderId, ai: AiConfig): Promise<string[]> {
+  const res = await fetch(`${COMPAT_PROVIDERS[provider].baseUrl}/models`, { headers: compatHeaders(provider, ai), signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) throw new Error(`${COMPAT_PROVIDERS[provider].label}: ${res.status} ${(await res.text().catch(() => "")).slice(0, 200)}`);
+  const json = await res.json() as { data?: { id: string }[] };
+  return [...new Set((json.data ?? []).map(m => m.id).filter(id => id && !NON_CHAT_MODEL.test(id)))].sort();
+}
+
 async function callAi(system: string, user: string, ai: AiConfig, additionalContext?: string): Promise<string> {
   const fullUser = additionalContext?.trim()
     ? `${user}\n\n---\nZusätzliche Hinweise des Nutzers:\n${additionalContext.trim()}`
     : user;
+  if (isCompatProvider(ai.provider)) {
+    return callCompat(ai.provider, ai, [{ role: "system", content: system }, { role: "user", content: fullUser }], { temperature: 0.15, maxTokens: 8192, timeoutMs: 180_000 });
+  }
   if (ai.provider === "lm-studio") {
     const baseUrl = await resolveHostUrl((ai.lmStudioUrl ?? "http://localhost:1234").replace(/\/$/, ""));
     const res = await fetch(`${baseUrl}/v1/chat/completions`, {
@@ -2577,10 +2839,10 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
     if (!res.ok) throw new Error(`LM Studio error: ${res.status} ${(await res.text().catch(() => "")).slice(0, 400)}`);
     return readChatCompletionStream(res);
   } else if (ai.provider === "anthropic") {
-    if (!ai.anthropicApiKey) throw new Error("Anthropic API Key fehlt");
+    if (!aiKey(ai, "anthropic")) throw new Error("Anthropic API Key fehlt");
     const res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "x-api-key": ai.anthropicApiKey, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+      headers: { "x-api-key": aiKey(ai, "anthropic"), "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 8192, system, messages: [{ role: "user", content: fullUser }] }),
       signal: AbortSignal.timeout(120_000)
     });
@@ -2588,11 +2850,11 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
     const json = await res.json() as { content?: { type: string; text: string }[] };
     return json.content?.find((b) => b.type === "text")?.text ?? "";
   } else if (ai.provider === "openai") {
-    if (!ai.openaiApiKey) throw new Error("OpenAI API Key fehlt");
+    if (!aiKey(ai, "openai")) throw new Error("OpenAI API Key fehlt");
     const model = (ai as AiConfig & { openaiModel?: string }).openaiModel || "gpt-4o-mini";
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${ai.openaiApiKey}`, "Content-Type": "application/json" },
+      headers: { "Authorization": `Bearer ${aiKey(ai, "openai")}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: fullUser }], temperature: 0.15, max_tokens: 8192 }),
       signal: AbortSignal.timeout(120_000)
     });
@@ -2600,9 +2862,9 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
     const json = await res.json() as { choices?: { message?: { content?: string } }[] };
     return json.choices?.[0]?.message?.content ?? "";
   } else if (ai.provider === "gemini") {
-    if (!ai.geminiApiKey) throw new Error("Gemini API Key fehlt");
+    if (!aiKey(ai, "gemini")) throw new Error("Gemini API Key fehlt");
     const model = (ai as AiConfig & { geminiModel?: string }).geminiModel || "gemini-2.0-flash";
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${ai.geminiApiKey}`, {
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${aiKey(ai, "gemini")}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -2616,11 +2878,11 @@ async function callAi(system: string, user: string, ai: AiConfig, additionalCont
     const json = await res.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
     return json.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
   } else if (ai.provider === "openrouter") {
-    if (!ai.openrouterApiKey) throw new Error("OpenRouter API Key fehlt");
+    if (!aiKey(ai, "openrouter")) throw new Error("OpenRouter API Key fehlt");
     const model = (ai as AiConfig & { openrouterModel?: string }).openrouterModel || "anthropic/claude-haiku-4-5";
     const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
-      headers: { "Authorization": `Bearer ${ai.openrouterApiKey}`, "Content-Type": "application/json", "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" },
+      headers: { "Authorization": `Bearer ${aiKey(ai, "openrouter")}`, "Content-Type": "application/json", "HTTP-Referer": "https://application-pal.app", "X-Title": "Application Pal" },
       body: JSON.stringify({ model, messages: [{ role: "system", content: system }, { role: "user", content: fullUser }], temperature: 0.15, max_tokens: 8192 }),
       signal: AbortSignal.timeout(120_000)
     });
@@ -3929,11 +4191,222 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET ?? "";
 const GOOGLE_REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI ?? "http://localhost/api/google/callback";
 const GOOGLE_FRONTEND_URL  = process.env.GOOGLE_FRONTEND_URL ?? "http://localhost";
 // Scopes include openid+email so Google Sign-In + Drive work in one consent
-const GOOGLE_SCOPES = (process.env.GOOGLE_SCOPES ?? "") ||
-  "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets";
+const IS_DESKTOP = env.APP_MODE === "desktop";
+// Desktop: `drive.file` instead of the restricted `drive` scope (no Google security
+// assessment needed). The app then sees only files it created itself or the user picked
+// in the Google Picker. Docs and Sheets APIs accept drive.file for those files, so
+// `documents`/`spreadsheets` are not requested either.
+const GOOGLE_SCOPES = IS_DESKTOP
+  ? "openid email profile https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/calendar.readonly"
+  : (process.env.GOOGLE_SCOPES ?? "") ||
+    "openid email profile https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/documents https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/spreadsheets";
+// Google Picker (desktop, and web if configured): browser API key + Cloud project number.
+const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY ?? "";
+const GOOGLE_APP_ID  = process.env.GOOGLE_APP_ID ?? "";
+
+// ── Desktop loopback flow (RFC 8252): system browser → http://127.0.0.1:<port>/api/google/callback
+// Google blocks sign-in inside embedded web views, so the consent page opens in the
+// default browser. PKCE + a random single-use `state` bind the answer to the profile
+// that started it; the callback is the only route the sidecar guard lets through
+// without its cookie (and only with a `state`).
+type PendingGoogleAuth = { userId: string; verifier: string; redirectUri: string; createdAt: number };
+const pendingGoogleAuth = new Map<string, PendingGoogleAuth>();
+const GOOGLE_AUTH_TTL = 10 * 60 * 1000;
+
+function b64url(buf: Buffer): string {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function desktopGoogleAuthUrl(userId: string): string {
+  for (const [k, v] of pendingGoogleAuth) if (Date.now() - v.createdAt > GOOGLE_AUTH_TTL) pendingGoogleAuth.delete(k);
+  const state = b64url(crypto.randomBytes(24));
+  const verifier = b64url(crypto.randomBytes(48));
+  const challenge = b64url(crypto.createHash("sha256").update(verifier).digest());
+  const redirectUri = `http://127.0.0.1:${env.PORT}/api/google/callback`;
+  pendingGoogleAuth.set(state, { userId, verifier, redirectUri, createdAt: Date.now() });
+  const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+  url.searchParams.set("client_id", GOOGLE_CLIENT_ID);
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("scope", GOOGLE_SCOPES);
+  url.searchParams.set("access_type", "offline");
+  url.searchParams.set("prompt", "consent");
+  url.searchParams.set("include_granted_scopes", "true");
+  url.searchParams.set("state", state);
+  url.searchParams.set("code_challenge", challenge);
+  url.searchParams.set("code_challenge_method", "S256");
+  return url.toString();
+}
+
+/** Open a URL in the user's default browser (desktop sidecar only). */
+function openInSystemBrowser(url: string): void {
+  const [cmd, args] = process.platform === "darwin" ? ["open", [url]]
+    : process.platform === "win32" ? ["rundll32", ["url.dll,FileProtocolHandler", url]]
+    : ["xdg-open", [url]];
+  const child = spawn(cmd as string, args as string[], { detached: true, stdio: "ignore" });
+  child.on("error", err => console.error("[google] Browser konnte nicht geöffnet werden:", err.message));
+  child.unref();
+}
+
+function loopbackPage(ok: boolean, text: string): string {
+  const color = ok ? "#16a34a" : "#dc2626";
+  return `<!doctype html><html lang="de"><head><meta charset="utf-8"><title>${APP_NAME}</title>
+<style>body{font-family:-apple-system,system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0;background:#f7f7f5;color:#222}
+div{max-width:420px;text-align:center;padding:32px;border-radius:14px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+h1{font-size:18px;color:${color};margin:0 0 8px}p{margin:0;line-height:1.5;color:#555}</style></head>
+<body><div><h1>${ok ? "Google verbunden" : "Verbindung fehlgeschlagen"}</h1><p>${text}</p></div></body></html>`;
+}
+
+app.post("/api/google/connect", (c) => {
+  if (!IS_DESKTOP) return c.json({ error: "Nur in der Desktop-App" }, 404);
+  if (!GOOGLE_CLIENT_ID) return c.json({ error: "Google ist in dieser App-Version nicht eingerichtet" }, 503);
+  const url = desktopGoogleAuthUrl(getUserId(c));
+  openInSystemBrowser(url);
+  return c.json({ url });
+});
+
+app.get("/api/google/picker-config", async (c) => {
+  if (!GOOGLE_API_KEY || !GOOGLE_APP_ID) return c.json({ available: false });
+  const accessToken = await getDriveAccessToken(getUserId(c));
+  if (!accessToken) return c.json({ available: false, error: "Google Drive nicht verbunden" });
+  return c.json({ available: true, apiKey: GOOGLE_API_KEY, appId: GOOGLE_APP_ID, accessToken });
+});
+
+// ── Desktop: Drive picker in the system browser ──
+// The Google Picker is an iframe from docs.google.com that needs the user's Google
+// cookies. WKWebView blocks those (“Can't access your Google Account”), so on the
+// desktop the picker runs on a small page of this server opened in the default
+// browser, where the user is signed in to Google. The page posts the pick back;
+// the app polls the session. A session is single-use, bound to the profile that
+// started it, and expires after 10 minutes; only with its id does the sidecar
+// guard let the two browser routes through.
+type PickerKindB = "folder" | "document" | "spreadsheet" | "template" | "readable" | "any";
+type PickerSession = {
+  userId: string; kind: PickerKindB; title: string; lang: "de" | "en" | "fr"; createdAt: number;
+  status: "pending" | "done" | "cancelled"; file?: { id: string; name: string; mimeType: string; url: string };
+};
+const pickerSessions = new Map<string, PickerSession>();
+const PICKER_TTL = 10 * 60 * 1000;
+const PICKER_MIME: Record<Exclude<PickerKindB, "any">, string> = {
+  folder: "application/vnd.google-apps.folder",
+  document: "application/vnd.google-apps.document",
+  spreadsheet: "application/vnd.google-apps.spreadsheet",
+  template: [
+    "application/vnd.google-apps.document",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.google-apps.spreadsheet",
+    "application/vnd.google-apps.presentation",
+  ].join(","),
+  // Files the app can read text from (CVs, certificates): Google Docs and PDFs
+  readable: "application/vnd.google-apps.document,application/pdf",
+};
+const PICKER_TEXT = {
+  de: { loading: "Google Drive wird geöffnet …", done: "Übernommen", doneText: `Du kannst dieses Fenster schliessen und zu ${APP_NAME} zurückkehren.`, cancel: "Abgebrochen", cancelText: "Es wurde nichts ausgewählt. Du kannst dieses Fenster schliessen.", expired: "Diese Auswahl ist abgelaufen. Starte sie in der App neu.", failed: "Google Drive konnte nicht geladen werden" },
+  en: { loading: "Opening Google Drive …", done: "Done", doneText: `You can close this window and return to ${APP_NAME}.`, cancel: "Cancelled", cancelText: "Nothing was selected. You can close this window.", expired: "This selection has expired. Start it again in the app.", failed: "Google Drive could not be loaded" },
+  fr: { loading: "Ouverture de Google Drive …", done: "C’est fait", doneText: `Tu peux fermer cette fenêtre et revenir à ${APP_NAME}.`, cancel: "Annulé", cancelText: "Rien n’a été sélectionné. Tu peux fermer cette fenêtre.", expired: "Cette sélection a expiré. Relance-la dans l’app.", failed: "Impossible de charger Google Drive" },
+};
+function livePickerSession(id: string | undefined): PickerSession | null {
+  for (const [k, v] of pickerSessions) if (Date.now() - v.createdAt > PICKER_TTL) pickerSessions.delete(k);
+  return id ? pickerSessions.get(id) ?? null : null;
+}
+
+app.post("/api/google/picker-session", async (c) => {
+  if (!IS_DESKTOP) return c.json({ error: "Nur in der Desktop-App" }, 404);
+  if (!GOOGLE_API_KEY || !GOOGLE_APP_ID) return c.json({ error: "Google-Picker ist nicht eingerichtet" }, 503);
+  const userId = getUserId(c);
+  if (!(await getDriveAccessToken(userId))) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const body = await c.req.json<{ kind?: string; title?: string; lang?: string }>().catch(() => ({} as { kind?: string; title?: string; lang?: string }));
+  const kind = (["folder", "document", "spreadsheet", "template", "readable", "any"].includes(body.kind ?? "") ? body.kind : "any") as PickerKindB;
+  const lang = (["de", "en", "fr"].includes(body.lang ?? "") ? body.lang : "de") as PickerSession["lang"];
+  livePickerSession(undefined);
+  const id = b64url(crypto.randomBytes(24));
+  pickerSessions.set(id, { userId, kind, title: String(body.title ?? "").slice(0, 120), lang, createdAt: Date.now(), status: "pending" });
+  openInSystemBrowser(`http://127.0.0.1:${env.PORT}/api/google/picker-page?s=${id}`);
+  return c.json({ id });
+});
+
+app.get("/api/google/picker-session/:id", (c) => {
+  const s = livePickerSession(c.req.param("id"));
+  if (!s || s.userId !== getUserId(c)) return c.json({ status: "expired" });
+  if (s.status !== "pending") pickerSessions.delete(c.req.param("id"));
+  return c.json({ status: s.status, file: s.file ?? null });
+});
+
+// Explicit cancel from the app (user gave up waiting) — the browser page then shows "expired".
+app.delete("/api/google/picker-session/:id", (c) => {
+  const s = livePickerSession(c.req.param("id"));
+  if (s && s.userId === getUserId(c)) pickerSessions.delete(c.req.param("id"));
+  return c.json({ ok: true });
+});
+
+app.get("/api/google/picker-page", async (c) => {
+  if (!IS_DESKTOP) return c.text("Not found", 404);
+  const id = c.req.query("s") ?? "";
+  const s = livePickerSession(id);
+  const tx = PICKER_TEXT[s?.lang ?? "de"];
+  if (!s || s.status !== "pending") return c.html(loopbackPage(false, tx.expired), 410);
+  const accessToken = await getDriveAccessToken(s.userId);
+  if (!accessToken) return c.html(loopbackPage(false, "Google Drive nicht verbunden"), 400);
+  c.header("Cache-Control", "no-store");
+  c.header("Referrer-Policy", "no-referrer");
+  const cfg = JSON.stringify({
+    id, kind: s.kind, title: s.title, mime: s.kind === "any" ? "" : PICKER_MIME[s.kind],
+    token: accessToken, apiKey: GOOGLE_API_KEY, appId: GOOGLE_APP_ID, tx,
+  }).replace(/</g, "\\u003c");
+  return c.html(`<!doctype html><html lang="${s.lang}"><head><meta charset="utf-8"><title>${APP_NAME} · Google Drive</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font-family:-apple-system,system-ui,sans-serif;display:grid;place-items:center;min-height:90vh;margin:0;background:#f7f7f5;color:#222}
+#box{max-width:440px;text-align:center;padding:32px;border-radius:14px;background:#fff;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+h1{font-size:18px;margin:0 0 8px}p{margin:0;line-height:1.5;color:#555}.ok{color:#16a34a}.bad{color:#dc2626}</style></head>
+<body><div id="box"><h1 id="h">${tx.loading}</h1><p id="p"></p></div>
+<script>
+const C = ${cfg};
+const show = (cls, h, p) => { const e = document.getElementById("h"); e.className = cls; e.textContent = h; document.getElementById("p").textContent = p; };
+const report = (body) => fetch("/api/google/picker-result?s=" + encodeURIComponent(C.id), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+function start() {
+  const p = google.picker;
+  let view;
+  if (C.kind === "folder") view = new p.DocsView(p.ViewId.FOLDERS).setIncludeFolders(true).setSelectFolderEnabled(true).setMimeTypes(C.mime);
+  else { view = new p.DocsView(p.ViewId.DOCS).setIncludeFolders(true); if (C.mime) view.setMimeTypes(C.mime); }
+  const b = new p.PickerBuilder().addView(view).setOAuthToken(C.token).setDeveloperKey(C.apiKey).setAppId(C.appId)
+    .setOrigin(location.origin).setSize(Math.min(1051, innerWidth - 40), Math.min(650, innerHeight - 40))
+    .setCallback(async (d) => {
+      const a = d[p.Response.ACTION];
+      if (a === p.Action.PICKED) {
+        const f = d[p.Response.DOCUMENTS][0];
+        await report({ action: "picked", file: { id: f[p.Document.ID], name: f[p.Document.NAME], mimeType: f[p.Document.MIME_TYPE], url: f[p.Document.URL] } });
+        show("ok", C.tx.done, C.tx.doneText); setTimeout(() => window.close(), 1500);
+      } else if (a === p.Action.CANCEL) {
+        await report({ action: "cancel" });
+        show("", C.tx.cancel, C.tx.cancelText);
+      }
+    });
+  if (C.title) b.setTitle(C.title);
+  b.build().setVisible(true);
+}
+</script>
+<script src="https://apis.google.com/js/api.js" onload="gapi.load('picker', { callback: start, onerror: () => show('bad', C.tx.failed, '') })" onerror="show('bad', C.tx.failed, '')"></script>
+</body></html>`);
+});
+
+app.post("/api/google/picker-result", async (c) => {
+  if (!IS_DESKTOP) return c.json({ error: "Not found" }, 404);
+  const s = livePickerSession(c.req.query("s"));
+  if (!s || s.status !== "pending") return c.json({ error: "expired" }, 410);
+  const body = await c.req.json<{ action?: string; file?: { id?: string; name?: string; mimeType?: string; url?: string } }>().catch(() => ({} as { action?: string; file?: undefined }));
+  const f = body.file;
+  if (body.action === "picked" && f?.id && /^[\w-]{10,200}$/.test(f.id)) {
+    s.status = "done";
+    s.file = { id: f.id, name: String(f.name ?? "").slice(0, 300), mimeType: String(f.mimeType ?? "").slice(0, 200), url: String(f.url ?? "").slice(0, 500) };
+  } else {
+    s.status = "cancelled";
+  }
+  return c.json({ ok: true });
+});
 
 app.get("/api/google/auth-url", (c) => {
   if (!GOOGLE_CLIENT_ID) return c.json({ error: "Google credentials not configured" }, 503);
+  if (IS_DESKTOP) return c.json({ error: "Desktop: POST /api/google/connect verwenden" }, 400);
   const url = new URL("https://accounts.google.com/o/oauth2/v2/auth");
   url.searchParams.set("client_id", GOOGLE_CLIENT_ID);
   url.searchParams.set("redirect_uri", GOOGLE_REDIRECT_URI);
@@ -3945,6 +4418,50 @@ app.get("/api/google/auth-url", (c) => {
 });
 
 app.get("/api/google/callback", async (c) => {
+  if (IS_DESKTOP) {
+    // Loopback answer from the system browser. Never stores a shared token, never logs in.
+    const state = c.req.query("state") ?? "";
+    const pending = pendingGoogleAuth.get(state);
+    pendingGoogleAuth.delete(state);
+    if (!pending || Date.now() - pending.createdAt > GOOGLE_AUTH_TTL) {
+      return c.html(loopbackPage(false, "Diese Anmeldung ist abgelaufen oder wurde schon verwendet. Bitte in der App erneut auf „Google verbinden“ klicken."), 400);
+    }
+    const code = c.req.query("code");
+    if (!code) {
+      const denied = c.req.query("error") === "access_denied";
+      return c.html(loopbackPage(false, denied ? "Der Zugriff wurde nicht erlaubt. Du kannst dieses Fenster schliessen." : "Google hat keinen Code geliefert."), 400);
+    }
+    try {
+      const res = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code, client_id: GOOGLE_CLIENT_ID,
+          ...(GOOGLE_CLIENT_SECRET ? { client_secret: GOOGLE_CLIENT_SECRET } : {}),
+          redirect_uri: pending.redirectUri, grant_type: "authorization_code",
+          code_verifier: pending.verifier,
+        }),
+      });
+      const data = await res.json() as { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string; error_description?: string };
+      if (!data.access_token) {
+        console.error("[google] Token-Tausch fehlgeschlagen:", data.error_description ?? res.status);
+        return c.html(loopbackPage(false, "Google hat die Anmeldung nicht bestätigt. Bitte erneut versuchen."), 502);
+      }
+      await db.delete(googleOAuthTokens).where(eq(googleOAuthTokens.userId, pending.userId));
+      await db.insert(googleOAuthTokens).values({
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token ?? null,
+        expiresAt: data.expires_in ? new Date(Date.now() + data.expires_in * 1000) : null,
+        scope: data.scope ?? GOOGLE_SCOPES,
+        userId: pending.userId,
+      });
+      return c.html(loopbackPage(true, `Du kannst dieses Fenster schliessen und zu ${APP_NAME} zurückkehren.`));
+    } catch (err) {
+      console.error("[google] callback error:", err);
+      return c.html(loopbackPage(false, "Unerwarteter Fehler. Bitte erneut versuchen."), 500);
+    }
+  }
+
   const code = c.req.query("code");
   if (!code) return c.redirect(`${GOOGLE_FRONTEND_URL}/?google_error=no_code`);
   try {
@@ -4014,10 +4531,12 @@ app.get("/api/google/callback", async (c) => {
 
 app.get("/api/google/status", async (c) => {
   const userId = getUserId(c);
-  const tokens = await db.select().from(googleOAuthTokens)
-    .where(or(eq(googleOAuthTokens.userId, userId), isNull(googleOAuthTokens.userId)))
-    .limit(1);
-  if (tokens.length === 0) return c.json({ connected: false });
+  // Own token first; the shared admin token (user_id NULL) only in the web version.
+  const [own] = await db.select().from(googleOAuthTokens).where(eq(googleOAuthTokens.userId, userId)).limit(1);
+  const tokens = own ? [own] : IS_DESKTOP ? [] : await db.select().from(googleOAuthTokens)
+    .where(isNull(googleOAuthTokens.userId)).limit(1);
+  const extra = { configured: !!GOOGLE_CLIENT_ID, scopeMode: IS_DESKTOP ? "drive.file" : "drive", pickerAvailable: !!(GOOGLE_API_KEY && GOOGLE_APP_ID) };
+  if (tokens.length === 0) return c.json({ connected: false, ...extra });
   const token = tokens[0];
   // Connected as long as we have a refresh token (can always renew) OR a non-expired access token
   const hasRefreshToken = !!token.refreshToken;
@@ -4028,8 +4547,10 @@ app.get("/api/google/status", async (c) => {
     // The Sheets API accepts the full `drive` scope for read, write and create —
     // `spreadsheets` is only the narrower, explicit alternative. Checking for the
     // latter alone falsely fails every token issued before it was requested.
-    hasSheetsScope: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-      .some(scope => (token.scope ?? "").split(/\s+/).includes(scope))
+    // drive.file (desktop) covers sheets the app created or the user picked.
+    hasSheetsScope: ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/drive.file"]
+      .some(scope => (token.scope ?? "").split(/\s+/).includes(scope)),
+    ...extra,
   });
 });
 
@@ -4071,8 +4592,9 @@ async function getDriveAccessToken(userId?: string): Promise<string | null> {
       .where(eq(googleOAuthTokens.userId, userId)).limit(1);
     token = userToken;
   }
-  // Fallback to shared token (user_id IS NULL, set by admin)
-  if (!token) {
+  // Fallback to shared token (user_id IS NULL, set by admin) — web only. On the desktop
+  // every profile is a different person; one must never write into another's Drive.
+  if (!token && !IS_DESKTOP) {
     const [shared] = await db.select().from(googleOAuthTokens)
       .where(isNull(googleOAuthTokens.userId)).limit(1);
     token = shared;
@@ -4637,7 +5159,8 @@ app.get("/api/cv/versions/:id", async (c) => {
 type CvCheckStored = { inputs: { layout: LayoutFacts | null; headerText: string | null; llm: LlmJudgement | null; sourceDocumentId: string | null; layoutError?: string; llmError?: string }; result: CvCheckResult };
 type CvCheckJob = {
   id: string; userId: string; lang: CvLanguage; versionId: string;
-  status: "running" | "done" | "error"; step: "pdf" | "llm" | "score"; startedAt: string; finishedAt?: string; error?: string;
+  status: "running" | "done" | "error"; step: "import" | "pdf" | "llm" | "score"; startedAt: string; finishedAt?: string; error?: string;
+  reimported?: boolean;
 };
 const cvCheckJobs = new Map<string, CvCheckJob>();
 
@@ -4665,28 +5188,123 @@ async function loadCvWaivers(userId: string, lang: CvLanguage): Promise<string[]
 
 const asUiLang = (v: unknown): UiLang => (v === "en" || v === "fr" ? v : "de");
 
-async function runCvCheckJob(job: CvCheckJob, ai: AiConfig, uiLang: UiLang) {
+// ─── Re-import before a check ─────────────────────────────────────
+// mode "auto": re-import when the CV document in Documents changed after the newest app
+// version was created (in-app edits made later are kept). "always": every time.
+// "never": check the stored version as is. Bullet ids are random per import, so
+// accepted bullet waivers are carried over to bullets with the same text.
+type CvReimportMode = "auto" | "always" | "never";
+
+const bulletTexts = (cv: unknown): Map<string, string> => {
+  const out = new Map<string, string>();
+  const walk = (n: unknown) => {
+    if (Array.isArray(n)) return n.forEach(walk);
+    if (!n || typeof n !== "object") return;
+    const o = n as Record<string, unknown>;
+    if (typeof o.id === "string" && typeof o.text === "string") out.set(o.id, o.text);
+    Object.values(o).forEach(walk);
+  };
+  walk(cv);
+  return out;
+};
+const normBullet = (s: string) => s.toLowerCase().replace(/ß/g, "ss").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+async function carryOverBulletWaivers(userId: string, lang: CvLanguage, oldData: string, newData: string) {
+  const [p] = await db.select({ w: userProfile.cvCheckWaivers }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  let all: Record<string, string[]> = {};
+  try { all = JSON.parse(p?.w ?? "{}"); } catch { /* corrupt → start empty */ }
+  const keys = Array.isArray(all[lang]) ? all[lang] : [];
+  if (!keys.length) return;
+  const oldB = bulletTexts(JSON.parse(oldData)), newB = bulletTexts(JSON.parse(newData));
+  const byText = new Map<string, string>();
+  for (const [id, text] of newB) if (!byText.has(normBullet(text))) byText.set(normBullet(text), id);
+  const next = new Set(keys);
+  for (const k of keys) {
+    const m = /^(action|specifics):(.+)$/.exec(k);
+    if (!m) continue;
+    const text = oldB.get(m[2]);
+    const newId = text ? byText.get(normBullet(text)) : undefined;
+    if (newId) next.add(`${m[1]}:${newId}`);
+  }
+  all[lang] = [...next].slice(-500);
+  await db.update(userProfile).set({ cvCheckWaivers: JSON.stringify(all) }).where(eq(userProfile.userId, userId));
+}
+
+/** Re-imports the current CV of the job's language if the mode asks for it. Returns an error text or null. */
+async function reimportForCheck(job: CvCheckJob, ai: AiConfig, mode: CvReimportMode): Promise<string | null> {
+  if (mode === "never") return null;
+  const [ver] = await db.select().from(cvVersions).where(and(eq(cvVersions.id, job.versionId), eq(cvVersions.userId, job.userId))).limit(1);
+  if (!ver) return null;
+  const docs = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.userId, job.userId), eq(userDocuments.category, "lebenslauf")))
+    .orderBy(desc(userDocuments.updatedAt));
+  const doc = docs.find(d => detectCvLang(d.name, d.tags) === job.lang);
+  if (!doc) return null;
+  if (mode === "auto") {
+    const driveId = doc.url ? driveFileId(doc.url) : undefined;
+    const token = await getDriveAccessToken(job.userId);
+    if (!driveId || !token) return null;
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?fields=modifiedTime`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+    const modified = r?.ok ? (await r.json() as { modifiedTime?: string }).modifiedTime : undefined;
+    if (!modified || Date.parse(modified) <= ver.createdAt.getTime()) return null;
+  }
+  if (!ai || ai.provider === "none") return "Kein KI-Anbieter konfiguriert";
+  if ([...cvImportJobs.values()].some(j => j.userId === job.userId && j.lang === job.lang && j.status === "running")) return "Für diese Sprache läuft bereits ein Import";
+  job.step = "import";
+  const imp: CvImportJob = { id: crypto.randomUUID(), userId: job.userId, lang: job.lang, documentId: doc.id, documentName: doc.name, status: "running", startedAt: new Date().toISOString() };
+  cvImportJobs.set(imp.id, imp); // the Structure tab shows it like a manual import
+  await runCvImport(imp, doc, ai).catch(err => Object.assign(imp, { status: "error", error: (err as Error).message, finishedAt: new Date().toISOString() }));
+  if (imp.status !== "done" || !imp.versionId) return `Neu-Import fehlgeschlagen: ${imp.error ?? "unbekannter Fehler"}`;
+  const [fresh] = await db.select({ data: cvVersions.data }).from(cvVersions).where(eq(cvVersions.id, imp.versionId)).limit(1);
+  if (fresh) await carryOverBulletWaivers(job.userId, job.lang, ver.data, fresh.data).catch(err => console.error("cv waiver carry-over:", err));
+  job.versionId = imp.versionId;
+  job.reimported = true;
+  return null;
+}
+
+async function runCvCheckJob(job: CvCheckJob, ai: AiConfig, uiLang: UiLang, reimport: CvReimportMode = "never") {
+  const reErr = await reimportForCheck(job, ai, reimport);
+  if (reErr) return Object.assign(job, { status: "error", error: reErr, finishedAt: new Date().toISOString() });
+  job.step = "pdf";
   const [row] = await db.select().from(cvVersions).where(and(eq(cvVersions.id, job.versionId), eq(cvVersions.userId, job.userId))).limit(1);
   if (!row) return Object.assign(job, { status: "error", error: "Version nicht gefunden", finishedAt: new Date().toISOString() });
   const cv = cvDocumentSchema.parse(JSON.parse(row.data));
   const inputs: CvCheckStored["inputs"] = { layout: null, headerText: null, llm: null, sourceDocumentId: row.sourceDocumentId ?? null };
 
-  // 1) PDF layout + Doc header from the source document
-  const [doc] = row.sourceDocumentId
-    ? await db.select().from(userDocuments).where(and(eq(userDocuments.id, row.sourceDocumentId), eq(userDocuments.userId, job.userId))).limit(1)
-    : [];
+  // 1) PDF layout + Doc header from the source document. Candidates: the document the
+  // version was imported from, then the current CV of that language in Documents (the
+  // one the page shows). On the desktop (drive.file) the import source may be a file
+  // the app was never granted — the re-picked current source then still works.
   const token = await getDriveAccessToken(job.userId);
-  const driveId = doc?.url ? driveFileId(doc.url) : undefined;
-  if (doc && driveId && token) {
+  const candidates: UserDocument[] = [];
+  if (row.sourceDocumentId) {
+    const [d] = await db.select().from(userDocuments).where(and(eq(userDocuments.id, row.sourceDocumentId), eq(userDocuments.userId, job.userId))).limit(1);
+    if (d) candidates.push(d);
+  }
+  const cvDocs = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.userId, job.userId), eq(userDocuments.category, "lebenslauf")))
+    .orderBy(desc(userDocuments.updatedAt));
+  const current = cvDocs.find(d => detectCvLang(d.name, d.tags) === job.lang);
+  if (current && !candidates.some(d => d.id === current.id)) candidates.push(current);
+  const readable = candidates.filter(d => d.url && driveFileId(d.url));
+  if (!token) inputs.layoutError = "Google Drive nicht verbunden";
+  else if (!readable.length) inputs.layoutError = "Keine Quelldatei";
+  for (const doc of token ? readable : []) {
+    const driveId = driveFileId(doc.url!)!;
     const isGDoc = doc.fileType === "gdoc" || doc.url!.includes("docs.google.com/document");
     try {
       const url = isGDoc ? `https://www.googleapis.com/drive/v3/files/${driveId}/export?mimeType=application/pdf` : `https://www.googleapis.com/drive/v3/files/${driveId}?alt=media`;
       const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(60_000) });
-      if (!r.ok) throw new Error(`Drive HTTP ${r.status}`);
+      if (!r.ok) throw new Error(r.status === 403 || r.status === 404
+        ? `kein Zugriff auf „${doc.name}“ (Drive HTTP ${r.status}) – Datei im CV-Check oder unter Dokumente neu in Drive auswählen`
+        : `Drive HTTP ${r.status}`);
       inputs.layout = await analyzePdfLayout(new Uint8Array(await r.arrayBuffer()));
-    } catch (err) { inputs.layoutError = (err as Error).message.slice(0, 200); }
-    if (isGDoc) inputs.headerText = await fetchDocHeaderText(driveId, token).catch(() => null);
-  } else inputs.layoutError = !token ? "Google Drive nicht verbunden" : "Keine Quelldatei";
+      inputs.layoutError = undefined;
+      inputs.sourceDocumentId = doc.id;
+      if (isGDoc) inputs.headerText = await fetchDocHeaderText(driveId, token!).catch(() => null);
+      break;
+    } catch (err) { inputs.layoutError ??= (err as Error).message.slice(0, 200); }
+  }
 
   // 2) LLM judgement
   job.step = "llm";
@@ -4710,7 +5328,9 @@ async function runCvCheckJob(job: CvCheckJob, ai: AiConfig, uiLang: UiLang) {
 
 app.post("/api/cv/check", async (c) => {
   const userId = getUserId(c);
-  const { lang, ai, uiLang, versionId } = await c.req.json<{ lang: CvLanguage; ai: AiConfig; uiLang?: string; versionId?: string }>();
+  const { lang, ai, uiLang, versionId, reimport } = await c.req.json<{ lang: CvLanguage; ai: AiConfig; uiLang?: string; versionId?: string; reimport?: CvReimportMode }>();
+  // An explicit version is checked as is; otherwise make sure it is the current CV text.
+  const mode: CvReimportMode = versionId ? "never" : reimport === "always" || reimport === "never" ? reimport : "auto";
   if (!CV_LANGUAGES.includes(lang)) return c.json({ error: "Sprache fehlt" }, 400);
   const running = [...cvCheckJobs.values()].find(j => j.userId === userId && j.lang === lang && j.status === "running");
   if (running) return c.json(running, 202);
@@ -4721,7 +5341,7 @@ app.post("/api/cv/check", async (c) => {
   for (const [id, j] of cvCheckJobs) if (j.status !== "running" && Date.now() - Date.parse(j.startedAt) > 86_400_000) cvCheckJobs.delete(id);
   const job: CvCheckJob = { id: crypto.randomUUID(), userId, lang, versionId: row.id, status: "running", step: "pdf", startedAt: new Date().toISOString() };
   cvCheckJobs.set(job.id, job);
-  void runCvCheckJob(job, ai, asUiLang(uiLang)).catch(err => {
+  void runCvCheckJob(job, ai, asUiLang(uiLang), mode).catch(err => {
     console.error("cv check job crashed:", err);
     Object.assign(job, { status: "error", error: "Interner Fehler bei der Prüfung", finishedAt: new Date().toISOString() });
   });
@@ -5803,7 +6423,7 @@ app.post("/api/drive/templates/create", async (c) => {
         { text: "Meine Rückfragen an das Unternehmen", heading: "HEADING_2" },
         { text: "{{RUECKFRAGEN}}" },
         { text: "" },
-        { text: `Erstellt mit Application Pal · ${date}`, gray: true, italic: true },
+        { text: `Erstellt mit ${APP_NAME} · ${date}`, gray: true, italic: true },
       ]
     },
     "cv": {
@@ -5981,11 +6601,37 @@ app.post("/api/drive/templates/create", async (c) => {
   }
 });
 
-app.get("/api/drive/templates", async (c) => {
-  const masterFolderId = env.GOOGLE_MASTER_FOLDER_ID;
-  if (!masterFolderId) return c.json({ error: "GOOGLE_MASTER_FOLDER_ID nicht konfiguriert" }, 400);
+app.post("/api/drive/templates/import", async (c) => {
+  // A file the user picked in the Google Picker becomes a template: copied into the
+  // user's own "Pal-Templates" folder, so the copy stays reachable with drive.file
+  // (the Picker grant covers the original, a copy belongs to the app).
+  const { fileId } = await c.req.json<{ fileId?: string }>();
+  if (!fileId || !/^[\w-]+$/.test(fileId)) return c.json({ error: "Datei fehlt" }, 400);
   const accessToken = await getDriveAccessToken(getUserId(c));
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const auth = { Authorization: `Bearer ${accessToken}` };
+  const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=name,mimeType`, { headers: auth });
+  if (!metaRes.ok) return c.json({ error: "Datei nicht gefunden oder kein Zugriff" }, 404);
+  const meta = await metaRes.json() as { name: string; mimeType: string };
+  if (!TEMPLATE_MIME_ALLOWLIST.has(meta.mimeType)) return c.json({ error: "Dieser Dateityp eignet sich nicht als Vorlage" }, 400);
+  const folderId = await findOrCreateDriveFolder(accessToken, "Pal-Templates", env.GOOGLE_MASTER_FOLDER_ID || undefined);
+  const copyRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/copy?fields=id,name,mimeType,webViewLink`, {
+    method: "POST",
+    headers: { ...auth, "Content-Type": "application/json" },
+    body: JSON.stringify({ name: meta.name, parents: [folderId] }),
+  });
+  if (!copyRes.ok) return c.json({ error: "Kopieren fehlgeschlagen" }, 502);
+  return c.json(await copyRes.json());
+});
+
+app.get("/api/drive/templates", async (c) => {
+  const accessToken = await getDriveAccessToken(getUserId(c));
+  if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  // Without a configured master folder (always on the desktop) templates live in the
+  // user's own "Pal-Templates" folder, which "Neu erstellen" and the import fill.
+  const masterFolderId = env.GOOGLE_MASTER_FOLDER_ID
+    || await findOrCreateDriveFolder(accessToken, "Pal-Templates").catch(() => "");
+  if (!masterFolderId) return c.json([]);
 
   const allFiles = await listDriveFiles(accessToken, masterFolderId);
   const docFiles = allFiles.filter(f => TEMPLATE_MIME_ALLOWLIST.has(f.mimeType));
@@ -6145,7 +6791,7 @@ async function buildExportPayload(userId: string) {
     applicationDocuments: docs,
     applicationActivities: activities,
     applicationContacts: contacts,
-    userProfile: profiles[0] ?? null,
+    userProfile: profiles[0] ? publicProfile(profiles[0]) : null,   // API keys never leave the install
     userDocuments: userDocs,
     cvVersions: cvRows,
     linkedinVersions: liRows,
@@ -6748,6 +7394,9 @@ app.post("/api/import", async (c) => {
     return c.json({ error: "Ungültige Export-Datei" }, 400);
   }
 
+  // API keys are not part of exports; keep the ones stored for this user across a replace.
+  const [keptSecrets] = await db.select({ s: userProfile.aiSecrets }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+
   if (mode === "replace") {
     // Delete only this user's data in FK-safe order
     const userAppIds = (await db.select({ id: applications.id }).from(applications).where(eq(applications.userId, userId))).map(a => a.id);
@@ -6781,6 +7430,46 @@ app.post("/api/import", async (c) => {
     rows?.forEach((r, i) => { rows[i] = revive(table, r); });
   }
   if (data.userProfile) data.userProfile = revive(userProfile, data.userProfile);
+  if (data.userProfile) delete (data.userProfile as Record<string, unknown>).aiSecrets;
+
+  // The upserts below key on the row id. If an id already belongs to ANOTHER user — the same
+  // file imported into a second desktop profile on one machine, or into a second web account —
+  // the upsert would move that row over and the original owner would lose it. Such rows (and
+  // the children of a re-keyed application) get fresh ids; references follow the mapping.
+  // Re-importing into the own account still updates in place.
+  const idMap = new Map<string, string>();
+  const idsOf = (rows?: Record<string, unknown>[]) => (rows ?? []).map(r => String(r.id ?? "")).filter(Boolean);
+  // Derived, not random: importing the same file into the same profile again maps to the same
+  // new ids, so a merge updates instead of duplicating.
+  const derivedId = (old: string) => {
+    const h = crypto.createHash("sha256").update(`${userId}:${old}`).digest("hex");
+    return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+  };
+  const claim = async (q: Promise<{ id: string }[]>) => { for (const { id } of await q) idMap.set(id, derivedId(id)); };
+  const foreign = <T extends typeof applications | typeof userDocuments | typeof cvVersions | typeof linkedinVersions>(t: T, rows?: Record<string, unknown>[]) => {
+    const ids = idsOf(rows);
+    const tt = t as unknown as typeof applications;   // all four have id + userId
+    return ids.length ? db.select({ id: tt.id }).from(tt).where(and(inArray(tt.id, ids), ne(tt.userId, userId))) : Promise.resolve([]);
+  };
+  await claim(foreign(applications, data.applications));
+  await claim(foreign(userDocuments, data.userDocuments));
+  await claim(foreign(cvVersions, data.cvVersions));
+  await claim(foreign(linkedinVersions, data.linkedinVersions));
+  for (const rows of [data.applicationDocuments, data.applicationActivities, data.applicationContacts]) {
+    for (const r of rows ?? []) if (idMap.has(String(r.applicationId)) && r.id) idMap.set(String(r.id), derivedId(String(r.id)));
+  }
+  if (idMap.size) {
+    const remap = (rows: Record<string, unknown>[] | undefined, keys: string[]) => rows?.forEach(r => {
+      for (const k of keys) if (typeof r[k] === "string" && idMap.has(r[k] as string)) r[k] = idMap.get(r[k] as string);
+    });
+    remap(data.applications, ["id"]);
+    remap(data.applicationDocuments, ["id", "applicationId", "userDocumentId"]);
+    remap(data.applicationActivities, ["id", "applicationId"]);
+    remap(data.applicationContacts, ["id", "applicationId"]);
+    remap(data.userDocuments, ["id"]);
+    remap(data.cvVersions, ["id", "parentId", "sourceDocumentId", "applicationId"]);
+    remap(data.linkedinVersions, ["id", "parentId"]);
+  }
 
   // Insert all records — add userId, skip duplicates on conflict (for merge mode)
   if (data.applications?.length) {
@@ -6821,19 +7510,29 @@ app.post("/api/import", async (c) => {
   }
   if (data.cvVersions?.length) {
     for (const row of data.cvVersions) {
-      const r = Object.assign({}, row, { userId, createdAt: row.createdAt ? new Date(String(row.createdAt)) : undefined }) as never;
+      // createdAt is already a Date (revive above); String(Date) would drop the milliseconds.
+      const r = Object.assign({}, row, { userId }) as never;
       await db.insert(cvVersions).values(r).onConflictDoUpdate({ target: cvVersions.id, set: r });
     }
   }
   if (data.linkedinVersions?.length) {
     for (const row of data.linkedinVersions) {
-      const r = Object.assign({}, row, { userId, createdAt: row.createdAt ? new Date(String(row.createdAt)) : undefined }) as never;
+      const r = Object.assign({}, row, { userId }) as never;
       await db.insert(linkedinVersions).values(r).onConflictDoUpdate({ target: linkedinVersions.id, set: r });
     }
   }
   if (data.userProfile) {
-    const rp = Object.assign({}, data.userProfile, { userId }) as never;
-    await db.insert(userProfile).values(rp).onConflictDoUpdate({ target: userProfile.id, set: rp });
+    // One profile row per user: key on userId, never take over the exported row id (it may
+    // be another profile's row on this machine).
+    const { id: _exportedId, ...prof } = data.userProfile;
+    // (user_profile.user_id has no unique index → no ON CONFLICT; update-or-insert instead.)
+    const rp = Object.assign({}, prof, { userId }) as never;
+    const [own] = await db.select({ id: userProfile.id }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+    if (own) await db.update(userProfile).set(rp).where(eq(userProfile.id, own.id));
+    else await db.insert(userProfile).values(rp);
+  }
+  if (keptSecrets?.s) {
+    await db.update(userProfile).set({ aiSecrets: keptSecrets.s }).where(eq(userProfile.userId, userId));
   }
 
   return c.json({ ok: true, mode, imported: {
@@ -6848,16 +7547,61 @@ app.post("/api/import", async (c) => {
   }});
 });
 
+// Desktop-Spike (M0): ohne nginx liefert der Sidecar das gebaute Frontend selbst aus
+// (gleiche Origin wie /api → Cookies funktionieren ohne CORS). Nur aktiv mit STATIC_DIR.
+if (env.STATIC_DIR) {
+  const staticRoot = path.resolve(env.STATIC_DIR);
+  const MIME: Record<string, string> = {
+    ".html": "text/html; charset=utf-8", ".js": "application/javascript", ".mjs": "application/javascript",
+    ".css": "text/css", ".json": "application/json", ".svg": "image/svg+xml", ".png": "image/png",
+    ".jpg": "image/jpeg", ".ico": "image/x-icon", ".woff2": "font/woff2", ".woff": "font/woff",
+    ".wasm": "application/wasm", ".map": "application/json", ".txt": "text/plain",
+  };
+  app.get("*", async (c, next) => {
+    const p = c.req.path;
+    if (p.startsWith("/api/") || p === "/health") return next();
+    const rel = path.normalize(decodeURIComponent(p)).replace(/^(\.\.[/\\])+/, "");
+    let file = path.join(staticRoot, rel);
+    if (!file.startsWith(staticRoot)) return c.notFound();
+    let body = await readFile(file).catch(() => null);
+    if (!body) { file = path.join(staticRoot, "index.html"); body = await readFile(file).catch(() => null); }
+    if (!body) return c.notFound();
+    const type = MIME[path.extname(file).toLowerCase()] ?? "application/octet-stream";
+    return c.body(new Uint8Array(body), 200, { "content-type": type });
+  });
+}
+
 void ensureKbTree()
   .then(regenerateKbIndex)
   .catch((error) => console.warn("Knowledge base bootstrap failed:", error));
+
+// Desktop sidecar: the Tauri shell holds our stdin open. When the shell exits — or
+// crashes — the pipe closes and we shut down cleanly, so PGlite is flushed and no
+// orphaned backend keeps the database locked.
+if (process.env.DESKTOP_PARENT_PIPE === "1") {
+  let stopping = false;
+  const stop = async (why: string) => {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[desktop] ${why} — shutting down`);
+    const force = setTimeout(() => process.exit(0), 5000);
+    try { await closeDb(); } catch (e) { console.warn("[desktop] closeDb failed", e); }
+    clearTimeout(force);
+    process.exit(0);
+  };
+  process.stdin.on("end", () => void stop("parent pipe closed"));
+  process.stdin.on("close", () => void stop("parent pipe closed"));
+  process.stdin.resume();
+  process.on("SIGTERM", () => void stop("SIGTERM"));
+  process.on("SIGINT", () => void stop("SIGINT"));
+}
 
 serve(
   {
     fetch: app.fetch,
     port: env.PORT,
     // In Docker muss der Server auf allen Interfaces lauschen (Nginx im Compose-Netz).
-    hostname: "0.0.0.0"
+    hostname: env.HOST
   },
   (info) => {
     console.log(`backend listening on http://localhost:${info.port}`);

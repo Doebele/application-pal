@@ -134,6 +134,8 @@ export const userProfile = pgTable("user_profile", {
   persona: text("persona"),                                        // 'schulabgaenger' | 'berufseinsteiger' | 'berufsumsteiger'
   sessionTimeout: text("session_timeout").default("15m"),
   uiLanguage: text("ui_language").default("de"),    // "de" | "en" — UI display language
+  uiSettings: text("ui_settings"),                  // JSON UiSettings — per-user UI + AI-provider settings (no secrets), synced from the client store
+  aiSecrets: text("ai_secrets"),                    // AES-256-GCM blob of { <AI_SECRET_PROVIDERS>?: key } API keys — never exported, never sent to the client
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow()
@@ -195,6 +197,8 @@ export const users = pgTable("users", {
   id: uuid("id").defaultRandom().primaryKey(),
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash"),
+  displayName: text("display_name"),               // desktop profile name (falls back to email)
+  authMode: text("auth_mode").notNull().default("password"), // "password" | "pin" | "none" — pin/none only in APP_MODE=desktop
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow()
 });
 
@@ -335,8 +339,33 @@ export const userDocumentInsertSchema = createInsertSchema(userDocuments, {
 export const userDocumentPatchSchema = userDocumentInsertSchema.partial();
 export type UserDocument = z.infer<typeof userDocumentSelectSchema>;
 
+// Cloud providers that speak the OpenAI chat-completions protocol. One table drives the
+// backend call, the model list, the settings page and the setup wizard. `baseUrl` already
+// contains the version path (chat = `${baseUrl}/chat/completions`, models = `${baseUrl}/models`).
+// `defaultModel` is only a fallback — the UI loads the provider's live model list.
+export const COMPAT_PROVIDER_IDS = ["xai", "meta", "kimi", "kimiCn", "moonshot", "deepseek", "zai", "zaiCoding", "mimo", "mistral"] as const;
+export type CompatProviderId = typeof COMPAT_PROVIDER_IDS[number];
+/** Providers with an own stored key; `zaiCoding` reuses the `zai` key (same z.ai account, other billing). */
+export const COMPAT_KEY_IDS = ["xai", "meta", "kimi", "kimiCn", "moonshot", "deepseek", "zai", "mimo", "mistral"] as const;
+export type CompatKeyId = typeof COMPAT_KEY_IDS[number];
+export const COMPAT_PROVIDERS: Record<CompatProviderId, { label: string; baseUrl: string; defaultModel: string; keyUrl: string; placeholder: string; keyOf: CompatKeyId; note?: "usOnly" | "codingPlan" | "china" }> = {
+  xai:       { label: "Grok (xAI)",              baseUrl: "https://api.x.ai/v1",                 defaultModel: "grok-4",                keyUrl: "https://console.x.ai",                          placeholder: "xai-…", keyOf: "xai" },
+  meta:      { label: "Muse (Meta)",             baseUrl: "https://api.meta.ai/v1",              defaultModel: "muse-spark-1.1",        keyUrl: "https://dev.meta.ai",                           placeholder: "…",     keyOf: "meta", note: "usOnly" },
+  // Kimi Code = subscription; key and address differ per region and do not work with the Open Platform.
+  kimi:      { label: "Kimi Code",               baseUrl: "https://api.kimi.ai/coding/v1",       defaultModel: "kimi-for-coding",       keyUrl: "https://www.kimi.ai/code/console",              placeholder: "sk-…",  keyOf: "kimi", note: "codingPlan" },
+  kimiCn:    { label: "Kimi Code (China)",       baseUrl: "https://api.kimi.com/coding/v1",      defaultModel: "kimi-for-coding",       keyUrl: "https://www.kimi.com/code/console",             placeholder: "sk-…",  keyOf: "kimiCn", note: "china" },
+  moonshot:  { label: "Kimi (Open Platform)",    baseUrl: "https://api.moonshot.ai/v1",          defaultModel: "kimi-latest",           keyUrl: "https://platform.moonshot.ai/console/api-keys", placeholder: "sk-…",  keyOf: "moonshot" },
+  deepseek:  { label: "DeepSeek",                baseUrl: "https://api.deepseek.com/v1",         defaultModel: "deepseek-chat",         keyUrl: "https://platform.deepseek.com/api_keys",        placeholder: "sk-…",  keyOf: "deepseek" },
+  zai:       { label: "GLM (Z.ai)",              baseUrl: "https://api.z.ai/api/paas/v4",        defaultModel: "glm-4.5v",              keyUrl: "https://z.ai/manage-apikey/apikey-list",        placeholder: "…",     keyOf: "zai" },
+  // Same z.ai account, subscription billing: only counts via this address (the general one answers 1113, no credit).
+  zaiCoding: { label: "GLM Coding Plan (Z.ai)",  baseUrl: "https://api.z.ai/api/coding/paas/v4", defaultModel: "glm-5.3-flash",         keyUrl: "https://z.ai/manage-apikey/apikey-list",        placeholder: "…",     keyOf: "zai", note: "codingPlan" },
+  mimo:      { label: "MiMo (Xiaomi)",           baseUrl: "https://api.xiaomimimo.com/v1",       defaultModel: "mimo-v2.5",             keyUrl: "https://platform.xiaomimimo.com",               placeholder: "sk-…",  keyOf: "mimo" },
+  mistral:   { label: "Mistral",                 baseUrl: "https://api.mistral.ai/v1",           defaultModel: "mistral-medium-latest", keyUrl: "https://console.mistral.ai/api-keys",           placeholder: "…",     keyOf: "mistral" },
+};
+export const isCompatProvider = (p: string): p is CompatProviderId => (COMPAT_PROVIDER_IDS as readonly string[]).includes(p);
+
 export const aiConfigSchema = z.object({
-  provider: z.enum(["none", "lm-studio", "anthropic", "openai", "gemini", "openrouter", "ollama"]).default("none"),
+  provider: z.enum(["none", "lm-studio", "anthropic", "openai", "gemini", "openrouter", "ollama", ...COMPAT_PROVIDER_IDS]).default("none"),
   // LM Studio
   lmStudioUrl: z.string().optional(),
   lmStudioModel: z.string().optional(),
@@ -354,6 +383,17 @@ export const aiConfigSchema = z.object({
   // Ollama
   ollamaUrl: z.string().optional(),
   ollamaModel: z.string().optional(),
+  // OpenAI-compatible cloud providers (COMPAT_PROVIDERS): key per provider, model per provider id
+  xaiApiKey: z.string().optional(),
+  metaApiKey: z.string().optional(),
+  kimiApiKey: z.string().optional(),
+  kimiCnApiKey: z.string().optional(),
+  moonshotApiKey: z.string().optional(),
+  deepseekApiKey: z.string().optional(),
+  zaiApiKey: z.string().optional(),
+  mimoApiKey: z.string().optional(),
+  mistralApiKey: z.string().optional(),
+  cloudModels: z.record(z.string(), z.string()).optional(),
 });
 
 export const kbIngestUrlRequestSchema = z.object({
@@ -372,6 +412,29 @@ export const applicationImportRequestSchema = z
   });
 
 export type AiConfig = z.infer<typeof aiConfigSchema>;
+
+// API keys that are stored server-side (encrypted, user_profile.ai_secrets) instead of in the browser.
+export const AI_SECRET_PROVIDERS = ["anthropic", "openai", "gemini", "openrouter", ...COMPAT_KEY_IDS] as const;
+export type AiSecretProvider = typeof AI_SECRET_PROVIDERS[number];
+export const AI_SECRET_FIELDS = {
+  anthropic: "anthropicApiKey", openai: "openaiApiKey", gemini: "geminiApiKey", openrouter: "openrouterApiKey",
+  xai: "xaiApiKey", meta: "metaApiKey", kimi: "kimiApiKey", kimiCn: "kimiCnApiKey", moonshot: "moonshotApiKey", deepseek: "deepseekApiKey",
+  zai: "zaiApiKey", mimo: "mimoApiKey", mistral: "mistralApiKey",
+} as const satisfies Record<AiSecretProvider, `${AiSecretProvider}ApiKey`>;
+
+/** GET /api/settings */
+export interface UserSettingsResponse {
+  /** Per-user UI settings (JSON from user_profile.ui_settings); null = never saved → client uploads its local state. */
+  settings: Record<string, unknown> | null;
+  /** Which API keys are stored server-side (values never leave the server). */
+  secrets: Record<AiSecretProvider, boolean>;
+  /** false = no encryption key configured (web without SECRETS_KEY/JWT_SECRET) → keys stay in the browser. */
+  secretsAvailable: boolean;
+}
+
+export type AuthMode = "password" | "pin" | "none";
+/** GET /api/auth/profiles (desktop only) */
+export interface DesktopProfile { id: string; name: string; authMode: AuthMode }
 
 export const applicationImportResponseSchema = z.object({
   company: z.string().nullable(),

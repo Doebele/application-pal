@@ -1,5 +1,5 @@
 // CV-Check: "Bewertung" and "Verbesserungen" sidebar tabs + the data hook behind them.
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Play, RefreshCircle } from "iconoir-react";
 import type { CvLanguage } from "@application-pal/shared";
@@ -11,14 +11,14 @@ import {
 import type { CheckResult } from "../components/check/types";
 import type { PdfHighlight } from "../components/check/PdfViewer";
 
-type CheckJob = { id: string; lang: CvLanguage; status: "running" | "done" | "error"; step: "pdf" | "llm" | "score"; startedAt: string; finishedAt?: string; error?: string };
+type CheckJob = { id: string; lang: CvLanguage; status: "running" | "done" | "error"; step: "import" | "pdf" | "llm" | "score"; startedAt: string; finishedAt?: string; error?: string; reimported?: boolean };
 type CheckResponse = { result: CheckResult | null; versionId: string | null; stale: boolean; inputErrors?: { layout: string | null; llm: string | null } };
 
 const errMsg = (e: unknown, fallback: string) =>
   (e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? fallback;
 
 /** Latest check for one language, the running job (polled) and waiver toggling. */
-export function useCvCheck(lang: CvLanguage) {
+export function useCvCheck(lang: CvLanguage, versionId?: string | null, onReimported?: () => void) {
   const { i18n, t } = useTranslation();
   const { ai } = useUiStore();
   const uiLang = (["de", "en", "fr"].includes(i18n.language) ? i18n.language : "de");
@@ -38,7 +38,9 @@ export function useCvCheck(lang: CvLanguage) {
     setJob(j);
     return j;
   }, [lang]);
-  useEffect(() => { setData(null); load(); loadJob(); }, [load, loadJob]);
+  // versionId: a finished (re-)import creates a new version — reload its check data,
+  // otherwise score and PDF highlights keep describing the old text.
+  useEffect(() => { setData(null); load(); loadJob(); }, [load, loadJob, versionId]);
 
   const running = job?.status === "running";
   useEffect(() => {
@@ -46,15 +48,21 @@ export function useCvCheck(lang: CvLanguage) {
     const iv = setInterval(async () => {
       setNow(Date.now());
       const j = await loadJob();
-      if (j?.status !== "running") load();
+      if (j?.status !== "running") { load(); if (j?.reimported) onReimportedRef.current?.(); }
     }, 3000);
     return () => clearInterval(iv);
   }, [running, loadJob, load]);
 
+  // Re-import before the check: "auto" (server default) re-imports when the CV in
+  // Documents changed after the app version; "always" forces it.
+  const [forceReimport, setForceReimport] = useState(false);
+  const onReimportedRef = useRef(onReimported);
+  onReimportedRef.current = onReimported;
+
   const run = async () => {
     setError(null);
     try {
-      const r = await api.post<CheckJob>("/api/cv/check", { lang, ai, uiLang });
+      const r = await api.post<CheckJob>("/api/cv/check", { lang, ai, uiLang, reimport: forceReimport ? "always" : "auto" });
       setJob(r.data); setNow(Date.now());
     } catch (e) { setError(errMsg(e, t("cvCheck.importError"))); }
   };
@@ -66,7 +74,7 @@ export function useCvCheck(lang: CvLanguage) {
     finally { setBusyKey(null); }
   };
 
-  return { data, job, running, error, busyKey, now, run, toggleWaiver, aiReady: ai.provider !== "none" };
+  return { data, job, running, error, busyKey, now, run, toggleWaiver, forceReimport, setForceReimport, aiReady: ai.provider !== "none" };
 }
 export type CvCheckState = ReturnType<typeof useCvCheck>;
 
@@ -84,6 +92,13 @@ function RunBar({ s, hasVersion, fmt }: { s: CvCheckState; hasVersion: boolean; 
         {s.running && s.job && <span className="chk-muted">{t(`cvCheck.check.step.${s.job.step}`)} · {Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")}</span>}
         {!s.running && res && <span className="chk-muted">{t("cvCheck.check.checkedAt", { date: fmt(res.checkedAt) })}</span>}
       </div>
+      {hasVersion && !s.running && (
+        <label className="chk-muted" style={{ display: "flex", alignItems: "flex-start", gap: 6, cursor: "pointer", lineHeight: 1.45 }}>
+          <input type="checkbox" checked={s.forceReimport} onChange={e => s.setForceReimport(e.target.checked)} style={{ marginTop: 2 }} />
+          <span>{t("cvCheck.check.forceReimport")}<br /><span style={{ fontSize: 11 }}>{t("cvCheck.check.autoReimportHint")}</span></span>
+        </label>
+      )}
+      {!s.running && s.job?.status === "done" && s.job.reimported && <div className="chk-note" data-tone="info">{t("cvCheck.check.reimported")}</div>}
       {!hasVersion && <div className="chk-note" data-tone="info">{t("cvCheck.check.needImport")}</div>}
       {s.running && <div className="chk-note" data-tone="info">{t("cvCheck.check.slowHint")}</div>}
       {s.error && <div className="chk-note" data-tone="error">{s.error}</div>}

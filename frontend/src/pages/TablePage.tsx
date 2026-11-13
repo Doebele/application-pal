@@ -119,7 +119,7 @@ function RunAiButton({ appId, endpoint, hasValue }: {
     setRunning(true);
     try {
       await api.post(`/api/applications/${appId}${endpoint}`, {
-        ai: { provider: ai.provider, anthropicApiKey: ai.anthropicApiKey, lmStudioUrl: ai.lmStudioUrl, lmStudioModel: ai.lmStudioModel },
+        ai: { ...ai },
       });
       queryClient.invalidateQueries({ queryKey: ["applications"] });
     } catch { /* silent */ }

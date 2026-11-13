@@ -610,7 +610,26 @@
     "folderColorsSync": "Update folder colors",
     "folderColorsSyncing": "Updating…",
     "folderColorsResult": "{{updated}} folders colored, {{failed}} failed",
-    "folderColorsError": "Failed to update folder colors"
+    "folderColorsError": "Failed to update folder colors",
+    "keyStored": "Stored (encrypted)",
+    "keyStoredHint": "The key is stored encrypted for this profile. Enter a new key to replace it.",
+    "keyRemove": "Remove",
+    "keySaveFailed": "Could not save the key",
+    "googleWaiting": "Waiting for browser …",
+    "googleBrowserHint": "Google sign-in opened in your browser. Once you allow access, the app connects automatically.",
+    "googleTimeout": "No answer from Google. Please connect again.",
+    "googleConnectFailed": "Could not start the Google connection.",
+    "exportSavedDownloads": "Saved to your Downloads folder: {{file}}",
+    "compatKey": "{{name}}: API key",
+    "compatSharedKey": "same key as {{name}}",
+    "compatModelSub": "List comes straight from the provider",
+    "compatModelsLoad": "Load models",
+    "compatModelsFailed": "Could not load models",
+    "compatNote": {
+      "usOnly": "currently for developers in the US only",
+      "codingPlan": "needs the provider's coding subscription",
+      "china": "access for mainland-China accounts"
+    }
   },
   "templates": {
     "title": "Templates",
@@ -1013,7 +1032,8 @@
       "step": {
         "pdf": "Reading PDF layout",
         "llm": "AI judges bullets and competencies",
-        "score": "Calculating points"
+        "score": "Calculating points",
+        "import": "Re-importing CV"
       },
       "checkedAt": "Checked on {{date}}",
       "notChecked": "This CV has not been checked yet.",
@@ -1055,8 +1075,15 @@
       "languageIssues": "Language",
       "competencyEvidence": "Evidence for competencies",
       "noEvidence": "No evidence found",
-      "placeholderHint": "[X] = number missing — fill it in yourself, never invent."
-    }
+      "placeholderHint": "[X] = number missing — fill it in yourself, never invent.",
+      "forceReimport": "Re-import first",
+      "autoReimportHint": "Otherwise only when the CV in Documents changed since the last import.",
+      "reimported": "The current CV was re-imported before the check."
+    },
+    "unreachableHint": "“{{name}}” is linked, but the app can't access it yet. Pick the file once in Google Drive — after that it can be read.",
+    "repick": "Choose file in Drive …",
+    "sourceNewer": "The CV was changed on {{source}}, the app version is from {{app}}. The next check re-imports it automatically — or re-import now.",
+    "sourceNewerRunning": "Re-import running — afterwards run the check again so score and highlights match the current text."
   },
   "check": {
     "status": {
@@ -1113,7 +1140,7 @@
     "connected": "Connected to LinkedIn",
     "expired": "Connection expired",
     "notConnected": "Not connected",
-    "intro": "Connect your LinkedIn profile so Application-Pal always knows its current state.",
+    "intro": "Connect your LinkedIn profile so {{app}} always knows its current state.",
     "expiredHint": "LinkedIn access lasts 60 days. Please reconnect.",
     "validUntil": "valid until {{date}} ({{days}} days left)",
     "viaOauth": "via your LinkedIn app",
@@ -1155,7 +1182,7 @@
     "disconnectKeepApp": "Disconnect, keep app details",
     "disconnectForget": "Disconnect and delete app details",
     "cancel": "Cancel",
-    "privacy": "Read-only: Application-Pal never changes or posts anything on LinkedIn. The access stays in your database and is never exported. Only for members located in the EU/EEA or Switzerland.",
+    "privacy": "Read-only: {{app}} never changes or posts anything on LinkedIn. The access stays in your database and is never exported. Only for members located in the EU/EEA or Switzerland.",
     "stats": {
       "positions": "{{n}} positions ({{withText}} with description)",
       "skills": "{{n}} skills",
@@ -1356,7 +1383,7 @@
       "notRatedShort": "n/r",
       "ptsTitle": "Earned / ratable (full: {{full}})"
     },
-    "emptyBuild": "No LinkedIn profile yet? Application-Pal builds it with you – from your CV, documents and a few questions.",
+    "emptyBuild": "No LinkedIn profile yet? {{app}} builds it with you – from your CV, documents and a few questions.",
     "emptyBuildGo": "Build profile",
     "lang": {
       "de": "German",
@@ -1522,7 +1549,7 @@
         "media": "Media"
       },
       "recRequests": "Ask for recommendations",
-      "recHint": "Templates to adapt – Application-Pal sends nothing. Replace [Name] and [Projekt] yourself.",
+      "recHint": "Templates to adapt – {{app}} sends nothing. Replace [Name] and [Projekt] yourself.",
       "pillars": "Topic pillars for posts",
       "groups": "Finding groups",
       "groupsHint": "No group names – use these criteria and search terms to find fitting groups yourself.",
@@ -1573,7 +1600,7 @@
     "checklist": {
       "title": "What's left to do",
       "progress": "{{done}} of {{total}} done",
-      "hint": "Application-Pal never changes anything on LinkedIn – you transfer every item yourself. Whatever a new import can prove ticks itself afterwards.",
+      "hint": "{{app}} never changes anything on LinkedIn – you transfer every item yourself. Whatever a new import can prove ticks itself afterwards.",
       "reimport": "Re-import profile",
       "hideDone": "Hide done",
       "noDraft": "No draft in this language yet – create one in the AI tools and the transfer steps appear here.",
@@ -1678,5 +1705,117 @@
         "connections": "Connections"
       }
     }
+  },
+  "profiles": {
+    "whoIsThere": "Who's there?",
+    "createTitle": "New profile",
+    "add": "New profile",
+    "back": "Back",
+    "unlock": "Open",
+    "loginFailed": "Sign-in failed",
+    "createFailed": "Could not create the profile",
+    "name": "Name",
+    "namePlaceholder": "e.g. Lea",
+    "nameSub": "How the profile appears in the picker at start.",
+    "nameMissing": "Please enter a name",
+    "nameSaved": "Name saved",
+    "protection": "Protection",
+    "pin": "PIN",
+    "password": "Password",
+    "repeat": "Repeat",
+    "email": "E-mail",
+    "optional": "(optional)",
+    "pinRule": "4–8 digits",
+    "passwordRule": "At least 8 characters",
+    "mismatch": "The entries don't match",
+    "create": "Create profile",
+    "mode": {
+      "none": "No protection",
+      "pin": "PIN",
+      "password": "Password"
+    },
+    "modeHint": {
+      "none": "Anyone using this Mac can open the profile.",
+      "pin": "A short number keeps curious siblings out.",
+      "password": "Stronger protection, recommended for sensitive documents."
+    },
+    "sectionTitle": "Profile & protection",
+    "current": "Current PIN or password",
+    "newPin": "New PIN",
+    "newPassword": "New password",
+    "saveProtection": "Save protection",
+    "protectionSaved": "Protection saved",
+    "saveFailed": "Saving failed"
+  },
+  "picker": {
+    "choose": "Choose in Drive …",
+    "chooseFolder": "Choose folder in Drive …",
+    "chooseSheet": "Choose sheet in Drive …",
+    "importTemplate": "Import template from Google Drive …",
+    "templateImported": "“{{name}}” imported as template",
+    "driveFileHint": "The desktop app only sees files it created itself or that you choose in Drive here. Pasted links to other files do not work.",
+    "waitingBrowser": "Choosing in browser …",
+    "browserHint": "Make your choice in Google Drive in your browser.",
+    "cancel": "Cancel"
+  },
+  "wizard": {
+    "welcomeTitle": "Welcome to {{app}}",
+    "welcomeText": "A few short steps and the app is ready. You can change everything later in Settings. Where are you right now?",
+    "aiTitle": "Artificial intelligence",
+    "aiText": "The AI writes cover letters, checks CVs and prepares interviews. You can use a model on this computer (private, free) or a cloud service (faster, paid).",
+    "aiLocal": "On this computer",
+    "aiCloud": "Cloud service",
+    "aiFound": "found · {{count}} models",
+    "aiNotFound": "not found",
+    "aiLocalMissing": "No local model found. Install one of these free apps:",
+    "aiRetry": "search again",
+    "aiSaveKey": "Save",
+    "aiGetKey": "Create a key ↗",
+    "aiTest": "Test connection",
+    "aiTesting": "Testing … (local models take longer the first time)",
+    "aiTestOk": "Answered after {{s}} s",
+    "aiTestFail": "No answer",
+    "aiPrivacy": "The key is stored encrypted on this computer only. With a cloud service your texts go to that provider.",
+    "googleTitle": "Google Drive & Calendar",
+    "googleText": "Optional. With Google the app can:",
+    "googleUse1": "create a folder per application and save cover letters as Google Docs",
+    "googleUse2": "show interviews from your calendar",
+    "googleUse3": "keep the RAV proof as a Google Sheet",
+    "googleUnavailable": "Google is not set up in this app version yet. You can skip this step.",
+    "googlePrivacy": "The app only sees Drive files it creates itself or that you choose.",
+    "liTitle": "LinkedIn",
+    "liText": "The LinkedIn check rates your profile and suggests better texts. Upload your profile once: as a PDF (“More → Save to PDF”) or as LinkedIn’s data export.",
+    "liTextBuild": "No LinkedIn profile yet? No problem: the LinkedIn check helps you build one step by step.",
+    "liOpen": "Open the LinkedIn check after setup",
+    "liHint": "{{app}} never posts to LinkedIn – you copy suggestions by hand.",
+    "doneTitle": "All set",
+    "sumNoPersona": "No starting point chosen",
+    "sumAi": "AI connected",
+    "sumNoAi": "AI not set up yet",
+    "sumGoogle": "Google connected",
+    "sumNoGoogle": "Google not connected",
+    "doneHint": "Anything left open is in Settings.",
+    "back": "Back",
+    "next": "Next",
+    "skip": "Skip",
+    "skipAll": "Set up later",
+    "start": "Let’s go",
+    "reopenLabel": "Setup wizard",
+    "reopenSub": "Set up starting point, AI and Google again step by step.",
+    "reopen": "Open wizard",
+    "aiLocalLmStudio": "open the app, download a model (e.g. Qwen) and start the server under “Developer”.",
+    "aiLocalOllama": "open the app and pull a model, e.g. “ollama pull qwen3” in the Terminal.",
+    "aiLocalThen": "Then here:"
+  },
+  "appUpdate": {
+    "label": "App version",
+    "sub": "Updates for the desktop app",
+    "installed": "Installed: version {{version}}",
+    "check": "Check for updates",
+    "checking": "Checking…",
+    "upToDate": "You have the latest version.",
+    "available": "Version {{version}} is available – see the dialog.",
+    "busy": "A check is already running.",
+    "failed": "Check failed: {{error}}"
   }
 }

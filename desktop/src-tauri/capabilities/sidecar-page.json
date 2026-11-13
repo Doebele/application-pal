@@ -1,0 +1,17 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "sidecar-page",
+  "description": "Das Frontend kommt vom Sidecar (http://127.0.0.1:<Port>) und darf nur die App-eigenen Befehle (check_update, app_version) aufrufen – keine Plugin-Rechte.",
+  "windows": [
+    "main"
+  ],
+  "remote": {
+    "urls": [
+      "http://127.0.0.1:*"
+    ]
+  },
+  "permissions": [
+    "allow-check-update",
+    "allow-app-version"
+  ]
+}

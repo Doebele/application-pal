@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@application-pal/shared": "0.1.0",
+    "@electric-sql/pglite": "^0.5.16",
     "@hono/node-server": "^1.13.7",
     "@hono/zod-validator": "^0.4.1",
+    "@napi-rs/canvas": "^0.1.80",
     "@simplewebauthn/server": "^13.3.0",
     "bcryptjs": "^3.0.3",
     "drizzle-kit": "^0.25.0",
