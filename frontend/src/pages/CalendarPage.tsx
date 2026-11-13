@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import { bodyZoom } from "../lib/zoom";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -87,12 +88,14 @@ function FloatingPopup({
     return () => document.removeEventListener("mousedown", handler, true);
   }, [onClose]);
 
-  // Smart position: keep inside viewport
+  // Smart position: keep inside viewport. Computed in viewport px, then
+  // converted to portal px (relaxed density zooms <body>, see bodyZoom).
   const W = 270;
+  const z = bodyZoom();
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  const left = Math.min(popup.x, vw - W - 12);
-  const top  = popup.y + 6 + (popup.y + 250 > vh ? -260 : 0);
+  const left = Math.min(popup.x, vw - W * z - 12) / z;
+  const top  = (popup.y + 6 + (popup.y + 250 * z > vh ? -260 * z : 0)) / z;
 
   return createPortal(
     <div

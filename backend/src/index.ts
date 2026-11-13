@@ -2149,8 +2149,11 @@ const driveFileId = (url: string) =>
 
 // True when the Drive file was edited after its summary was built (cheap metadata call).
 async function isSummaryStale(doc: UserDocument, token: string | null): Promise<boolean> {
+  if (!doc.summarizedAt) return false;
+  // Websites have no reliable modification time: re-read them once their summary is a month old.
+  if (isWebsiteDoc(doc)) return Date.now() - new Date(doc.summarizedAt).getTime() > WEBSITE_SUMMARY_MAX_AGE_MS;
   const id = doc.url && driveFileId(doc.url);
-  if (!id || !token || !doc.summarizedAt) return false;
+  if (!id || !token) return false;
   const res = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=modifiedTime`, {
     headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000)
   });
@@ -2159,11 +2162,101 @@ async function isSummaryStale(doc: UserDocument, token: string | null): Promise<
   return !!modifiedTime && new Date(modifiedTime) > new Date(doc.summarizedAt);
 }
 
-// Reads the document's file (Drive PDF, Google Doc, or a public PDF link) as plain text.
-// Returns null for document types without readable content (Figma, images, plain links).
+const WEBSITE_SUMMARY_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+const WEBSITE_MAX_BYTES = 5 * 1024 * 1024;
+
+// A public web page (portfolio, personal site, online PDF): any http(s) link that is not a
+// Drive/Google Docs file and not Figma (Figma pages need a login and render client-side).
+function isWebsiteDoc(doc: UserDocument): boolean {
+  if (!doc.url || !/^https?:\/\//i.test(doc.url)) return false;
+  if (/^(docs|drive)\.google\.com$/i.test(hostOf(doc.url))) return false;
+  return !/(^|\.)figma\.com$/i.test(hostOf(doc.url));
+}
+
+function hostOf(url: string): string {
+  try { return new URL(url).hostname; } catch { return ""; }
+}
+
+// Refuses hosts that resolve to loopback, private, link-local or otherwise internal
+// addresses, so a document link can't be used to probe the server's own network.
+async function assertPublicHost(url: string): Promise<void> {
+  const host = hostOf(url).replace(/^\[|\]$/g, "");
+  if (!host) throw new Error("Ungültige URL");
+  const { lookup } = await import("node:dns/promises");
+  const addrs = await lookup(host, { all: true }).catch(() => { throw new Error(`Host nicht gefunden: ${host}`); });
+  for (const { address, family } of addrs) {
+    const a = address.toLowerCase();
+    const internal = family === 4
+      ? /^(0|10|127)\./.test(a) || /^169\.254\./.test(a) || /^192\.168\./.test(a)
+        || /^172\.(1[6-9]|2\d|3[01])\./.test(a) || /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(a)
+      : a === "::1" || a === "::" || /^f[cd]/.test(a) || /^fe[89ab]/.test(a) || /^::ffff:/.test(a);
+    if (internal) throw new Error("Interne Adressen werden nicht gelesen");
+  }
+}
+
+const HTML_ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", ndash: "–", mdash: "—", hellip: "…", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“", auml: "ä", ouml: "ö", uuml: "ü", Auml: "Ä", Ouml: "Ö", Uuml: "Ü", szlig: "ß", eacute: "é", egrave: "è", agrave: "à", ccedil: "ç", copy: "©", reg: "®" };
+
+// Visible text of an HTML page: title + meta description, then the body without scripts,
+// styles and inline SVG; block elements become line breaks.
+function htmlToText(html: string): string {
+  const decode = (t: string) => t
+    .replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(Number(d)))
+    .replace(/&([a-z]+);/gi, (m, n) => HTML_ENTITIES[n] ?? m);
+  const title = decode(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] ?? "").trim();
+  const desc = decode(html.match(/<meta[^>]+name=["'](?:description|og:description)["'][^>]*content=["']([^"']*)["']/i)?.[1] ?? "").trim();
+  const body = decode((html.match(/<body[^>]*>([\s\S]*)<\/body>/i)?.[1] ?? html)
+    .replace(/<!--[\s\S]*?-->/g, " ")
+    .replace(/<(script|style|noscript|svg|template|iframe)\b[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<\/?(p|div|section|article|header|footer|li|ul|ol|h[1-6]|br|tr|table|blockquote|figure|figcaption|main|nav)\b[^>]*>/gi, "\n")
+    .replace(/<[^>]+>/g, " "))
+    .split("\n").map(l => l.replace(/\s+/g, " ").trim()).filter(Boolean).join("\n");
+  return [title, desc && desc !== title ? desc : "", body].filter(Boolean).join("\n\n");
+}
+
+async function fetchWebsiteText(url: string): Promise<string | null> {
+  // Redirects are followed by hand so every hop is checked before it is requested.
+  let res: Response | null = null;
+  for (let hop = 0; hop < 5; hop++) {
+    await assertPublicHost(url);
+    res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; ApplicationPal/1.0)", Accept: "text/html,application/pdf;q=0.9,text/plain;q=0.8,*/*;q=0.5" },
+      redirect: "manual", signal: AbortSignal.timeout(30_000),
+    });
+    const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!next) break;
+    url = new URL(next, url).toString();
+    if (!/^https?:\/\//i.test(url)) throw new Error("Ungültige Weiterleitung");
+    res = null;
+  }
+  if (!res) throw new Error("Zu viele Weiterleitungen");
+  if (!res.ok) throw new Error(`Website: HTTP ${res.status}`);
+  const len = Number(res.headers.get("content-length") ?? 0);
+  if (len > WEBSITE_MAX_BYTES) throw new Error("Website zu gross");
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > WEBSITE_MAX_BYTES) throw new Error("Website zu gross");
+  const type = (res.headers.get("content-type") ?? "").toLowerCase();
+  if (type.includes("pdf") || buf.subarray(0, 5).toString() === "%PDF-") {
+    const parser = new PDFParse({ data: buf });
+    try { return (await parser.getText()).text.trim() || null; } finally { await parser.destroy(); }
+  }
+  if (type.includes("html") || type.includes("xml")) {
+    const text = htmlToText(buf.toString("utf8"));
+    // A page rendered only by JavaScript leaves little more than its title.
+    if (text.length < 200) throw new Error("Website liefert kaum Text (per JavaScript gerendert?)");
+    return text;
+  }
+  if (type.startsWith("text/")) return buf.toString("utf8").trim() || null;
+  return null; // images and other binary content
+}
+
+// Reads the document's content as plain text: a Drive PDF, a Google Doc, or a public web
+// page / online PDF. Returns null when there is nothing readable (Figma, Drive images, folders).
 async function fetchDocumentText(doc: UserDocument, userId: string): Promise<string | null> {
-  if (!doc.url || !/^https?:\/\//.test(doc.url) || !["pdf", "gdoc"].includes(doc.fileType)) return null;
+  if (!doc.url || !/^https?:\/\//.test(doc.url)) return null;
   if (doc.url.includes("/folders/")) return null; // a Drive folder link, not a file
+  if (isWebsiteDoc(doc)) return fetchWebsiteText(doc.url);
+  if (!["pdf", "gdoc"].includes(doc.fileType)) return null;
   const driveId = driveFileId(doc.url);
   let res: Response;
   if (driveId) {
@@ -2189,7 +2282,8 @@ async function fetchDocumentText(doc: UserDocument, userId: string): Promise<str
 async function summarizeDocument(doc: UserDocument, userId: string, ai: AiConfig): Promise<UserDocument> {
   const text = await fetchDocumentText(doc, userId);
   if (!text) return doc;
-  const system = `Du fasst ein Bewerbungsdokument (Arbeitszeugnis, Referenz, Zertifikat, Portfolio oder Lebenslauf) für spätere Anschreiben und CV-Anpassungen zusammen.
+  const system = `Du fasst ein Bewerbungsdokument (Arbeitszeugnis, Referenz, Zertifikat, Portfolio, Lebenslauf oder die Portfolio-/Website des Kandidaten) für spätere Anschreiben und CV-Anpassungen zusammen.
+Bei einer Website: nur Inhalte über den Kandidaten (Projekte, Rollen, Ergebnisse, Kompetenzen) — Navigation, Cookie-Hinweise und Kontaktformulare ignorieren.
 Gib 4–8 knappe Stichpunkte (je eine Zeile, beginnend mit "- ") in der Sprache des Dokuments zurück: Aussteller/Arbeitgeber, Zeitraum, Rolle, konkrete Aufgaben und Ergebnisse (mit Zahlen), Bewertungen/Zitate und belegte Kompetenzen.
 Nur Fakten aus dem Dokument — nichts erfinden, keine Einleitung, kein Markdown ausser den Stichpunkten.`;
   const raw = await callAi(system, `Dokument: ${doc.name}\n\n${text.slice(0, 12000)}`, ai);

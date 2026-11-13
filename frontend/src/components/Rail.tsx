@@ -21,6 +21,7 @@ import gbFlagUrl from "round-flag-icons/flags/gb.svg?url";
 import frFlagUrl from "round-flag-icons/flags/fr.svg?url";
 import { APP_NAME } from "../lib/appName";
 import appIcon from "../assets/brand/app-icon.png";
+import { bodyZoom } from "../lib/zoom";
 
 const FLAG_URLS: Record<string, string> = { de: deFlagUrl, en: gbFlagUrl, fr: frFlagUrl };
 
@@ -190,10 +191,12 @@ function UserModal({
     }).catch(() => setOtherUsers([]));
   }, [confirmSwitch, email]);
 
-  // Position: anchored above the trigger element
+  // Position: anchored above the trigger element (viewport px → portal px,
+  // see bodyZoom: relaxed density zooms <body>)
   const rect = anchorRef.current?.getBoundingClientRect();
-  const top  = (rect?.top ?? 0) - 8;
-  const left = (rect?.right ?? 0) + 10;
+  const z = bodyZoom();
+  const top  = ((rect?.top ?? 0) - 8) / z;
+  const left = ((rect?.right ?? 0) + 10) / z;
 
   const initials = email.slice(0, 2).toUpperCase();
 
