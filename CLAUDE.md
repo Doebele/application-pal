@@ -300,6 +300,7 @@ Rules — don't "fix" them:
 - `GET /api/cv/check` re-scores from stored inputs on every read — accepting a point or switching UI language needs no AI call.
 - The pdf.js worker is a `.mjs` file: `frontend/nginx.conf` serves `*.mjs` as `application/javascript` — without it the viewer fails with "Setting up fake worker failed".
 - Never run two smooth scrolls at once (Chrome cancels the first): `BulletCard` scrolls itself instantly, `PdfViewer` scrolls its container with `scrollTo`.
+- A check re-imports first (`reimport` `auto` = only when the Documents CV changed after the newest app version, `always` = checkbox); accepted bullet waivers move to bullets with the same text.
 - Import and check run as in-memory background jobs (local models exceed the nginx 600 s limit); LM Studio/Ollama calls stream with a 20-minute timeout.
 
 ### Key Frontend Patterns

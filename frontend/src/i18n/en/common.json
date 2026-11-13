@@ -1032,7 +1032,8 @@
       "step": {
         "pdf": "Reading PDF layout",
         "llm": "AI judges bullets and competencies",
-        "score": "Calculating points"
+        "score": "Calculating points",
+        "import": "Re-importing CV"
       },
       "checkedAt": "Checked on {{date}}",
       "notChecked": "This CV has not been checked yet.",
@@ -1074,11 +1075,14 @@
       "languageIssues": "Language",
       "competencyEvidence": "Evidence for competencies",
       "noEvidence": "No evidence found",
-      "placeholderHint": "[X] = number missing — fill it in yourself, never invent."
+      "placeholderHint": "[X] = number missing — fill it in yourself, never invent.",
+      "forceReimport": "Re-import first",
+      "autoReimportHint": "Otherwise only when the CV in Documents changed since the last import.",
+      "reimported": "The current CV was re-imported before the check."
     },
     "unreachableHint": "“{{name}}” is linked, but the app can't access it yet. Pick the file once in Google Drive — after that it can be read.",
     "repick": "Choose file in Drive …",
-    "sourceNewer": "The CV was changed on {{source}}, the app version is from {{app}}. Score and highlights still refer to the old text — please re-import.",
+    "sourceNewer": "The CV was changed on {{source}}, the app version is from {{app}}. The next check re-imports it automatically — or re-import now.",
     "sourceNewerRunning": "Re-import running — afterwards run the check again so score and highlights match the current text."
   },
   "check": {

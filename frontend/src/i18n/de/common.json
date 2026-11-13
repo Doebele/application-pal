@@ -1032,7 +1032,8 @@
       "step": {
         "pdf": "PDF-Layout lesen",
         "llm": "KI bewertet Bullets und Kompetenzen",
-        "score": "Punkte berechnen"
+        "score": "Punkte berechnen",
+        "import": "CV neu importieren"
       },
       "checkedAt": "Geprüft am {{date}}",
       "notChecked": "Dieser CV wurde noch nicht geprüft.",
@@ -1074,11 +1075,14 @@
       "languageIssues": "Sprache",
       "competencyEvidence": "Belege für Kompetenzen",
       "noEvidence": "Kein Beleg gefunden",
-      "placeholderHint": "[X] = Zahl fehlt – bitte selbst einsetzen, nichts erfinden."
+      "placeholderHint": "[X] = Zahl fehlt – bitte selbst einsetzen, nichts erfinden.",
+      "forceReimport": "Vorher neu importieren",
+      "autoReimportHint": "Sonst nur, wenn der Lebenslauf unter Dokumente seit dem letzten Import geändert wurde.",
+      "reimported": "Vor der Prüfung wurde der aktuelle Lebenslauf neu importiert."
     },
     "unreachableHint": "„{{name}}“ ist verknüpft, aber die App hat noch keinen Zugriff darauf. Wähle die Datei einmal in Google Drive aus – danach kann sie gelesen werden.",
     "repick": "Datei in Drive auswählen …",
-    "sourceNewer": "Der Lebenslauf wurde am {{source}} geändert, die App-Version stammt vom {{app}}. Punkte und Markierungen beziehen sich deshalb noch auf die alte Fassung – bitte neu importieren.",
+    "sourceNewer": "Der Lebenslauf wurde am {{source}} geändert, die App-Version stammt vom {{app}}. Die nächste Prüfung importiert ihn automatisch neu – oder jetzt neu importieren.",
     "sourceNewerRunning": "Neuer Import läuft – danach die Prüfung neu starten, damit Punkte und Markierungen zur aktuellen Fassung passen."
   },
   "check": {

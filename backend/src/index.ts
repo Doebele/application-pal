@@ -5065,7 +5065,8 @@ app.get("/api/cv/versions/:id", async (c) => {
 type CvCheckStored = { inputs: { layout: LayoutFacts | null; headerText: string | null; llm: LlmJudgement | null; sourceDocumentId: string | null; layoutError?: string; llmError?: string }; result: CvCheckResult };
 type CvCheckJob = {
   id: string; userId: string; lang: CvLanguage; versionId: string;
-  status: "running" | "done" | "error"; step: "pdf" | "llm" | "score"; startedAt: string; finishedAt?: string; error?: string;
+  status: "running" | "done" | "error"; step: "import" | "pdf" | "llm" | "score"; startedAt: string; finishedAt?: string; error?: string;
+  reimported?: boolean;
 };
 const cvCheckJobs = new Map<string, CvCheckJob>();
 
@@ -5093,7 +5094,84 @@ async function loadCvWaivers(userId: string, lang: CvLanguage): Promise<string[]
 
 const asUiLang = (v: unknown): UiLang => (v === "en" || v === "fr" ? v : "de");
 
-async function runCvCheckJob(job: CvCheckJob, ai: AiConfig, uiLang: UiLang) {
+// ─── Re-import before a check ─────────────────────────────────────
+// mode "auto": re-import when the CV document in Documents changed after the newest app
+// version was created (in-app edits made later are kept). "always": every time.
+// "never": check the stored version as is. Bullet ids are random per import, so
+// accepted bullet waivers are carried over to bullets with the same text.
+type CvReimportMode = "auto" | "always" | "never";
+
+const bulletTexts = (cv: unknown): Map<string, string> => {
+  const out = new Map<string, string>();
+  const walk = (n: unknown) => {
+    if (Array.isArray(n)) return n.forEach(walk);
+    if (!n || typeof n !== "object") return;
+    const o = n as Record<string, unknown>;
+    if (typeof o.id === "string" && typeof o.text === "string") out.set(o.id, o.text);
+    Object.values(o).forEach(walk);
+  };
+  walk(cv);
+  return out;
+};
+const normBullet = (s: string) => s.toLowerCase().replace(/ß/g, "ss").replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+async function carryOverBulletWaivers(userId: string, lang: CvLanguage, oldData: string, newData: string) {
+  const [p] = await db.select({ w: userProfile.cvCheckWaivers }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  let all: Record<string, string[]> = {};
+  try { all = JSON.parse(p?.w ?? "{}"); } catch { /* corrupt → start empty */ }
+  const keys = Array.isArray(all[lang]) ? all[lang] : [];
+  if (!keys.length) return;
+  const oldB = bulletTexts(JSON.parse(oldData)), newB = bulletTexts(JSON.parse(newData));
+  const byText = new Map<string, string>();
+  for (const [id, text] of newB) if (!byText.has(normBullet(text))) byText.set(normBullet(text), id);
+  const next = new Set(keys);
+  for (const k of keys) {
+    const m = /^(action|specifics):(.+)$/.exec(k);
+    if (!m) continue;
+    const text = oldB.get(m[2]);
+    const newId = text ? byText.get(normBullet(text)) : undefined;
+    if (newId) next.add(`${m[1]}:${newId}`);
+  }
+  all[lang] = [...next].slice(-500);
+  await db.update(userProfile).set({ cvCheckWaivers: JSON.stringify(all) }).where(eq(userProfile.userId, userId));
+}
+
+/** Re-imports the current CV of the job's language if the mode asks for it. Returns an error text or null. */
+async function reimportForCheck(job: CvCheckJob, ai: AiConfig, mode: CvReimportMode): Promise<string | null> {
+  if (mode === "never") return null;
+  const [ver] = await db.select().from(cvVersions).where(and(eq(cvVersions.id, job.versionId), eq(cvVersions.userId, job.userId))).limit(1);
+  if (!ver) return null;
+  const docs = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.userId, job.userId), eq(userDocuments.category, "lebenslauf")))
+    .orderBy(desc(userDocuments.updatedAt));
+  const doc = docs.find(d => detectCvLang(d.name, d.tags) === job.lang);
+  if (!doc) return null;
+  if (mode === "auto") {
+    const driveId = doc.url ? driveFileId(doc.url) : undefined;
+    const token = await getDriveAccessToken(job.userId);
+    if (!driveId || !token) return null;
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?fields=modifiedTime`, { headers: { Authorization: `Bearer ${token}` } }).catch(() => null);
+    const modified = r?.ok ? (await r.json() as { modifiedTime?: string }).modifiedTime : undefined;
+    if (!modified || Date.parse(modified) <= ver.createdAt.getTime()) return null;
+  }
+  if (!ai || ai.provider === "none") return "Kein KI-Anbieter konfiguriert";
+  if ([...cvImportJobs.values()].some(j => j.userId === job.userId && j.lang === job.lang && j.status === "running")) return "Für diese Sprache läuft bereits ein Import";
+  job.step = "import";
+  const imp: CvImportJob = { id: crypto.randomUUID(), userId: job.userId, lang: job.lang, documentId: doc.id, documentName: doc.name, status: "running", startedAt: new Date().toISOString() };
+  cvImportJobs.set(imp.id, imp); // the Structure tab shows it like a manual import
+  await runCvImport(imp, doc, ai).catch(err => Object.assign(imp, { status: "error", error: (err as Error).message, finishedAt: new Date().toISOString() }));
+  if (imp.status !== "done" || !imp.versionId) return `Neu-Import fehlgeschlagen: ${imp.error ?? "unbekannter Fehler"}`;
+  const [fresh] = await db.select({ data: cvVersions.data }).from(cvVersions).where(eq(cvVersions.id, imp.versionId)).limit(1);
+  if (fresh) await carryOverBulletWaivers(job.userId, job.lang, ver.data, fresh.data).catch(err => console.error("cv waiver carry-over:", err));
+  job.versionId = imp.versionId;
+  job.reimported = true;
+  return null;
+}
+
+async function runCvCheckJob(job: CvCheckJob, ai: AiConfig, uiLang: UiLang, reimport: CvReimportMode = "never") {
+  const reErr = await reimportForCheck(job, ai, reimport);
+  if (reErr) return Object.assign(job, { status: "error", error: reErr, finishedAt: new Date().toISOString() });
+  job.step = "pdf";
   const [row] = await db.select().from(cvVersions).where(and(eq(cvVersions.id, job.versionId), eq(cvVersions.userId, job.userId))).limit(1);
   if (!row) return Object.assign(job, { status: "error", error: "Version nicht gefunden", finishedAt: new Date().toISOString() });
   const cv = cvDocumentSchema.parse(JSON.parse(row.data));
@@ -5156,7 +5234,9 @@ async function runCvCheckJob(job: CvCheckJob, ai: AiConfig, uiLang: UiLang) {
 
 app.post("/api/cv/check", async (c) => {
   const userId = getUserId(c);
-  const { lang, ai, uiLang, versionId } = await c.req.json<{ lang: CvLanguage; ai: AiConfig; uiLang?: string; versionId?: string }>();
+  const { lang, ai, uiLang, versionId, reimport } = await c.req.json<{ lang: CvLanguage; ai: AiConfig; uiLang?: string; versionId?: string; reimport?: CvReimportMode }>();
+  // An explicit version is checked as is; otherwise make sure it is the current CV text.
+  const mode: CvReimportMode = versionId ? "never" : reimport === "always" || reimport === "never" ? reimport : "auto";
   if (!CV_LANGUAGES.includes(lang)) return c.json({ error: "Sprache fehlt" }, 400);
   const running = [...cvCheckJobs.values()].find(j => j.userId === userId && j.lang === lang && j.status === "running");
   if (running) return c.json(running, 202);
@@ -5167,7 +5247,7 @@ app.post("/api/cv/check", async (c) => {
   for (const [id, j] of cvCheckJobs) if (j.status !== "running" && Date.now() - Date.parse(j.startedAt) > 86_400_000) cvCheckJobs.delete(id);
   const job: CvCheckJob = { id: crypto.randomUUID(), userId, lang, versionId: row.id, status: "running", step: "pdf", startedAt: new Date().toISOString() };
   cvCheckJobs.set(job.id, job);
-  void runCvCheckJob(job, ai, asUiLang(uiLang)).catch(err => {
+  void runCvCheckJob(job, ai, asUiLang(uiLang), mode).catch(err => {
     console.error("cv check job crashed:", err);
     Object.assign(job, { status: "error", error: "Interner Fehler bei der Prüfung", finishedAt: new Date().toISOString() });
   });

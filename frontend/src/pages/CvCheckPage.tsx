@@ -116,7 +116,7 @@ export function CvCheckPage() {
     ?? (sources?.languages.find(l => l.lang === current?.masterLang && l.documentId) ? current!.masterLang : null)
     ?? sources?.languages.find(l => l.documentId)?.lang
     ?? current?.masterLang ?? "en";
-  const check = useCvCheck(activeLang, current?.current[activeLang]?.id ?? null);
+  const check = useCvCheck(activeLang, current?.current[activeLang]?.id ?? null, () => { load(); loadJobs(); setPdfNonce(n => n + 1); });
   const [activeId, setActiveId] = useState<string | null>(null);
   const checkResult = check.data?.result;
   const highlights = useMemo(() => cvHighlights(checkResult), [checkResult]);
@@ -187,9 +187,9 @@ export function CvCheckPage() {
             <div className="chk-note" role="status" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", margin: "0 0 8px" }}>
               <WarningCircle width={14} height={14} style={{ color: "var(--score-mid)", flexShrink: 0 }} />
               <span style={{ flex: 1, minWidth: 200 }}>
-                {importRunning ? t("cvCheck.sourceNewerRunning") : t("cvCheck.sourceNewer", { source: fmt(src.modifiedTime), app: fmt(ver!.createdAt) })}
+                {importRunning || check.running ? t("cvCheck.sourceNewerRunning") : t("cvCheck.sourceNewer", { source: fmt(src.modifiedTime), app: fmt(ver!.createdAt) })}
               </span>
-              {!importRunning && (
+              {!importRunning && !check.running && (
                 <button className="btn btn-secondary" style={{ fontSize: 12, gap: 5 }} disabled={ai.provider === "none"} onClick={() => runImport(activeLang, src.documentId)}>
                   <Download width={11} height={11} /> {t("cvCheck.reimport")}
                 </button>
