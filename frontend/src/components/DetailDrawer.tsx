@@ -5008,7 +5008,9 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
   const [newType, setNewType] = useState("note");
   const [newTitle, setNewTitle] = useState("");
   const [newDesc, setNewDesc] = useState("");
-  const [expandedResultId, setExpandedResultId] = useSticky<string | null>("processResult", null);
+  // Sticky per stage: a result zoomed in the CV phase (e.g. CV highlights) must not
+  // reopen over the letter workspace of an application in the letter phase.
+  const [expandedResultId, setExpandedResultId] = useSticky<string | null>(`processResult:${app.stage}`, null);
 
   // Expand-Logik for the content blocks
   const [interviewExpanded, setInterviewExpanded] = useSticky("interviewExpanded", false);
