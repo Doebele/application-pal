@@ -21,6 +21,7 @@ import { api } from "../lib/api";
 import { useUiStore, type AiConfig } from "../lib/store";
 import { useTranslation } from "react-i18next";
 import { ContractField, PensumField } from "./ImportDrawer";
+import { GooglePickerButton, type PickedFile } from "../lib/googlePicker";
 
 // ─── Round flag icon (round-flag-icons library) ───────────────
 // @ts-ignore
@@ -2716,6 +2717,9 @@ function DocumentsTab({ app }: { app: Application }) {
   const [togglingId, setTogglingId]     = useState<string | null>(null);
   const [copyingLibId, setCopyingLibId] = useState<string | null>(null);
   const [copyLibErr, setCopyLibErr]     = useState<string | null>(null);
+  // Library doc the app can't read in Drive (drive.file) → offer the Picker
+  const [accessNeeded, setAccessNeeded] = useState<UserDocument | null>(null);
+  const queryClient = useQueryClient();
   // Map of userDocumentId → drive URL (for docs already copied to this app's folder)
   const [libDriveUrls, setLibDriveUrls] = useState<Record<string, string>>({});
 
@@ -2829,81 +2833,90 @@ function DocumentsTab({ app }: { app: Application }) {
     } else {
       const isGDoc = libDoc.fileType === "gdoc";
       const isPdf  = libDoc.fileType === "pdf";
-      // If Drive folder exists and it's a Google Doc → copy to Drive first
-      let googleDocUrl = isGDoc ? libDoc.url : undefined;
       setCopyLibErr(null);
-      // Copy Google Docs to Drive folder
-      if (folderState && isGDoc && libDoc.url) {
-        try {
-          const r = await api.post<{ driveUrl: string; name: string }>(
-            `/api/applications/${app.id}/drive/copy-doc`,
-            { userDocumentId: libDoc.id, docRule: driveNameDoc }
-          );
-          googleDocUrl = r.data.driveUrl;
-          setLibDriveUrls(prev => ({ ...prev, [libDoc.id]: r.data.driveUrl }));
-        } catch (e: unknown) {
-          const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
-          setCopyLibErr(msg ?? null);
-          showToast(msg ?? "Google Doc konnte nicht kopiert werden", "error");
-        }
-      }
-      // Copy PDFs to Drive folder (upload from URL directly into app folder)
-      let finalFileUrl = !isGDoc ? libDoc.url : undefined;
-      if (folderState && isPdf && libDoc.url) {
-        try {
-          const r = await api.post<{ fileUrl: string }>(
-            `/api/applications/${app.id}/drive/upload-pdf-from-url`,
-            { url: libDoc.url, fileName: libDoc.name }
-          );
-          finalFileUrl = r.data.fileUrl;
-          setLibDriveUrls(prev => ({ ...prev, [libDoc.id]: r.data.fileUrl }));
-        } catch (e: unknown) {
-          const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
-          setCopyLibErr(msg ?? "PDF-Upload fehlgeschlagen");
-          showToast(msg ?? "PDF konnte nicht auf Drive kopiert werden", "error");
-        }
+      // Copy into the application's Drive folder first (Google Doc → copy, PDF → upload)
+      let copied: { url: string } | null = null;
+      let copyError: { msg: string; noAccess: boolean } | null = null;
+      if (folderState && (isGDoc || isPdf) && libDoc.url) {
+        try { copied = { url: await copyToDrive(libDoc) }; }
+        catch (e) { copyError = driveCopyError(e); }
       }
       await api.post(`/api/applications/${app.id}/documents`, {
         type: catToDocType(libDoc.category),
         name: libDoc.name,
         status: "draft",
-        googleDocUrl,
-        fileUrl: finalFileUrl,
+        googleDocUrl: isGDoc ? copied?.url ?? libDoc.url : undefined,
+        fileUrl: !isGDoc ? copied?.url ?? libDoc.url : undefined,
         userDocumentId: libDoc.id,
       }).catch(() => {});
-      showToast(
-        folderState && (isGDoc || isPdf)
+      // Green only when the copy really exists in Drive
+      if (copyError) {
+        if (copyError.noAccess) setAccessNeeded(libDoc);
+        showToast(copyError.noAccess ? t("documents.needsAccess", { name: libDoc.name }) : copyError.msg, "error");
+      } else {
+        showToast(copied
           ? t("documents.addedAndCopied", { name: libDoc.name })
-          : t("documents.addedToApp", { name: libDoc.name })
-      );
-      // Refresh Drive file list
-      void loadDriveFiles();
+          : t("documents.addedToApp", { name: libDoc.name }));
+      }
+      if (copied) void loadDriveFiles();
     }
     setTogglingId(null);
     refetch();
   };
 
+  /** Copies a library doc into the app's Drive folder, returns the new file's URL. */
+  const copyToDrive = async (libDoc: UserDocument): Promise<string> => {
+    if (libDoc.fileType === "pdf") {
+      const r = await api.post<{ fileUrl: string }>(
+        `/api/applications/${app.id}/drive/upload-pdf-from-url`,
+        { url: libDoc.url, fileName: libDoc.name }
+      );
+      setLibDriveUrls(prev => ({ ...prev, [libDoc.id]: r.data.fileUrl }));
+      return r.data.fileUrl;
+    }
+    const r = await api.post<{ driveUrl: string }>(
+      `/api/applications/${app.id}/drive/copy-doc`,
+      { userDocumentId: libDoc.id, docRule: driveNameDoc }
+    );
+    setLibDriveUrls(prev => ({ ...prev, [libDoc.id]: r.data.driveUrl }));
+    return r.data.driveUrl;
+  };
+
+  const driveCopyError = (e: unknown) => {
+    const data = (e as { response?: { data?: { error?: string; code?: string } } })?.response?.data;
+    return { msg: data?.error ?? t("documents.copyFailed"), noAccess: data?.code === "no_access" };
+  };
+
   const copyLibDocToDrive = async (libDoc: UserDocument) => {
-    if (!folderState || libDoc.fileType !== "gdoc") return;
+    if (!folderState || (libDoc.fileType !== "gdoc" && libDoc.fileType !== "pdf")) return;
     setCopyingLibId(libDoc.id);
     try {
-      const r = await api.post<{ driveUrl: string }>(
-        `/api/applications/${app.id}/drive/copy-doc`,
-        { userDocumentId: libDoc.id, docRule: driveNameDoc }
-      );
-      setLibDriveUrls(prev => ({ ...prev, [libDoc.id]: r.data.driveUrl }));
+      const url = await copyToDrive(libDoc);
       // Update the linked applicationDocument with new Drive URL
       const match = appDocs.find((d) => d.userDocumentId === libDoc.id);
       if (match) {
-        await api.patch(`/api/applications/${app.id}/documents/${match.id}`, { googleDocUrl: r.data.driveUrl }).catch(() => {});
+        await api.patch(`/api/applications/${app.id}/documents/${match.id}`,
+          libDoc.fileType === "pdf" ? { fileUrl: url } : { googleDocUrl: url }).catch(() => {});
         refetch();
       }
+      setAccessNeeded(prev => prev?.id === libDoc.id ? null : prev);
       showToast(t("documents.copiedToDrive", { name: libDoc.name }));
+      void loadDriveFiles();
     } catch (e: unknown) {
-      const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
-      showToast(msg ?? "Kopieren fehlgeschlagen", "error");
+      const err = driveCopyError(e);
+      if (err.noAccess) setAccessNeeded(libDoc);
+      showToast(err.noAccess ? t("documents.needsAccess", { name: libDoc.name }) : err.msg, "error");
     }
     setCopyingLibId(null);
+  };
+
+  // drive.file: the user picks the original once in Google, which grants the app
+  // access; the library entry is re-linked to the picked file, then copied.
+  const grantAccessAndCopy = async (libDoc: UserDocument, f: PickedFile) => {
+    const fileType = f.mimeType === "application/pdf" ? "pdf" : "gdoc";
+    await api.patch(`/api/documents/${libDoc.id}`, { url: f.url, fileType });
+    void queryClient.invalidateQueries({ queryKey: ["user-documents"] });
+    await copyLibDocToDrive({ ...libDoc, url: f.url, fileType });
   };
 
   const create = async (type: "cv" | "letter") => {
@@ -3114,6 +3127,18 @@ function DocumentsTab({ app }: { app: Application }) {
             <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{t("documents.count", { count: library.length })}</span>
           )}
         </button>
+
+        {accessNeeded && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "10px 12px", marginBottom: 10,
+            border: "1px solid var(--border)", borderRadius: 8, background: "var(--surface-2, var(--surface))", fontSize: 12, color: "var(--fg-2)" }}>
+            <span style={{ flex: 1, minWidth: 180, lineHeight: 1.45 }}>{t("documents.needsAccessHint", { name: accessNeeded.name })}</span>
+            <GooglePickerButton kind="readable" title={accessNeeded.name} label={t("documents.grantAccess")} className="btn btn-primary"
+              onPicked={f => grantAccessAndCopy(accessNeeded, f)} />
+            <button type="button" className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setAccessNeeded(null)}>
+              {t("cancel")}
+            </button>
+          </div>
+        )}
 
         {libOpen && (
           library.length === 0 ? (

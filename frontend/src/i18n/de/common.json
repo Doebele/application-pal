@@ -401,7 +401,11 @@
     "summarizeAllHint": "Liest alle Zeugnisse, Referenzen, Zertifikate, Portfolios und Lebensläufe (PDF / Google Doc) ohne Zusammenfassung und speichert eine KI-Zusammenfassung",
     "summarizeAllResult": "{{count}} Dokument(e) zusammengefasst",
     "summarizeAllErrors": "Fehler bei: {{names}}",
-    "summaryNoAi": "Zuerst einen KI-Provider in den Einstellungen wählen"
+    "summaryNoAi": "Zuerst einen KI-Provider in den Einstellungen wählen",
+    "needsAccess": "{{name}}: kein Zugriff auf das Original in Google Drive – nicht kopiert",
+    "needsAccessHint": "{{app}} darf „{{name}}“ in Google Drive noch nicht lesen. Wähle das Original einmal über Google aus, dann wird es in den Ordner der Bewerbung kopiert.",
+    "grantAccess": "Zugriff erteilen",
+    "copyFailed": "Kopieren fehlgeschlagen"
   },
   "contacts": {
     "label": "Kontakte",
