@@ -4895,6 +4895,9 @@ app.post("/api/applications/:id/drive/upload-pdf-from-url", async (c) => {
         headers: { "Authorization": `Bearer ${accessToken}` },
         signal: AbortSignal.timeout(60_000)
       });
+      if (fetchRes.status === 404 || fetchRes.status === 403) {
+        return c.json({ error: "Kein Zugriff auf das Originaldokument in Google Drive", code: "no_access" }, 403);
+      }
       if (!fetchRes.ok) return c.json({ error: `Drive Download: HTTP ${fetchRes.status}` }, 502);
       fileBuffer = await fetchRes.arrayBuffer();
     } else {
@@ -7012,7 +7015,14 @@ app.post("/api/applications/:id/drive/copy-doc", async (c) => {
     }
   }
 
-  if (!newFileId) return c.json({ error: "Kopieren fehlgeschlagen. Prüfe Kopierberechtigung im Originaldokument." }, 502);
+  if (!newFileId) {
+    // drive.file (desktop): Google answers 404/403 for originals the app neither
+    // created nor got through the Picker. Say so, the drawer then offers the Picker.
+    if (copyRes.status === 404 || copyRes.status === 403) {
+      return c.json({ error: "Kein Zugriff auf das Originaldokument in Google Drive", code: "no_access" }, 403);
+    }
+    return c.json({ error: "Kopieren fehlgeschlagen. Prüfe Kopierberechtigung im Originaldokument." }, 502);
+  }
   const driveUrl = `https://docs.google.com/document/d/${newFileId}/edit`;
   return c.json({ ok: true, fileId: newFileId, driveUrl, name: newName });
 });

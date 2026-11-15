@@ -401,7 +401,11 @@
     "summarizeAllHint": "Lit tous les certificats, références, portfolios et CV (PDF / Google Doc) sans résumé et enregistre un résumé IA",
     "summarizeAllResult": "{{count}} document(s) résumé(s)",
     "summarizeAllErrors": "Échec : {{names}}",
-    "summaryNoAi": "Choisissez d'abord un fournisseur IA dans les paramètres"
+    "summaryNoAi": "Choisissez d'abord un fournisseur IA dans les paramètres",
+    "needsAccess": "{{name}} : pas d'accès à l'original dans Google Drive – non copié",
+    "needsAccessHint": "{{app}} ne peut pas encore lire « {{name}} » dans Google Drive. Choisis l'original une fois dans Google, il sera ensuite copié dans le dossier de la candidature.",
+    "grantAccess": "Autoriser l'accès",
+    "copyFailed": "La copie a échoué"
   },
   "contacts": {
     "label": "Contacts",
