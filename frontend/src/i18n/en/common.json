@@ -405,7 +405,9 @@
     "needsAccess": "{{name}}: no access to the original in Google Drive – not copied",
     "needsAccessHint": "{{app}} can't read “{{name}}” in Google Drive yet. Pick the original once in Google, then it is copied into the application's folder.",
     "grantAccess": "Grant access",
-    "copyFailed": "Copy failed"
+    "copyFailed": "Copy failed",
+    "relinkFailed": "Re-linking failed",
+    "missingHint": "The app can’t open this file (deleted, moved or no access). Use “Re-link …” to pick it in Google Drive."
   },
   "contacts": {
     "label": "Contacts",
@@ -686,7 +688,18 @@
       "description": "30/60/90-day plan for the new job"
     },
     "langDe": "Deutsch",
-    "langEn": "English"
+    "langEn": "English",
+    "missingFallback": "Template not reachable in Google Drive – document created without it. Import the templates once under Templates.",
+    "linked": "Linked",
+    "linkedHint": "The file is reachable in Google Drive.",
+    "missing": "Not reachable",
+    "missingHint": "The app can't open this file in Google Drive. Re-link it; this applies everywhere the template is used.",
+    "relink": "Re-link …",
+    "relinked": "“{{name}}” linked – everywhere the template is used",
+    "missingExport": "The app can’t open the template “{{name}}”, so the Google Doc was created without it. Pick the template once in Google Drive: it gets linked everywhere it is used, and the document is created again with the template.",
+    "relinkAndExport": "Pick template and recreate",
+    "relinkFailed": "Linking failed",
+    "missingExportNoName": "The app can’t open the template, so the Google Doc was created without it. Pick the template once in Google Drive: it gets linked everywhere it is used, and the document is created again with the template."
   },
   "table": {
     "title": "Application List",
@@ -1755,12 +1768,14 @@
     "choose": "Choose in Drive …",
     "chooseFolder": "Choose folder in Drive …",
     "chooseSheet": "Choose sheet in Drive …",
-    "importTemplate": "Import template from Google Drive …",
+    "importTemplate": "Import templates from Google Drive …",
     "templateImported": "“{{name}}” imported as template",
     "driveFileHint": "The desktop app only sees files it created itself or that you choose in Drive here. Pasted links to other files do not work.",
     "waitingBrowser": "Choosing in browser …",
     "browserHint": "Make your choice in Google Drive in your browser.",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "templatesImported": "{{count}} of {{total}} templates imported",
+    "templatesRelinked": "previous template choices kept"
   },
   "wizard": {
     "welcomeTitle": "Welcome to {{app}}",

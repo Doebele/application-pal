@@ -405,7 +405,9 @@
     "needsAccess": "{{name}}: kein Zugriff auf das Original in Google Drive – nicht kopiert",
     "needsAccessHint": "{{app}} darf „{{name}}“ in Google Drive noch nicht lesen. Wähle das Original einmal über Google aus, dann wird es in den Ordner der Bewerbung kopiert.",
     "grantAccess": "Zugriff erteilen",
-    "copyFailed": "Kopieren fehlgeschlagen"
+    "copyFailed": "Kopieren fehlgeschlagen",
+    "relinkFailed": "Neu verknüpfen fehlgeschlagen",
+    "missingHint": "Die App kann diese Datei nicht öffnen (gelöscht, verschoben oder ohne Zugriff). Mit „Neu verknüpfen …“ die Datei in Google Drive wählen."
   },
   "contacts": {
     "label": "Kontakte",
@@ -686,7 +688,18 @@
       "description": "30/60/90-Tage-Plan für den neuen Job"
     },
     "langDe": "Deutsch",
-    "langEn": "English"
+    "langEn": "English",
+    "missingFallback": "Vorlage in Google Drive nicht erreichbar – Dokument ohne Vorlage erstellt. Unter Templates die Vorlagen einmal übernehmen.",
+    "linked": "Verknüpft",
+    "linkedHint": "Die Datei ist in Google Drive erreichbar.",
+    "missing": "Nicht erreichbar",
+    "missingHint": "Die App kann diese Datei in Google Drive nicht öffnen. Neu verknüpfen, dann gilt das für alle Stellen, an denen die Vorlage verwendet wird.",
+    "relink": "Neu verknüpfen …",
+    "relinked": "„{{name}}“ verknüpft – überall, wo die Vorlage verwendet wird",
+    "missingExport": "Die App kann die Vorlage „{{name}}“ nicht öffnen – das Google Doc wurde deshalb ohne Vorlage erstellt. Wähle die Vorlage einmal in Google Drive aus: Sie wird überall verknüpft, wo sie verwendet wird, und das Dokument wird neu mit Vorlage erstellt.",
+    "relinkAndExport": "Vorlage wählen und neu erstellen",
+    "relinkFailed": "Verknüpfen fehlgeschlagen",
+    "missingExportNoName": "Die App kann die Vorlage nicht öffnen – das Google Doc wurde deshalb ohne Vorlage erstellt. Wähle die Vorlage einmal in Google Drive aus: Sie wird überall verknüpft, wo sie verwendet wird, und das Dokument wird neu mit Vorlage erstellt."
   },
   "table": {
     "title": "Bewerbungsliste",
@@ -1755,12 +1768,14 @@
     "choose": "In Drive wählen …",
     "chooseFolder": "Ordner in Drive wählen …",
     "chooseSheet": "Tabelle in Drive wählen …",
-    "importTemplate": "Vorlage aus Google Drive übernehmen …",
+    "importTemplate": "Vorlagen aus Google Drive übernehmen …",
     "templateImported": "„{{name}}“ als Vorlage übernommen",
     "driveFileHint": "Die Desktop-App sieht nur Dateien, die sie selbst angelegt hat oder die du hier in Drive auswählst. Eingefügte Links auf andere Dateien funktionieren nicht.",
     "waitingBrowser": "Auswahl im Browser …",
     "browserHint": "Wähle in deinem Browser in Google Drive aus.",
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "templatesImported": "{{count}} von {{total}} Vorlagen übernommen",
+    "templatesRelinked": "bisherige Vorlagen-Auswahl übernommen"
   },
   "wizard": {
     "welcomeTitle": "Willkommen bei {{app}}",

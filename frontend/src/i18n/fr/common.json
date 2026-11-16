@@ -405,7 +405,9 @@
     "needsAccess": "{{name}} : pas d'accès à l'original dans Google Drive – non copié",
     "needsAccessHint": "{{app}} ne peut pas encore lire « {{name}} » dans Google Drive. Choisis l'original une fois dans Google, il sera ensuite copié dans le dossier de la candidature.",
     "grantAccess": "Autoriser l'accès",
-    "copyFailed": "La copie a échoué"
+    "copyFailed": "La copie a échoué",
+    "relinkFailed": "Échec de la nouvelle liaison",
+    "missingHint": "L’app ne peut pas ouvrir ce fichier (supprimé, déplacé ou sans accès). Avec « Relier … », choisis-le dans Google Drive."
   },
   "contacts": {
     "label": "Contacts",
@@ -686,7 +688,18 @@
       "description": "Plan 30/60/90 jours pour le nouveau poste"
     },
     "langDe": "Deutsch",
-    "langEn": "English"
+    "langEn": "English",
+    "missingFallback": "Modèle introuvable dans Google Drive – document créé sans modèle. Importe les modèles une fois sous Modèles.",
+    "linked": "Lié",
+    "linkedHint": "Le fichier est accessible dans Google Drive.",
+    "missing": "Inaccessible",
+    "missingHint": "L’app ne peut pas ouvrir ce fichier dans Google Drive. Relie-le ; cela s’applique partout où le modèle est utilisé.",
+    "relink": "Relier …",
+    "relinked": "« {{name}} » lié – partout où le modèle est utilisé",
+    "missingExport": "L’app ne peut pas ouvrir le modèle « {{name}} » : le Google Doc a donc été créé sans modèle. Choisis le modèle une fois dans Google Drive : il sera relié partout où il est utilisé et le document sera recréé avec le modèle.",
+    "relinkAndExport": "Choisir le modèle et recréer",
+    "relinkFailed": "Échec de la liaison",
+    "missingExportNoName": "L’app ne peut pas ouvrir le modèle : le Google Doc a donc été créé sans modèle. Choisis le modèle une fois dans Google Drive : il sera relié partout où il est utilisé et le document sera recréé avec le modèle."
   },
   "table": {
     "title": "Liste des candidatures",
@@ -1755,12 +1768,14 @@
     "choose": "Choisir dans Drive …",
     "chooseFolder": "Choisir un dossier dans Drive …",
     "chooseSheet": "Choisir un tableau dans Drive …",
-    "importTemplate": "Importer un modèle depuis Google Drive …",
+    "importTemplate": "Importer des modèles depuis Google Drive …",
     "templateImported": "« {{name}} » importé comme modèle",
     "driveFileHint": "L’app de bureau ne voit que les fichiers qu’elle a créés ou que tu choisis ici dans Drive. Les liens collés vers d’autres fichiers ne fonctionnent pas.",
     "waitingBrowser": "Choix dans le navigateur …",
     "browserHint": "Fais ton choix dans Google Drive dans ton navigateur.",
-    "cancel": "Annuler"
+    "cancel": "Annuler",
+    "templatesImported": "{{count}} modèles sur {{total}} importés",
+    "templatesRelinked": "choix de modèles précédents repris"
   },
   "wizard": {
     "welcomeTitle": "Bienvenue dans {{app}}",

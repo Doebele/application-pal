@@ -2,12 +2,12 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Page, Link, MediaImage, Plus, Trash, OpenNewWindow,
-  Medal, Group, GraduationCap, Bag, Folder, EditPencil, Check, Xmark,
+  Medal, Group, GraduationCap, Bag, Folder, EditPencil, Check, Xmark, WarningTriangle,
   List, GridPlus, Expand, Collapse, RefreshCircle, PageEdit, Sparks
 } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
-import { GooglePickerButton } from "../lib/googlePicker";
+import { GooglePickerButton, type PickedFile } from "../lib/googlePicker";
 import { hasShell } from "../lib/desktopShell";
 import { useUiStore } from "../lib/store";
 
@@ -18,6 +18,12 @@ const SUMMARY_CATEGORIES = ["zeugnis", "referenz", "zertifikat", "portfolio", "l
 const hostOf = (url: string) => { try { return new URL(url).hostname; } catch { return ""; } };
 const isWebsite = (url: string) => /^https?:\/\//i.test(url)
   && !/^(docs|drive)\.google\.com$/i.test(hostOf(url)) && !/(^|\.)figma\.com$/i.test(hostOf(url));
+// Drive file id of a Google Doc / Drive link (…/d/<id>/… or ?id=<id>); folders have none.
+const driveFileId = (url?: string | null): string | null => {
+  if (!url || !/^(docs|drive)\.google\.com$/i.test(hostOf(url)) || url.includes("/folders/")) return null;
+  return url.match(/\/d\/([\w-]{10,})/)?.[1] ?? url.match(/[?&]id=([\w-]{10,})/)?.[1] ?? null;
+};
+type LinkStatus = "ok" | "missing" | "unknown";
 const isSummarizable = (d: UserDocument) =>
   SUMMARY_CATEGORIES.includes(d.category) && !!d.url && !d.url.includes("/folders/")
   && (d.fileType === "pdf" || d.fileType === "gdoc" || isWebsite(d.url));
@@ -365,11 +371,35 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate, onSummarize }: {
   doc: UserDocument;
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
-  onUrlUpdate?: (id: string, newUrl: string) => void;
+  onUrlUpdate?: (id: string, newUrl: string, fileType?: string) => void;
   onSummarize?: (id: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [hov, setHov] = useState(false);
+  // Can the app still open the linked Drive file? On the desktop (drive.file) files the
+  // app neither created nor got through the Picker answer 404 → offer a re-link.
+  const fileId = (doc.fileType === "gdoc" || doc.fileType === "pdf") ? driveFileId(doc.url) : null;
+  const [linkStatus, setLinkStatus] = useState<LinkStatus | null>(null);
+  const [relinkErr, setRelinkErr] = useState<string | null>(null);
+  useEffect(() => {
+    setLinkStatus(null);
+    if (!fileId) return;
+    let live = true;
+    api.post<{ connected: boolean; status: Record<string, LinkStatus> }>("/api/drive/files/status", { ids: [fileId] })
+      .then(r => { if (live && r.data.connected) setLinkStatus(r.data.status[fileId] ?? "unknown"); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, [fileId]);
+  const relink = async (f: PickedFile) => {
+    setRelinkErr(null);
+    const fileType = f.mimeType === "application/pdf" ? "pdf" : "gdoc";
+    try {
+      await api.patch(`/api/documents/${doc.id}`, { url: f.url, fileType });
+      onUrlUpdate?.(doc.id, f.url, fileType);
+    } catch (e: unknown) {
+      setRelinkErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("documents.relinkFailed"));
+    }
+  };
   const [showSummary, setShowSummary] = useState(false);
   const [summarizing, setSummarizing] = useState(false);
   const [summaryErr, setSummaryErr] = useState<string | null>(null);
@@ -504,8 +534,34 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate, onSummarize }: {
           </a>
         )}
 
+        {linkStatus === "ok" && (
+          <span title={t("templates.linkedHint")} style={{
+            display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600,
+            color: "var(--score-high)", padding: "3px 8px", borderRadius: 6,
+            background: "var(--score-high-bg)", border: "1px solid var(--score-high-border)"
+          }}>
+            <Check width={10} height={10} /> {isPdf ? t("documents.onDrive") : t("templates.linked")}
+          </span>
+        )}
+        {linkStatus === "missing" && (
+          <span title={t("documents.missingHint")} style={{
+            display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600,
+            color: "var(--score-low)", padding: "3px 8px", borderRadius: 6,
+            background: "var(--score-low-bg)", border: "1px solid var(--score-low-border)"
+          }}>
+            <WarningTriangle width={10} height={10} /> {t("templates.missing")}
+          </span>
+        )}
+        {fileId && linkStatus && linkStatus !== "unknown" && (linkStatus === "missing" || hov) && (
+          <GooglePickerButton kind="readable" title={doc.name} onPicked={relink}
+            label={t("templates.relink")}
+            className={linkStatus === "missing" ? "btn btn-primary" : "btn btn-ghost"}
+            style={{ fontSize: 10, padding: "3px 8px" }} />
+        )}
+        {relinkErr && <span style={{ fontSize: 10, color: "var(--score-low)" }}>{relinkErr}</span>}
+
         {/* Drive upload section for PDFs */}
-        {isPdf && driveConnected && (
+        {isPdf && driveConnected && !fileId && (
           isOnDrive ? (
             <span style={{
               display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 600,
@@ -740,7 +796,7 @@ function DocList({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate, onSummarize 
   onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId" | "contentSummary" | "summarizedAt">) => Promise<void>;
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
-  onUrlUpdate?: (id: string, newUrl: string) => void;
+  onUrlUpdate?: (id: string, newUrl: string, fileType?: string) => void;
   onSummarize?: (id: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -782,7 +838,7 @@ function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate, onSummar
   onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId" | "contentSummary" | "summarizedAt">) => Promise<void>;
   onDelete: (id: string) => void;
   onEdit: (doc: UserDocument) => void;
-  onUrlUpdate?: (id: string, newUrl: string) => void;
+  onUrlUpdate?: (id: string, newUrl: string, fileType?: string) => void;
   onSummarize?: (id: string) => Promise<void>;
 }) {
   const { t } = useTranslation();
@@ -823,7 +879,7 @@ function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate, onSummar
 // ─── Tab View ─────────────────────────────────────────────────────────────────
 function TabView({ docs, onAdd, onDelete, onEdit, onUrlUpdate, onSummarize }: {
   docs: UserDocument[];
-  onUrlUpdate?: (id: string, newUrl: string) => void;
+  onUrlUpdate?: (id: string, newUrl: string, fileType?: string) => void;
   onSummarize?: (id: string) => Promise<void>;
   onAdd: (d: Omit<UserDocument, "id" | "createdAt" | "updatedAt" | "userId" | "contentSummary" | "summarizedAt">) => Promise<void>;
   onDelete: (id: string) => void;
@@ -1003,8 +1059,8 @@ export function DocumentsPage() {
   }, [ai]);  // eslint-disable-line react-hooks/exhaustive-deps -- throws on error — EditModal catches it
 
   // Drive upload re-links the file — the backend dropped the old summary, so rebuild it.
-  const handleUrlUpdate = useCallback((id: string, newUrl: string) => {
-    setDocs((prev) => prev.map((d) => d.id === id ? { ...d, url: newUrl, contentSummary: null, summarizedAt: null } : d));
+  const handleUrlUpdate = useCallback((id: string, newUrl: string, fileType?: string) => {
+    setDocs((prev) => prev.map((d) => d.id === id ? { ...d, url: newUrl, ...(fileType ? { fileType } : {}), contentSummary: null, summarizedAt: null } : d));
     if (aiReady) summarizeDoc(id).catch(() => {});
   }, [ai]); // eslint-disable-line react-hooks/exhaustive-deps
 

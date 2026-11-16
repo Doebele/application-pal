@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
-  OpenNewWindow, Trash, Plus, RefreshCircle, Check, Calendar,
+  OpenNewWindow, Trash, Plus, RefreshCircle, Check, Calendar, WarningTriangle, Link,
   ChatBubbleCheck, PageEdit, SendMail, Coins, Search, HandCash, TaskList,
 } from "iconoir-react";
 // @ts-ignore — round-flag-icons ships plain SVG files, no TS types needed
@@ -11,7 +11,7 @@ import deFlagUrl from "round-flag-icons/flags/de.svg?url";
 import gbFlagUrl from "round-flag-icons/flags/gb.svg?url";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
-import { GooglePickerButton } from "../lib/googlePicker";
+import { GooglePickerButton, type PickedFile } from "../lib/googlePicker";
 
 // ─── Round flag icon (round-flag-icons library) ───────────────
 function FlagIcon({ lang, size = 20 }: { lang: "de" | "en"; size?: number }) {
@@ -108,6 +108,7 @@ const CONTENT_TYPES = [
 ] as const;
 
 type ContentTypeId = (typeof CONTENT_TYPES)[number]["id"];
+type TemplateStatus = "ok" | "missing" | "unknown";
 
 // ─── Hook: load + save docTemplates from profile ──────────────
 function useDocTemplates() {
@@ -267,6 +268,8 @@ function LangSection({
   onRemove,
   onAddFromDrive,
   onCreateNew,
+  status,
+  onRelink,
 }: {
   lang: Lang;
   templates: TemplateEntry[];
@@ -275,6 +278,9 @@ function LangSection({
   onRemove: (id: string) => void;
   onAddFromDrive: () => void;
   onCreateNew: () => void;
+  /** Reachability per template file id (undefined = not checked yet / no Google) */
+  status?: Record<string, TemplateStatus>;
+  onRelink?: (oldId: string, f: PickedFile) => Promise<void>;
 }) {
   const { t } = useTranslation();
   const [creating, setCreating] = useState(false);
@@ -357,12 +363,34 @@ function LangSection({
                   <div style={{ fontSize: 12, fontWeight: isActive ? 700 : 500, color: "var(--fg-1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {tmpl.name}
                   </div>
-                  {isActive && (
-                    <div style={{ fontSize: 10, color: "var(--accent)", fontWeight: 600, marginTop: 1 }}>
-                      {t("templates.activeLabel")}
-                    </div>
-                  )}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 1 }}>
+                    {isActive && (
+                      <span style={{ fontSize: 10, color: "var(--accent)", fontWeight: 600 }}>
+                        {t("templates.activeLabel")}
+                      </span>
+                    )}
+                    {status?.[tmpl.id] === "ok" && (
+                      <span title={t("templates.linkedHint")} style={{ fontSize: 10, color: "var(--score-high)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                        <Link width={10} height={10} /> {t("templates.linked")}
+                      </span>
+                    )}
+                    {status?.[tmpl.id] === "missing" && (
+                      <span title={t("templates.missingHint")} style={{ fontSize: 10, color: "var(--score-low)", fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 3 }}>
+                        <WarningTriangle width={10} height={10} /> {t("templates.missing")}
+                      </span>
+                    )}
+                  </div>
                 </div>
+
+                {onRelink && status?.[tmpl.id] && (
+                  <span onClick={e => e.stopPropagation()} style={{ flexShrink: 0 }}>
+                    <GooglePickerButton kind="template" title={tmpl.name}
+                      label={t("templates.relink")}
+                      className={status[tmpl.id] === "missing" ? "btn btn-primary" : "btn btn-ghost"}
+                      style={{ fontSize: 10, padding: "3px 8px" }}
+                      onPicked={f => onRelink(tmpl.id, f)} />
+                  </span>
+                )}
 
                 <a
                   href={`https://docs.google.com/document/d/${tmpl.id}/edit`}
@@ -399,7 +427,11 @@ function ContentTypeSection({
   onAddFromDrive,
   onRemove,
   onCreateNew,
+  status,
+  onRelink,
 }: {
+  status?: Record<string, TemplateStatus>;
+  onRelink?: (oldId: string, f: PickedFile) => Promise<void>;
   contentType: (typeof CONTENT_TYPES)[number];
   config: DocTemplateConfig;
   onSetActive: (type: string, id: string | null, lang: Lang) => Promise<void>;
@@ -438,6 +470,8 @@ function ContentTypeSection({
         onRemove={id => void onRemove(contentType.id, id)}
         onAddFromDrive={() => onAddFromDrive(contentType.id as ContentTypeId, "de")}
         onCreateNew={() => onCreateNew(contentType.id as ContentTypeId, "de")}
+        status={status}
+        onRelink={onRelink}
       />
 
       {/* EN section */}
@@ -449,6 +483,8 @@ function ContentTypeSection({
         onRemove={id => void onRemove(contentType.id, id)}
         onAddFromDrive={() => onAddFromDrive(contentType.id as ContentTypeId, "en")}
         onCreateNew={() => onCreateNew(contentType.id as ContentTypeId, "en")}
+        status={status}
+        onRelink={onRelink}
       />
 
       {/* Placeholders */}
@@ -503,6 +539,26 @@ export function TemplatesPage() {
     setTimeout(() => setToast(null), 2500);
   };
 
+  // Can the app still open each configured template file? (check mark per row)
+  const templateIds = [...new Set(Object.values(config).flatMap(tc => tc?.templates?.map(x => x.id) ?? []))].sort();
+  const { data: statusData } = useQuery({
+    queryKey: ["template-status", templateIds.join(",")],
+    enabled: googleConnected && templateIds.length > 0,
+    queryFn: () => api.post<{ status: Record<string, TemplateStatus> }>("/api/drive/templates/status", { ids: templateIds }).then(r => r.data.status),
+  });
+
+  // Re-link one template row to a file picked in Drive: the server copies it into the
+  // app's Pal-Templates and moves every use of the old id (all types, DE/EN active) to it.
+  const relink = async (oldId: string, f: PickedFile) => {
+    try {
+      await api.post("/api/drive/templates/import", { fileId: f.id, replaceId: oldId });
+      await queryClient.invalidateQueries({ queryKey: ["profile"] });
+      queryClient.invalidateQueries({ queryKey: ["template-status"] });
+      queryClient.invalidateQueries({ queryKey: ["drive-templates"] });
+      showToast(t("templates.relinked", { name: f.name }));
+    } catch { showToast(t("templates.createError")); }
+  };
+
   const handleCreateNew = async (type: ContentTypeId, lang: Lang) => {
     try {
       const r = await api.post<{ fileId: string; fileName: string; fileUrl: string }>(
@@ -547,11 +603,23 @@ export function TemplatesPage() {
           {googleConnected && (
             <div style={{ marginTop: 10 }}>
               <GooglePickerButton kind="template" label={t("picker.importTemplate")} onPicked={async f => {
-                try {
-                  await api.post("/api/drive/templates/import", { fileId: f.id });
-                  queryClient.invalidateQueries({ queryKey: ["drive-templates"] });
-                  showToast(t("picker.templateImported", { name: f.name }));
-                } catch { showToast(t("templates.createError")); }
+                // Several templates can be picked at once; each is copied into the app's
+                // own Pal-Templates and the stored template choices are moved to the copy.
+                const files = f.all?.length ? f.all : [f];
+                let ok = 0, relinked = 0;
+                for (const file of files) {
+                  try {
+                    const r = await api.post<{ relinked?: number }>("/api/drive/templates/import", { fileId: file.id });
+                    ok++; relinked += r.data.relinked ?? 0;
+                  } catch { /* counted below */ }
+                }
+                queryClient.invalidateQueries({ queryKey: ["drive-templates"] });
+                queryClient.invalidateQueries({ queryKey: ["profile"] });
+                queryClient.invalidateQueries({ queryKey: ["template-status"] });
+                if (!ok) showToast(t("templates.createError"));
+                else showToast(files.length === 1 && ok === 1
+                  ? t("picker.templateImported", { name: f.name })
+                  : t("picker.templatesImported", { count: ok, total: files.length }) + (relinked ? ` · ${t("picker.templatesRelinked")}` : ""));
               }} />
             </div>
           )}
@@ -572,6 +640,8 @@ export function TemplatesPage() {
               onAddFromDrive={(type, lang) => setPickerOpen({ type, lang })}
               onRemove={removeTemplate}
               onCreateNew={handleCreateNew}
+              status={statusData}
+              onRelink={googleConnected ? relink : undefined}
             />
           ))
         )}

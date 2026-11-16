@@ -1,7 +1,7 @@
 import "./sidecar-polyfill.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
@@ -3027,8 +3027,8 @@ app.post("/api/applications/:id/ai/cv-doc", async (c) => {
         HIGHLIGHTS: highlightText.replace(/[═✓]/g, "").trim(),
         LEBENSLAUF: profile.masterCv,
       };
-      const { docUrl } = await createDocFromTemplate(accessTokenForDoc, templateFileId, docTitle, placeholders, app_.googleFolderId ?? null);
-      return c.json({ docUrl, title: docTitle });
+      const { docUrl, templateMissing } = await createDocFromTemplate(accessTokenForDoc, templateFileId, docTitle, placeholders, app_.googleFolderId ?? null);
+      return c.json({ docUrl, title: docTitle, templateMissing });
     } else {
       const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
         method: "POST",
@@ -3274,6 +3274,7 @@ app.post("/api/applications/:id/ai/cover-letter/export-doc", async (c) => {
       };
       const result = await createDocFromTemplate(coverLetterToken, templateFileId, coverDocTitle, placeholders, app_.googleFolderId ?? null);
       docUrl = result.docUrl;
+      if (result.templateMissing) return c.json({ docUrl, templateMissing: result.templateMissing });
     } else {
       const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
         method: "POST",
@@ -3417,12 +3418,12 @@ app.post("/api/applications/:id/ai/interview-prep/export-doc", async (c) => {
         VOSS_FRAGEN: interviewPrep.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"),
         RUECKFRAGEN: interviewPrep.rueckfragen.map(q => `• ${q}`).join("\n"),
       };
-      const { docId, docUrl } = await createDocFromTemplate(token, interviewTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
+      const { docId, docUrl, templateMissing } = await createDocFromTemplate(token, interviewTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
       await db.insert(applicationDocuments).values({
         applicationId: id, type: "other", name: docTitle,
         status: "draft", googleDocId: docId, googleDocUrl: docUrl
       });
-      return c.json({ docUrl, title: docTitle });
+      return c.json({ docUrl, title: docTitle, templateMissing });
     } else {
       const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
         method: "POST",
@@ -3727,8 +3728,8 @@ app.post("/api/applications/:id/ai/salary-check/export-doc", async (c) => {
         FORMULIERUNGEN: (Array.isArray(salaryData.formulierungen) ? (salaryData.formulierungen as string[]) : []).join("\n"),
         VOSS_ANKER: String(salaryData.vossAnker ?? ""),
       };
-      const { docUrl } = await createDocFromTemplate(salaryDocToken, salaryTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
-      return c.json({ docUrl });
+      const { docUrl, templateMissing } = await createDocFromTemplate(salaryDocToken, salaryTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
+      return c.json({ docUrl, templateMissing });
     } else {
       const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
         method: "POST",
@@ -3843,8 +3844,8 @@ app.post("/api/applications/:id/ai/company-research/export-doc", async (c) => {
         WETTBEWERBER: Array.isArray(researchData.wettbewerber) ? (researchData.wettbewerber as string[]).join("\n") : String(researchData.wettbewerber ?? ""),
         AKTUELLE_THEMEN: Array.isArray(researchData.aktuelleThemen) ? (researchData.aktuelleThemen as string[]).join("\n") : String(researchData.aktuelleThemen ?? ""),
       };
-      const { docUrl } = await createDocFromTemplate(compResToken, compResTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
-      return c.json({ docUrl });
+      const { docUrl, templateMissing } = await createDocFromTemplate(compResToken, compResTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
+      return c.json({ docUrl, templateMissing });
     } else {
       const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
         method: "POST",
@@ -3949,8 +3950,8 @@ app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
         NICHTMONETAER: Array.isArray(scriptData.nichtmonetaer) ? (scriptData.nichtmonetaer as string[]).join("\n") : String(scriptData.nichtmonetaer ?? ""),
         VOSS_ANKER: String(scriptData.vossAnker ?? ""),
       };
-      const { docUrl } = await createDocFromTemplate(ackerToken, ackerTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
-      return c.json({ docUrl });
+      const { docUrl, templateMissing } = await createDocFromTemplate(ackerToken, ackerTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
+      return c.json({ docUrl, templateMissing });
     } else {
       const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
         method: "POST",
@@ -4154,8 +4155,8 @@ app.post("/api/applications/:id/ai/onboarding/export-doc", async (c) => {
         ERSTE_90_TAGE: Array.isArray(onboardingData.erste90Tage) ? (onboardingData.erste90Tage as string[]).map(t => `• ${t}`).join("\n") : String(onboardingData.erste90Tage ?? ""),
         ALLGEMEIN: Array.isArray(onboardingData.allgemein) ? (onboardingData.allgemein as string[]).map(t => `• ${t}`).join("\n") : String(onboardingData.allgemein ?? ""),
       };
-      const { docUrl } = await createDocFromTemplate(onboardToken, onboardTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
-      return c.json({ docUrl });
+      const { docUrl, templateMissing } = await createDocFromTemplate(onboardToken, onboardTemplateId, docTitle, placeholders, app_.googleFolderId ?? null);
+      return c.json({ docUrl, templateMissing });
     } else {
       const docRes = await fetch("https://docs.googleapis.com/v1/documents", {
         method: "POST",
@@ -4283,8 +4284,9 @@ app.get("/api/google/picker-config", async (c) => {
 type PickerKindB = "folder" | "document" | "spreadsheet" | "template" | "readable" | "any";
 type PickerSession = {
   userId: string; kind: PickerKindB; title: string; lang: "de" | "en" | "fr"; createdAt: number;
-  status: "pending" | "done" | "cancelled"; file?: { id: string; name: string; mimeType: string; url: string };
+  status: "pending" | "done" | "cancelled"; file?: PickedFileB; files?: PickedFileB[];
 };
+type PickedFileB = { id: string; name: string; mimeType: string; url: string };
 const pickerSessions = new Map<string, PickerSession>();
 const PICKER_TTL = 10 * 60 * 1000;
 const PICKER_MIME: Record<Exclude<PickerKindB, "any">, string> = {
@@ -4329,7 +4331,7 @@ app.get("/api/google/picker-session/:id", (c) => {
   const s = livePickerSession(c.req.param("id"));
   if (!s || s.userId !== getUserId(c)) return c.json({ status: "expired" });
   if (s.status !== "pending") pickerSessions.delete(c.req.param("id"));
-  return c.json({ status: s.status, file: s.file ?? null });
+  return c.json({ status: s.status, file: s.file ?? null, files: s.files ?? (s.file ? [s.file] : []) });
 });
 
 // Explicit cancel from the app (user gave up waiting) — the browser page then shows "expired".
@@ -4373,8 +4375,8 @@ function start() {
     .setCallback(async (d) => {
       const a = d[p.Response.ACTION];
       if (a === p.Action.PICKED) {
-        const f = d[p.Response.DOCUMENTS][0];
-        await report({ action: "picked", file: { id: f[p.Document.ID], name: f[p.Document.NAME], mimeType: f[p.Document.MIME_TYPE], url: f[p.Document.URL] } });
+        const files = d[p.Response.DOCUMENTS].map((f) => ({ id: f[p.Document.ID], name: f[p.Document.NAME], mimeType: f[p.Document.MIME_TYPE], url: f[p.Document.URL] }));
+        await report({ action: "picked", file: files[0], files });
         show("ok", C.tx.done, C.tx.doneText); setTimeout(() => window.close(), 1500);
       } else if (a === p.Action.CANCEL) {
         await report({ action: "cancel" });
@@ -4382,6 +4384,7 @@ function start() {
       }
     });
   if (C.title) b.setTitle(C.title);
+  if (C.kind === "template") b.enableFeature(p.Feature.MULTISELECT_ENABLED);
   b.build().setVisible(true);
 }
 </script>
@@ -4393,11 +4396,17 @@ app.post("/api/google/picker-result", async (c) => {
   if (!IS_DESKTOP) return c.json({ error: "Not found" }, 404);
   const s = livePickerSession(c.req.query("s"));
   if (!s || s.status !== "pending") return c.json({ error: "expired" }, 410);
-  const body = await c.req.json<{ action?: string; file?: { id?: string; name?: string; mimeType?: string; url?: string } }>().catch(() => ({} as { action?: string; file?: undefined }));
-  const f = body.file;
-  if (body.action === "picked" && f?.id && /^[\w-]{10,200}$/.test(f.id)) {
+  type RawFile = { id?: string; name?: string; mimeType?: string; url?: string };
+  const body = await c.req.json<{ action?: string; file?: RawFile; files?: RawFile[] }>().catch(() => ({} as { action?: string; file?: undefined; files?: undefined }));
+  const clean = (f: RawFile | undefined): PickedFileB | null => f?.id && /^[\w-]{10,200}$/.test(f.id)
+    ? { id: f.id, name: String(f.name ?? "").slice(0, 300), mimeType: String(f.mimeType ?? "").slice(0, 200), url: String(f.url ?? "").slice(0, 500) }
+    : null;
+  const f = clean(body.file);
+  if (body.action === "picked" && f) {
     s.status = "done";
-    s.file = { id: f.id, name: String(f.name ?? "").slice(0, 300), mimeType: String(f.mimeType ?? "").slice(0, 200), url: String(f.url ?? "").slice(0, 500) };
+    s.file = f;
+    const many = (Array.isArray(body.files) ? body.files.slice(0, 50) : []).map(clean).filter((x): x is PickedFileB => !!x);
+    s.files = many.length ? many : [f];
   } else {
     s.status = "cancelled";
   }
@@ -4655,13 +4664,16 @@ function getActiveTemplateId(
   } catch { return null; }
 }
 
+// Header fields of a template; left out when a missing template falls back to a plain doc
+const TEMPLATE_META_KEYS = new Set(["FIRMA", "ROLLE", "DATUM", "NAME", "ORT", "EMAIL", "HEADLINE"]);
+
 async function createDocFromTemplate(
   accessToken: string,
   templateFileId: string,
   fileName: string,
   placeholders: Record<string, string>,
   parentFolderId?: string | null
-): Promise<{ docId: string; docUrl: string }> {
+): Promise<{ docId: string; docUrl: string; templateMissing?: string }> {
   const copyBody: Record<string, unknown> = { name: fileName };
   if (parentFolderId) copyBody.parents = [parentFolderId];
   const copyRes = await fetch(`https://www.googleapis.com/drive/v3/files/${templateFileId}/copy`, {
@@ -4669,6 +4681,17 @@ async function createDocFromTemplate(
     headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify(copyBody)
   });
+  if (copyRes.status === 404 || copyRes.status === 403) {
+    // The template is gone or unreadable — on the desktop (drive.file, own OAuth client)
+    // always for templates the web version created. Still deliver the content as a plain
+    // doc; `templateMissing` = the unreadable template id, so the client can offer to
+    // re-link exactly that template (Picker) and export again.
+    const text = Object.entries(placeholders)
+      .filter(([k, v]) => !TEMPLATE_META_KEYS.has(k) && v.trim())
+      .map(([, v]) => v.trim()).join("\n\n");
+    const doc = await createBlankDoc(accessToken, fileName, text || fileName, parentFolderId);
+    return { ...doc, templateMissing: templateFileId };
+  }
   if (!copyRes.ok) throw new Error(`Template copy failed: HTTP ${copyRes.status}`);
   const { id: docId } = await copyRes.json() as { id: string };
   const requests = Object.entries(placeholders).map(([key, value]) => ({
@@ -6608,7 +6631,8 @@ app.post("/api/drive/templates/import", async (c) => {
   // A file the user picked in the Google Picker becomes a template: copied into the
   // user's own "Pal-Templates" folder, so the copy stays reachable with drive.file
   // (the Picker grant covers the original, a copy belongs to the app).
-  const { fileId } = await c.req.json<{ fileId?: string }>();
+  // replaceId: re-link one template row of the Templates page to the picked file
+  const { fileId, replaceId } = await c.req.json<{ fileId?: string; replaceId?: string }>();
   if (!fileId || !/^[\w-]+$/.test(fileId)) return c.json({ error: "Datei fehlt" }, 400);
   const accessToken = await getDriveAccessToken(getUserId(c));
   if (!accessToken) return c.json({ error: "Google Drive nicht verbunden" }, 400);
@@ -6618,14 +6642,80 @@ app.post("/api/drive/templates/import", async (c) => {
   const meta = await metaRes.json() as { name: string; mimeType: string };
   if (!TEMPLATE_MIME_ALLOWLIST.has(meta.mimeType)) return c.json({ error: "Dieser Dateityp eignet sich nicht als Vorlage" }, 400);
   const folderId = await findOrCreateDriveFolder(accessToken, "Pal-Templates", env.GOOGLE_MASTER_FOLDER_ID || undefined);
-  const copyRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/copy?fields=id,name,mimeType,webViewLink`, {
-    method: "POST",
-    headers: { ...auth, "Content-Type": "application/json" },
-    body: JSON.stringify({ name: meta.name, parents: [folderId] }),
-  });
-  if (!copyRes.ok) return c.json({ error: "Kopieren fehlgeschlagen" }, 502);
-  return c.json(await copyRes.json());
+  // Already imported (same name in the app's own Pal-Templates)? Reuse it, no duplicate.
+  const existing = (await listDriveFiles(accessToken, folderId).catch(() => []))
+    .find(f => f.name.trim().toLowerCase() === meta.name.trim().toLowerCase() && f.mimeType === meta.mimeType);
+  let copied: { id: string; name: string; mimeType: string; webViewLink?: string };
+  if (existing) {
+    copied = { id: existing.id, name: existing.name, mimeType: existing.mimeType };
+  } else {
+    const copyRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}/copy?fields=id,name,mimeType,webViewLink`, {
+      method: "POST",
+      headers: { ...auth, "Content-Type": "application/json" },
+      body: JSON.stringify({ name: meta.name, parents: [folderId] }),
+    });
+    if (!copyRes.ok) return c.json({ error: "Kopieren fehlgeschlagen" }, 502);
+    copied = await copyRes.json();
+  }
+  const oldIds = [fileId, ...(replaceId && /^[\w-]+$/.test(replaceId) ? [replaceId] : [])];
+  const relinked = await relinkTemplateByName(getUserId(c), oldIds, meta.name, copied.id);
+  return c.json({ ...copied, relinked });
 });
+
+// Template config (user_profile.doc_templates) still pointing at a file the app can't
+// read — on the desktop: the templates the web version created — is moved to the
+// imported copy: every entry with the same name (or the picked original's id) gets
+// the copy's id, active ids included. Returns how many entries changed.
+async function relinkTemplateByName(userId: string, oldIds: string[], name: string, newId: string): Promise<number> {
+  const [prof] = await db.select({ docTemplates: userProfile.docTemplates }).from(userProfile)
+    .where(eq(userProfile.userId, userId)).limit(1);
+  if (!prof?.docTemplates) return 0;
+  let cfg: Record<string, { activeId?: string | null; activeIdDe?: string | null; activeIdEn?: string | null; templates?: { id: string; name: string }[] }>;
+  try { cfg = JSON.parse(prof.docTemplates); } catch { return 0; }
+  const norm = (s: string) => s.trim().toLowerCase();
+  const stale = new Set(oldIds);
+  for (const tc of Object.values(cfg)) {
+    for (const t of tc?.templates ?? []) if (t.id !== newId && norm(t.name) === norm(name)) stale.add(t.id);
+  }
+  stale.delete(newId);
+  if (!stale.size) return 0;
+  let changed = 0;
+  for (const tc of Object.values(cfg)) {
+    if (!tc) continue;
+    for (const t of tc.templates ?? []) if (stale.has(t.id)) { t.id = newId; t.name = name; changed++; }
+    for (const k of ["activeId", "activeIdDe", "activeIdEn"] as const) {
+      if (tc[k] && stale.has(tc[k]!)) { tc[k] = newId; changed++; }
+    }
+    // the same file may now be listed twice
+    if (tc.templates) tc.templates = tc.templates.filter((t, i, a) => a.findIndex(x => x.id === t.id) === i);
+  }
+  if (changed) {
+    await db.update(userProfile).set({ docTemplates: JSON.stringify(cfg) }).where(eq(userProfile.userId, userId));
+  }
+  return changed;
+}
+
+// Which Drive files the app can still open (check mark on the Templates and Documents
+// pages). drive.file (desktop) answers 404 for files the app neither created nor got
+// through the Picker.
+const driveFileStatusRoute = async (c: Context) => {
+  const { ids } = await c.req.json<{ ids?: string[] }>().catch(() => ({ ids: [] as string[] }));
+  const list = [...new Set((ids ?? []).filter(id => typeof id === "string" && /^[\w-]{10,200}$/.test(id)))].slice(0, 100);
+  const accessToken = await getDriveAccessToken(getUserId(c));
+  if (!accessToken) return c.json({ connected: false, status: {} });
+  const status: Record<string, "ok" | "missing" | "unknown"> = {};
+  await Promise.all(list.map(async id => {
+    try {
+      const r = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=id,trashed`, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (r.status === 404 || r.status === 403) { status[id] = "missing"; return; }
+      if (!r.ok) { status[id] = "unknown"; return; }
+      status[id] = (await r.json() as { trashed?: boolean }).trashed ? "missing" : "ok";
+    } catch { status[id] = "unknown"; }
+  }));
+  return c.json({ connected: true, status });
+};
+app.post("/api/drive/templates/status", driveFileStatusRoute);
+app.post("/api/drive/files/status", driveFileStatusRoute);
 
 app.get("/api/drive/templates", async (c) => {
   const accessToken = await getDriveAccessToken(getUserId(c));
