@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, createContext, useContext } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Page, Link, MediaImage, Plus, Trash, OpenNewWindow,
@@ -9,6 +9,7 @@ import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 import { GooglePickerButton, type PickedFile } from "../lib/googlePicker";
 import { hasShell } from "../lib/desktopShell";
+import { driveStatus, normName, parentOf, type DriveFolder, type LinkStatus } from "../lib/driveLinks";
 import { useUiStore } from "../lib/store";
 
 // Categories whose content feeds AI prompts (mirrors CONTEXT_DOC_CATEGORIES in the backend)
@@ -23,7 +24,10 @@ const driveFileId = (url?: string | null): string | null => {
   if (!url || !/^(docs|drive)\.google\.com$/i.test(hostOf(url)) || url.includes("/folders/")) return null;
   return url.match(/\/d\/([\w-]{10,})/)?.[1] ?? url.match(/[?&]id=([\w-]{10,})/)?.[1] ?? null;
 };
-type LinkStatus = "ok" | "missing" | "unknown";
+const driveIdOf = (d: UserDocument) => (d.fileType === "gdoc" || d.fileType === "pdf") ? driveFileId(d.url) : null;
+// Link status of every Drive document, checked once per page (not per card), plus a
+// callback after a re-link — the page then remembers the picked file's folder.
+const DocLinkCtx = createContext<{ status: Record<string, LinkStatus>; onRelinked: (pickedFileId: string) => void }>({ status: {}, onRelinked: () => {} });
 const isSummarizable = (d: UserDocument) =>
   SUMMARY_CATEGORIES.includes(d.category) && !!d.url && !d.url.includes("/folders/")
   && (d.fileType === "pdf" || d.fileType === "gdoc" || isWebsite(d.url));
@@ -378,24 +382,17 @@ function DocCard({ doc, onDelete, onEdit, onUrlUpdate, onSummarize }: {
   const [hov, setHov] = useState(false);
   // Can the app still open the linked Drive file? On the desktop (drive.file) files the
   // app neither created nor got through the Picker answer 404 → offer a re-link.
-  const fileId = (doc.fileType === "gdoc" || doc.fileType === "pdf") ? driveFileId(doc.url) : null;
-  const [linkStatus, setLinkStatus] = useState<LinkStatus | null>(null);
+  const fileId = driveIdOf(doc);
+  const links = useContext(DocLinkCtx);
+  const linkStatus: LinkStatus | null = fileId ? links.status[fileId] ?? null : null;
   const [relinkErr, setRelinkErr] = useState<string | null>(null);
-  useEffect(() => {
-    setLinkStatus(null);
-    if (!fileId) return;
-    let live = true;
-    api.post<{ connected: boolean; status: Record<string, LinkStatus> }>("/api/drive/files/status", { ids: [fileId] })
-      .then(r => { if (live && r.data.connected) setLinkStatus(r.data.status[fileId] ?? "unknown"); })
-      .catch(() => {});
-    return () => { live = false; };
-  }, [fileId]);
   const relink = async (f: PickedFile) => {
     setRelinkErr(null);
     const fileType = f.mimeType === "application/pdf" ? "pdf" : "gdoc";
     try {
       await api.patch(`/api/documents/${doc.id}`, { url: f.url, fileType });
       onUrlUpdate?.(doc.id, f.url, fileType);
+      links.onRelinked(f.id);
     } catch (e: unknown) {
       setRelinkErr((e as { response?: { data?: { error?: string } } })?.response?.data?.error ?? t("documents.relinkFailed"));
     }
@@ -1064,6 +1061,47 @@ export function DocumentsPage() {
     if (aiReady) summarizeDoc(id).catch(() => {});
   }, [ai]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Which linked Drive files can the app still open? On the desktop (drive.file) the
+  // ones the web version linked answer 404. One check for all cards.
+  const [linkStatus, setLinkStatus] = useState<Record<string, LinkStatus>>({});
+  const [linkFolder, setLinkFolder] = useState<DriveFolder | null>(null);
+  const [linkMsg, setLinkMsg] = useState<string | null>(null);
+  const driveIdsKey = [...new Set(docs.map(driveIdOf).filter((x): x is string => !!x))].sort().join(",");
+  useEffect(() => {
+    if (!driveIdsKey) { setLinkStatus({}); return; }
+    let live = true;
+    driveStatus(driveIdsKey.split(",")).then(r => { if (live && r.connected) setLinkStatus(r.status); }).catch(() => {});
+    return () => { live = false; };
+  }, [driveIdsKey]);
+  const onRelinked = useCallback((pickedId: string) => {
+    parentOf(pickedId).then(p => { if (p) setLinkFolder(p); });
+  }, []);
+  const missingDocs = docs.filter(d => { const id = driveIdOf(d); return !!id && linkStatus[id] === "missing"; });
+
+  // Several files picked (in the folder of the last re-linked one): each is matched to an
+  // unreachable document by name and re-linked; the rest is reported, nothing guessed.
+  const relinkMany = async (f: PickedFile) => {
+    const files = f.all?.length ? f.all : [f];
+    const open = [...missingDocs];
+    let matched = 0; const unmatched: string[] = [];
+    for (const file of files) {
+      const n = normName(file.name);
+      let i = open.findIndex(d => normName(d.name) === n);
+      if (i < 0) i = open.findIndex(d => { const m = normName(d.name); return m.length > 3 && (n.includes(m) || m.includes(n)); });
+      if (i < 0) { unmatched.push(file.name); continue; }
+      const doc = open.splice(i, 1)[0];
+      const fileType = file.mimeType === "application/pdf" ? "pdf" : "gdoc";
+      try {
+        await api.patch(`/api/documents/${doc.id}`, { url: file.url, fileType });
+        handleUrlUpdate(doc.id, file.url, fileType);
+        matched++;
+      } catch { unmatched.push(file.name); }
+    }
+    onRelinked(f.id);
+    setLinkMsg(t("documents.relinkedMany", { count: matched })
+      + (unmatched.length ? ` · ${t("documents.relinkUnmatched", { names: unmatched.join(", ") })}` : ""));
+  };
+
   if (loading) return (
     <>
       <Topbar title={t("documents.title")} />
@@ -1113,8 +1151,32 @@ export function DocumentsPage() {
         sub={t("documents.sub")}
         actions={<div style={{ display: "flex", gap: 8, alignItems: "center" }}>{summarizeAllBtn}{viewToggle}</div>}
       />
+      <DocLinkCtx.Provider value={{ status: linkStatus, onRelinked }}>
       <div className="page-content" style={{ maxWidth: 760 }}>
         {bulkMsg && <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 12 }}>{bulkMsg}</div>}
+        {missingDocs.length > 0 && (
+          <div style={{
+            padding: "12px 16px", borderRadius: 10, marginBottom: 20, display: "flex", flexDirection: "column", gap: 8,
+            background: "var(--score-mid-bg)", border: "1px solid var(--score-mid-border)", fontSize: 12, color: "var(--fg-1)", lineHeight: 1.5,
+          }}>
+            <span style={{ display: "flex", gap: 6 }}>
+              <WarningTriangle width={14} height={14} style={{ flexShrink: 0, color: "var(--score-mid)", marginTop: 2 }} />
+              <span>{linkFolder
+                ? t("documents.missingBannerFolder", { count: missingDocs.length, folder: linkFolder.name || "Google Drive" })
+                : t("documents.missingBanner", { count: missingDocs.length })}</span>
+            </span>
+            <span style={{ fontSize: 11, color: "var(--fg-3)" }}>
+              {missingDocs.slice(0, 10).map(d => d.name).join(" · ")}{missingDocs.length > 10 ? " …" : ""}
+            </span>
+            <span>
+              <GooglePickerButton kind="readable" className="btn btn-primary" onPicked={relinkMany}
+                options={linkFolder ? { parentId: linkFolder.id, multi: true } : { multi: true }}
+                title={linkFolder?.name || undefined}
+                label={linkFolder ? t("templates.pickInFolder", { folder: linkFolder.name || "Google Drive" }) : t("documents.pickMissing")} />
+            </span>
+          </div>
+        )}
+        {linkMsg && <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 12 }}>{linkMsg}</div>}
         {viewMode === "tabs" ? (
           <TabView docs={docs} onAdd={handleAdd} onDelete={handleDelete} onEdit={setEditDoc} onUrlUpdate={handleUrlUpdate} onSummarize={summarizeDoc} />
         ) : (
@@ -1132,6 +1194,7 @@ export function DocumentsPage() {
           ))
         )}
       </div>
+      </DocLinkCtx.Provider>
 
       {editDoc && (
         <EditModal doc={editDoc} onSave={handleEdit} onClose={() => setEditDoc(null)} />

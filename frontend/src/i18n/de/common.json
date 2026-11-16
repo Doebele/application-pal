@@ -279,7 +279,19 @@
     "influenceFactors": "Einflussfaktoren",
     "day30": "Erste 30 Tage",
     "day60": "Erste 60 Tage",
-    "day90": "Erste 90 Tage"
+    "day90": "Erste 90 Tage",
+    "reviewLevel": {
+      "length": {
+        "too_long": "zu lang",
+        "appropriate": "angemessen",
+        "too_short": "zu kurz"
+      },
+      "personal": {
+        "weak": "schwach",
+        "medium": "mittel",
+        "strong": "stark"
+      }
+    }
   },
   "tileExpand": {
     "runNow": "Jetzt ausführen",
@@ -407,7 +419,12 @@
     "grantAccess": "Zugriff erteilen",
     "copyFailed": "Kopieren fehlgeschlagen",
     "relinkFailed": "Neu verknüpfen fehlgeschlagen",
-    "missingHint": "Die App kann diese Datei nicht öffnen (gelöscht, verschoben oder ohne Zugriff). Mit „Neu verknüpfen …“ die Datei in Google Drive wählen."
+    "missingHint": "Die App kann diese Datei nicht öffnen (gelöscht, verschoben oder ohne Zugriff). Mit „Neu verknüpfen …“ die Datei in Google Drive wählen.",
+    "missingBanner": "{{count}} Dokument(e) sind nicht erreichbar. Wähle sie in Google Drive aus – mehrere auf einmal mit Cmd- oder Shift-Klick. Sie werden über den Namen zugeordnet.",
+    "missingBannerFolder": "{{count}} Dokument(e) sind noch nicht erreichbar. Markiere sie im Ordner „{{folder}}“ auf einmal (Cmd- oder Shift-Klick) – sie werden über den Namen zugeordnet.",
+    "pickMissing": "In Google Drive auswählen",
+    "relinkedMany": "{{count}} Dokument(e) neu verknüpft",
+    "relinkUnmatched": "nicht zugeordnet: {{names}} – bitte einzeln über „Neu verknüpfen …“"
   },
   "contacts": {
     "label": "Kontakte",
@@ -699,7 +716,13 @@
     "missingExport": "Die App kann die Vorlage „{{name}}“ nicht öffnen – das Google Doc wurde deshalb ohne Vorlage erstellt. Wähle die Vorlage einmal in Google Drive aus: Sie wird überall verknüpft, wo sie verwendet wird, und das Dokument wird neu mit Vorlage erstellt.",
     "relinkAndExport": "Vorlage wählen und neu erstellen",
     "relinkFailed": "Verknüpfen fehlgeschlagen",
-    "missingExportNoName": "Die App kann die Vorlage nicht öffnen – das Google Doc wurde deshalb ohne Vorlage erstellt. Wähle die Vorlage einmal in Google Drive aus: Sie wird überall verknüpft, wo sie verwendet wird, und das Dokument wird neu mit Vorlage erstellt."
+    "missingExportNoName": "Die App kann die Vorlage nicht öffnen – das Google Doc wurde deshalb ohne Vorlage erstellt. Wähle die Vorlage einmal in Google Drive aus: Sie wird überall verknüpft, wo sie verwendet wird, und das Dokument wird neu mit Vorlage erstellt.",
+    "folderFollowUp": "{{linked}} Vorlage(n) verknüpft. {{count}} weitere sind noch nicht erreichbar – markiere sie im Ordner „{{folder}}“ auf einmal (Cmd- oder Shift-Klick).",
+    "pickInFolder": "Im Ordner „{{folder}}“ auswählen",
+    "skipAndExport": "Überspringen und Dokument erstellen",
+    "missingBanner": "{{count}} Vorlage(n) sind nicht erreichbar. Wähle sie in Google Drive aus – mehrere auf einmal mit Cmd- oder Shift-Klick. Sie werden über den Namen zugeordnet.",
+    "missingBannerFolder": "{{count}} Vorlage(n) sind noch nicht erreichbar. Markiere sie im Ordner „{{folder}}“ auf einmal (Cmd- oder Shift-Klick) – sie werden über den Namen zugeordnet.",
+    "pickMissing": "In Google Drive auswählen"
   },
   "table": {
     "title": "Bewerbungsliste",

@@ -164,6 +164,20 @@ function StagePicker({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
+// Letter review "laenge"/"personalisierung": the backend returns codes; reviews stored
+// before that hold German words — map both to the UI language, show anything else as is.
+const REVIEW_LEVEL_LEGACY: Record<string, string> = {
+  "zu lang": "too_long", "angemessen": "appropriate", "zu kurz": "too_short",
+  "schwach": "weak", "mittel": "medium", "stark": "strong",
+};
+function reviewLevel(t: (k: string) => string, kind: "length" | "personal", raw: string): string {
+  const v = raw.trim().toLowerCase();
+  const code = REVIEW_LEVEL_LEGACY[v] ?? v.replace(/\s+/g, "_");
+  const key = `aiResult.reviewLevel.${kind}.${code}`;
+  const out = t(key);
+  return out === key ? raw : out;
+}
+
 function daysAgo(date: Date | string): number {
   return Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000);
 }
@@ -1253,8 +1267,8 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
         {lr.cliches?.length > 0 && <AiSection title={t("aiResult.cliches")}><div>{lr.cliches.map((c, i) => <TagBadge key={i} text={c} color="#f87171" />)}</div></AiSection>}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 10, color: "var(--fg-3)" }}>
           {lr.tonalitaet     && <span>{t("aiResult.tone")}: <strong style={{ color: "var(--fg-2)" }}>{lr.tonalitaet}</strong></span>}
-          {lr.laenge         && <span>· {t("aiResult.length")}: <strong style={{ color: "var(--fg-2)" }}>{lr.laenge}</strong></span>}
-          {lr.personalisierung && <span>· {t("aiResult.personalization")}: <strong style={{ color: "var(--fg-2)" }}>{lr.personalisierung}</strong></span>}
+          {lr.laenge         && <span>· {t("aiResult.length")}: <strong style={{ color: "var(--fg-2)" }}>{reviewLevel(t, "length", lr.laenge)}</strong></span>}
+          {lr.personalisierung && <span>· {t("aiResult.personalization")}: <strong style={{ color: "var(--fg-2)" }}>{reviewLevel(t, "personal", lr.personalisierung)}</strong></span>}
         </div>
       </>
     );
@@ -3854,7 +3868,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
           const r = await api.post<AckermannScript>(`/api/applications/${app.id}/ai/ackermann-script`, aiBody);
           updateAckermannScript(r.data);
         } else if (id === "letter-review") {
-          const r = await api.post<LetterReview>(`/api/applications/${app.id}/ai/letter-review`, { ...aiBody });
+          const r = await api.post<LetterReview>(`/api/applications/${app.id}/ai/letter-review`, { ...aiBody, uiLang: i18n.language });
           updateLetterReview(r.data);
         } else if (id === "opening-sentences") {
           const r = await api.post<OpeningSentences>(`/api/applications/${app.id}/ai/opening-sentences`, aiBody);
@@ -4634,7 +4648,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     setGeneratingReview(true); setErr(null);
     startAiJob(app.id, "letter-review"); // survives switching tiles while it runs
     try {
-      const r = await api.post(`/api/applications/${app.id}/ai/letter-review`, { ai: aiBody(), language: appLang });
+      const r = await api.post(`/api/applications/${app.id}/ai/letter-review`, { ai: aiBody(), language: appLang, uiLang: i18n.language });
       onAiResult?.("letter-review", r.data); invalidate();
     } catch (e) { setErr(errMsg(e)); } finally { setGeneratingReview(false); finishAiJob(app.id, "letter-review"); }
   };
@@ -4932,8 +4946,8 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
           )}
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 10, color: "var(--fg-3)", marginBottom: (review.promptVorschlaege?.length ?? 0) > 0 ? 12 : 0 }}>
             {review.tonalitaet && <span>{t("aiResult.tone")}: <strong style={{ color: "var(--fg-2)" }}>{review.tonalitaet}</strong></span>}
-            {review.laenge && <span>· {t("aiResult.length")}: <strong style={{ color: "var(--fg-2)" }}>{review.laenge}</strong></span>}
-            {review.personalisierung && <span>· {t("aiResult.personalization")}: <strong style={{ color: "var(--fg-2)" }}>{review.personalisierung}</strong></span>}
+            {review.laenge && <span>· {t("aiResult.length")}: <strong style={{ color: "var(--fg-2)" }}>{reviewLevel(t, "length", review.laenge)}</strong></span>}
+            {review.personalisierung && <span>· {t("aiResult.personalization")}: <strong style={{ color: "var(--fg-2)" }}>{reviewLevel(t, "personal", review.personalisierung)}</strong></span>}
           </div>
           {(review.promptVorschlaege?.length ?? 0) > 0 && (
             <div>

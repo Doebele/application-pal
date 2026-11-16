@@ -279,7 +279,19 @@
     "influenceFactors": "Influence factors",
     "day30": "First 30 days",
     "day60": "First 60 days",
-    "day90": "First 90 days"
+    "day90": "First 90 days",
+    "reviewLevel": {
+      "length": {
+        "too_long": "too long",
+        "appropriate": "appropriate",
+        "too_short": "too short"
+      },
+      "personal": {
+        "weak": "weak",
+        "medium": "medium",
+        "strong": "strong"
+      }
+    }
   },
   "tileExpand": {
     "runNow": "Run now",
@@ -407,7 +419,12 @@
     "grantAccess": "Grant access",
     "copyFailed": "Copy failed",
     "relinkFailed": "Re-linking failed",
-    "missingHint": "The app can’t open this file (deleted, moved or no access). Use “Re-link …” to pick it in Google Drive."
+    "missingHint": "The app can’t open this file (deleted, moved or no access). Use “Re-link …” to pick it in Google Drive.",
+    "missingBanner": "{{count}} document(s) can’t be reached. Pick them in Google Drive – several at once with Cmd or Shift click. They are matched by name.",
+    "missingBannerFolder": "{{count}} document(s) still can’t be reached. Mark them in the folder “{{folder}}” in one go (Cmd or Shift click) – they are matched by name.",
+    "pickMissing": "Pick in Google Drive",
+    "relinkedMany": "{{count}} document(s) re-linked",
+    "relinkUnmatched": "not matched: {{names}} – please use “Re-link …” on each"
   },
   "contacts": {
     "label": "Contacts",
@@ -699,7 +716,13 @@
     "missingExport": "The app can’t open the template “{{name}}”, so the Google Doc was created without it. Pick the template once in Google Drive: it gets linked everywhere it is used, and the document is created again with the template.",
     "relinkAndExport": "Pick template and recreate",
     "relinkFailed": "Linking failed",
-    "missingExportNoName": "The app can’t open the template, so the Google Doc was created without it. Pick the template once in Google Drive: it gets linked everywhere it is used, and the document is created again with the template."
+    "missingExportNoName": "The app can’t open the template, so the Google Doc was created without it. Pick the template once in Google Drive: it gets linked everywhere it is used, and the document is created again with the template.",
+    "folderFollowUp": "{{linked}} template(s) linked. {{count}} more can’t be reached yet – mark them in the folder “{{folder}}” in one go (Cmd or Shift click).",
+    "pickInFolder": "Pick in folder “{{folder}}”",
+    "skipAndExport": "Skip and create document",
+    "missingBanner": "{{count}} template(s) can’t be reached. Pick them in Google Drive – several at once with Cmd or Shift click. They are matched by name.",
+    "missingBannerFolder": "{{count}} template(s) still can’t be reached. Mark them in the folder “{{folder}}” in one go (Cmd or Shift click) – they are matched by name.",
+    "pickMissing": "Pick in Google Drive"
   },
   "table": {
     "title": "Application List",
