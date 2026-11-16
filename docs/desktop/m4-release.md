@@ -20,7 +20,7 @@ Stand: 11.11.2026 · Branch `desktop`
 ### Release-Ablauf
 
 1. Version in `desktop/src-tauri/tauri.conf.json` erhöhen (auch `Cargo.toml` und `desktop/package.json`).
-2. Tag `desktop-v0.2.0` pushen → `Desktop Release` baut drei Pakete, signiert/notarisiert den Mac-Teil und legt einen **Entwurf** an. Der Tag muss zur Version passen, sonst bricht der Build ab.
+2. Tag `desktop-vX.Y.Z` pushen (z. B. `desktop-v0.3.0`) → `Desktop Release` baut drei Pakete, signiert/notarisiert den Mac-Teil und legt einen **Entwurf** an. Der Tag muss zur Version passen, sonst bricht der Build ab.
 3. Entwurf auf GitHub prüfen und **veröffentlichen** → `Desktop Updater` legt dessen `latest.json` in den festen Release `desktop-updater`. Ab dann bieten installierte Apps das Update an.
 
 Desktop-Tags heissen bewusst `desktop-v*`: `docker.yml` baut bei jedem `v*`-Tag die Docker-Images.
