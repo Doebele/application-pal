@@ -60,7 +60,9 @@
     "groupApplications": "Applications",
     "groupMe": "Me & my documents",
     "groupWriting": "Writing & knowledge",
-    "help": "Help & overview"
+    "help": "Help & overview",
+    "setupAi": "Set up AI model",
+    "setupGoogle": "Connect Google"
   },
   "tabs": {
     "actions": "Actions",
@@ -1905,7 +1907,9 @@
       "letterCoach": "Your fixed rules for every cover letter: structure, tone, no-gos.",
       "templates": "Google Docs templates for exporting cover letters, CVs and more.",
       "knowledge": "Collected knowledge on companies, salaries and interviews.",
-      "settings": "AI provider, Google, language, profile and security."
+      "settings": "AI provider, Google, language, profile and security.",
+      "setupAi": "Step by step: choose a provider, connect, pick a model.",
+      "setupGoogle": "Step by step: sign in to Google, pick a Drive folder."
     },
     "steps": {
       "board": {
@@ -1978,6 +1982,26 @@
         "main": {
           "title": "Your master CV",
           "body": "Master CV, personal notes and target salary. All AI texts – match score, cover letter, interview – build on it."
+        },
+        "focus": {
+          "title": "Your situation",
+          "body": "Choose school leaver, entry-level or career changer. It decides which help you see – for example the LinkedIn check for entry-level and career changers."
+        },
+        "personal": {
+          "title": "Personal details",
+          "body": "Name, contact, location and headline. They go into cover letters, exports and the RAV proof. Fill them in once."
+        },
+        "linkedin": {
+          "title": "Connect LinkedIn",
+          "body": "Optional: with your own LinkedIn developer app, Apply-Pal reads your profile (read-only). It also works without – the LinkedIn check imports a PDF or the ZIP export."
+        },
+        "cv": {
+          "title": "Master CV",
+          "body": "Your CV as text, the most important basis for the AI: match score, cover letter, interview prep. Paste it in “Edit”, check it in “Preview”. The more complete, the better the texts."
+        },
+        "notes": {
+          "title": "Personal notes",
+          "body": "What isn't in the CV: motivation, preferred environment, achievements, things you don't want. The AI uses it for more personal letters."
         }
       },
       "documents": {
@@ -1987,27 +2011,47 @@
         },
         "actions": {
           "title": "Summaries and view",
-          "body": "Re-summarises all documents and switches between list and tabs."
+          "body": "The AI summarises every document and reads those summaries for each application. “Summarise all” refreshes them (needs an AI model). On the right you switch between list and tabs."
+        },
+        "category": {
+          "title": "A category",
+          "body": "CV, references, certificates, portfolio: each category has its own area. “+” adds a link (Google Doc, Drive PDF or web page) or, for Google Docs categories, creates a new document. CVs here are also the source for the CV check."
         }
       },
       "cvCheck": {
         "main": {
           "title": "Your CV",
-          "body": "The CV from “Documents” as a PDF. Highlights show which passage a hint refers to."
+          "body": "The CV from “Documents” (category CV) shows here as a PDF. None yet? Add it under Documents first. Highlights show which passage a hint refers to."
         },
         "side": {
           "title": "Score",
-          "body": "100 points for impact, presentation and competencies, with feedback bullet by bullet and rewrite suggestions."
+          "body": "100 points for impact, presentation and competencies. Hints you deliberately want to keep can be accepted – they then count in full."
+        },
+        "tabs": {
+          "title": "Four tabs",
+          "body": "Score: overall result and start the check. Improve: bullet by bullet with rewrites. Structure: the detected layout. Versions: compare earlier states."
+        },
+        "actions": {
+          "title": "Language and sidebar",
+          "body": "One CV and one score per language (DE/EN/FR). Show or hide the sidebar here."
         }
       },
       "linkedin": {
         "main": {
           "title": "Your profile",
-          "body": "Your imported LinkedIn profile or the draft the AI builds from it."
+          "body": "Your imported LinkedIn profile or the draft the AI builds from it. Nothing yet? Import the profile PDF, the ZIP export or copied text under “Source”."
         },
         "side": {
-          "title": "Score, tools, checklist",
-          "body": "A score out of 100, the text generator and a checklist for copying everything to LinkedIn."
+          "title": "Step by step",
+          "body": "The recommended path: import, read the score, answer the questions in AI tools and confirm a positioning, generate texts, then work through the checklist. Apply-Pal never writes to LinkedIn itself."
+        },
+        "tabs": {
+          "title": "Five tabs",
+          "body": "Score: rating. AI tools: choose a positioning and generate texts. Checklist: what to copy to LinkedIn. Versions: compare states. Source: import."
+        },
+        "actions": {
+          "title": "Language and view",
+          "body": "LinkedIn keeps one profile per language. Choose the language here and switch between cards, draft and PDF."
         }
       },
       "letterCoach": {
@@ -2020,6 +2064,22 @@
         "main": {
           "title": "Google Docs templates",
           "body": "One active template per content type and language. Google Doc exports use them automatically."
+        },
+        "noGoogle": {
+          "title": "Connect Google first",
+          "body": "Templates live in your Google Drive. Connect Google under Settings → Integrations (the guided tour “Connect Google” helps)."
+        },
+        "how": {
+          "title": "How templates work",
+          "body": "A template is a Google Doc with placeholders. On export, Apply-Pal copies it into the application's folder and fills it in. “Import template” picks existing Docs from your Drive."
+        },
+        "type": {
+          "title": "A content type",
+          "body": "Cover letter, CV, interview prep, salary and more: each type has its own templates."
+        },
+        "lang": {
+          "title": "One active template per language",
+          "body": "Set one active template for German and one for English. The application's language decides which is used. “Create new” makes an empty template, “From Drive” links an existing one. “Unreachable” means: link it again."
         }
       },
       "knowledge": {
@@ -2034,8 +2094,16 @@
       },
       "settings": {
         "main": {
-          "title": "Set everything up",
-          "body": "AI provider, Google connection, language, appearance and profile security. You can also reset the tours here."
+          "title": "More settings",
+          "body": "Appearance, backup, Drive naming and profile security. Reset the tours at the very top."
+        },
+        "ai": {
+          "title": "AI model",
+          "body": "Without an AI model, match score, cover letters and checks don't work. The guided tour “Set up AI model” in the overview explains each step."
+        },
+        "google": {
+          "title": "Google",
+          "body": "Google Drive, Docs and Calendar: for application folders, template exports and appointments. The guided tour “Connect Google” in the overview shows how."
         }
       },
       "common": {
@@ -2046,6 +2114,46 @@
         "help": {
           "title": "Help on every screen",
           "body": "Start this tour again here (or press ?). “Help & overview” in the navigation shows all screens at a glance."
+        }
+      },
+      "setupAi": {
+        "providers": {
+          "title": "1. Choose a provider",
+          "body": "Local and free: LM Studio or Ollama – the model runs on your computer, nothing leaves it. In the cloud: Anthropic, OpenAI, Gemini or OpenRouter with your own API key. Click a provider right here in the bright area, then “Next”."
+        },
+        "connection": {
+          "title": "2. Connection",
+          "body": "Local: the server address, usually http://localhost:1234 (LM Studio) or http://localhost:11434 (Ollama). The server must be running with a model loaded. Cloud: paste the API key from your provider account – it is stored encrypted."
+        },
+        "model": {
+          "title": "3. Pick a model",
+          "body": "The list shows what your provider offers; for local servers the button next to it reloads it. Empty list = server not running or no model loaded. For cover letters a larger model pays off, e.g. Qwen3 or a current Claude model."
+        },
+        "check": {
+          "title": "4. Check",
+          "body": "If models appear in the list, the connection works. Then start a match score on an application – if a result comes back, you're set."
+        },
+        "done": {
+          "title": "Done",
+          "body": "The choice is saved immediately and applies to your profile on every device. API keys stay on the server and are never sent back to the browser."
+        }
+      },
+      "setupGoogle": {
+        "intro": {
+          "title": "Connect Google",
+          "body": "One connection for Drive (application folders, exports), Docs (templates) and Calendar (appointments). Apply-Pal only reads what it needs."
+        },
+        "connect": {
+          "title": "1. Sign in",
+          "body": "“Connect Google” opens Google sign-in (in the desktop app in your system browser). Choose the account, allow access, come back – the status changes to “Connected”. You can click right here."
+        },
+        "folder": {
+          "title": "2. Folder for applications",
+          "body": "Choose the Drive folder where each application gets a subfolder – with the folder picker or by pasting the folder URL. Without a choice, everything goes to “My Drive”."
+        },
+        "next": {
+          "title": "What next?",
+          "body": "Set your Google Docs templates under “Templates” and link CV and references under “Documents”. Pick the calendar further down this page."
         }
       }
     },

@@ -1693,14 +1693,15 @@ textarea {
 }
 
 /* ── In-app help: tours + overview (components/Tour.tsx) ─────── */
-.tour-root { position: fixed; inset: 0; z-index: 10000; }
-.tour-shade { position: absolute; inset: 0; }
+.tour-root { position: fixed; inset: 0; z-index: 10000; pointer-events: none; }
+.tour-shade { position: absolute; inset: 0; pointer-events: auto; background: rgba(8,10,16,0.62); }
+[data-theme="light"] .tour-shade { background: rgba(15,17,22,0.5); }
+.tour-tip { pointer-events: auto; }
 .tour-hole {
   position: absolute; border-radius: 9px; pointer-events: none;
-  outline: 200vmax solid rgba(8,10,16,0.62); box-shadow: 0 0 0 2px var(--accent);
+  box-shadow: 0 0 0 2px var(--accent);
   transition: left .28s ease, top .28s ease, width .28s ease, height .28s ease;
 }
-[data-theme="light"] .tour-hole { outline-color: rgba(15,17,22,0.55); }
 .tour-tip {
   position: absolute; width: 320px; max-width: calc(100vw - 24px);
   background: var(--surface); color: var(--fg-1); border: 1px solid var(--border);
@@ -1708,7 +1709,9 @@ textarea {
   transition: left .28s ease, top .28s ease;
 }
 .tour-reduced .tour-hole, .tour-reduced .tour-tip { transition: none; }
-@media (prefers-reduced-motion: reduce) { .tour-hole, .tour-tip { transition: none; } }
+.tour-shade { transition: clip-path .28s ease; }
+.tour-reduced .tour-shade { transition: none; }
+@media (prefers-reduced-motion: reduce) { .tour-hole, .tour-tip, .tour-shade { transition: none; } }
 .tour-eyebrow { font-family: "Fira Sans Condensed", var(--font-sans); font-size: 10.5px; letter-spacing: .09em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
 .tour-tip h3 { margin: 4px 0 6px; font-size: 15px; }
 .tour-tip p { margin: 0; color: var(--fg-2); line-height: 1.5; font-size: 13px; }

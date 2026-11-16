@@ -842,7 +842,7 @@ function ListSection({ cat, docs, onAdd, onDelete, onEdit, onUrlUpdate, onSummar
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div style={{
+    <div data-tour="documents.category" style={{
       marginBottom: expanded ? 0 : 32,
       ...(expanded ? {
         position: "absolute", top: 57, left: 0, right: 0, bottom: 0,

@@ -243,7 +243,12 @@ function TourOverlay({ screen, steps, onEnd }: { screen: ScreenId; steps: TourSt
 
   return createPortal(
     <div className={"tour-root" + (reduced ? " tour-reduced" : "")}>
-      <div className="tour-shade" onClick={e => e.stopPropagation()} />
+      {/* Shade with a hole: clicks inside the spotlight reach the page (e.g. pick an AI provider). */}
+      <div
+        className="tour-shade"
+        onClick={e => e.stopPropagation()}
+        style={box ? { clipPath: `polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${box.x}px ${box.y}px, ${box.x + box.w}px ${box.y}px, ${box.x + box.w}px ${box.y + box.h}px, ${box.x}px ${box.y + box.h}px, ${box.x}px ${box.y}px)` } : undefined}
+      />
       {box && <div className="tour-hole" style={{ left: box.x, top: box.y, width: box.w, height: box.h }} />}
       {box && (
         <div

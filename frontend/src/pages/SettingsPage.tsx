@@ -976,7 +976,7 @@ function GoogleSection() {
             {status === "connected" ? t("settings.googleConnected") : t("settings.googleDisconnected")}
           </div>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+        <div data-tour="settings.googleConnect" style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {status === "loading" && <RefreshCircle width={14} height={14} style={{ animation: "spin 1s linear infinite", color: "var(--fg-3)" }} />}
           {status === "connected" && (
             <>
@@ -1002,7 +1002,7 @@ function GoogleSection() {
 
       {/* Folder picker — only when connected */}
       {status === "connected" && (
-        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
+        <div data-tour="settings.googleFolder" style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--fg-3)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
             {t("settings.folderSection")}
           </div>
@@ -1783,14 +1783,14 @@ export function SettingsPage() {
         </div>
 
         {/* AI Integration */}
-        <div style={{ marginBottom: 32 }}>
+        <div data-tour="settings.ai" style={{ marginBottom: 32 }}>
           <div className="eyebrow" style={{ marginBottom: 4 }}>{t("settings.ai")}</div>
           <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 14 }}>
             {t("settings.aiSub")}
           </div>
 
           {/* Provider selector — two rows */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
+          <div data-tour="settings.aiProviders" style={{ display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" }}>
             <ProviderPill value="none"        label={t("settings.aiNone")}        active={ai.provider === "none"}        onClick={() => setAi({ provider: "none" })} />
             <ProviderPill value="lm-studio"   label={t("settings.aiLmStudio")}    color="#10b981" active={ai.provider === "lm-studio"}   onClick={() => setAi({ provider: "lm-studio" })}  recommended={t("settings.recommended")} />
             <ProviderPill value="ollama"      label={t("settings.aiOllama")}      color="#e05d44" active={ai.provider === "ollama"}      onClick={() => setAi({ provider: "ollama" })} />
@@ -1804,7 +1804,7 @@ export function SettingsPage() {
           </div>
 
           {ai.provider !== "none" && (
-            <div className="settings-group">
+            <div className="settings-group" data-tour="settings.aiDetails">
               {ai.provider === "lm-studio"  && <LmStudioSection />}
               {ai.provider === "ollama"     && <OllamaSection />}
               {ai.provider === "anthropic"  && <AnthropicSection />}
@@ -1833,7 +1833,7 @@ export function SettingsPage() {
         {/* Integrations */}
         <div style={{ marginBottom: 32 }}>
           <div className="eyebrow" style={{ marginBottom: 12 }}>{t("settings.integrations")}</div>
-          <div className="settings-group">
+          <div className="settings-group" data-tour="settings.google">
             <GoogleSection />
           </div>
         </div>

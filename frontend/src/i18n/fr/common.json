@@ -60,7 +60,9 @@
     "groupApplications": "Candidatures",
     "groupMe": "Moi & mes documents",
     "groupWriting": "Rédaction & savoir",
-    "help": "Aide & vue d'ensemble"
+    "help": "Aide & vue d'ensemble",
+    "setupAi": "Configurer l'IA",
+    "setupGoogle": "Connecter Google"
   },
   "tabs": {
     "actions": "Actions",
@@ -1905,7 +1907,9 @@
       "letterCoach": "Tes règles fixes pour chaque lettre : structure, ton, interdits.",
       "templates": "Modèles Google Docs pour exporter lettres, CV, etc.",
       "knowledge": "Savoir réuni sur les entreprises, salaires et entretiens.",
-      "settings": "Fournisseur IA, Google, langue, profil et sécurité."
+      "settings": "Fournisseur IA, Google, langue, profil et sécurité.",
+      "setupAi": "Pas à pas : choisir un fournisseur, se connecter, choisir un modèle.",
+      "setupGoogle": "Pas à pas : se connecter à Google, choisir un dossier Drive."
     },
     "steps": {
       "board": {
@@ -1978,6 +1982,26 @@
         "main": {
           "title": "Ton CV maître",
           "body": "CV maître, notes personnelles et salaire souhaité. Tous les textes IA s'appuient dessus."
+        },
+        "focus": {
+          "title": "Ta situation",
+          "body": "Choisis : fin de scolarité, début de carrière ou reconversion. Cela détermine l'aide affichée – par exemple le check LinkedIn."
+        },
+        "personal": {
+          "title": "Données personnelles",
+          "body": "Nom, contact, lieu et titre. Ils apparaissent dans les lettres, les exports et la preuve ORP. À remplir une seule fois."
+        },
+        "linkedin": {
+          "title": "Connecter LinkedIn",
+          "body": "Optionnel : avec ta propre app développeur LinkedIn, Apply-Pal lit ton profil (lecture seule). Sans connexion, le check LinkedIn importe un PDF ou l'export ZIP."
+        },
+        "cv": {
+          "title": "CV maître",
+          "body": "Ton CV en texte, la base principale de l'IA : score, lettre, préparation d'entretien. Colle-le dans « Modifier », vérifie dans « Aperçu ». Plus il est complet, meilleurs sont les textes."
+        },
+        "notes": {
+          "title": "Notes personnelles",
+          "body": "Ce qui n'est pas dans le CV : motivation, environnement souhaité, réussites, ce que tu ne veux pas. L'IA s'en sert pour des lettres plus personnelles."
         }
       },
       "documents": {
@@ -1987,27 +2011,47 @@
         },
         "actions": {
           "title": "Résumés et vue",
-          "body": "Résume à nouveau tous les documents et bascule entre liste et onglets."
+          "body": "L'IA résume chaque document et lit ces résumés pour chaque candidature. « Tout résumer » les actualise (modèle IA requis). À droite : liste ou onglets."
+        },
+        "category": {
+          "title": "Une catégorie",
+          "body": "CV, certificats, attestations, références, portfolio : chaque catégorie a sa zone. « + » ajoute un lien (Google Doc, PDF Drive ou page web) ou crée un nouveau document Google. Les CV ici servent aussi au contrôle CV."
         }
       },
       "cvCheck": {
         "main": {
           "title": "Ton CV",
-          "body": "Le CV de « Documents » en PDF. Les surlignages montrent à quel passage se rapporte une remarque."
+          "body": "Le CV de « Documents » (catégorie CV) s'affiche ici en PDF. Pas encore de CV ? Ajoute-le d'abord dans Documents. Les surlignages montrent le passage concerné."
         },
         "side": {
           "title": "Évaluation",
-          "body": "100 points pour impact, présentation et compétences, avec retour puce par puce et propositions de reformulation."
+          "body": "100 points pour impact, présentation et compétences. Les remarques que tu veux garder telles quelles peuvent être acceptées – elles comptent alors en entier."
+        },
+        "tabs": {
+          "title": "Quatre onglets",
+          "body": "Score : résultat et lancement du contrôle. Améliorer : puce par puce avec reformulations. Structure : la structure détectée. Versions : comparer les états."
+        },
+        "actions": {
+          "title": "Langue et panneau",
+          "body": "Un CV et un score par langue (DE/EN/FR). Affiche ou masque le panneau ici."
         }
       },
       "linkedin": {
         "main": {
           "title": "Ton profil",
-          "body": "Ton profil LinkedIn importé ou le brouillon que l'IA en tire."
+          "body": "Ton profil LinkedIn importé ou le brouillon que l'IA en tire. Rien encore ? Importe le PDF, l'export ZIP ou le texte copié sous « Source »."
         },
         "side": {
-          "title": "Score, outils, checklist",
-          "body": "Un score sur 100, le générateur de textes et une checklist pour tout reporter sur LinkedIn."
+          "title": "Pas à pas",
+          "body": "Le chemin conseillé : importer, lire le score, répondre aux questions des outils IA et confirmer un positionnement, générer les textes, puis suivre la checklist. Apply-Pal n'écrit jamais sur LinkedIn."
+        },
+        "tabs": {
+          "title": "Cinq onglets",
+          "body": "Score : évaluation. Outils IA : choisir un positionnement et générer des textes. Checklist : ce qu'il faut reporter. Versions : comparer. Source : import."
+        },
+        "actions": {
+          "title": "Langue et vue",
+          "body": "LinkedIn garde un profil par langue. Choisis la langue ici et bascule entre cartes, brouillon et PDF."
         }
       },
       "letterCoach": {
@@ -2020,6 +2064,22 @@
         "main": {
           "title": "Modèles Google Docs",
           "body": "Un modèle actif par type de contenu et par langue. Les exports Google Doc les utilisent automatiquement."
+        },
+        "noGoogle": {
+          "title": "D'abord connecter Google",
+          "body": "Les modèles sont dans ton Google Drive. Connecte Google sous Paramètres → Intégrations (la visite « Connecter Google » t'aide)."
+        },
+        "how": {
+          "title": "Fonctionnement des modèles",
+          "body": "Un modèle est un Google Doc avec des espaces réservés. À l'export, Apply-Pal le copie dans le dossier de la candidature et le remplit. « Importer un modèle » choisit des Docs existants."
+        },
+        "type": {
+          "title": "Un type de contenu",
+          "body": "Lettre, CV, préparation d'entretien, salaire, etc. : chaque type a ses modèles."
+        },
+        "lang": {
+          "title": "Un modèle actif par langue",
+          "body": "Active un modèle pour l'allemand et un pour l'anglais. La langue de la candidature décide lequel est utilisé. « Créer » fait un modèle vide, « Depuis Drive » en lie un existant. « Inaccessible » : il faut le relier à nouveau."
         }
       },
       "knowledge": {
@@ -2034,8 +2094,16 @@
       },
       "settings": {
         "main": {
-          "title": "Tout configurer",
-          "body": "Fournisseur IA, connexion Google, langue, affichage et sécurité du profil. Tu peux aussi réinitialiser les visites ici."
+          "title": "Autres paramètres",
+          "body": "Affichage, sauvegarde, nommage Drive et sécurité du profil. Les visites se réinitialisent tout en haut."
+        },
+        "ai": {
+          "title": "Modèle IA",
+          "body": "Sans modèle IA, ni score, ni lettres, ni contrôles. La visite guidée « Configurer l'IA » de la vue d'ensemble explique chaque étape."
+        },
+        "google": {
+          "title": "Google",
+          "body": "Google Drive, Docs et Agenda : dossiers de candidature, exports de modèles et rendez-vous. La visite « Connecter Google » montre comment faire."
         }
       },
       "common": {
@@ -2046,6 +2114,46 @@
         "help": {
           "title": "De l'aide sur chaque écran",
           "body": "Relance cette visite ici (ou avec ?). « Aide & vue d'ensemble » dans la navigation montre tous les écrans."
+        }
+      },
+      "setupAi": {
+        "providers": {
+          "title": "1. Choisir un fournisseur",
+          "body": "En local et gratuit : LM Studio ou Ollama – le modèle tourne sur ton ordinateur, rien n'en sort. Dans le cloud : Anthropic, OpenAI, Gemini ou OpenRouter avec ta propre clé API. Clique directement ici sur un fournisseur, puis « Suivant »."
+        },
+        "connection": {
+          "title": "2. Connexion",
+          "body": "Local : l'adresse du serveur, souvent http://localhost:1234 (LM Studio) ou http://localhost:11434 (Ollama). Le serveur doit tourner avec un modèle chargé. Cloud : colle la clé API de ton compte – elle est stockée chiffrée."
+        },
+        "model": {
+          "title": "3. Choisir un modèle",
+          "body": "La liste montre ce que propose ton fournisseur ; pour un serveur local, le bouton à côté la recharge. Liste vide = serveur arrêté ou aucun modèle chargé. Pour les lettres, un modèle plus grand vaut la peine, p. ex. Qwen3 ou un modèle Claude récent."
+        },
+        "check": {
+          "title": "4. Vérifier",
+          "body": "Si des modèles apparaissent, la connexion fonctionne. Lance ensuite un score sur une candidature – si un résultat arrive, tout est prêt."
+        },
+        "done": {
+          "title": "Terminé",
+          "body": "Le choix est enregistré aussitôt et vaut pour ton profil sur tous les appareils. Les clés API restent sur le serveur et ne reviennent jamais au navigateur."
+        }
+      },
+      "setupGoogle": {
+        "intro": {
+          "title": "Connecter Google",
+          "body": "Une connexion pour Drive (dossiers, exports), Docs (modèles) et Agenda (rendez-vous). Apply-Pal ne lit que ce dont il a besoin."
+        },
+        "connect": {
+          "title": "1. Se connecter",
+          "body": "« Connecter Google » ouvre la connexion Google (dans l'app de bureau, dans ton navigateur). Choisis le compte, autorise l'accès, reviens – le statut passe à « Connecté ». Tu peux cliquer ici directement."
+        },
+        "folder": {
+          "title": "2. Dossier des candidatures",
+          "body": "Choisis le dossier Drive où chaque candidature reçoit un sous-dossier – via le sélecteur ou en collant l'URL du dossier. Sans choix, tout va dans « Mon Drive »."
+        },
+        "next": {
+          "title": "Et ensuite ?",
+          "body": "Définis tes modèles Google Docs sous « Modèles » et relie CV et certificats sous « Documents ». L'agenda se choisit plus bas sur cette page."
         }
       }
     },
