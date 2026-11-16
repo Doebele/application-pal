@@ -51,12 +51,15 @@ Erzeugt am 11.11.2026: `~/.tauri/d2603-updater.key` (privat, ohne Passwort) und 
 - Privaten Schlüssel in den Passwortmanager (Enpass) **und** als GitHub-Secret `TAURI_SIGNING_PRIVATE_KEY` (Dateiinhalt). `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` leer anlegen.
 - **Geht der Schlüssel verloren, können installierte Apps keine Updates mehr annehmen** – sie müssten neu installiert werden.
 
-### 2. Apple (Konto Kafka-Locker)
+### 2. Apple (Einzelkonto Claus Medvesek, Team-ID `8HU3TR2B84`)
 
-1. Zertifikat **„Developer ID Application“** erstellen (developer.apple.com → Certificates; nur der Account Holder darf das). Lokal gibt es bisher nur „Apple Development“-Zertifikate, die für die Verteilung nicht reichen.
-2. Mit privatem Schlüssel als `.p12` exportieren → `base64 -i cert.p12 | pbcopy` → Secret `APPLE_CERTIFICATE`; Exportpasswort → `APPLE_CERTIFICATE_PASSWORD`.
-3. `APPLE_SIGNING_IDENTITY` = voller Name, z.B. `Developer ID Application: Kafka-Locker GmbH (TEAMID)`.
-4. App-Store-Connect-API-Schlüssel (Users and Access → Integrations → Team Keys, Rolle „Developer“): `.p8`-Inhalt → `APPLE_API_PRIVATE_KEY`, Key-ID → `APPLE_API_KEY`, Issuer-ID → `APPLE_API_ISSUER`.
+Die Apple-ID hat nur das persönliche Team; ein Team „Cafcalog“ gibt es dort nicht. macOS zeigt deshalb „Claus Medvesek“ als Entwickler. Für „Cafcalog“ bräuchte es eine Organisations-Mitgliedschaft (D-U-N-S).
+
+Eingerichtet am 16.11.2026:
+1. Zertifikat **„Developer ID Application“** (gültig bis 16.12.2027): CSR aus der Schlüsselbundverwaltung (Zertifikatsassistent → „Auf der Festplatte sichern“), auf developer.apple.com → Certificates → + → Developer ID Application hochladen. Die `.cer` in den Schlüsselbund **Anmeldung** importieren (bei ausgewähltem iCloud-Schlüsselbund kommt Fehler -25294), z.B. `security import developerID_application.cer -k ~/Library/Keychains/login.keychain-db`.
+2. Mit privatem Schlüssel als `.p12` exportiert (Kopie in Enpass) → `base64 -i … | gh secret set APPLE_CERTIFICATE`; Exportpasswort → `APPLE_CERTIFICATE_PASSWORD`.
+3. `APPLE_SIGNING_IDENTITY` = `Developer ID Application: CLAUS MEDVESEK (8HU3TR2B84)`.
+4. App-Store-Connect-API-Team-Schlüssel „Apply-Pal Notarization“ (Rolle Developer, Key-ID `R25V7C2P3M`, `.p8` in Enpass): `.p8`-Inhalt → `APPLE_API_PRIVATE_KEY`, Key-ID → `APPLE_API_KEY`, Issuer-ID → `APPLE_API_ISSUER`.
 
 Ohne Zertifikat baut die CI eine unsignierte Mac-App (Warnung im Log); ohne API-Schlüssel signiert, aber nicht notarisiert.
 
