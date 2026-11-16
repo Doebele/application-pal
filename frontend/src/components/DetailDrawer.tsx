@@ -22,6 +22,8 @@ import { useUiStore, type AiConfig } from "../lib/store";
 import { useTranslation } from "react-i18next";
 import { ContractField, PensumField } from "./ImportDrawer";
 import { GooglePickerButton, type PickedFile } from "../lib/googlePicker";
+import { MissingTemplateNotice } from "./MissingTemplateNotice";
+import i18n from "../i18n";
 
 // ─── Round flag icon (round-flag-icons library) ───────────────
 // @ts-ignore
@@ -890,6 +892,7 @@ function SalaryCheckDetail({ data, appId }: { data: SalaryCheck; appId: string }
 function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appId: string; showToast?: (msg: string, type?: string) => void }) {
   const [exporting, setExporting] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
+  const [templateMissing, setTemplateMissing] = useState<string | null>(null);
 
   const copyAll = () => {
     const sep = "─".repeat(40);
@@ -914,15 +917,21 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
   const exportDoc = async () => {
     setExporting(true);
     try {
-      const r = await api.post<{ docUrl: string }>(`/api/applications/${appId}/ai/interview-prep/export-doc`, { interviewPrep: iv });
+      const r = await api.post<{ docUrl: string; templateMissing?: string }>(`/api/applications/${appId}/ai/interview-prep/export-doc`, { interviewPrep: iv });
       setExportUrl(r.data.docUrl);
-      showToast?.("Google Doc erstellt");
+      setTemplateMissing(r.data.templateMissing ?? null);
+      if (!r.data.templateMissing) showToast?.("Google Doc erstellt");
     } catch { showToast?.("Export fehlgeschlagen", "error"); }
     finally { setExporting(false); }
   };
 
   return (
     <div>
+      {templateMissing && (
+        <div style={{ marginBottom: 10 }}>
+          <MissingTemplateNotice templateId={templateMissing} appId={appId} fallbackDocUrl={exportUrl} onRetry={exportDoc} />
+        </div>
+      )}
       {/* Action bar */}
       <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
         <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={copyAll}>
@@ -1013,6 +1022,7 @@ function AckermannScriptDetail({ script, appId }: { script: AckermannScript; app
   const { t } = useTranslation();
   const [exporting, setExporting] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
+  const [templateMissing, setTemplateMissing] = useState<string | null>(null);
 
   const copyAll = () => {
     const sep = "─".repeat(40);
@@ -1033,8 +1043,9 @@ function AckermannScriptDetail({ script, appId }: { script: AckermannScript; app
   const exportDoc = async () => {
     setExporting(true);
     try {
-      const r = await api.post<{ docUrl: string }>(`/api/applications/${appId}/ai/ackermann-script/export-doc`, { script });
+      const r = await api.post<{ docUrl: string; templateMissing?: string }>(`/api/applications/${appId}/ai/ackermann-script/export-doc`, { script });
       setExportUrl(r.data.docUrl);
+      setTemplateMissing(r.data.templateMissing ?? null);
     } catch { /* silent */ }
     finally { setExporting(false); }
   };
@@ -1046,6 +1057,11 @@ function AckermannScriptDetail({ script, appId }: { script: AckermannScript; app
         <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={copyAll}>
           <IcCopy width={11} height={11} /> Alles kopieren
         </button>
+        {templateMissing && (
+          <div style={{ flexBasis: "100%" }}>
+            <MissingTemplateNotice templateId={templateMissing} appId={appId} fallbackDocUrl={exportUrl} onRetry={exportDoc} />
+          </div>
+        )}
         {exportUrl ? (
           <a href={exportUrl} target="_blank" rel="noopener noreferrer" className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}>
             <Page width={11} height={11} /> Google Doc öffnen ↗
@@ -2050,6 +2066,7 @@ function TileExpandView({ id, entry, appId, appLanguage, onClose, onRegister }: 
   const [running, setRunning] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
+  const [templateMissing, setTemplateMissing] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
 
@@ -2112,9 +2129,10 @@ function TileExpandView({ id, entry, appId, appLanguage, onClose, onRegister }: 
       else if (id === "salary-tips")  body.tips             = entry.data;
       else if (id === "letter-review") body.review          = entry.data;
       else if (id === "opening-sentences") body.sentences   = entry.data;
-      const r = await api.post<{ docUrl: string }>(`/api/applications/${appId}${endpoint}`, body);
+      const r = await api.post<{ docUrl: string; templateMissing?: string }>(`/api/applications/${appId}${endpoint}`, body);
       setExportUrl(r.data.docUrl);
-      fireToast(t("tileExpand.docCreated"));
+      setTemplateMissing(r.data.templateMissing ?? null);
+      if (!r.data.templateMissing) fireToast(t("tileExpand.docCreated"));
     } catch { fireToast(t("tileExpand.exportFailed"), "err"); }
     finally { setExporting(false); }
   };
@@ -2178,6 +2196,11 @@ function TileExpandView({ id, entry, appId, appLanguage, onClose, onRegister }: 
         </button>
       </div>
       {err && <div style={{ fontSize: 11, color: "#f87171", marginBottom: 8, flexShrink: 0 }}>{err}</div>}
+      {templateMissing && (
+        <div style={{ marginBottom: 12, flexShrink: 0 }}>
+          <MissingTemplateNotice templateId={templateMissing} appId={appId} fallbackDocUrl={exportUrl} onRetry={exportDoc} />
+        </div>
+      )}
 
       {/* ATS-Keywords: full-width cloud + 4-column category list */}
       {id === "ats-keywords" && hasData ? (() => {
@@ -3989,9 +4012,10 @@ function StageAiActions({ app, onSave, onAiResult }: {
                 onClick={async () => {
                   setLoading("iv-export");
                   try {
-                    const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/interview-prep/export-doc`, { interviewPrep });
+                    const r = await api.post<{ docUrl: string; templateMissing?: string }>(`/api/applications/${app.id}/ai/interview-prep/export-doc`, { interviewPrep });
                     window.open(r.data.docUrl, "_blank");
-                    showToast(tc("tileExpand.docCreated"));
+                    if (r.data.templateMissing) showToast(tc("templates.missingFallback"), "error");
+                    else showToast(tc("tileExpand.docCreated"));
                   } catch (e: unknown) {
                     const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
                     if (msg === "Unauthorized" || (e as { response?: { status?: number } })?.response?.status === 401) {
@@ -4483,6 +4507,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const [draftBody, setDraftBody] = useState(letter?.body ?? "");
   const [exporting, setExporting] = useState(false);
   const [exportUrl, setExportUrl] = useState<string | null>(null);
+  const [letterTemplateMissing, setLetterTemplateMissing] = useState<string | null>(null);
   const hydrated = useRef(false);
 
   const items = useMemo(() => angles ? [
@@ -4649,8 +4674,9 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     if (!letter?.body) return;
     setExporting(true);
     try {
-      const r = await api.post<{ docUrl: string }>(`/api/applications/${app.id}/ai/cover-letter/export-doc`, { subject: letter.subject, body: letter.body, language: appLang });
+      const r = await api.post<{ docUrl: string; templateMissing?: string }>(`/api/applications/${app.id}/ai/cover-letter/export-doc`, { subject: letter.subject, body: letter.body, language: appLang });
       setExportUrl(r.data.docUrl);
+      setLetterTemplateMissing(r.data.templateMissing ?? null);
     } catch (e) { setErr(errMsg(e)); } finally { setExporting(false); }
   };
   // Persist an inline edit to the CURRENT version (implicit save on blur). Does NOT
@@ -4838,6 +4864,11 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
       <div style={{ fontSize: 10, color: "var(--fg-4)", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}>
         <EditPencil width={9} height={9} /> {t("letterDraft.editHint")}
       </div>
+      {letterTemplateMissing && (
+        <div style={{ marginBottom: 10 }}>
+          <MissingTemplateNotice templateId={letterTemplateMissing} appId={app.id} fallbackDocUrl={exportUrl} onRetry={exportLetter} />
+        </div>
+      )}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 10 }}>
         <button className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }} onClick={copyLetter}>
           <IcCopy width={11} height={11} /> {copied ? t("tileExpand.copied") : t("buttons.copy")}

@@ -18,7 +18,8 @@ import { hasShell } from "./desktopShell";
 import i18n from "../i18n";
 
 export type PickerKind = "folder" | "document" | "spreadsheet" | "template" | "readable" | "any";
-export type PickedFile = { id: string; name: string; mimeType: string; url: string };
+/** `all` = every picked file when the picker allows several (kind "template"); the first is the file itself. */
+export type PickedFile = { id: string; name: string; mimeType: string; url: string; all?: PickedFile[] };
 
 type PickerConfig = { available: boolean; apiKey?: string; appId?: string; accessToken?: string; error?: string };
 
@@ -64,8 +65,8 @@ async function pickInBrowser(kind: PickerKind, title: string | undefined, signal
       if (signal?.aborted) return null;
       await sleep(1500);
       if (signal?.aborted) return null;
-      const r = await api.get<{ status: "pending" | "done" | "cancelled" | "expired"; file: PickedFile | null }>(`/api/google/picker-session/${data.id}`);
-      if (r.data.status === "done") return r.data.file;
+      const r = await api.get<{ status: "pending" | "done" | "cancelled" | "expired"; file: PickedFile | null; files?: PickedFile[] }>(`/api/google/picker-session/${data.id}`);
+      if (r.data.status === "done") return r.data.file ? { ...r.data.file, all: r.data.files?.length ? r.data.files : [r.data.file] } : null;
       if (r.data.status !== "pending") return null;
     }
     return null;
@@ -98,13 +99,14 @@ export async function openGooglePicker(kind: PickerKind, title?: string, signal?
       .setOrigin(window.location.origin)
       .setCallback((data: any) => {
         if (data[p.Response.ACTION] === p.Action.PICKED) {
-          const d = data[p.Response.DOCUMENTS][0];
-          resolve({ id: d[p.Document.ID], name: d[p.Document.NAME], mimeType: d[p.Document.MIME_TYPE], url: d[p.Document.URL] });
+          const all: PickedFile[] = data[p.Response.DOCUMENTS].map((d: any) => ({ id: d[p.Document.ID], name: d[p.Document.NAME], mimeType: d[p.Document.MIME_TYPE], url: d[p.Document.URL] }));
+          resolve({ ...all[0], all });
         } else if (data[p.Response.ACTION] === p.Action.CANCEL) {
           resolve(null);
         }
       });
     if (title) builder.setTitle(title);
+    if (kind === "template") builder.enableFeature(p.Feature.MULTISELECT_ENABLED);
     builder.build().setVisible(true);
   });
 }
