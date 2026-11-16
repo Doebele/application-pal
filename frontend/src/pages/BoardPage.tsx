@@ -511,7 +511,7 @@ export function BoardPage() {
       </div>
 
       {!showArchived && (
-        <button className="btn btn-primary" onClick={() => setImportModalOpen(true)}>
+        <button className="btn btn-primary" data-tour="board.add" onClick={() => setImportModalOpen(true)}>
           <Plus width={13} height={13} /> {t("buttons.import")}
         </button>
       )}

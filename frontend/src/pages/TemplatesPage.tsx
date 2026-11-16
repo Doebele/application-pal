@@ -294,7 +294,7 @@ function LangSection({
   };
 
   return (
-    <div style={{
+    <div data-tour="templates.lang" style={{
       border: "1px solid var(--border)", borderRadius: 10,
       marginBottom: 8, overflow: "hidden",
     }}>
@@ -452,7 +452,7 @@ function ContentTypeSection({
   const activeIdEn = typeConfig?.activeIdEn ?? typeConfig?.activeId ?? null;
 
   return (
-    <div style={{ marginBottom: 32 }}>
+    <div data-tour="templates.type" style={{ marginBottom: 32 }}>
       {/* Type header */}
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
         <contentType.Icon width={28} height={28} style={{ color: "var(--fg-2)", flexShrink: 0 }} />
@@ -606,7 +606,7 @@ export function TemplatesPage() {
 
       <div className="page-content" style={{ maxWidth: 720 }}>
         {!isLoading && !googleConnected && (
-          <div style={{
+          <div data-tour="templates.noGoogle" style={{
             padding: "12px 16px", borderRadius: 10, marginBottom: 24,
             background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)",
             fontSize: 12, color: "#fbbf24",
@@ -618,7 +618,7 @@ export function TemplatesPage() {
           </div>
         )}
 
-        <div style={{
+        <div data-tour="templates.how" style={{
           padding: "12px 16px", borderRadius: 10, marginBottom: 28,
           background: "var(--surface-2)", border: "1px solid var(--border)",
           fontSize: 12, color: "var(--fg-2)", lineHeight: 1.7,

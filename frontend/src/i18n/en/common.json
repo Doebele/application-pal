@@ -54,9 +54,15 @@
     "templates": "Templates",
     "settings": "Settings",
     "timelineSub": "Workspace activity — all changes across applications",
-    "letterCoach": "Cover Letter",
+    "letterCoach": "Cover-letter coach",
     "cvCheck": "CV check",
-    "linkedinCheck": "LinkedIn Check"
+    "linkedinCheck": "LinkedIn Check",
+    "groupApplications": "Applications",
+    "groupMe": "Me & my documents",
+    "groupWriting": "Writing & knowledge",
+    "help": "Help & overview",
+    "setupAi": "Set up AI model",
+    "setupGoogle": "Connect Google"
   },
   "tabs": {
     "actions": "Actions",
@@ -1859,5 +1865,304 @@
     "available": "Version {{version}} is available – see the dialog.",
     "busy": "A check is already running.",
     "failed": "Check failed: {{error}}"
+  },
+  "tours": {
+    "ui": {
+      "step": "Step {{n}} of {{total}}",
+      "back": "Back",
+      "next": "Next",
+      "done": "Done",
+      "end": "End tour",
+      "helpBtn": "Tour of this screen (?)"
+    },
+    "overview": {
+      "titleFirst": "Welcome to {{app}}",
+      "title": "What can {{app}} do?",
+      "lead": "{{app}} supports every application from job ad to offer. You add a job, the AI rates it against your CV and helps with every step: documents, cover letter, interview, salary.",
+      "flow": [
+        "Add job",
+        "Good fit? Match score",
+        "CV & cover letter",
+        "Sent",
+        "Interview",
+        "Offer"
+      ],
+      "hint": "Open this overview any time via “Help & overview”. Tour per screen: ?",
+      "later": "Later",
+      "close": "Close",
+      "startBoard": "Start board tour",
+      "startTour": "Start tour →",
+      "groupSystem": "System"
+    },
+    "screens": {
+      "board": "All applications as cards, columns = stages.",
+      "table": "All applications as a sortable table, RAV report.",
+      "calendar": "Appointments, deadlines and Google Calendar together.",
+      "timeline": "All activity in time order: what happened when.",
+      "archive": "Rejected and finished applications, restorable.",
+      "profile": "Master CV, personal notes, target salary – the basis for all AI texts.",
+      "documents": "CVs, references, certificates, portfolio – the AI reads their summaries.",
+      "cvCheck": "Scores your CV out of 100, bullet by bullet.",
+      "linkedin": "Scores your profile and writes texts to copy over.",
+      "letterCoach": "Your fixed rules for every cover letter: structure, tone, no-gos.",
+      "templates": "Google Docs templates for exporting cover letters, CVs and more.",
+      "knowledge": "Collected knowledge on companies, salaries and interviews.",
+      "settings": "AI provider, Google, language, profile and security.",
+      "setupAi": "Step by step: choose a provider, connect, pick a model.",
+      "setupGoogle": "Step by step: sign in to Google, pick a Drive folder."
+    },
+    "steps": {
+      "board": {
+        "search": {
+          "title": "Search",
+          "body": "Filters all applications instantly by company, role, location or tag. ⌘K jumps here from anywhere."
+        },
+        "add": {
+          "title": "Add a new job",
+          "body": "Paste a link or the text of a job ad. The AI fills in company, role, workload, work model and location."
+        },
+        "columns": {
+          "title": "Columns = stages",
+          "body": "Each column is an application stage, from inbox to offer. Drag a card to the next column as you progress – the matching tasks appear automatically."
+        },
+        "card": {
+          "title": "One application",
+          "body": "The number at the top right is the match score: how well the job fits your CV. A click opens all details."
+        },
+        "tabs": {
+          "title": "Four tabs per application",
+          "body": "Process: tasks and AI actions of the current stage. Details: fields and job description. Documents: Drive folder. AI: all results at a glance."
+        },
+        "process": {
+          "title": "What to do now",
+          "body": "The checklist changes with the stage. In “Preparing letter”, for example, the guided cover-letter assistant appears here."
+        }
+      },
+      "table": {
+        "head": {
+          "title": "Adjust columns",
+          "body": "Drag to reorder, drag the edge for width, click to sort. The column menu shows or hides fields and pins them to the left."
+        },
+        "grid": {
+          "title": "Rows",
+          "body": "A click opens the same details as on the board. AI analyses can be started per row right here."
+        },
+        "rav": {
+          "title": "RAV report",
+          "body": "Creates the monthly proof of job-search efforts for the RAV – as a Google Sheet or CSV."
+        }
+      },
+      "calendar": {
+        "main": {
+          "title": "Month or week",
+          "body": "Interviews, deadlines and activities from your applications, together with your Google Calendar. Click an event to open the application."
+        },
+        "actions": {
+          "title": "Switch view",
+          "body": "Switch between month and week view and move through time."
+        }
+      },
+      "timeline": {
+        "main": {
+          "title": "What happened when",
+          "body": "Every change to an application – stage changes, notes, AI results – appears here in time order."
+        }
+      },
+      "archive": {
+        "main": {
+          "title": "Archived applications",
+          "body": "Rejected or finished applications end up here with their reason. Open a card to restore it."
+        },
+        "actions": {
+          "title": "Cards or table",
+          "body": "Shows the archive as cards or as a table."
+        }
+      },
+      "profile": {
+        "main": {
+          "title": "Your master CV",
+          "body": "Master CV, personal notes and target salary. All AI texts – match score, cover letter, interview – build on it."
+        },
+        "focus": {
+          "title": "Your situation",
+          "body": "Choose school leaver, entry-level or career changer. It decides which help you see – for example the LinkedIn check for entry-level and career changers."
+        },
+        "personal": {
+          "title": "Personal details",
+          "body": "Name, contact, location and headline. They go into cover letters, exports and the RAV proof. Fill them in once."
+        },
+        "linkedin": {
+          "title": "Connect LinkedIn",
+          "body": "Optional: with your own LinkedIn developer app, Apply-Pal reads your profile (read-only). It also works without – the LinkedIn check imports a PDF or the ZIP export."
+        },
+        "cv": {
+          "title": "Master CV",
+          "body": "Your CV as text, the most important basis for the AI: match score, cover letter, interview prep. Paste it in “Edit”, check it in “Preview”. The more complete, the better the texts."
+        },
+        "notes": {
+          "title": "Personal notes",
+          "body": "What isn't in the CV: motivation, preferred environment, achievements, things you don't want. The AI uses it for more personal letters."
+        }
+      },
+      "documents": {
+        "main": {
+          "title": "Your documents",
+          "body": "CVs, references, certificates and portfolio as links. The AI reads their summaries for every application."
+        },
+        "actions": {
+          "title": "Summaries and view",
+          "body": "The AI summarises every document and reads those summaries for each application. “Summarise all” refreshes them (needs an AI model). On the right you switch between list and tabs."
+        },
+        "category": {
+          "title": "A category",
+          "body": "CV, references, certificates, portfolio: each category has its own area. “+” adds a link (Google Doc, Drive PDF or web page) or, for Google Docs categories, creates a new document. CVs here are also the source for the CV check."
+        }
+      },
+      "cvCheck": {
+        "main": {
+          "title": "Your CV",
+          "body": "The CV from “Documents” (category CV) shows here as a PDF. None yet? Add it under Documents first. Highlights show which passage a hint refers to."
+        },
+        "side": {
+          "title": "Score",
+          "body": "100 points for impact, presentation and competencies. Hints you deliberately want to keep can be accepted – they then count in full."
+        },
+        "tabs": {
+          "title": "Four tabs",
+          "body": "Score: overall result and start the check. Improve: bullet by bullet with rewrites. Structure: the detected layout. Versions: compare earlier states."
+        },
+        "actions": {
+          "title": "Language and sidebar",
+          "body": "One CV and one score per language (DE/EN/FR). Show or hide the sidebar here."
+        }
+      },
+      "linkedin": {
+        "main": {
+          "title": "Your profile",
+          "body": "Your imported LinkedIn profile or the draft the AI builds from it. Nothing yet? Import the profile PDF, the ZIP export or copied text under “Source”."
+        },
+        "side": {
+          "title": "Step by step",
+          "body": "The recommended path: import, read the score, answer the questions in AI tools and confirm a positioning, generate texts, then work through the checklist. Apply-Pal never writes to LinkedIn itself."
+        },
+        "tabs": {
+          "title": "Five tabs",
+          "body": "Score: rating. AI tools: choose a positioning and generate texts. Checklist: what to copy to LinkedIn. Versions: compare states. Source: import."
+        },
+        "actions": {
+          "title": "Language and view",
+          "body": "LinkedIn keeps one profile per language. Choose the language here and switch between cards, draft and PDF."
+        }
+      },
+      "letterCoach": {
+        "main": {
+          "title": "Rules for every letter",
+          "body": "Structure, values, strengths, phrases and no-gos. These rules go into every cover letter the AI writes."
+        }
+      },
+      "templates": {
+        "main": {
+          "title": "Google Docs templates",
+          "body": "One active template per content type and language. Google Doc exports use them automatically."
+        },
+        "noGoogle": {
+          "title": "Connect Google first",
+          "body": "Templates live in your Google Drive. Connect Google under Settings → Integrations (the guided tour “Connect Google” helps)."
+        },
+        "how": {
+          "title": "How templates work",
+          "body": "A template is a Google Doc with placeholders. On export, Apply-Pal copies it into the application's folder and fills it in. “Import template” picks existing Docs from your Drive."
+        },
+        "type": {
+          "title": "A content type",
+          "body": "Cover letter, CV, interview prep, salary and more: each type has its own templates."
+        },
+        "lang": {
+          "title": "One active template per language",
+          "body": "Set one active template for German and one for English. The application's language decides which is used. “Create new” makes an empty template, “From Drive” links an existing one. “Unreachable” means: link it again."
+        }
+      },
+      "knowledge": {
+        "main": {
+          "title": "Collect knowledge",
+          "body": "A company list on the left, collected knowledge on company, salary and interviews on the right."
+        },
+        "actions": {
+          "title": "Add a company",
+          "body": "Create a new company to collect knowledge about it."
+        }
+      },
+      "settings": {
+        "main": {
+          "title": "More settings",
+          "body": "Appearance, backup, Drive naming and profile security. Reset the tours at the very top."
+        },
+        "ai": {
+          "title": "AI model",
+          "body": "Without an AI model, match score, cover letters and checks don't work. The guided tour “Set up AI model” in the overview explains each step."
+        },
+        "google": {
+          "title": "Google",
+          "body": "Google Drive, Docs and Calendar: for application folders, template exports and appointments. The guided tour “Connect Google” in the overview shows how."
+        }
+      },
+      "common": {
+        "title": {
+          "title": "This screen",
+          "body": "{{screen}}"
+        },
+        "help": {
+          "title": "Help on every screen",
+          "body": "Start this tour again here (or press ?). “Help & overview” in the navigation shows all screens at a glance."
+        }
+      },
+      "setupAi": {
+        "providers": {
+          "title": "1. Choose a provider",
+          "body": "Local and free: LM Studio or Ollama – the model runs on your computer, nothing leaves it. In the cloud: Anthropic, OpenAI, Gemini or OpenRouter with your own API key. Click a provider right here in the bright area, then “Next”."
+        },
+        "connection": {
+          "title": "2. Connection",
+          "body": "Local: the server address, usually http://localhost:1234 (LM Studio) or http://localhost:11434 (Ollama). The server must be running with a model loaded. Cloud: paste the API key from your provider account – it is stored encrypted."
+        },
+        "model": {
+          "title": "3. Pick a model",
+          "body": "The list shows what your provider offers; for local servers the button next to it reloads it. Empty list = server not running or no model loaded. For cover letters a larger model pays off, e.g. Qwen3 or a current Claude model."
+        },
+        "check": {
+          "title": "4. Check",
+          "body": "If models appear in the list, the connection works. Then start a match score on an application – if a result comes back, you're set."
+        },
+        "done": {
+          "title": "Done",
+          "body": "The choice is saved immediately and applies to your profile on every device. API keys stay on the server and are never sent back to the browser."
+        }
+      },
+      "setupGoogle": {
+        "intro": {
+          "title": "Connect Google",
+          "body": "One connection for Drive (application folders, exports), Docs (templates) and Calendar (appointments). Apply-Pal only reads what it needs."
+        },
+        "connect": {
+          "title": "1. Sign in",
+          "body": "“Connect Google” opens Google sign-in (in the desktop app in your system browser). Choose the account, allow access, come back – the status changes to “Connected”. You can click right here."
+        },
+        "folder": {
+          "title": "2. Folder for applications",
+          "body": "Choose the Drive folder where each application gets a subfolder – with the folder picker or by pasting the folder URL. Without a choice, everything goes to “My Drive”."
+        },
+        "next": {
+          "title": "What next?",
+          "body": "Set your Google Docs templates under “Templates” and link CV and references under “Documents”. Pick the calendar further down this page."
+        }
+      }
+    },
+    "settings": {
+      "title": "Help & tours",
+      "resetLabel": "Reset all tours",
+      "resetSub": "The overview appears again on next start, all tours count as unseen.",
+      "resetBtn": "Reset",
+      "resetDone": "Reset done"
+    }
   }
 }

@@ -5081,7 +5081,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
   return (
     <>
       {/* Two-column: Aufgaben (left) | Aktionen (right) — single column when StageAiActions is empty (preparing_letter) */}
-      <div style={{ display: "grid", gridTemplateColumns: app.stage === "preparing_letter" ? "1fr" : "1fr 1fr", gap: 12, alignItems: "start", marginBottom: 4 }}>
+      <div data-tour="drawer.process" style={{ display: "grid", gridTemplateColumns: app.stage === "preparing_letter" ? "1fr" : "1fr 1fr", gap: 12, alignItems: "start", marginBottom: 4 }}>
         <TaskChecklist app={app} />
         <StageAiActions
           app={app} onSave={onSave}
@@ -5893,7 +5893,7 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
 
 
           {/* Tabs — scrollable */}
-          <div className="hide-scrollbar" style={{ display: "flex", borderBottom: "1px solid var(--border)", overflowX: "auto", gap: 0 }}>
+          <div className="hide-scrollbar" data-tour="drawer.tabs" style={{ display: "flex", borderBottom: "1px solid var(--border)", overflowX: "auto", gap: 0 }}>
             {TABS.map(({ id, label }) => (
               <button key={id} className={"tab" + (tab === id ? " active" : "")} onClick={() => setTab(id)} style={{ whiteSpace: "nowrap" }}>
                 {label}

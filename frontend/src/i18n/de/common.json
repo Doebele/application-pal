@@ -50,13 +50,19 @@
     "timeline": "Timeline",
     "profile": "Profil",
     "documents": "Dokumente",
-    "knowledge": "Knowledge",
+    "knowledge": "Wissen",
     "templates": "Vorlagen",
     "settings": "Einstellungen",
     "timelineSub": "Workspace-Aktivitäten — alle Änderungen im Überblick",
-    "letterCoach": "Anschreiben",
+    "letterCoach": "Anschreiben-Coach",
     "cvCheck": "CV-Check",
-    "linkedinCheck": "LinkedIn-Check"
+    "linkedinCheck": "LinkedIn-Check",
+    "groupApplications": "Bewerbungen",
+    "groupMe": "Ich & meine Unterlagen",
+    "groupWriting": "Schreiben & Wissen",
+    "help": "Hilfe & Übersicht",
+    "setupAi": "KI-Modell einrichten",
+    "setupGoogle": "Google verbinden"
   },
   "tabs": {
     "actions": "Aktionen",
@@ -1859,5 +1865,304 @@
     "available": "Version {{version}} ist verfügbar – siehe Dialog.",
     "busy": "Die Prüfung läuft bereits.",
     "failed": "Prüfung fehlgeschlagen: {{error}}"
+  },
+  "tours": {
+    "ui": {
+      "step": "Schritt {{n}} von {{total}}",
+      "back": "Zurück",
+      "next": "Weiter",
+      "done": "Fertig",
+      "end": "Beenden",
+      "helpBtn": "Tour für diesen Screen (?)"
+    },
+    "overview": {
+      "titleFirst": "Willkommen bei {{app}}",
+      "title": "Was kann {{app}}?",
+      "lead": "{{app}} begleitet jede Bewerbung vom Inserat bis zur Zusage. Du erfasst einen Job, die KI bewertet ihn gegen deinen Lebenslauf und hilft bei jedem Schritt: Unterlagen, Anschreiben, Interview, Gehalt.",
+      "flow": [
+        "Job erfassen",
+        "Passt er? Match-Score",
+        "CV & Anschreiben",
+        "Gesendet",
+        "Interview",
+        "Angebot"
+      ],
+      "hint": "Diese Übersicht öffnest du jederzeit über „Hilfe & Übersicht“. Touren pro Screen: ?",
+      "later": "Später",
+      "close": "Schliessen",
+      "startBoard": "Board-Tour starten",
+      "startTour": "Tour starten →",
+      "groupSystem": "System"
+    },
+    "screens": {
+      "board": "Alle Bewerbungen als Karten, Spalten = Phasen.",
+      "table": "Alle Bewerbungen als sortierbare Tabelle, RAV-Report.",
+      "calendar": "Termine, Fristen und Google-Kalender zusammen.",
+      "timeline": "Alle Aktivitäten zeitlich, was wann passiert ist.",
+      "archive": "Abgesagte und erledigte Bewerbungen, wiederherstellbar.",
+      "profile": "Master-CV, persönliche Stichpunkte, Wunschgehalt – Basis für alle KI-Texte.",
+      "documents": "Lebensläufe, Zeugnisse, Zertifikate, Portfolio – die KI liest die Zusammenfassungen mit.",
+      "cvCheck": "Bewertet deinen Lebenslauf auf 100 Punkte, Bullet für Bullet.",
+      "linkedin": "Bewertet dein Profil und schreibt Texte zum Übernehmen.",
+      "letterCoach": "Deine festen Regeln für jedes Anschreiben: Aufbau, Ton, No-Gos.",
+      "templates": "Google-Docs-Vorlagen für den Export von Anschreiben, CV und Co.",
+      "knowledge": "Gesammeltes Wissen zu Firmen, Gehältern und Interviews.",
+      "settings": "KI-Anbieter, Google, Sprache, Profil und Schutz.",
+      "setupAi": "Schritt für Schritt: Anbieter wählen, verbinden, Modell auswählen.",
+      "setupGoogle": "Schritt für Schritt: Google anmelden, Drive-Ordner wählen."
+    },
+    "steps": {
+      "board": {
+        "search": {
+          "title": "Suchen",
+          "body": "Filtert alle Bewerbungen sofort nach Firma, Rolle, Ort oder Tag. Mit ⌘K springst du von überall hierher."
+        },
+        "add": {
+          "title": "Neuen Job erfassen",
+          "body": "Füge einen Link oder den Text eines Inserats ein. Die KI füllt Firma, Rolle, Pensum, Arbeitsmodell und Ort selbst aus."
+        },
+        "columns": {
+          "title": "Spalten = Phasen",
+          "body": "Jede Spalte ist eine Bewerbungsphase, von Inbox bis Angebot. Zieh eine Karte in die nächste Spalte, wenn du weiterkommst – die passenden Aufgaben erscheinen dann automatisch."
+        },
+        "card": {
+          "title": "Eine Bewerbung",
+          "body": "Die Zahl oben rechts ist der Match-Score: wie gut die Stelle zu deinem CV passt. Ein Klick öffnet alle Details."
+        },
+        "tabs": {
+          "title": "Vier Tabs pro Bewerbung",
+          "body": "Prozess: Aufgaben und KI-Aktionen der aktuellen Phase. Details: Felder und Stellenbeschreibung. Dokumente: Drive-Ordner. KI: alle Ergebnisse auf einen Blick."
+        },
+        "process": {
+          "title": "Was jetzt zu tun ist",
+          "body": "Die Checkliste wechselt mit der Phase. In „Anschreiben“ erscheint hier zum Beispiel der geführte Anschreiben-Assistent."
+        }
+      },
+      "table": {
+        "head": {
+          "title": "Spalten anpassen",
+          "body": "Ziehen zum Umordnen, Rand ziehen für die Breite, Klick zum Sortieren. Über das Spaltenmenü blendest du Felder ein und aus oder pinnst sie links an."
+        },
+        "grid": {
+          "title": "Zeilen",
+          "body": "Ein Klick öffnet dieselben Details wie auf dem Board. KI-Analysen lassen sich hier direkt pro Zeile starten."
+        },
+        "rav": {
+          "title": "RAV-Report",
+          "body": "Erstellt den monatlichen Nachweis der Arbeitsbemühungen für das RAV – als Google Sheet oder CSV."
+        }
+      },
+      "calendar": {
+        "main": {
+          "title": "Monat oder Woche",
+          "body": "Interviews, Fristen und Aktivitäten aus deinen Bewerbungen, zusammen mit deinem Google-Kalender. Klick auf einen Termin öffnet die Bewerbung."
+        },
+        "actions": {
+          "title": "Ansicht wechseln",
+          "body": "Hier schaltest du zwischen Monats- und Wochenansicht um und blätterst durch die Zeit."
+        }
+      },
+      "timeline": {
+        "main": {
+          "title": "Was wann passiert ist",
+          "body": "Jede Änderung an einer Bewerbung – Phasenwechsel, Notizen, KI-Ergebnisse – erscheint hier chronologisch."
+        }
+      },
+      "archive": {
+        "main": {
+          "title": "Archivierte Bewerbungen",
+          "body": "Abgesagte oder erledigte Bewerbungen landen hier mit ihrem Grund. Öffne eine Karte, um sie wiederherzustellen."
+        },
+        "actions": {
+          "title": "Karten oder Tabelle",
+          "body": "Zeigt das Archiv als Karten oder als Tabelle."
+        }
+      },
+      "profile": {
+        "main": {
+          "title": "Dein Master-CV",
+          "body": "Master-CV, persönliche Stichpunkte und Wunschgehalt. Alle KI-Texte – Match-Score, Anschreiben, Interview – bauen darauf auf."
+        },
+        "focus": {
+          "title": "Deine Ausgangslage",
+          "body": "Wähle, ob du Schulabgänger, Berufseinsteiger oder Berufsumsteiger bist. Davon hängt ab, welche Hilfen du siehst – zum Beispiel der LinkedIn-Check für Ein- und Umsteiger."
+        },
+        "personal": {
+          "title": "Persönliche Angaben",
+          "body": "Name, Kontakt, Ort und Headline. Sie landen in Anschreiben, Exporten und im RAV-Nachweis. Einmal ausfüllen reicht."
+        },
+        "linkedin": {
+          "title": "LinkedIn verbinden",
+          "body": "Optional: Mit einer eigenen LinkedIn-Entwickler-App liest Apply-Pal dein Profil (nur lesen). Ohne Verbindung geht es auch – im LinkedIn-Check kannst du ein PDF oder den ZIP-Export importieren."
+        },
+        "cv": {
+          "title": "Master-CV",
+          "body": "Dein Lebenslauf als Text, die wichtigste Grundlage für die KI: Match-Score, Anschreiben, Interviewvorbereitung. Mit „Bearbeiten“ einfügen, mit „Vorschau“ prüfen. Je vollständiger, desto besser die Texte."
+        },
+        "notes": {
+          "title": "Persönliche Stichpunkte",
+          "body": "Was nicht im CV steht: Motivation, Wunschumfeld, Erfolge, Dinge, die du nicht willst. Die KI nutzt das für persönlichere Anschreiben."
+        }
+      },
+      "documents": {
+        "main": {
+          "title": "Deine Unterlagen",
+          "body": "Lebensläufe, Zeugnisse, Zertifikate und Portfolio als Links. Die KI liest die Zusammenfassungen bei jeder Bewerbung mit."
+        },
+        "actions": {
+          "title": "Zusammenfassen und Ansicht",
+          "body": "Die KI fasst jedes Dokument kurz zusammen und liest diese Zusammenfassungen bei jeder Bewerbung mit. „Alle zusammenfassen“ aktualisiert sie (braucht ein KI-Modell). Rechts wechselst du zwischen Liste und Registern."
+        },
+        "category": {
+          "title": "Eine Kategorie",
+          "body": "Lebenslauf, Zeugnisse, Zertifikate, Referenzen, Portfolio: jede Kategorie hat ihren Bereich. Über „+“ fügst du einen Link hinzu (Google Doc, Drive-PDF oder Webseite) oder legst bei Google-Docs-Kategorien direkt ein neues Dokument an. Lebensläufe hier sind auch die Quelle für den CV-Check."
+        }
+      },
+      "cvCheck": {
+        "main": {
+          "title": "Dein Lebenslauf",
+          "body": "Hier erscheint der Lebenslauf aus „Dokumente“ (Kategorie Lebenslauf) als PDF. Noch keiner da? Lege ihn zuerst unter Dokumente an. Markierungen zeigen, auf welche Stelle sich ein Hinweis bezieht."
+        },
+        "side": {
+          "title": "Bewertung",
+          "body": "100 Punkte für Wirkung, Darstellung und Kompetenzen. Hinweise, die du bewusst so lassen willst, kannst du akzeptieren – sie zählen dann voll."
+        },
+        "tabs": {
+          "title": "Vier Register",
+          "body": "Score: Gesamtwertung und Prüfung starten. Verbessern: Bullet für Bullet mit Umformulierungen. Struktur: der erkannte Aufbau. Versionen: frühere Stände vergleichen."
+        },
+        "actions": {
+          "title": "Sprache und Seitenleiste",
+          "body": "Pro Sprache (DE/EN/FR) ein eigener Lebenslauf und eine eigene Wertung. Die Seitenleiste blendest du hier ein und aus."
+        }
+      },
+      "linkedin": {
+        "main": {
+          "title": "Dein Profil",
+          "body": "Dein importiertes LinkedIn-Profil oder der Entwurf, den die KI daraus macht. Noch nichts da? Unter „Quelle“ importierst du das Profil-PDF, den ZIP-Export oder kopierten Text."
+        },
+        "side": {
+          "title": "Schritt für Schritt",
+          "body": "Der empfohlene Weg: importieren, Score lesen, in den KI-Werkzeugen Fragen beantworten und eine Positionierung bestätigen, Texte erzeugen, dann die Checkliste abarbeiten. Apply-Pal schreibt nie selbst in LinkedIn."
+        },
+        "tabs": {
+          "title": "Fünf Register",
+          "body": "Score: Bewertung. KI-Werkzeuge: Positionierung wählen und Texte erzeugen. Checkliste: was du nach LinkedIn überträgst. Versionen: Stände vergleichen. Quelle: Import."
+        },
+        "actions": {
+          "title": "Sprache und Ansicht",
+          "body": "LinkedIn kennt ein Profil pro Sprache. Hier wählst du die Sprache und wechselst zwischen Karten, Entwurf und PDF."
+        }
+      },
+      "letterCoach": {
+        "main": {
+          "title": "Regeln für jedes Anschreiben",
+          "body": "Aufbau, Werte, Stärken, Formulierungen und No-Gos. Diese Vorgaben fliessen in jedes Anschreiben, das die KI schreibt."
+        }
+      },
+      "templates": {
+        "main": {
+          "title": "Google-Docs-Vorlagen",
+          "body": "Pro Inhaltstyp und Sprache eine aktive Vorlage. Exporte als Google Doc verwenden sie automatisch."
+        },
+        "noGoogle": {
+          "title": "Zuerst Google verbinden",
+          "body": "Vorlagen liegen in deinem Google Drive. Verbinde Google unter Einstellungen → Integrationen (dort gibt es auch die geführte Tour „Google verbinden“)."
+        },
+        "how": {
+          "title": "So funktionieren Vorlagen",
+          "body": "Eine Vorlage ist ein Google Doc mit Platzhaltern. Beim Export kopiert Apply-Pal sie in den Ordner der Bewerbung und füllt sie aus. Mit „Vorlage importieren“ wählst du bestehende Docs aus deinem Drive."
+        },
+        "type": {
+          "title": "Ein Inhaltstyp",
+          "body": "Anschreiben, CV, Interviewvorbereitung, Gehalt und mehr: jeder Typ hat eigene Vorlagen."
+        },
+        "lang": {
+          "title": "Pro Sprache eine aktive Vorlage",
+          "body": "Für Deutsch und Englisch je eine Vorlage aktiv setzen. Die Sprache der Bewerbung entscheidet, welche benutzt wird. „Neu erstellen“ legt eine leere Vorlage an, „Aus Drive“ verknüpft eine bestehende. „Nicht erreichbar“ heisst: neu verknüpfen."
+        }
+      },
+      "knowledge": {
+        "main": {
+          "title": "Wissen sammeln",
+          "body": "Links eine Firmenliste, rechts gesammeltes Wissen zu Firma, Gehalt und Interviews."
+        },
+        "actions": {
+          "title": "Firma hinzufügen",
+          "body": "Lege eine neue Firma an, um Wissen dazu zu sammeln."
+        }
+      },
+      "settings": {
+        "main": {
+          "title": "Weitere Einstellungen",
+          "body": "Darstellung, Datensicherung, Drive-Benennung und Schutz deines Profils. Ganz oben setzt du die Touren zurück."
+        },
+        "ai": {
+          "title": "KI-Modell",
+          "body": "Ohne KI-Modell funktionieren Match-Score, Anschreiben und Checks nicht. Die geführte Tour „KI-Modell einrichten“ in der Übersicht erklärt jeden Schritt."
+        },
+        "google": {
+          "title": "Google",
+          "body": "Google Drive, Docs und Kalender: für Bewerbungsordner, Vorlagen-Exporte und Termine. Die geführte Tour „Google verbinden“ in der Übersicht zeigt den Ablauf."
+        }
+      },
+      "common": {
+        "title": {
+          "title": "Dieser Screen",
+          "body": "{{screen}}"
+        },
+        "help": {
+          "title": "Hilfe auf jedem Screen",
+          "body": "Hier startest du diese Tour erneut (oder mit ?). „Hilfe & Übersicht“ in der Navigation zeigt alle Screens auf einen Blick."
+        }
+      },
+      "setupAi": {
+        "providers": {
+          "title": "1. Anbieter wählen",
+          "body": "Lokal und kostenlos: LM Studio oder Ollama – das Modell läuft auf deinem Rechner, nichts verlässt ihn. In der Cloud: Anthropic, OpenAI, Gemini oder OpenRouter mit eigenem API-Schlüssel. Klick jetzt direkt hier im hellen Bereich auf einen Anbieter und dann auf „Weiter“."
+        },
+        "connection": {
+          "title": "2. Verbindung",
+          "body": "Lokal: die Adresse des Servers, meist http://localhost:1234 (LM Studio) oder http://localhost:11434 (Ollama). Der Server muss laufen und ein Modell geladen sein. Cloud: den API-Schlüssel aus dem Konto des Anbieters einfügen – er wird verschlüsselt gespeichert."
+        },
+        "model": {
+          "title": "3. Modell auswählen",
+          "body": "Die Liste zeigt, was dein Anbieter anbietet; bei lokalen Servern lädt der Knopf daneben sie neu. Bleibt sie leer, läuft der Server nicht oder kein Modell ist geladen. Für Anschreiben lohnt sich ein grösseres Modell, z. B. Qwen3 oder ein aktuelles Claude-Modell."
+        },
+        "check": {
+          "title": "4. Prüfen",
+          "body": "Erscheinen Modelle in der Liste, steht die Verbindung. Danach einfach auf einer Bewerbung den Match-Score starten – kommt ein Ergebnis, ist alles eingerichtet."
+        },
+        "done": {
+          "title": "Fertig",
+          "body": "Die Auswahl wird sofort gespeichert und gilt für dein Profil auf allen Geräten. API-Schlüssel bleiben auf dem Server und gehen nie an den Browser zurück."
+        }
+      },
+      "setupGoogle": {
+        "intro": {
+          "title": "Google verbinden",
+          "body": "Eine Verbindung für Drive (Bewerbungsordner, Exporte), Docs (Vorlagen) und Kalender (Termine). Apply-Pal liest nur, was es braucht."
+        },
+        "connect": {
+          "title": "1. Anmelden",
+          "body": "„Mit Google verbinden“ öffnet die Google-Anmeldung (in der Desktop-App im Systembrowser). Konto wählen, Zugriff erlauben, zurückkehren – der Status wechselt auf „Verbunden“. Klick ruhig direkt hier."
+        },
+        "folder": {
+          "title": "2. Ordner für Bewerbungen",
+          "body": "Wähle den Drive-Ordner, in dem pro Bewerbung ein Unterordner entsteht – per Ordner-Auswahl oder durch Einfügen der Ordner-URL. Ohne Auswahl landet alles in „Meine Ablage“."
+        },
+        "next": {
+          "title": "Und dann?",
+          "body": "Lege unter „Vorlagen“ deine Google-Docs-Vorlagen fest und verknüpfe unter „Dokumente“ Lebenslauf und Zeugnisse. Den Kalender wählst du weiter unten auf dieser Seite."
+        }
+      }
+    },
+    "settings": {
+      "title": "Hilfe & Touren",
+      "resetLabel": "Alle Touren zurücksetzen",
+      "resetSub": "Die Übersicht erscheint beim nächsten Start wieder, alle Touren gelten als ungesehen.",
+      "resetBtn": "Zurücksetzen",
+      "resetDone": "Zurückgesetzt"
+    }
   }
 }

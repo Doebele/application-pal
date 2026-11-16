@@ -50,13 +50,19 @@
     "timeline": "Chronologie",
     "profile": "Profil",
     "documents": "Documents",
-    "knowledge": "Connaissances",
+    "knowledge": "Savoir",
     "templates": "Modèles",
     "settings": "Paramètres",
     "timelineSub": "Activités de l'espace de travail — toutes les modifications en un coup d'œil",
-    "letterCoach": "Lettre de motivation",
+    "letterCoach": "Coach lettre de motivation",
     "cvCheck": "Contrôle CV",
-    "linkedinCheck": "Check LinkedIn"
+    "linkedinCheck": "Check LinkedIn",
+    "groupApplications": "Candidatures",
+    "groupMe": "Moi & mes documents",
+    "groupWriting": "Rédaction & savoir",
+    "help": "Aide & vue d'ensemble",
+    "setupAi": "Configurer l'IA",
+    "setupGoogle": "Connecter Google"
   },
   "tabs": {
     "actions": "Actions",
@@ -1859,5 +1865,304 @@
     "available": "La version {{version}} est disponible – voir la fenêtre.",
     "busy": "Une vérification est déjà en cours.",
     "failed": "Échec de la vérification : {{error}}"
+  },
+  "tours": {
+    "ui": {
+      "step": "Étape {{n}} sur {{total}}",
+      "back": "Retour",
+      "next": "Suivant",
+      "done": "Terminé",
+      "end": "Quitter",
+      "helpBtn": "Visite de cet écran (?)"
+    },
+    "overview": {
+      "titleFirst": "Bienvenue dans {{app}}",
+      "title": "Que fait {{app}} ?",
+      "lead": "{{app}} accompagne chaque candidature de l'annonce à l'offre. Tu saisis un poste, l'IA l'évalue par rapport à ton CV et t'aide à chaque étape : dossier, lettre, entretien, salaire.",
+      "flow": [
+        "Saisir un poste",
+        "Ça colle ? Score",
+        "CV & lettre",
+        "Envoyée",
+        "Entretien",
+        "Offre"
+      ],
+      "hint": "Ouvre cette vue à tout moment via « Aide & vue d'ensemble ». Visite par écran : ?",
+      "later": "Plus tard",
+      "close": "Fermer",
+      "startBoard": "Visite du tableau",
+      "startTour": "Lancer la visite →",
+      "groupSystem": "Système"
+    },
+    "screens": {
+      "board": "Toutes les candidatures en cartes, colonnes = étapes.",
+      "table": "Toutes les candidatures en tableau triable, rapport ORP.",
+      "calendar": "Rendez-vous, échéances et Google Agenda réunis.",
+      "timeline": "Toutes les activités dans l'ordre : quoi, quand.",
+      "archive": "Candidatures refusées ou terminées, restaurables.",
+      "profile": "CV maître, notes personnelles, salaire souhaité – base de tous les textes IA.",
+      "documents": "CV, certificats de travail, attestations, portfolio – l'IA lit leurs résumés.",
+      "cvCheck": "Note ton CV sur 100, puce par puce.",
+      "linkedin": "Note ton profil et rédige des textes à reprendre.",
+      "letterCoach": "Tes règles fixes pour chaque lettre : structure, ton, interdits.",
+      "templates": "Modèles Google Docs pour exporter lettres, CV, etc.",
+      "knowledge": "Savoir réuni sur les entreprises, salaires et entretiens.",
+      "settings": "Fournisseur IA, Google, langue, profil et sécurité.",
+      "setupAi": "Pas à pas : choisir un fournisseur, se connecter, choisir un modèle.",
+      "setupGoogle": "Pas à pas : se connecter à Google, choisir un dossier Drive."
+    },
+    "steps": {
+      "board": {
+        "search": {
+          "title": "Rechercher",
+          "body": "Filtre aussitôt toutes les candidatures par entreprise, poste, lieu ou tag. ⌘K t'amène ici de partout."
+        },
+        "add": {
+          "title": "Saisir un poste",
+          "body": "Colle un lien ou le texte d'une annonce. L'IA remplit entreprise, poste, taux, modèle de travail et lieu."
+        },
+        "columns": {
+          "title": "Colonnes = étapes",
+          "body": "Chaque colonne est une étape, de la boîte de réception à l'offre. Glisse une carte dans la colonne suivante – les tâches adaptées apparaissent automatiquement."
+        },
+        "card": {
+          "title": "Une candidature",
+          "body": "Le chiffre en haut à droite est le score de correspondance avec ton CV. Un clic ouvre tous les détails."
+        },
+        "tabs": {
+          "title": "Quatre onglets par candidature",
+          "body": "Processus : tâches et actions IA de l'étape. Détails : champs et description du poste. Documents : dossier Drive. IA : tous les résultats."
+        },
+        "process": {
+          "title": "Ce qu'il faut faire",
+          "body": "La liste change avec l'étape. À l'étape « Lettre », l'assistant de lettre guidé apparaît ici."
+        }
+      },
+      "table": {
+        "head": {
+          "title": "Ajuster les colonnes",
+          "body": "Glisse pour réordonner, tire le bord pour la largeur, clique pour trier. Le menu des colonnes affiche, masque ou épingle les champs."
+        },
+        "grid": {
+          "title": "Lignes",
+          "body": "Un clic ouvre les mêmes détails que sur le tableau. Les analyses IA se lancent ici ligne par ligne."
+        },
+        "rav": {
+          "title": "Rapport ORP",
+          "body": "Crée la preuve mensuelle des recherches d'emploi pour l'ORP – en Google Sheet ou CSV."
+        }
+      },
+      "calendar": {
+        "main": {
+          "title": "Mois ou semaine",
+          "body": "Entretiens, échéances et activités de tes candidatures, avec ton Google Agenda. Un clic sur un événement ouvre la candidature."
+        },
+        "actions": {
+          "title": "Changer de vue",
+          "body": "Bascule entre mois et semaine et navigue dans le temps."
+        }
+      },
+      "timeline": {
+        "main": {
+          "title": "Quoi, quand",
+          "body": "Chaque changement – étape, note, résultat IA – apparaît ici dans l'ordre chronologique."
+        }
+      },
+      "archive": {
+        "main": {
+          "title": "Candidatures archivées",
+          "body": "Les candidatures refusées ou terminées arrivent ici avec leur motif. Ouvre une carte pour la restaurer."
+        },
+        "actions": {
+          "title": "Cartes ou tableau",
+          "body": "Affiche l'archive en cartes ou en tableau."
+        }
+      },
+      "profile": {
+        "main": {
+          "title": "Ton CV maître",
+          "body": "CV maître, notes personnelles et salaire souhaité. Tous les textes IA s'appuient dessus."
+        },
+        "focus": {
+          "title": "Ta situation",
+          "body": "Choisis : fin de scolarité, début de carrière ou reconversion. Cela détermine l'aide affichée – par exemple le check LinkedIn."
+        },
+        "personal": {
+          "title": "Données personnelles",
+          "body": "Nom, contact, lieu et titre. Ils apparaissent dans les lettres, les exports et la preuve ORP. À remplir une seule fois."
+        },
+        "linkedin": {
+          "title": "Connecter LinkedIn",
+          "body": "Optionnel : avec ta propre app développeur LinkedIn, Apply-Pal lit ton profil (lecture seule). Sans connexion, le check LinkedIn importe un PDF ou l'export ZIP."
+        },
+        "cv": {
+          "title": "CV maître",
+          "body": "Ton CV en texte, la base principale de l'IA : score, lettre, préparation d'entretien. Colle-le dans « Modifier », vérifie dans « Aperçu ». Plus il est complet, meilleurs sont les textes."
+        },
+        "notes": {
+          "title": "Notes personnelles",
+          "body": "Ce qui n'est pas dans le CV : motivation, environnement souhaité, réussites, ce que tu ne veux pas. L'IA s'en sert pour des lettres plus personnelles."
+        }
+      },
+      "documents": {
+        "main": {
+          "title": "Tes documents",
+          "body": "CV, certificats, attestations et portfolio en liens. L'IA lit leurs résumés pour chaque candidature."
+        },
+        "actions": {
+          "title": "Résumés et vue",
+          "body": "L'IA résume chaque document et lit ces résumés pour chaque candidature. « Tout résumer » les actualise (modèle IA requis). À droite : liste ou onglets."
+        },
+        "category": {
+          "title": "Une catégorie",
+          "body": "CV, certificats, attestations, références, portfolio : chaque catégorie a sa zone. « + » ajoute un lien (Google Doc, PDF Drive ou page web) ou crée un nouveau document Google. Les CV ici servent aussi au contrôle CV."
+        }
+      },
+      "cvCheck": {
+        "main": {
+          "title": "Ton CV",
+          "body": "Le CV de « Documents » (catégorie CV) s'affiche ici en PDF. Pas encore de CV ? Ajoute-le d'abord dans Documents. Les surlignages montrent le passage concerné."
+        },
+        "side": {
+          "title": "Évaluation",
+          "body": "100 points pour impact, présentation et compétences. Les remarques que tu veux garder telles quelles peuvent être acceptées – elles comptent alors en entier."
+        },
+        "tabs": {
+          "title": "Quatre onglets",
+          "body": "Score : résultat et lancement du contrôle. Améliorer : puce par puce avec reformulations. Structure : la structure détectée. Versions : comparer les états."
+        },
+        "actions": {
+          "title": "Langue et panneau",
+          "body": "Un CV et un score par langue (DE/EN/FR). Affiche ou masque le panneau ici."
+        }
+      },
+      "linkedin": {
+        "main": {
+          "title": "Ton profil",
+          "body": "Ton profil LinkedIn importé ou le brouillon que l'IA en tire. Rien encore ? Importe le PDF, l'export ZIP ou le texte copié sous « Source »."
+        },
+        "side": {
+          "title": "Pas à pas",
+          "body": "Le chemin conseillé : importer, lire le score, répondre aux questions des outils IA et confirmer un positionnement, générer les textes, puis suivre la checklist. Apply-Pal n'écrit jamais sur LinkedIn."
+        },
+        "tabs": {
+          "title": "Cinq onglets",
+          "body": "Score : évaluation. Outils IA : choisir un positionnement et générer des textes. Checklist : ce qu'il faut reporter. Versions : comparer. Source : import."
+        },
+        "actions": {
+          "title": "Langue et vue",
+          "body": "LinkedIn garde un profil par langue. Choisis la langue ici et bascule entre cartes, brouillon et PDF."
+        }
+      },
+      "letterCoach": {
+        "main": {
+          "title": "Règles pour chaque lettre",
+          "body": "Structure, valeurs, forces, formulations et interdits. Ces règles entrent dans chaque lettre écrite par l'IA."
+        }
+      },
+      "templates": {
+        "main": {
+          "title": "Modèles Google Docs",
+          "body": "Un modèle actif par type de contenu et par langue. Les exports Google Doc les utilisent automatiquement."
+        },
+        "noGoogle": {
+          "title": "D'abord connecter Google",
+          "body": "Les modèles sont dans ton Google Drive. Connecte Google sous Paramètres → Intégrations (la visite « Connecter Google » t'aide)."
+        },
+        "how": {
+          "title": "Fonctionnement des modèles",
+          "body": "Un modèle est un Google Doc avec des espaces réservés. À l'export, Apply-Pal le copie dans le dossier de la candidature et le remplit. « Importer un modèle » choisit des Docs existants."
+        },
+        "type": {
+          "title": "Un type de contenu",
+          "body": "Lettre, CV, préparation d'entretien, salaire, etc. : chaque type a ses modèles."
+        },
+        "lang": {
+          "title": "Un modèle actif par langue",
+          "body": "Active un modèle pour l'allemand et un pour l'anglais. La langue de la candidature décide lequel est utilisé. « Créer » fait un modèle vide, « Depuis Drive » en lie un existant. « Inaccessible » : il faut le relier à nouveau."
+        }
+      },
+      "knowledge": {
+        "main": {
+          "title": "Réunir du savoir",
+          "body": "À gauche la liste des entreprises, à droite le savoir réuni sur l'entreprise, le salaire et les entretiens."
+        },
+        "actions": {
+          "title": "Ajouter une entreprise",
+          "body": "Crée une entreprise pour réunir du savoir à son sujet."
+        }
+      },
+      "settings": {
+        "main": {
+          "title": "Autres paramètres",
+          "body": "Affichage, sauvegarde, nommage Drive et sécurité du profil. Les visites se réinitialisent tout en haut."
+        },
+        "ai": {
+          "title": "Modèle IA",
+          "body": "Sans modèle IA, ni score, ni lettres, ni contrôles. La visite guidée « Configurer l'IA » de la vue d'ensemble explique chaque étape."
+        },
+        "google": {
+          "title": "Google",
+          "body": "Google Drive, Docs et Agenda : dossiers de candidature, exports de modèles et rendez-vous. La visite « Connecter Google » montre comment faire."
+        }
+      },
+      "common": {
+        "title": {
+          "title": "Cet écran",
+          "body": "{{screen}}"
+        },
+        "help": {
+          "title": "De l'aide sur chaque écran",
+          "body": "Relance cette visite ici (ou avec ?). « Aide & vue d'ensemble » dans la navigation montre tous les écrans."
+        }
+      },
+      "setupAi": {
+        "providers": {
+          "title": "1. Choisir un fournisseur",
+          "body": "En local et gratuit : LM Studio ou Ollama – le modèle tourne sur ton ordinateur, rien n'en sort. Dans le cloud : Anthropic, OpenAI, Gemini ou OpenRouter avec ta propre clé API. Clique directement ici sur un fournisseur, puis « Suivant »."
+        },
+        "connection": {
+          "title": "2. Connexion",
+          "body": "Local : l'adresse du serveur, souvent http://localhost:1234 (LM Studio) ou http://localhost:11434 (Ollama). Le serveur doit tourner avec un modèle chargé. Cloud : colle la clé API de ton compte – elle est stockée chiffrée."
+        },
+        "model": {
+          "title": "3. Choisir un modèle",
+          "body": "La liste montre ce que propose ton fournisseur ; pour un serveur local, le bouton à côté la recharge. Liste vide = serveur arrêté ou aucun modèle chargé. Pour les lettres, un modèle plus grand vaut la peine, p. ex. Qwen3 ou un modèle Claude récent."
+        },
+        "check": {
+          "title": "4. Vérifier",
+          "body": "Si des modèles apparaissent, la connexion fonctionne. Lance ensuite un score sur une candidature – si un résultat arrive, tout est prêt."
+        },
+        "done": {
+          "title": "Terminé",
+          "body": "Le choix est enregistré aussitôt et vaut pour ton profil sur tous les appareils. Les clés API restent sur le serveur et ne reviennent jamais au navigateur."
+        }
+      },
+      "setupGoogle": {
+        "intro": {
+          "title": "Connecter Google",
+          "body": "Une connexion pour Drive (dossiers, exports), Docs (modèles) et Agenda (rendez-vous). Apply-Pal ne lit que ce dont il a besoin."
+        },
+        "connect": {
+          "title": "1. Se connecter",
+          "body": "« Connecter Google » ouvre la connexion Google (dans l'app de bureau, dans ton navigateur). Choisis le compte, autorise l'accès, reviens – le statut passe à « Connecté ». Tu peux cliquer ici directement."
+        },
+        "folder": {
+          "title": "2. Dossier des candidatures",
+          "body": "Choisis le dossier Drive où chaque candidature reçoit un sous-dossier – via le sélecteur ou en collant l'URL du dossier. Sans choix, tout va dans « Mon Drive »."
+        },
+        "next": {
+          "title": "Et ensuite ?",
+          "body": "Définis tes modèles Google Docs sous « Modèles » et relie CV et certificats sous « Documents ». L'agenda se choisit plus bas sur cette page."
+        }
+      }
+    },
+    "settings": {
+      "title": "Aide & visites",
+      "resetLabel": "Réinitialiser toutes les visites",
+      "resetSub": "La vue d'ensemble réapparaît au prochain démarrage, toutes les visites comptent comme non vues.",
+      "resetBtn": "Réinitialiser",
+      "resetDone": "Réinitialisé"
+    }
   }
 }

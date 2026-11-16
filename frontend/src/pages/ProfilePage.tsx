@@ -136,7 +136,7 @@ export function ProfilePage() {
 
         {/* Persona selector */}
         <div style={{ marginBottom: 32 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <div data-tour="profile.focus" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <div className="eyebrow">{t("profile.focus")}</div>
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
@@ -208,7 +208,7 @@ export function ProfilePage() {
 
         {/* Personal Info */}
         <div style={{ marginBottom: 32 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <div data-tour="profile.personal" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <User width={14} height={14} style={{ color: "var(--accent)" }} />
             <div className="eyebrow">{t("profile.personalInfo")}</div>
           </div>
@@ -269,7 +269,7 @@ export function ProfilePage() {
             display: "flex", flexDirection: "column", overflow: "auto"
           } : {})
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+          <div data-tour="profile.linkedin" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
             <Linkedin width={14} height={14} style={{ color: "#0a66c2" }} />
             <div className="eyebrow" style={{ flex: 1 }}>{t("profile.linkedinSection")}</div>
             <button
@@ -334,7 +334,7 @@ export function ProfilePage() {
             display: "flex", flexDirection: "column", overflow: "auto"
           } : {})
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <div data-tour="profile.cv" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <Page width={14} height={14} style={{ color: "var(--accent)" }} />
             <div className="eyebrow" style={{ flex: 1 }}>{t("profile.masterCv")}</div>
             {/* Vorschau / Bearbeiten toggle */}
@@ -426,7 +426,7 @@ export function ProfilePage() {
             display: "flex", flexDirection: "column", overflow: "auto"
           } : {})
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+          <div data-tour="profile.notes" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
             <LightBulb width={14} height={14} style={{ color: "#f59e0b" }} />
             <div className="eyebrow" style={{ flex: 1 }}>{t("profile.personalNotes")}</div>
             {/* Vorschau / Bearbeiten toggle */}
