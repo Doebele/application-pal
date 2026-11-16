@@ -11,6 +11,7 @@ import { useAuth } from "../lib/auth";
 import { GooglePickerButton } from "../lib/googlePicker";
 import { hasShell, shellInvoke, type UpdateCheck } from "../lib/desktopShell";
 import { startRegistration } from "@simplewebauthn/browser";
+import { useTour } from "../components/Tour";
 import type { PublicKeyCredentialCreationOptionsJSON } from "@simplewebauthn/browser";
 
 const ACCENT_SWATCHES: { value: Accent; color: string; label: string }[] = [
@@ -1685,6 +1686,8 @@ function SecuritySection() {
 
 export function SettingsPage() {
   const { t } = useTranslation();
+  const { resetAll: resetTours } = useTour();
+  const [toursReset, setToursReset] = useState(false);
   const { user } = useAuth();
   const { theme, setTheme, accent, setAccent, density, setDensity, cardVariant, setCardVariant, ai, setAi } = useUiStore();
 
@@ -1692,6 +1695,24 @@ export function SettingsPage() {
     <>
       <Topbar title={t("settings.title")} />
       <div className="page-content" style={{ maxWidth: 680 }}>
+
+        {/* Help & tours */}
+        <div style={{ marginBottom: 32 }}>
+          <div className="eyebrow" style={{ marginBottom: 12 }}>{t("tours.settings.title")}</div>
+          <div className="settings-group">
+            <div className="settings-row">
+              <div>
+                <div className="settings-row-label">{t("tours.settings.resetLabel")}</div>
+                <div className="settings-row-sub">{t("tours.settings.resetSub")}</div>
+              </div>
+              <div className="settings-row-right">
+                <button className="btn btn-secondary" onClick={async () => { await resetTours(); setToursReset(true); }}>
+                  {toursReset ? t("tours.settings.resetDone") : t("tours.settings.resetBtn")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Appearance */}
         <div style={{ marginBottom: 32 }}>

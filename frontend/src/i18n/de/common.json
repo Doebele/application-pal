@@ -50,13 +50,17 @@
     "timeline": "Timeline",
     "profile": "Profil",
     "documents": "Dokumente",
-    "knowledge": "Knowledge",
+    "knowledge": "Wissen",
     "templates": "Vorlagen",
     "settings": "Einstellungen",
     "timelineSub": "Workspace-Aktivitäten — alle Änderungen im Überblick",
-    "letterCoach": "Anschreiben",
+    "letterCoach": "Anschreiben-Coach",
     "cvCheck": "CV-Check",
-    "linkedinCheck": "LinkedIn-Check"
+    "linkedinCheck": "LinkedIn-Check",
+    "groupApplications": "Bewerbungen",
+    "groupMe": "Ich & meine Unterlagen",
+    "groupWriting": "Schreiben & Wissen",
+    "help": "Hilfe & Übersicht"
   },
   "tabs": {
     "actions": "Aktionen",
@@ -1859,5 +1863,198 @@
     "available": "Version {{version}} ist verfügbar – siehe Dialog.",
     "busy": "Die Prüfung läuft bereits.",
     "failed": "Prüfung fehlgeschlagen: {{error}}"
+  },
+  "tours": {
+    "ui": {
+      "step": "Schritt {{n}} von {{total}}",
+      "back": "Zurück",
+      "next": "Weiter",
+      "done": "Fertig",
+      "end": "Beenden",
+      "helpBtn": "Tour für diesen Screen (?)"
+    },
+    "overview": {
+      "titleFirst": "Willkommen bei {{app}}",
+      "title": "Was kann {{app}}?",
+      "lead": "{{app}} begleitet jede Bewerbung vom Inserat bis zur Zusage. Du erfasst einen Job, die KI bewertet ihn gegen deinen Lebenslauf und hilft bei jedem Schritt: Unterlagen, Anschreiben, Interview, Gehalt.",
+      "flow": [
+        "Job erfassen",
+        "Passt er? Match-Score",
+        "CV & Anschreiben",
+        "Gesendet",
+        "Interview",
+        "Angebot"
+      ],
+      "hint": "Diese Übersicht öffnest du jederzeit über „Hilfe & Übersicht“. Touren pro Screen: ?",
+      "later": "Später",
+      "close": "Schliessen",
+      "startBoard": "Board-Tour starten",
+      "startTour": "Tour starten →",
+      "groupSystem": "System"
+    },
+    "screens": {
+      "board": "Alle Bewerbungen als Karten, Spalten = Phasen.",
+      "table": "Alle Bewerbungen als sortierbare Tabelle, RAV-Report.",
+      "calendar": "Termine, Fristen und Google-Kalender zusammen.",
+      "timeline": "Alle Aktivitäten zeitlich, was wann passiert ist.",
+      "archive": "Abgesagte und erledigte Bewerbungen, wiederherstellbar.",
+      "profile": "Master-CV, persönliche Stichpunkte, Wunschgehalt – Basis für alle KI-Texte.",
+      "documents": "Lebensläufe, Zeugnisse, Zertifikate, Portfolio – die KI liest die Zusammenfassungen mit.",
+      "cvCheck": "Bewertet deinen Lebenslauf auf 100 Punkte, Bullet für Bullet.",
+      "linkedin": "Bewertet dein Profil und schreibt Texte zum Übernehmen.",
+      "letterCoach": "Deine festen Regeln für jedes Anschreiben: Aufbau, Ton, No-Gos.",
+      "templates": "Google-Docs-Vorlagen für den Export von Anschreiben, CV und Co.",
+      "knowledge": "Gesammeltes Wissen zu Firmen, Gehältern und Interviews.",
+      "settings": "KI-Anbieter, Google, Sprache, Profil und Schutz."
+    },
+    "steps": {
+      "board": {
+        "search": {
+          "title": "Suchen",
+          "body": "Filtert alle Bewerbungen sofort nach Firma, Rolle, Ort oder Tag. Mit ⌘K springst du von überall hierher."
+        },
+        "add": {
+          "title": "Neuen Job erfassen",
+          "body": "Füge einen Link oder den Text eines Inserats ein. Die KI füllt Firma, Rolle, Pensum, Arbeitsmodell und Ort selbst aus."
+        },
+        "columns": {
+          "title": "Spalten = Phasen",
+          "body": "Jede Spalte ist eine Bewerbungsphase, von Inbox bis Angebot. Zieh eine Karte in die nächste Spalte, wenn du weiterkommst – die passenden Aufgaben erscheinen dann automatisch."
+        },
+        "card": {
+          "title": "Eine Bewerbung",
+          "body": "Die Zahl oben rechts ist der Match-Score: wie gut die Stelle zu deinem CV passt. Ein Klick öffnet alle Details."
+        },
+        "tabs": {
+          "title": "Vier Tabs pro Bewerbung",
+          "body": "Prozess: Aufgaben und KI-Aktionen der aktuellen Phase. Details: Felder und Stellenbeschreibung. Dokumente: Drive-Ordner. KI: alle Ergebnisse auf einen Blick."
+        },
+        "process": {
+          "title": "Was jetzt zu tun ist",
+          "body": "Die Checkliste wechselt mit der Phase. In „Anschreiben“ erscheint hier zum Beispiel der geführte Anschreiben-Assistent."
+        }
+      },
+      "table": {
+        "head": {
+          "title": "Spalten anpassen",
+          "body": "Ziehen zum Umordnen, Rand ziehen für die Breite, Klick zum Sortieren. Über das Spaltenmenü blendest du Felder ein und aus oder pinnst sie links an."
+        },
+        "grid": {
+          "title": "Zeilen",
+          "body": "Ein Klick öffnet dieselben Details wie auf dem Board. KI-Analysen lassen sich hier direkt pro Zeile starten."
+        },
+        "rav": {
+          "title": "RAV-Report",
+          "body": "Erstellt den monatlichen Nachweis der Arbeitsbemühungen für das RAV – als Google Sheet oder CSV."
+        }
+      },
+      "calendar": {
+        "main": {
+          "title": "Monat oder Woche",
+          "body": "Interviews, Fristen und Aktivitäten aus deinen Bewerbungen, zusammen mit deinem Google-Kalender. Klick auf einen Termin öffnet die Bewerbung."
+        },
+        "actions": {
+          "title": "Ansicht wechseln",
+          "body": "Hier schaltest du zwischen Monats- und Wochenansicht um und blätterst durch die Zeit."
+        }
+      },
+      "timeline": {
+        "main": {
+          "title": "Was wann passiert ist",
+          "body": "Jede Änderung an einer Bewerbung – Phasenwechsel, Notizen, KI-Ergebnisse – erscheint hier chronologisch."
+        }
+      },
+      "archive": {
+        "main": {
+          "title": "Archivierte Bewerbungen",
+          "body": "Abgesagte oder erledigte Bewerbungen landen hier mit ihrem Grund. Öffne eine Karte, um sie wiederherzustellen."
+        },
+        "actions": {
+          "title": "Karten oder Tabelle",
+          "body": "Zeigt das Archiv als Karten oder als Tabelle."
+        }
+      },
+      "profile": {
+        "main": {
+          "title": "Dein Master-CV",
+          "body": "Master-CV, persönliche Stichpunkte und Wunschgehalt. Alle KI-Texte – Match-Score, Anschreiben, Interview – bauen darauf auf."
+        }
+      },
+      "documents": {
+        "main": {
+          "title": "Deine Unterlagen",
+          "body": "Lebensläufe, Zeugnisse, Zertifikate und Portfolio als Links. Die KI liest die Zusammenfassungen bei jeder Bewerbung mit."
+        },
+        "actions": {
+          "title": "Zusammenfassen und Ansicht",
+          "body": "Lässt alle Dokumente neu zusammenfassen und wechselt zwischen Liste und Registern."
+        }
+      },
+      "cvCheck": {
+        "main": {
+          "title": "Dein Lebenslauf",
+          "body": "Der CV aus „Dokumente“ als PDF. Markierungen zeigen, auf welche Stelle sich ein Hinweis bezieht."
+        },
+        "side": {
+          "title": "Bewertung",
+          "body": "100 Punkte für Wirkung, Darstellung und Kompetenzen, mit Feedback Bullet für Bullet und Vorschlägen zum Umformulieren."
+        }
+      },
+      "linkedin": {
+        "main": {
+          "title": "Dein Profil",
+          "body": "Dein importiertes LinkedIn-Profil oder der Entwurf, den die KI daraus macht."
+        },
+        "side": {
+          "title": "Score, Werkzeuge, Checkliste",
+          "body": "Bewertung auf 100 Punkte, Textgenerator und eine Checkliste zum Übernehmen nach LinkedIn."
+        }
+      },
+      "letterCoach": {
+        "main": {
+          "title": "Regeln für jedes Anschreiben",
+          "body": "Aufbau, Werte, Stärken, Formulierungen und No-Gos. Diese Vorgaben fliessen in jedes Anschreiben, das die KI schreibt."
+        }
+      },
+      "templates": {
+        "main": {
+          "title": "Google-Docs-Vorlagen",
+          "body": "Pro Inhaltstyp und Sprache eine aktive Vorlage. Exporte als Google Doc verwenden sie automatisch."
+        }
+      },
+      "knowledge": {
+        "main": {
+          "title": "Wissen sammeln",
+          "body": "Links eine Firmenliste, rechts gesammeltes Wissen zu Firma, Gehalt und Interviews."
+        },
+        "actions": {
+          "title": "Firma hinzufügen",
+          "body": "Lege eine neue Firma an, um Wissen dazu zu sammeln."
+        }
+      },
+      "settings": {
+        "main": {
+          "title": "Alles einstellen",
+          "body": "KI-Anbieter, Google-Verbindung, Sprache, Darstellung und Schutz deines Profils. Hier setzt du auch die Touren zurück."
+        }
+      },
+      "common": {
+        "title": {
+          "title": "Dieser Screen",
+          "body": "{{screen}}"
+        },
+        "help": {
+          "title": "Hilfe auf jedem Screen",
+          "body": "Hier startest du diese Tour erneut (oder mit ?). „Hilfe & Übersicht“ in der Navigation zeigt alle Screens auf einen Blick."
+        }
+      }
+    },
+    "settings": {
+      "title": "Hilfe & Touren",
+      "resetLabel": "Alle Touren zurücksetzen",
+      "resetSub": "Die Übersicht erscheint beim nächsten Start wieder, alle Touren gelten als ungesehen.",
+      "resetBtn": "Zurücksetzen",
+      "resetDone": "Zurückgesetzt"
+    }
   }
 }

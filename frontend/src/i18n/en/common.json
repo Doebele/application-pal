@@ -54,9 +54,13 @@
     "templates": "Templates",
     "settings": "Settings",
     "timelineSub": "Workspace activity — all changes across applications",
-    "letterCoach": "Cover Letter",
+    "letterCoach": "Cover-letter coach",
     "cvCheck": "CV check",
-    "linkedinCheck": "LinkedIn Check"
+    "linkedinCheck": "LinkedIn Check",
+    "groupApplications": "Applications",
+    "groupMe": "Me & my documents",
+    "groupWriting": "Writing & knowledge",
+    "help": "Help & overview"
   },
   "tabs": {
     "actions": "Actions",
@@ -1859,5 +1863,198 @@
     "available": "Version {{version}} is available – see the dialog.",
     "busy": "A check is already running.",
     "failed": "Check failed: {{error}}"
+  },
+  "tours": {
+    "ui": {
+      "step": "Step {{n}} of {{total}}",
+      "back": "Back",
+      "next": "Next",
+      "done": "Done",
+      "end": "End tour",
+      "helpBtn": "Tour of this screen (?)"
+    },
+    "overview": {
+      "titleFirst": "Welcome to {{app}}",
+      "title": "What can {{app}} do?",
+      "lead": "{{app}} supports every application from job ad to offer. You add a job, the AI rates it against your CV and helps with every step: documents, cover letter, interview, salary.",
+      "flow": [
+        "Add job",
+        "Good fit? Match score",
+        "CV & cover letter",
+        "Sent",
+        "Interview",
+        "Offer"
+      ],
+      "hint": "Open this overview any time via “Help & overview”. Tour per screen: ?",
+      "later": "Later",
+      "close": "Close",
+      "startBoard": "Start board tour",
+      "startTour": "Start tour →",
+      "groupSystem": "System"
+    },
+    "screens": {
+      "board": "All applications as cards, columns = stages.",
+      "table": "All applications as a sortable table, RAV report.",
+      "calendar": "Appointments, deadlines and Google Calendar together.",
+      "timeline": "All activity in time order: what happened when.",
+      "archive": "Rejected and finished applications, restorable.",
+      "profile": "Master CV, personal notes, target salary – the basis for all AI texts.",
+      "documents": "CVs, references, certificates, portfolio – the AI reads their summaries.",
+      "cvCheck": "Scores your CV out of 100, bullet by bullet.",
+      "linkedin": "Scores your profile and writes texts to copy over.",
+      "letterCoach": "Your fixed rules for every cover letter: structure, tone, no-gos.",
+      "templates": "Google Docs templates for exporting cover letters, CVs and more.",
+      "knowledge": "Collected knowledge on companies, salaries and interviews.",
+      "settings": "AI provider, Google, language, profile and security."
+    },
+    "steps": {
+      "board": {
+        "search": {
+          "title": "Search",
+          "body": "Filters all applications instantly by company, role, location or tag. ⌘K jumps here from anywhere."
+        },
+        "add": {
+          "title": "Add a new job",
+          "body": "Paste a link or the text of a job ad. The AI fills in company, role, workload, work model and location."
+        },
+        "columns": {
+          "title": "Columns = stages",
+          "body": "Each column is an application stage, from inbox to offer. Drag a card to the next column as you progress – the matching tasks appear automatically."
+        },
+        "card": {
+          "title": "One application",
+          "body": "The number at the top right is the match score: how well the job fits your CV. A click opens all details."
+        },
+        "tabs": {
+          "title": "Four tabs per application",
+          "body": "Process: tasks and AI actions of the current stage. Details: fields and job description. Documents: Drive folder. AI: all results at a glance."
+        },
+        "process": {
+          "title": "What to do now",
+          "body": "The checklist changes with the stage. In “Preparing letter”, for example, the guided cover-letter assistant appears here."
+        }
+      },
+      "table": {
+        "head": {
+          "title": "Adjust columns",
+          "body": "Drag to reorder, drag the edge for width, click to sort. The column menu shows or hides fields and pins them to the left."
+        },
+        "grid": {
+          "title": "Rows",
+          "body": "A click opens the same details as on the board. AI analyses can be started per row right here."
+        },
+        "rav": {
+          "title": "RAV report",
+          "body": "Creates the monthly proof of job-search efforts for the RAV – as a Google Sheet or CSV."
+        }
+      },
+      "calendar": {
+        "main": {
+          "title": "Month or week",
+          "body": "Interviews, deadlines and activities from your applications, together with your Google Calendar. Click an event to open the application."
+        },
+        "actions": {
+          "title": "Switch view",
+          "body": "Switch between month and week view and move through time."
+        }
+      },
+      "timeline": {
+        "main": {
+          "title": "What happened when",
+          "body": "Every change to an application – stage changes, notes, AI results – appears here in time order."
+        }
+      },
+      "archive": {
+        "main": {
+          "title": "Archived applications",
+          "body": "Rejected or finished applications end up here with their reason. Open a card to restore it."
+        },
+        "actions": {
+          "title": "Cards or table",
+          "body": "Shows the archive as cards or as a table."
+        }
+      },
+      "profile": {
+        "main": {
+          "title": "Your master CV",
+          "body": "Master CV, personal notes and target salary. All AI texts – match score, cover letter, interview – build on it."
+        }
+      },
+      "documents": {
+        "main": {
+          "title": "Your documents",
+          "body": "CVs, references, certificates and portfolio as links. The AI reads their summaries for every application."
+        },
+        "actions": {
+          "title": "Summaries and view",
+          "body": "Re-summarises all documents and switches between list and tabs."
+        }
+      },
+      "cvCheck": {
+        "main": {
+          "title": "Your CV",
+          "body": "The CV from “Documents” as a PDF. Highlights show which passage a hint refers to."
+        },
+        "side": {
+          "title": "Score",
+          "body": "100 points for impact, presentation and competencies, with feedback bullet by bullet and rewrite suggestions."
+        }
+      },
+      "linkedin": {
+        "main": {
+          "title": "Your profile",
+          "body": "Your imported LinkedIn profile or the draft the AI builds from it."
+        },
+        "side": {
+          "title": "Score, tools, checklist",
+          "body": "A score out of 100, the text generator and a checklist for copying everything to LinkedIn."
+        }
+      },
+      "letterCoach": {
+        "main": {
+          "title": "Rules for every letter",
+          "body": "Structure, values, strengths, phrases and no-gos. These rules go into every cover letter the AI writes."
+        }
+      },
+      "templates": {
+        "main": {
+          "title": "Google Docs templates",
+          "body": "One active template per content type and language. Google Doc exports use them automatically."
+        }
+      },
+      "knowledge": {
+        "main": {
+          "title": "Collect knowledge",
+          "body": "A company list on the left, collected knowledge on company, salary and interviews on the right."
+        },
+        "actions": {
+          "title": "Add a company",
+          "body": "Create a new company to collect knowledge about it."
+        }
+      },
+      "settings": {
+        "main": {
+          "title": "Set everything up",
+          "body": "AI provider, Google connection, language, appearance and profile security. You can also reset the tours here."
+        }
+      },
+      "common": {
+        "title": {
+          "title": "This screen",
+          "body": "{{screen}}"
+        },
+        "help": {
+          "title": "Help on every screen",
+          "body": "Start this tour again here (or press ?). “Help & overview” in the navigation shows all screens at a glance."
+        }
+      }
+    },
+    "settings": {
+      "title": "Help & tours",
+      "resetLabel": "Reset all tours",
+      "resetSub": "The overview appears again on next start, all tours count as unseen.",
+      "resetBtn": "Reset",
+      "resetDone": "Reset done"
+    }
   }
 }

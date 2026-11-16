@@ -502,7 +502,7 @@ export function TablePage() {
   const actions = (
     <>
       {/* RAV report — opens the dialog with the currently visible rows */}
-      <button onClick={() => setRavOpen(true)} className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}
+      <button data-tour="table.rav" onClick={() => setRavOpen(true)} className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}
         disabled={filtered.length === 0} title={t("rav.exportViewHint")}>
         <Table2Columns width={12} height={12} /> {t("rav.reportBtn")}
       </button>
@@ -624,7 +624,7 @@ export function TablePage() {
         (div.overflow-auto). They don't interfere with each other.
         No DnD library wrappers. No two-table approach.
       */}
-      <div style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}>
+      <div data-tour="table.grid" style={{ flex: 1, overflow: "auto", background: "var(--bg)" }}>
         <table style={{
           borderCollapse: "separate", borderSpacing: 0,
           fontSize: 12, tableLayout: "fixed", width: table.getTotalSize(),
@@ -637,7 +637,7 @@ export function TablePage() {
           </colgroup>
 
           {/* thead sticky top:0 — vertical anchor only */}
-          <thead style={{ position: "sticky", top: 0, zIndex: 10 }}>
+          <thead data-tour="table.head" style={{ position: "sticky", top: 0, zIndex: 10 }}>
             <tr>
               {table.getVisibleLeafColumns().map(col => {
                 const isSorted     = col.getIsSorted();

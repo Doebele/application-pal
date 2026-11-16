@@ -10,6 +10,7 @@ import { SettingsSync } from "./lib/settingsSync";
 import { SetupWizard } from "./components/SetupWizard";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Rail } from "./components/Rail";
+import { TourProvider } from "./components/Tour";
 import { BoardPage } from "./pages/BoardPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
@@ -72,6 +73,11 @@ function MainApp() {
     staleTime: Infinity,
   });
   const queryClient = useQueryClient();
+  const { data: persona = null } = useQuery({
+    queryKey: ["profile"],
+    queryFn: async () => (await api.get<{ persona?: string | null }>("/api/profile")).data,
+    select: (p: { persona?: string | null }) => p.persona ?? null,
+  });
   if (onboarding === "pending") {
     return (
       <>
@@ -81,6 +87,7 @@ function MainApp() {
     );
   }
   return (
+    <TourProvider key={user?.id} userId={user?.id ?? ""} persona={persona}>
     <div className="app-shell">
       {user?.id && <SettingsSync key={user.id} userId={user.id} />}
       <Rail applications={applications} />
@@ -102,6 +109,7 @@ function MainApp() {
         </Routes>
       </div>
     </div>
+    </TourProvider>
   );
 }
 

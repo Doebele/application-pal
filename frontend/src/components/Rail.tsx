@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import {
   DashboardDots, Calendar, List, MultiplePages, Settings, Table2Columns,
   SidebarCollapse, SunLight, HalfMoon, DashboardSpeed, Sofa, ProfileCircle, Folder, Database, Archive,
-  LogOut, SwitchOff, WarningCircle, Globe, SendMail, PageSearch, Linkedin,
+  LogOut, SwitchOff, WarningCircle, Globe, SendMail, PageSearch, Linkedin, HelpCircle,
 } from "iconoir-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -22,6 +22,7 @@ import frFlagUrl from "round-flag-icons/flags/fr.svg?url";
 import { APP_NAME } from "../lib/appName";
 import appIcon from "../assets/brand/app-icon.png";
 import { bodyZoom } from "../lib/zoom";
+import { useTour } from "./Tour";
 
 const FLAG_URLS: Record<string, string> = { de: deFlagUrl, en: gbFlagUrl, fr: frFlagUrl };
 
@@ -83,8 +84,9 @@ function RailTooltip({ label, visible }: { label: string; visible: boolean }) {
 
 // ── Single rail button ────────────────────────────────────────
 function RailBtn({
-  icon, label, active, onClick, open, badge,
+  icon, label, active, onClick, open, badge, sub,
 }: {
+  sub?: boolean;
   icon: React.ReactNode;
   label: string;
   active?: boolean;
@@ -111,7 +113,7 @@ function RailBtn({
   return (
     <div style={{ position: "relative" }}>
       <button
-        className={"rail-btn" + (active ? " active" : "")}
+        className={"rail-btn" + (active ? " active" : "") + (sub && open ? " rail-sub" : "")}
         onClick={onClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
@@ -495,23 +497,49 @@ export function Rail({ applications }: Props) {
   const { data: profileData } = useQuery({ queryKey: ["profile"], queryFn: async () => (await api.get<{ persona?: string | null }>("/api/profile")).data });
   const persona = profileData?.persona ?? null;
 
-  // Ordered nav items — labels via i18n
-  const navItems = [
-    { to: "/",           label: t("nav.board"),     icon: <DashboardDots  width={15} height={15} />, count: applications.filter(a => a.stage !== undefined).length },
-    { to: "/table",      label: t("nav.list"),      icon: <Table2Columns  width={15} height={15} /> },
-    { to: "/calendar",   label: t("nav.calendar"),  icon: <Calendar       width={15} height={15} /> },
-    { to: "/timeline",   label: t("nav.timeline"),  icon: <List           width={15} height={15} /> },
-    { to: "/profile",    label: t("nav.profile"),   icon: <ProfileCircle  width={15} height={15} /> },
-    { to: "/documents",  label: t("nav.documents"), icon: <Folder         width={15} height={15} /> },
-    { to: "/cv-check",   label: t("nav.cvCheck"),   icon: <PageSearch     width={15} height={15} /> },
-    // LinkedIn-Check: Berufsumsteiger (check + build) and Berufseinsteiger (build first); hidden for Schulabgänger / no persona
-    ...(persona === "berufsumsteiger" || persona === "berufseinsteiger"
-      ? [{ to: "/linkedin", label: t("nav.linkedinCheck"), icon: <Linkedin width={15} height={15} /> }] : []),
-    { to: "/letter-coach", label: t("nav.letterCoach"), icon: <SendMail   width={15} height={15} /> },
-    { to: "/knowledge",  label: t("nav.knowledge"), icon: <Database       width={15} height={15} /> },
-    { to: "/templates",  label: t("nav.templates"), icon: <MultiplePages  width={15} height={15} /> },
-    { to: "/settings",      label: t("nav.settings"),      icon: <Settings     width={15} height={15} /> },
+  const { openOverview } = useTour();
+  type NavItem = { to: string; label: string; icon: React.ReactNode; count?: number };
+  // Grouped nav — labels via i18n. Archive is a sub-entry of the applications group.
+  const groups: { label: string; items: NavItem[] }[] = [
+    { label: t("nav.groupApplications"), items: [
+      { to: "/",           label: t("nav.board"),     icon: <DashboardDots  width={15} height={15} />, count: applications.filter(a => a.stage !== undefined).length },
+      { to: "/table",      label: t("nav.list"),      icon: <Table2Columns  width={15} height={15} /> },
+      { to: "/calendar",   label: t("nav.calendar"),  icon: <Calendar       width={15} height={15} /> },
+      { to: "/timeline",   label: t("nav.timeline"),  icon: <List           width={15} height={15} /> },
+    ] },
+    { label: t("nav.groupMe"), items: [
+      { to: "/profile",    label: t("nav.profile"),   icon: <ProfileCircle  width={15} height={15} /> },
+      { to: "/documents",  label: t("nav.documents"), icon: <Folder         width={15} height={15} /> },
+      { to: "/cv-check",   label: t("nav.cvCheck"),   icon: <PageSearch     width={15} height={15} /> },
+      // LinkedIn-Check: Berufsumsteiger (check + build) and Berufseinsteiger (build first); hidden for Schulabgänger / no persona
+      ...(persona === "berufsumsteiger" || persona === "berufseinsteiger"
+        ? [{ to: "/linkedin", label: t("nav.linkedinCheck"), icon: <Linkedin width={15} height={15} /> }] : []),
+    ] },
+    { label: t("nav.groupWriting"), items: [
+      { to: "/letter-coach", label: t("nav.letterCoach"), icon: <SendMail   width={15} height={15} /> },
+      { to: "/templates",  label: t("nav.templates"), icon: <MultiplePages  width={15} height={15} /> },
+      { to: "/knowledge",  label: t("nav.knowledge"), icon: <Database       width={15} height={15} /> },
+    ] },
   ];
+
+  const renderItem = (item: NavItem) => (
+    <NavLink
+      key={item.to}
+      to={item.to}
+      end={item.to === "/"}
+      style={{ textDecoration: "none", display: "block", position: "relative" }}
+    >
+      {({ isActive }) => (
+        <RailBtn
+          icon={item.icon}
+          label={item.label}
+          active={item.to === "/" ? (isActive && !isArchive) : isActive}
+          open={railOpen}
+          badge={item.count}
+        />
+      )}
+    </NavLink>
+  );
 
   // Desktop profiles show their name; web accounts their e-mail.
   const email = (user?.mode === "desktop" ? user?.name : user?.email) ?? user?.email ?? "";
@@ -550,42 +578,35 @@ export function Rail({ applications }: Props) {
 
         {/* ── Workspace nav ── */}
         <div className="rail-body">
-          <RailSection label={t("nav.workspace")} open={railOpen} />
-          <div className="rail-section">
-            {navItems.map((item, idx) => (
-              <>
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === "/"}
-                  style={{ textDecoration: "none", display: "block", position: "relative" }}
-                >
-                  {({ isActive }) => (
-                    <RailBtn
-                      icon={item.icon}
-                      label={item.label}
-                      active={item.to === "/" ? (isActive && !isArchive) : isActive}
-                      open={railOpen}
-                      badge={item.count}
-                    />
-                  )}
-                </NavLink>
-                {/* Insert Archive after Timeline (index 2) */}
-                {idx === 2 && (
-                  <div key="archive" style={{ position: "relative" }}>
-                    <RailBtn
-                      icon={<Archive width={15} height={15} />}
-                      label={t("nav.archive")}
-                      active={isArchive}
-                      onClick={() => navigate(isArchive ? "/" : "/?archive=true")}
-                      open={railOpen}
-                    />
-                  </div>
-                )}
-              </>
-            ))}
-          </div>
+          {groups.map((g, gi) => (
+            <div key={g.label} className="rail-section">
+              {gi > 0 && <div className="rail-divider" />}
+              <RailSection label={g.label} open={railOpen} />
+              {g.items.map(renderItem)}
+              {gi === 0 && (
+                <RailBtn
+                  icon={<Archive width={15} height={15} />}
+                  label={t("nav.archive")}
+                  active={isArchive}
+                  onClick={() => navigate(isArchive ? "/" : "/?archive=true")}
+                  open={railOpen}
+                  sub
+                />
+              )}
+            </div>
+          ))}
 
+          <div style={{ flex: 1 }} />
+          <div className="rail-section">
+            <div className="rail-divider" />
+            <RailBtn
+              icon={<HelpCircle width={15} height={15} />}
+              label={t("nav.help")}
+              onClick={openOverview}
+              open={railOpen}
+            />
+            {renderItem({ to: "/settings", label: t("nav.settings"), icon: <Settings width={15} height={15} /> })}
+          </div>
         </div>
 
         {/* ── Footer ── */}

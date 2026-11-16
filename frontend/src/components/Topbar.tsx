@@ -1,5 +1,7 @@
 import { useRef, useState, useEffect } from "react";
-import { Search, Xmark } from "iconoir-react";
+import { Search, Xmark, HelpCircle } from "iconoir-react";
+import { useTranslation } from "react-i18next";
+import { useTour } from "./Tour";
 import { useRotatingPlaceholder } from "../lib/search";
 
 type Props = {
@@ -14,6 +16,8 @@ type Props = {
 
 export function Topbar({ title, sub, actions, searchValue, onSearchChange, searchSuggestions }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const { t } = useTranslation();
+  const { startTour } = useTour();
   const [focused, setFocused] = useState(false);
 
   // Rotating placeholder — pauses while the input is focused or has a value
@@ -41,14 +45,14 @@ export function Topbar({ title, sub, actions, searchValue, onSearchChange, searc
 
   return (
     <div className="topbar">
-      <div>
+      <div data-tour="top.title">
         <h1>{title}</h1>
         {sub && <div className="topbar-sub">{sub}</div>}
       </div>
 
       {/* Only render search when wired up */}
       {onSearchChange && (
-        <div className="topbar-search">
+        <div className="topbar-search" data-tour="top.search">
           <Search width={13} height={13} className="search-icon" />
           <input
             ref={inputRef}
@@ -75,7 +79,17 @@ export function Topbar({ title, sub, actions, searchValue, onSearchChange, searc
 
       <div className="topbar-spacer" />
 
-      {actions}
+      {actions && <div data-tour="top.actions" style={{ display: "flex", alignItems: "center", gap: 8 }}>{actions}</div>}
+
+      <button
+        className="topbar-help"
+        data-tour="top.help"
+        onClick={() => startTour()}
+        title={t("tours.ui.helpBtn")}
+        aria-label={t("tours.ui.helpBtn")}
+      >
+        <HelpCircle width={15} height={15} />
+      </button>
     </div>
   );
 }

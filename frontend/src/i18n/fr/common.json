@@ -50,13 +50,17 @@
     "timeline": "Chronologie",
     "profile": "Profil",
     "documents": "Documents",
-    "knowledge": "Connaissances",
+    "knowledge": "Savoir",
     "templates": "Modèles",
     "settings": "Paramètres",
     "timelineSub": "Activités de l'espace de travail — toutes les modifications en un coup d'œil",
-    "letterCoach": "Lettre de motivation",
+    "letterCoach": "Coach lettre de motivation",
     "cvCheck": "Contrôle CV",
-    "linkedinCheck": "Check LinkedIn"
+    "linkedinCheck": "Check LinkedIn",
+    "groupApplications": "Candidatures",
+    "groupMe": "Moi & mes documents",
+    "groupWriting": "Rédaction & savoir",
+    "help": "Aide & vue d'ensemble"
   },
   "tabs": {
     "actions": "Actions",
@@ -1859,5 +1863,198 @@
     "available": "La version {{version}} est disponible – voir la fenêtre.",
     "busy": "Une vérification est déjà en cours.",
     "failed": "Échec de la vérification : {{error}}"
+  },
+  "tours": {
+    "ui": {
+      "step": "Étape {{n}} sur {{total}}",
+      "back": "Retour",
+      "next": "Suivant",
+      "done": "Terminé",
+      "end": "Quitter",
+      "helpBtn": "Visite de cet écran (?)"
+    },
+    "overview": {
+      "titleFirst": "Bienvenue dans {{app}}",
+      "title": "Que fait {{app}} ?",
+      "lead": "{{app}} accompagne chaque candidature de l'annonce à l'offre. Tu saisis un poste, l'IA l'évalue par rapport à ton CV et t'aide à chaque étape : dossier, lettre, entretien, salaire.",
+      "flow": [
+        "Saisir un poste",
+        "Ça colle ? Score",
+        "CV & lettre",
+        "Envoyée",
+        "Entretien",
+        "Offre"
+      ],
+      "hint": "Ouvre cette vue à tout moment via « Aide & vue d'ensemble ». Visite par écran : ?",
+      "later": "Plus tard",
+      "close": "Fermer",
+      "startBoard": "Visite du tableau",
+      "startTour": "Lancer la visite →",
+      "groupSystem": "Système"
+    },
+    "screens": {
+      "board": "Toutes les candidatures en cartes, colonnes = étapes.",
+      "table": "Toutes les candidatures en tableau triable, rapport ORP.",
+      "calendar": "Rendez-vous, échéances et Google Agenda réunis.",
+      "timeline": "Toutes les activités dans l'ordre : quoi, quand.",
+      "archive": "Candidatures refusées ou terminées, restaurables.",
+      "profile": "CV maître, notes personnelles, salaire souhaité – base de tous les textes IA.",
+      "documents": "CV, certificats de travail, attestations, portfolio – l'IA lit leurs résumés.",
+      "cvCheck": "Note ton CV sur 100, puce par puce.",
+      "linkedin": "Note ton profil et rédige des textes à reprendre.",
+      "letterCoach": "Tes règles fixes pour chaque lettre : structure, ton, interdits.",
+      "templates": "Modèles Google Docs pour exporter lettres, CV, etc.",
+      "knowledge": "Savoir réuni sur les entreprises, salaires et entretiens.",
+      "settings": "Fournisseur IA, Google, langue, profil et sécurité."
+    },
+    "steps": {
+      "board": {
+        "search": {
+          "title": "Rechercher",
+          "body": "Filtre aussitôt toutes les candidatures par entreprise, poste, lieu ou tag. ⌘K t'amène ici de partout."
+        },
+        "add": {
+          "title": "Saisir un poste",
+          "body": "Colle un lien ou le texte d'une annonce. L'IA remplit entreprise, poste, taux, modèle de travail et lieu."
+        },
+        "columns": {
+          "title": "Colonnes = étapes",
+          "body": "Chaque colonne est une étape, de la boîte de réception à l'offre. Glisse une carte dans la colonne suivante – les tâches adaptées apparaissent automatiquement."
+        },
+        "card": {
+          "title": "Une candidature",
+          "body": "Le chiffre en haut à droite est le score de correspondance avec ton CV. Un clic ouvre tous les détails."
+        },
+        "tabs": {
+          "title": "Quatre onglets par candidature",
+          "body": "Processus : tâches et actions IA de l'étape. Détails : champs et description du poste. Documents : dossier Drive. IA : tous les résultats."
+        },
+        "process": {
+          "title": "Ce qu'il faut faire",
+          "body": "La liste change avec l'étape. À l'étape « Lettre », l'assistant de lettre guidé apparaît ici."
+        }
+      },
+      "table": {
+        "head": {
+          "title": "Ajuster les colonnes",
+          "body": "Glisse pour réordonner, tire le bord pour la largeur, clique pour trier. Le menu des colonnes affiche, masque ou épingle les champs."
+        },
+        "grid": {
+          "title": "Lignes",
+          "body": "Un clic ouvre les mêmes détails que sur le tableau. Les analyses IA se lancent ici ligne par ligne."
+        },
+        "rav": {
+          "title": "Rapport ORP",
+          "body": "Crée la preuve mensuelle des recherches d'emploi pour l'ORP – en Google Sheet ou CSV."
+        }
+      },
+      "calendar": {
+        "main": {
+          "title": "Mois ou semaine",
+          "body": "Entretiens, échéances et activités de tes candidatures, avec ton Google Agenda. Un clic sur un événement ouvre la candidature."
+        },
+        "actions": {
+          "title": "Changer de vue",
+          "body": "Bascule entre mois et semaine et navigue dans le temps."
+        }
+      },
+      "timeline": {
+        "main": {
+          "title": "Quoi, quand",
+          "body": "Chaque changement – étape, note, résultat IA – apparaît ici dans l'ordre chronologique."
+        }
+      },
+      "archive": {
+        "main": {
+          "title": "Candidatures archivées",
+          "body": "Les candidatures refusées ou terminées arrivent ici avec leur motif. Ouvre une carte pour la restaurer."
+        },
+        "actions": {
+          "title": "Cartes ou tableau",
+          "body": "Affiche l'archive en cartes ou en tableau."
+        }
+      },
+      "profile": {
+        "main": {
+          "title": "Ton CV maître",
+          "body": "CV maître, notes personnelles et salaire souhaité. Tous les textes IA s'appuient dessus."
+        }
+      },
+      "documents": {
+        "main": {
+          "title": "Tes documents",
+          "body": "CV, certificats, attestations et portfolio en liens. L'IA lit leurs résumés pour chaque candidature."
+        },
+        "actions": {
+          "title": "Résumés et vue",
+          "body": "Résume à nouveau tous les documents et bascule entre liste et onglets."
+        }
+      },
+      "cvCheck": {
+        "main": {
+          "title": "Ton CV",
+          "body": "Le CV de « Documents » en PDF. Les surlignages montrent à quel passage se rapporte une remarque."
+        },
+        "side": {
+          "title": "Évaluation",
+          "body": "100 points pour impact, présentation et compétences, avec retour puce par puce et propositions de reformulation."
+        }
+      },
+      "linkedin": {
+        "main": {
+          "title": "Ton profil",
+          "body": "Ton profil LinkedIn importé ou le brouillon que l'IA en tire."
+        },
+        "side": {
+          "title": "Score, outils, checklist",
+          "body": "Un score sur 100, le générateur de textes et une checklist pour tout reporter sur LinkedIn."
+        }
+      },
+      "letterCoach": {
+        "main": {
+          "title": "Règles pour chaque lettre",
+          "body": "Structure, valeurs, forces, formulations et interdits. Ces règles entrent dans chaque lettre écrite par l'IA."
+        }
+      },
+      "templates": {
+        "main": {
+          "title": "Modèles Google Docs",
+          "body": "Un modèle actif par type de contenu et par langue. Les exports Google Doc les utilisent automatiquement."
+        }
+      },
+      "knowledge": {
+        "main": {
+          "title": "Réunir du savoir",
+          "body": "À gauche la liste des entreprises, à droite le savoir réuni sur l'entreprise, le salaire et les entretiens."
+        },
+        "actions": {
+          "title": "Ajouter une entreprise",
+          "body": "Crée une entreprise pour réunir du savoir à son sujet."
+        }
+      },
+      "settings": {
+        "main": {
+          "title": "Tout configurer",
+          "body": "Fournisseur IA, connexion Google, langue, affichage et sécurité du profil. Tu peux aussi réinitialiser les visites ici."
+        }
+      },
+      "common": {
+        "title": {
+          "title": "Cet écran",
+          "body": "{{screen}}"
+        },
+        "help": {
+          "title": "De l'aide sur chaque écran",
+          "body": "Relance cette visite ici (ou avec ?). « Aide & vue d'ensemble » dans la navigation montre tous les écrans."
+        }
+      }
+    },
+    "settings": {
+      "title": "Aide & visites",
+      "resetLabel": "Réinitialiser toutes les visites",
+      "resetSub": "La vue d'ensemble réapparaît au prochain démarrage, toutes les visites comptent comme non vues.",
+      "resetBtn": "Réinitialiser",
+      "resetDone": "Réinitialisé"
+    }
   }
 }
