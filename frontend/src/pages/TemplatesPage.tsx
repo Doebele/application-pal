@@ -12,6 +12,7 @@ import gbFlagUrl from "round-flag-icons/flags/gb.svg?url";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 import { GooglePickerButton, type PickedFile } from "../lib/googlePicker";
+import { importTemplates, parentOf, type DriveFolder } from "../lib/driveLinks";
 
 // ─── Round flag icon (round-flag-icons library) ───────────────
 function FlagIcon({ lang, size = 20 }: { lang: "de" | "en"; size?: number }) {
@@ -547,16 +548,40 @@ export function TemplatesPage() {
     queryFn: () => api.post<{ status: Record<string, TemplateStatus> }>("/api/drive/templates/status", { ids: templateIds }).then(r => r.data.status),
   });
 
+  // Unreachable templates (desktop: everything the web version linked) and the Drive
+  // folder of the last picked file — the next Picker opens there, so the user marks the
+  // other templates of that folder in one go (drive.file can't list the folder itself).
+  const nameById = new Map(Object.values(config).flatMap(tc => tc?.templates?.map(x => [x.id, x.name] as const) ?? []));
+  const missing = statusData ? templateIds.filter(id => statusData[id] === "missing") : [];
+  const [folder, setFolder] = useState<DriveFolder | null>(null);
+  const rememberFolder = (fileId: string) => { parentOf(fileId).then(p => { if (p) setFolder(p); }); };
+  const refreshTemplates = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["profile"] });
+    queryClient.invalidateQueries({ queryKey: ["template-status"] });
+    queryClient.invalidateQueries({ queryKey: ["drive-templates"] });
+  };
+
   // Re-link one template row to a file picked in Drive: the server copies it into the
   // app's Pal-Templates and moves every use of the old id (all types, DE/EN active) to it.
   const relink = async (oldId: string, f: PickedFile) => {
-    try {
-      await api.post("/api/drive/templates/import", { fileId: f.id, replaceId: oldId });
-      await queryClient.invalidateQueries({ queryKey: ["profile"] });
-      queryClient.invalidateQueries({ queryKey: ["template-status"] });
-      queryClient.invalidateQueries({ queryKey: ["drive-templates"] });
-      showToast(t("templates.relinked", { name: f.name }));
-    } catch { showToast(t("templates.createError")); }
+    const r = await importTemplates(f.all ?? [f], { id: oldId, name: nameById.get(oldId) ?? "" });
+    await refreshTemplates();
+    rememberFolder(f.id);
+    if (!r.ok) showToast(t("templates.createError"));
+    else showToast(r.ok === 1 ? t("templates.relinked", { name: f.name }) : t("picker.templatesImported", { count: r.ok, total: r.ok + r.failed }));
+  };
+
+  const importMany = async (f: PickedFile) => {
+    // Several templates can be picked at once; each is copied into the app's own
+    // Pal-Templates and the stored template choices are moved to the copy (by name).
+    const files = f.all?.length ? f.all : [f];
+    const r = await importTemplates(files);
+    await refreshTemplates();
+    rememberFolder(f.id);
+    if (!r.ok) showToast(t("templates.createError"));
+    else showToast(files.length === 1 && r.ok === 1
+      ? t("picker.templateImported", { name: f.name })
+      : t("picker.templatesImported", { count: r.ok, total: files.length }) + (r.relinked ? ` · ${t("picker.templatesRelinked")}` : ""));
   };
 
   const handleCreateNew = async (type: ContentTypeId, lang: Lang) => {
@@ -602,28 +627,33 @@ export function TemplatesPage() {
           {t("templates.howItWorksDesc")}
           {googleConnected && (
             <div style={{ marginTop: 10 }}>
-              <GooglePickerButton kind="template" label={t("picker.importTemplate")} onPicked={async f => {
-                // Several templates can be picked at once; each is copied into the app's
-                // own Pal-Templates and the stored template choices are moved to the copy.
-                const files = f.all?.length ? f.all : [f];
-                let ok = 0, relinked = 0;
-                for (const file of files) {
-                  try {
-                    const r = await api.post<{ relinked?: number }>("/api/drive/templates/import", { fileId: file.id });
-                    ok++; relinked += r.data.relinked ?? 0;
-                  } catch { /* counted below */ }
-                }
-                queryClient.invalidateQueries({ queryKey: ["drive-templates"] });
-                queryClient.invalidateQueries({ queryKey: ["profile"] });
-                queryClient.invalidateQueries({ queryKey: ["template-status"] });
-                if (!ok) showToast(t("templates.createError"));
-                else showToast(files.length === 1 && ok === 1
-                  ? t("picker.templateImported", { name: f.name })
-                  : t("picker.templatesImported", { count: ok, total: files.length }) + (relinked ? ` · ${t("picker.templatesRelinked")}` : ""));
-              }} />
+              <GooglePickerButton kind="template" label={t("picker.importTemplate")} onPicked={importMany} />
             </div>
           )}
         </div>
+
+        {missing.length > 0 && (
+          <div style={{
+            padding: "12px 16px", borderRadius: 10, marginBottom: 28, display: "flex", flexDirection: "column", gap: 8,
+            background: "var(--score-mid-bg)", border: "1px solid var(--score-mid-border)", fontSize: 12, color: "var(--fg-1)", lineHeight: 1.5,
+          }}>
+            <span style={{ display: "flex", gap: 6 }}>
+              <WarningTriangle width={14} height={14} style={{ flexShrink: 0, color: "var(--score-mid)", marginTop: 2 }} />
+              <span>{folder
+                ? t("templates.missingBannerFolder", { count: missing.length, folder: folder.name || "Google Drive" })
+                : t("templates.missingBanner", { count: missing.length })}</span>
+            </span>
+            <span style={{ fontSize: 11, color: "var(--fg-3)" }}>
+              {missing.slice(0, 10).map(id => nameById.get(id) || id).join(" · ")}{missing.length > 10 ? " …" : ""}
+            </span>
+            <span>
+              <GooglePickerButton kind="template" className="btn btn-primary" onPicked={importMany}
+                options={folder ? { parentId: folder.id, multi: true } : { multi: true }}
+                title={folder?.name || undefined}
+                label={folder ? t("templates.pickInFolder", { folder: folder.name || "Google Drive" }) : t("templates.pickMissing")} />
+            </span>
+          </div>
+        )}
 
         {isLoading ? (
           <div style={{ fontSize: 13, color: "var(--fg-3)", display: "flex", alignItems: "center", gap: 8 }}>

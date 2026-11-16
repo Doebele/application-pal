@@ -18,8 +18,11 @@ import { hasShell } from "./desktopShell";
 import i18n from "../i18n";
 
 export type PickerKind = "folder" | "document" | "spreadsheet" | "template" | "readable" | "any";
-/** `all` = every picked file when the picker allows several (kind "template"); the first is the file itself. */
+/** `all` = every picked file when the picker allows several; the first is the file itself. */
 export type PickedFile = { id: string; name: string; mimeType: string; url: string; all?: PickedFile[] };
+
+/** parentId = open in this folder · query = pre-filled search · multi = allow several (always for "template"). */
+export type PickerOptions = { parentId?: string; query?: string; multi?: boolean };
 
 type PickerConfig = { available: boolean; apiKey?: string; appId?: string; accessToken?: string; error?: string };
 
@@ -56,9 +59,9 @@ const MIME = {
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 /** Desktop: run the picker in the system browser and wait for its answer (max. 10 min). */
-async function pickInBrowser(kind: PickerKind, title: string | undefined, signal?: AbortSignal): Promise<PickedFile | null> {
+async function pickInBrowser(kind: PickerKind, title: string | undefined, signal?: AbortSignal, opts: PickerOptions = {}): Promise<PickedFile | null> {
   const lang = ["de", "en", "fr"].includes(i18n.language) ? i18n.language : "de";
-  const { data } = await api.post<{ id: string }>("/api/google/picker-session", { kind, title, lang });
+  const { data } = await api.post<{ id: string }>("/api/google/picker-session", { kind, title, lang, ...opts });
   const deadline = Date.now() + 10 * 60 * 1000;
   try {
     while (Date.now() < deadline) {
@@ -75,8 +78,8 @@ async function pickInBrowser(kind: PickerKind, title: string | undefined, signal
   }
 }
 
-export async function openGooglePicker(kind: PickerKind, title?: string, signal?: AbortSignal): Promise<PickedFile | null> {
-  if (hasShell()) return pickInBrowser(kind, title, signal);
+export async function openGooglePicker(kind: PickerKind, title?: string, signal?: AbortSignal, opts: PickerOptions = {}): Promise<PickedFile | null> {
+  if (hasShell()) return pickInBrowser(kind, title, signal, opts);
   const { data: cfg } = await api.get<PickerConfig>("/api/google/picker-config");
   if (!cfg.available) throw new Error(cfg.error ?? "Google-Picker ist nicht eingerichtet");
   await loadPickerApi();
@@ -89,6 +92,8 @@ export async function openGooglePicker(kind: PickerKind, title?: string, signal?
     view = new p.DocsView(p.ViewId.DOCS).setIncludeFolders(true);
     if (kind !== "any") view.setMimeTypes(MIME[kind]);
   }
+  if (opts.parentId) view.setParent(opts.parentId);
+  else if (opts.query) view.setQuery(opts.query);
 
   return new Promise<PickedFile | null>((resolve) => {
     const builder = new p.PickerBuilder()
@@ -106,7 +111,7 @@ export async function openGooglePicker(kind: PickerKind, title?: string, signal?
         }
       });
     if (title) builder.setTitle(title);
-    if (kind === "template") builder.enableFeature(p.Feature.MULTISELECT_ENABLED);
+    if (kind === "template" || opts.multi) builder.enableFeature(p.Feature.MULTISELECT_ENABLED);
     builder.build().setVisible(true);
   });
 }
@@ -125,8 +130,9 @@ export function usePickerAvailable(): boolean {
   return ok;
 }
 
-export function GooglePickerButton({ kind, onPicked, label, title, className = "btn btn-secondary", style }: {
+export function GooglePickerButton({ kind, onPicked, label, title, className = "btn btn-secondary", style, options }: {
   kind: PickerKind;
+  options?: PickerOptions;
   onPicked: (file: PickedFile) => void | Promise<void>;
   label?: string;
   title?: string;
@@ -145,7 +151,7 @@ export function GooglePickerButton({ kind, onPicked, label, title, className = "
     setBusy(true); setError("");
     abort.current = new AbortController();
     try {
-      const file = await openGooglePicker(kind, title, abort.current.signal);
+      const file = await openGooglePicker(kind, title, abort.current.signal, options);
       if (file) await onPicked(file);
     } catch (e) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;

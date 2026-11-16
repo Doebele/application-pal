@@ -3979,20 +3979,39 @@ app.post("/api/applications/:id/ai/ackermann-script/export-doc", async (c) => {
   }
 });
 
+const REVIEW_LANG_NAMES: Record<string, string> = { de: "German (Deutsch)", en: "English", fr: "French (Français)" };
+
+/** Letter review: explanations in the reader's UI language, quoted/proposed letter wording in the letter's language. */
+function reviewLangDirective(uiLang: string, letterLang: string): string {
+  const ui = REVIEW_LANG_NAMES[uiLang] ?? REVIEW_LANG_NAMES.de;
+  const letter = REVIEW_LANG_NAMES[letterLang] ?? REVIEW_LANG_NAMES.de;
+  if (ui === letter) return `IMPORTANT: Write ALL output strictly in ${ui}, regardless of the language of the instructions.`;
+  return `IMPORTANT — two languages. The cover letter is written in ${letter}; the person reading this review reads ${ui}.
+- Write every explanation, assessment and instruction in ${ui}: "gesamteindruck", "staerken", "verbesserungen", "tonalitaet" and the instruction text of each "promptVorschlaege" entry. Do NOT write them in German just because these instructions are German (unless ${ui} is German).
+- Keep in ${letter}, verbatim: every quote taken from the letter, every entry of "cliches" (they are quotes), and any replacement wording proposed for the letter (put it in quotes inside the ${ui} sentence).
+Example for a ${letter} letter: an instruction sentence in ${ui} that contains a quoted ${letter} phrase.`;
+}
+
 // Anschreiben reviewen (Letter stage)
 app.post("/api/applications/:id/ai/letter-review", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, coverLetterContent, additionalContext, language: bodyLang } = await c.req.json<{ ai: AiConfig; coverLetterContent?: string; additionalContext?: string; language?: string }>();
+  const { ai, coverLetterContent, additionalContext, language: bodyLang, uiLang: bodyUiLang } = await c.req.json<{ ai: AiConfig; coverLetterContent?: string; additionalContext?: string; language?: string; uiLang?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [reviewProfile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  // Two languages: the letter's (quotes + wording meant for the letter) and the
+  // reader's UI language (everything that explains or instructs).
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
+  const uiLang_ = REVIEW_LANG_NAMES[bodyUiLang ?? ""] ? bodyUiLang! : REVIEW_LANG_NAMES[reviewProfile?.uiLanguage ?? ""] ? reviewProfile!.uiLanguage! : lang_;
   const reviewGuidance = buildLetterGuidance(reviewProfile?.letterConfig);
   const reviewHumanize = humanizerPrompt(lang_, reviewProfile?.letterConfig);
-  const system = `${langPrompt(lang_)} Du bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch.${reviewGuidance ? ` Prüfe zusätzlich, ob es die folgenden Vorgaben des Kandidaten erfüllt, und nenne Abweichungen in "verbesserungen":\n\n${reviewGuidance}` : ""}${reviewHumanize ? `\n\nBewerte das Anschreiben außerdem an diesen Maßstäben für menschliches Schreiben und nenne Verstöße in "verbesserungen" bzw. "cliches" (schreibe auch deinen Review-Text selbst nach diesen Regeln):\n${reviewHumanize}` : ""} Antworte NUR mit JSON:
-{ "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "zu lang | angemessen | zu kurz", "personalisierung": "schwach | mittel | stark", "promptVorschlaege": ["<string>"] }
-"promptVorschlaege": 2-4 fertig formulierte, direkt einsetzbare Anweisungen, mit denen der Kandidat das Anschreiben gezielt anpassen lassen kann (z.B. "Kürze den zweiten Absatz auf zwei Sätze und entferne Wiederholungen." oder "Ersetze das Klischee '…' durch einen konkreten Beleg aus dem Lebenslauf."). Jede Anweisung muss eigenständig verständlich sein, ohne den Review-Text zu kennen.`;
+  const system = `${reviewLangDirective(uiLang_, lang_)}\n\nDu bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch.${reviewGuidance ? ` Prüfe zusätzlich, ob es die folgenden Vorgaben des Kandidaten erfüllt, und nenne Abweichungen in "verbesserungen":\n\n${reviewGuidance}` : ""}${reviewHumanize ? `\n\nBewerte das Anschreiben außerdem an diesen Maßstäben für menschliches Schreiben und nenne Verstöße in "verbesserungen" bzw. "cliches":\n${reviewHumanize}` : ""} Antworte NUR mit JSON:
+{ "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "too_long | appropriate | too_short", "personalisierung": "weak | medium | strong", "promptVorschlaege": ["<string>"] }
+"laenge" und "personalisierung": genau einer der englischen Codes, nicht übersetzen.
+"promptVorschlaege": 2-4 fertig formulierte, direkt einsetzbare Anweisungen, mit denen der Kandidat das Anschreiben gezielt anpassen lassen kann (z.B. sinngemäss "Kürze den zweiten Absatz auf zwei Sätze." oder "Ersetze das Klischee '…' durch einen konkreten Beleg aus dem Lebenslauf."). Jede Anweisung muss eigenständig verständlich sein, ohne den Review-Text zu kennen.
+
+${reviewLangDirective(uiLang_, lang_)}`;
   // Auto-source cover letter: explicit content > cached generated letter > error hint
   let letterText = coverLetterContent?.trim() ?? "";
   if (!letterText) {
@@ -4284,6 +4303,8 @@ app.get("/api/google/picker-config", async (c) => {
 type PickerKindB = "folder" | "document" | "spreadsheet" | "template" | "readable" | "any";
 type PickerSession = {
   userId: string; kind: PickerKindB; title: string; lang: "de" | "en" | "fr"; createdAt: number;
+  /** Open in this folder (siblings of a file the user already picked) / pre-fill the search / allow several. */
+  parentId?: string; query?: string; multi?: boolean;
   status: "pending" | "done" | "cancelled"; file?: PickedFileB; files?: PickedFileB[];
 };
 type PickedFileB = { id: string; name: string; mimeType: string; url: string };
@@ -4317,12 +4338,18 @@ app.post("/api/google/picker-session", async (c) => {
   if (!GOOGLE_API_KEY || !GOOGLE_APP_ID) return c.json({ error: "Google-Picker ist nicht eingerichtet" }, 503);
   const userId = getUserId(c);
   if (!(await getDriveAccessToken(userId))) return c.json({ error: "Google Drive nicht verbunden" }, 400);
-  const body = await c.req.json<{ kind?: string; title?: string; lang?: string }>().catch(() => ({} as { kind?: string; title?: string; lang?: string }));
+  type Body = { kind?: string; title?: string; lang?: string; parentId?: string; query?: string; multi?: boolean };
+  const body = await c.req.json<Body>().catch(() => ({} as Body));
   const kind = (["folder", "document", "spreadsheet", "template", "readable", "any"].includes(body.kind ?? "") ? body.kind : "any") as PickerKindB;
   const lang = (["de", "en", "fr"].includes(body.lang ?? "") ? body.lang : "de") as PickerSession["lang"];
   livePickerSession(undefined);
   const id = b64url(crypto.randomBytes(24));
-  pickerSessions.set(id, { userId, kind, title: String(body.title ?? "").slice(0, 120), lang, createdAt: Date.now(), status: "pending" });
+  pickerSessions.set(id, {
+    userId, kind, title: String(body.title ?? "").slice(0, 120), lang, createdAt: Date.now(), status: "pending",
+    parentId: typeof body.parentId === "string" && /^[\w-]{10,200}$/.test(body.parentId) ? body.parentId : undefined,
+    query: typeof body.query === "string" ? body.query.slice(0, 120) : undefined,
+    multi: body.multi === true,
+  });
   openInSystemBrowser(`http://127.0.0.1:${env.PORT}/api/google/picker-page?s=${id}`);
   return c.json({ id });
 });
@@ -4353,6 +4380,7 @@ app.get("/api/google/picker-page", async (c) => {
   c.header("Referrer-Policy", "no-referrer");
   const cfg = JSON.stringify({
     id, kind: s.kind, title: s.title, mime: s.kind === "any" ? "" : PICKER_MIME[s.kind],
+    parentId: s.parentId ?? "", query: s.query ?? "", multi: s.kind === "template" || !!s.multi,
     token: accessToken, apiKey: GOOGLE_API_KEY, appId: GOOGLE_APP_ID, tx,
   }).replace(/</g, "\\u003c");
   return c.html(`<!doctype html><html lang="${s.lang}"><head><meta charset="utf-8"><title>${APP_NAME} · Google Drive</title>
@@ -4370,6 +4398,7 @@ function start() {
   let view;
   if (C.kind === "folder") view = new p.DocsView(p.ViewId.FOLDERS).setIncludeFolders(true).setSelectFolderEnabled(true).setMimeTypes(C.mime);
   else { view = new p.DocsView(p.ViewId.DOCS).setIncludeFolders(true); if (C.mime) view.setMimeTypes(C.mime); }
+  if (C.parentId) view.setParent(C.parentId); else if (C.query) view.setQuery(C.query);
   const b = new p.PickerBuilder().addView(view).setOAuthToken(C.token).setDeveloperKey(C.apiKey).setAppId(C.appId)
     .setOrigin(location.origin).setSize(Math.min(1051, innerWidth - 40), Math.min(650, innerHeight - 40))
     .setCallback(async (d) => {
@@ -4384,7 +4413,7 @@ function start() {
       }
     });
   if (C.title) b.setTitle(C.title);
-  if (C.kind === "template") b.enableFeature(p.Feature.MULTISELECT_ENABLED);
+  if (C.multi) b.enableFeature(p.Feature.MULTISELECT_ENABLED);
   b.build().setVisible(true);
 }
 </script>
@@ -6716,6 +6745,24 @@ const driveFileStatusRoute = async (c: Context) => {
 };
 app.post("/api/drive/templates/status", driveFileStatusRoute);
 app.post("/api/drive/files/status", driveFileStatusRoute);
+
+// Folder of a file the user picked (drive.file grants the file, so its `parents` are
+// readable). The client opens the next Picker there, so siblings — the other templates
+// or certificates in the same folder — can be linked in one go.
+app.get("/api/drive/files/:fileId/parent", async (c) => {
+  const fileId = c.req.param("fileId");
+  if (!/^[\w-]{10,200}$/.test(fileId)) return c.json({ parent: null });
+  const accessToken = await getDriveAccessToken(getUserId(c));
+  if (!accessToken) return c.json({ parent: null });
+  const auth = { headers: { Authorization: `Bearer ${accessToken}` } };
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents&supportsAllDrives=true`, auth).catch(() => null);
+  const parentId = r?.ok ? ((await r.json()) as { parents?: string[] }).parents?.[0] : undefined;
+  if (!parentId) return c.json({ parent: null });
+  // The folder's name may be hidden under drive.file — the id is enough for the Picker.
+  const f = await fetch(`https://www.googleapis.com/drive/v3/files/${parentId}?fields=name&supportsAllDrives=true`, auth).catch(() => null);
+  const name = f?.ok ? ((await f.json()) as { name?: string }).name ?? "" : "";
+  return c.json({ parent: { id: parentId, name } });
+});
 
 app.get("/api/drive/templates", async (c) => {
   const accessToken = await getDriveAccessToken(getUserId(c));

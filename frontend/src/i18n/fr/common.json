@@ -279,7 +279,19 @@
     "influenceFactors": "Facteurs d'influence",
     "day30": "Premiers 30 jours",
     "day60": "Premiers 60 jours",
-    "day90": "Premiers 90 jours"
+    "day90": "Premiers 90 jours",
+    "reviewLevel": {
+      "length": {
+        "too_long": "trop long",
+        "appropriate": "adaptée",
+        "too_short": "trop court"
+      },
+      "personal": {
+        "weak": "faible",
+        "medium": "moyenne",
+        "strong": "forte"
+      }
+    }
   },
   "tileExpand": {
     "runNow": "Exécuter maintenant",
@@ -407,7 +419,12 @@
     "grantAccess": "Autoriser l'accès",
     "copyFailed": "La copie a échoué",
     "relinkFailed": "Échec de la nouvelle liaison",
-    "missingHint": "L’app ne peut pas ouvrir ce fichier (supprimé, déplacé ou sans accès). Avec « Relier … », choisis-le dans Google Drive."
+    "missingHint": "L’app ne peut pas ouvrir ce fichier (supprimé, déplacé ou sans accès). Avec « Relier … », choisis-le dans Google Drive.",
+    "missingBanner": "{{count}} document(s) inaccessible(s). Choisis-les dans Google Drive – plusieurs à la fois avec clic Cmd ou Maj. Ils sont associés par leur nom.",
+    "missingBannerFolder": "{{count}} document(s) encore inaccessible(s). Sélectionne-les d’un coup dans le dossier « {{folder}} » (clic Cmd ou Maj) – ils sont associés par leur nom.",
+    "pickMissing": "Choisir dans Google Drive",
+    "relinkedMany": "{{count}} document(s) relié(s)",
+    "relinkUnmatched": "non associés : {{names}} – utilise « Relier … » pour chacun"
   },
   "contacts": {
     "label": "Contacts",
@@ -699,7 +716,13 @@
     "missingExport": "L’app ne peut pas ouvrir le modèle « {{name}} » : le Google Doc a donc été créé sans modèle. Choisis le modèle une fois dans Google Drive : il sera relié partout où il est utilisé et le document sera recréé avec le modèle.",
     "relinkAndExport": "Choisir le modèle et recréer",
     "relinkFailed": "Échec de la liaison",
-    "missingExportNoName": "L’app ne peut pas ouvrir le modèle : le Google Doc a donc été créé sans modèle. Choisis le modèle une fois dans Google Drive : il sera relié partout où il est utilisé et le document sera recréé avec le modèle."
+    "missingExportNoName": "L’app ne peut pas ouvrir le modèle : le Google Doc a donc été créé sans modèle. Choisis le modèle une fois dans Google Drive : il sera relié partout où il est utilisé et le document sera recréé avec le modèle.",
+    "folderFollowUp": "{{linked}} modèle(s) relié(s). {{count}} autres sont encore inaccessibles – sélectionne-les d’un coup dans le dossier « {{folder}} » (clic Cmd ou Maj).",
+    "pickInFolder": "Choisir dans le dossier « {{folder}} »",
+    "skipAndExport": "Ignorer et créer le document",
+    "missingBanner": "{{count}} modèle(s) inaccessible(s). Choisis-les dans Google Drive – plusieurs à la fois avec clic Cmd ou Maj. Ils sont associés par leur nom.",
+    "missingBannerFolder": "{{count}} modèle(s) encore inaccessible(s). Sélectionne-les d’un coup dans le dossier « {{folder}} » (clic Cmd ou Maj) – ils sont associés par leur nom.",
+    "pickMissing": "Choisir dans Google Drive"
   },
   "table": {
     "title": "Liste des candidatures",
