@@ -73,6 +73,18 @@ Your data is preserved (the PostgreSQL volume is not deleted).
 
 ---
 
+## In-app help
+
+New users get an overview of what every screen does, and every screen has a guided tour.
+
+- **Overview** ("What can Application Pal do?") — opens once on first start (desktop: after the setup wizard) and any time via **Help & overview** at the bottom of the navigation. It shows the application flow (add job → match score → CV & cover letter → sent → interview → offer) and one tile per screen; a tile opens the screen and starts its tour.
+- **Screen tours** — the **?** button in the top bar, or the `?` key, starts the tour for the current screen: a spotlight on each area with a short explanation, *Back* / *Next* / *End tour*, ←/→/Esc. The board tour opens an application to show its four tabs and the stage checklist; Profile, Documents, Templates, CV-Check and LinkedIn-Check walk through each section.
+- **Guided set-up** — two tours in the overview walk through Settings step by step: **Set up AI model** (choose a provider, server address or API key, pick a model, check it) and **Connect Google** (sign in, choose the Drive folder for applications). You can click inside the highlighted area while the tour runs, e.g. to pick a provider.
+- **Grouped navigation** — Applications (Board, List, Calendar, Timeline, Archive) · Me & my documents (Profile, Documents, CV-Check, LinkedIn-Check) · Writing & knowledge (Cover-letter coach, Templates, Knowledge) · Help & overview, Settings.
+- Progress is stored per user; **Settings → Help & tours → Reset all tours** shows the overview again on the next start. All texts in German, English and French.
+
+---
+
 ## Views
 
 ### Board
