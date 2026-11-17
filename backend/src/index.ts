@@ -1,4 +1,6 @@
 import "./sidecar-polyfill.js";
+import { buildSchoolCv, normalizeCvData, schoolCvChecks, schoolCvText, type CvLang, type ProfileIn } from "./school-cv.js";
+import { schoolCvPdf } from "./school-cv-pdf.js";
 import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote, parseSchoolProfile, formatSchoolProfile, formatSchoolAnswers, schoolAnglesTask, normalizeTest, schoolLetterChecks, checksForPrompt, SCHOOL_TEST_EXTRACT_PROMPT, stageTasksFor, SCHOOL_STAGE_TASKS, normalizeDebrief, debriefNotes, upsertTasterExperience, letterSimilarity, SIMILAR_LETTER_THRESHOLD, type SchoolAnswers, type SchoolTest } from "./letter-kinds.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
@@ -3244,6 +3246,71 @@ Antworte NUR mit diesem JSON:
 // School tests (Stellwerk, Lernpass plus, Multicheck …): read every document in the category
 // "schultest" and let the model pull out the scores. The user reviews them in the pupil
 // profile — nothing is stored here.
+// ─── Pupil CV (persona Schulabgänger) ─────────────────────────
+const cvLang = (v: string | undefined): CvLang => (v === "en" || v === "fr" ? v : "de");
+
+async function loadSchoolCvInput(userId: string) {
+  const [p] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const person = { name: p?.name, email: p?.email, phone: p?.phone, location: p?.location, photoUrl: p?.photoUrl };
+  let profile: ProfileIn = {};
+  try { profile = JSON.parse(p?.schoolProfile ?? "{}") as ProfileIn; } catch { /* empty */ }
+  return { p, person, profile: { ...parseSchoolProfile(p?.schoolProfile), cv: profile.cv } as ProfileIn };
+}
+
+/** Photo bytes: the uploaded photo (data URL) first, else the profile photo URL (public hosts only, ≤ 3 MB). */
+async function schoolCvPhoto(profile: ProfileIn, photoUrl: string | null | undefined): Promise<{ bytes: Uint8Array; type: "jpeg" | "png" } | null> {
+  const data = normalizeCvData(profile.cv).photo;
+  if (data) {
+    const m = data.match(/^data:image\/(jpeg|png);base64,(.+)$/);
+    if (m) return { bytes: new Uint8Array(Buffer.from(m[2], "base64")), type: m[1] as "jpeg" | "png" };
+  }
+  const url = (photoUrl ?? "").trim();
+  if (!/^https?:\/\//i.test(url)) return null;
+  try {
+    await assertPublicHost(url);
+    const r = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(8000) });
+    const type = (r.headers.get("content-type") ?? "").includes("png") ? "png" : (r.headers.get("content-type") ?? "").includes("jpeg") || (r.headers.get("content-type") ?? "").includes("jpg") ? "jpeg" : null;
+    if (!r.ok || !type) return null;
+    const buf = new Uint8Array(await r.arrayBuffer());
+    return buf.length <= 3_000_000 ? { bytes: buf, type } : null;
+  } catch { return null; }
+}
+
+// CV model (sections) + deterministic checklist, for the preview
+app.get("/api/school-cv", async (c) => {
+  const userId = getUserId(c);
+  const { person, profile } = await loadSchoolCvInput(userId);
+  const lang = cvLang(c.req.query("lang"));
+  return c.json({ model: buildSchoolCv(person, profile, lang), checks: schoolCvChecks(person, profile) });
+});
+
+// PDF download (A4, photo top right)
+app.get("/api/school-cv/pdf", async (c) => {
+  const userId = getUserId(c);
+  const { person, profile } = await loadSchoolCvInput(userId);
+  const model = buildSchoolCv(person, profile, cvLang(c.req.query("lang")));
+  const pdf = await schoolCvPdf(model, await schoolCvPhoto(profile, person.photoUrl));
+  const file = `${model.title}_${(model.name || "CV").replace(/[^\p{L}\p{N}]+/gu, "_")}.pdf`;
+  return new Response(Buffer.from(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file)}` } });
+});
+
+// Editable copy as Google Doc (text only — Google Docs can't take the inline photo from here)
+app.post("/api/school-cv/export-doc", async (c) => {
+  const userId = getUserId(c);
+  const { lang } = await c.req.json<{ lang?: string }>().catch(() => ({ lang: undefined }));
+  const { p, person, profile } = await loadSchoolCvInput(userId);
+  const token = await getDriveAccessToken(userId);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const model = buildSchoolCv(person, profile, cvLang(lang));
+  try {
+    const { docUrl } = await createBlankDoc(token, `${model.title} ${model.name}`.trim(), schoolCvText(model), p?.driveApplicationsFolderId ?? null);
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("school-cv export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
+  }
+});
+
 app.post("/api/school-profile/extract-tests", async (c) => {
   const userId = getUserId(c);
   const { ai } = await c.req.json<{ ai: AiConfig }>();

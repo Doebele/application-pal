@@ -63,7 +63,8 @@
     "groupWriting": "Writing & knowledge",
     "help": "Help & overview",
     "setupAi": "Set up AI model",
-    "setupGoogle": "Connect Google"
+    "setupGoogle": "Connect Google",
+    "schoolCv": "CV"
   },
   "tabs": {
     "actions": "Actions",
@@ -2617,5 +2618,122 @@
     "overview": "What the company does",
     "culture": "What working there is like",
     "ideas": "Ideas for “why this company”"
+  },
+  "schoolCv": {
+    "title": "CV",
+    "sub": "Built from your pupil profile — as PDF or Google Doc",
+    "fromProfile": "Taster days, experiences, hobbies and wish jobs come from your pupil profile automatically. Here you only add what the CV needs on top.",
+    "toProfile": "Go to profile →",
+    "photo": "Photo",
+    "photoSub": "A friendly passport-style photo with a calm background. It stays saved in your profile.",
+    "photoPick": "Choose photo",
+    "photoRemove": "Remove photo",
+    "photoFailed": "The image could not be read (JPG or PNG only).",
+    "personal": "Personal details",
+    "personalSub": "Name, phone and email come from your profile.",
+    "street": "Street and no.",
+    "zipCity": "Postcode and town",
+    "birthDate": "Date of birth",
+    "nationality": "Nationality",
+    "nationalityPlaceholder": "e.g. Switzerland",
+    "noContact": "No contact details in your profile yet.",
+    "editContact": "Edit in profile",
+    "schools": "Schools",
+    "schoolsSub": "Every school from primary school on, with years (e.g. 2016 – 2022).",
+    "addSchool": "Add school",
+    "schoolName": "School",
+    "place": "Town",
+    "from": "from (year)",
+    "to": "to (empty = today)",
+    "languages": "Languages",
+    "addLanguage": "Add language",
+    "languageName": "Language",
+    "levels": {
+      "native": "native",
+      "very_good": "very good",
+      "good": "good",
+      "basic": "basic"
+    },
+    "itHobbies": "Computer and free time",
+    "it": "Computer skills",
+    "itPlaceholder": "e.g. Word, PowerPoint, touch typing",
+    "hobbies": "More hobbies",
+    "hobbiesPlaceholder": "Adds to the hobbies from your profile",
+    "parents": "Parents",
+    "parentsSub": "Common in Switzerland, but optional.",
+    "addParent": "Add parent",
+    "parentName": "Name",
+    "parentJob": "Job",
+    "phone": "Phone",
+    "email": "Email",
+    "references": "References",
+    "referencesSub": "For example your teacher or coach — ask first whether that is okay.",
+    "addReference": "Add reference",
+    "refName": "Name",
+    "refRole": "Role (e.g. class teacher)",
+    "remove": "Remove",
+    "pdf": "Download PDF",
+    "doc": "As Google Doc",
+    "openDoc": "Open",
+    "pdfFailed": "The PDF could not be created.",
+    "docDone": "Google Doc created.",
+    "docFailed": "The Google Doc could not be created.",
+    "checklist": "Checklist",
+    "openCount_one": "{{count}} item open",
+    "openCount_other": "{{count}} items open",
+    "allOk": "all done",
+    "missing": {
+      "name": "name",
+      "phone": "phone",
+      "email": "email",
+      "address": "address"
+    },
+    "checks": {
+      "photo": {
+        "ok": "Photo included.",
+        "warn": "No photo yet — most Swiss companies expect one."
+      },
+      "contact": {
+        "ok": "Contact details are complete.",
+        "fail": "Still missing: {{missing}}."
+      },
+      "birthDate": {
+        "ok": "Date of birth is filled in.",
+        "fail": "Add your date of birth."
+      },
+      "email": {
+        "ok": "Your email address looks serious.",
+        "warn": "The address {{email}} doesn't look serious — better use firstname.lastname@…"
+      },
+      "schools": {
+        "ok": "Schools listed without gaps, with years.",
+        "warn": "Something is missing between {{gap}} — add the school or a bridge year.",
+        "noDates": "One school has no years.",
+        "fail": "Add at least your current school."
+      },
+      "taster": {
+        "ok": "Taster days are listed.",
+        "warn": "No taster days in your profile yet — they show your interest in the trade."
+      },
+      "languages": {
+        "ok": "Languages are listed.",
+        "warn": "Add your languages (including your first language)."
+      },
+      "hobbies": {
+        "ok": "Hobbies are included.",
+        "warn": "No hobbies yet — they show who you are."
+      },
+      "references": {
+        "ok": "At least one reference is included.",
+        "warn": "No reference yet — ask your teacher, for example."
+      },
+      "swiss": {
+        "ok": "Swiss spelling (ss instead of ß).",
+        "warn": "The text contains ß — in Switzerland you write ss."
+      },
+      "tests": {
+        "ok": "Tip: attach your test results ({{names}}) to the application as a separate document."
+      }
+    }
   }
 }

@@ -499,7 +499,9 @@ export function Rail({ applications }: Props) {
       { to: "/profile",    label: t("nav.profile"),   icon: <ProfileCircle  width={15} height={15} /> },
       { to: "/documents",  label: t("nav.documents"), icon: <Folder         width={15} height={15} /> },
       // CV-Check scores adult CVs (impact, numbers) — not for school leavers (their CV comes from the pupil profile)
-      ...(persona !== "schulabgaenger" ? [{ to: "/cv-check", label: t("nav.cvCheck"), icon: <PageSearch width={15} height={15} /> }] : []),
+      ...(persona !== "schulabgaenger"
+        ? [{ to: "/cv-check", label: t("nav.cvCheck"), icon: <PageSearch width={15} height={15} /> }]
+        : [{ to: "/school-cv", label: t("nav.schoolCv"), icon: <PageSearch width={15} height={15} /> }]),
       // LinkedIn-Check: Berufsumsteiger (check + build) and Berufseinsteiger (build first); hidden for Schulabgänger / no persona
       ...(persona === "berufsumsteiger" || persona === "berufseinsteiger"
         ? [{ to: "/linkedin", label: t("nav.linkedinCheck"), icon: <Linkedin width={15} height={15} /> }] : []),

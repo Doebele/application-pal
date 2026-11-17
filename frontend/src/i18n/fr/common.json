@@ -63,7 +63,8 @@
     "groupWriting": "Rédaction & savoir",
     "help": "Aide & vue d'ensemble",
     "setupAi": "Configurer l'IA",
-    "setupGoogle": "Connecter Google"
+    "setupGoogle": "Connecter Google",
+    "schoolCv": "CV"
   },
   "tabs": {
     "actions": "Actions",
@@ -2617,5 +2618,122 @@
     "overview": "Ce que fait l'entreprise",
     "culture": "Comment on y travaille",
     "ideas": "Idées pour « pourquoi cette entreprise »"
+  },
+  "schoolCv": {
+    "title": "CV",
+    "sub": "Créé à partir de ton profil d'élève — en PDF ou Google Doc",
+    "fromProfile": "Les stages, expériences, loisirs et métiers souhaités viennent automatiquement de ton profil d'élève. Ici, tu ajoutes seulement ce dont le CV a besoin en plus.",
+    "toProfile": "Vers le profil →",
+    "photo": "Photo",
+    "photoSub": "Une photo d'identité souriante sur fond calme. Elle reste enregistrée dans ton profil.",
+    "photoPick": "Choisir une photo",
+    "photoRemove": "Retirer la photo",
+    "photoFailed": "L'image n'a pas pu être lue (JPG ou PNG uniquement).",
+    "personal": "Données personnelles",
+    "personalSub": "Le nom, le téléphone et l'e-mail viennent de ton profil.",
+    "street": "Rue et n°",
+    "zipCity": "NPA et localité",
+    "birthDate": "Date de naissance",
+    "nationality": "Nationalité",
+    "nationalityPlaceholder": "p. ex. Suisse",
+    "noContact": "Pas encore de coordonnées dans le profil.",
+    "editContact": "Modifier dans le profil",
+    "schools": "Écoles",
+    "schoolsSub": "Toutes les écoles depuis l'école primaire, avec les années (p. ex. 2016 – 2022).",
+    "addSchool": "Ajouter une école",
+    "schoolName": "École",
+    "place": "Lieu",
+    "from": "de (année)",
+    "to": "à (vide = aujourd'hui)",
+    "languages": "Langues",
+    "addLanguage": "Ajouter une langue",
+    "languageName": "Langue",
+    "levels": {
+      "native": "langue maternelle",
+      "very_good": "très bien",
+      "good": "bien",
+      "basic": "notions"
+    },
+    "itHobbies": "Informatique et loisirs",
+    "it": "Connaissances informatiques",
+    "itPlaceholder": "p. ex. Word, PowerPoint, dactylographie",
+    "hobbies": "Autres loisirs",
+    "hobbiesPlaceholder": "S'ajoute aux loisirs de ton profil",
+    "parents": "Parents",
+    "parentsSub": "Courant en Suisse, mais facultatif.",
+    "addParent": "Ajouter un parent",
+    "parentName": "Nom",
+    "parentJob": "Profession",
+    "phone": "Téléphone",
+    "email": "E-mail",
+    "references": "Références",
+    "referencesSub": "Par exemple ton enseignant·e ou ton entraîneur — demande d'abord si c'est d'accord.",
+    "addReference": "Ajouter une référence",
+    "refName": "Nom",
+    "refRole": "Fonction (p. ex. maîtresse de classe)",
+    "remove": "Retirer",
+    "pdf": "Télécharger le PDF",
+    "doc": "En Google Doc",
+    "openDoc": "Ouvrir",
+    "pdfFailed": "Le PDF n'a pas pu être créé.",
+    "docDone": "Google Doc créé.",
+    "docFailed": "Le Google Doc n'a pas pu être créé.",
+    "checklist": "Liste de contrôle",
+    "openCount_one": "{{count}} point ouvert",
+    "openCount_other": "{{count}} points ouverts",
+    "allOk": "tout est fait",
+    "missing": {
+      "name": "nom",
+      "phone": "téléphone",
+      "email": "e-mail",
+      "address": "adresse"
+    },
+    "checks": {
+      "photo": {
+        "ok": "La photo est là.",
+        "warn": "Pas encore de photo — en Suisse, la plupart des entreprises en attendent une."
+      },
+      "contact": {
+        "ok": "Les coordonnées sont complètes.",
+        "fail": "Il manque encore : {{missing}}."
+      },
+      "birthDate": {
+        "ok": "La date de naissance est saisie.",
+        "fail": "Indique ta date de naissance."
+      },
+      "email": {
+        "ok": "Ton adresse e-mail fait sérieux.",
+        "warn": "L'adresse {{email}} ne fait pas sérieux — utilise plutôt prenom.nom@…"
+      },
+      "schools": {
+        "ok": "Écoles sans lacune, avec les années.",
+        "warn": "Il manque quelque chose entre {{gap}} — ajoute l'école ou une année intermédiaire.",
+        "noDates": "Une école n'a pas d'années.",
+        "fail": "Ajoute au moins ton école actuelle."
+      },
+      "taster": {
+        "ok": "Les stages sont indiqués.",
+        "warn": "Pas encore de stage dans ton profil — il montre ton intérêt pour le métier."
+      },
+      "languages": {
+        "ok": "Les langues sont indiquées.",
+        "warn": "Ajoute tes langues (y compris ta langue maternelle)."
+      },
+      "hobbies": {
+        "ok": "Les loisirs sont là.",
+        "warn": "Pas encore de loisirs — ils montrent qui tu es."
+      },
+      "references": {
+        "ok": "Au moins une référence est indiquée.",
+        "warn": "Pas encore de référence — demande par exemple à ton enseignant·e."
+      },
+      "swiss": {
+        "ok": "Orthographe suisse (ss au lieu de ß).",
+        "warn": "Le texte contient un ß — en Suisse on écrit ss."
+      },
+      "tests": {
+        "ok": "Astuce : joins tes résultats de tests ({{names}}) à la candidature comme document séparé."
+      }
+    }
   }
 }

@@ -2,6 +2,8 @@
 // that depend on it, plus the deterministic salutation. Pure functions, no AI, no DB.
 // Self-check: npx tsx backend/src/letter-kinds.check.ts
 
+import { normalizeCvData, type SchoolCvData } from "./school-cv.js";
+
 export type ApplicationKind = "job" | "schnupperlehre" | "lehrstelle" | "praktikum";
 export type ContactGender = "f" | "m" | "x";
 type Lang = "de" | "en" | "fr";
@@ -135,6 +137,7 @@ export type SchoolProfile = {
   strengths?: { strength: string; example?: string }[];              // strength → example
   tests?: SchoolTest[];                                              // Stellwerk, Lernpass plus, Multicheck, Basic-Check
   ravRegistered?: boolean;                                           // registered with the RAV (SEMO, bridge year) → RAV export visible
+  cv?: SchoolCvData;                                                 // CV-only fields (school-cv.ts)
 };
 
 /** Scale of a school test: stellwerk = 200–800 (norm mean 500), stanine = 1–9 (Lernpass plus PSM), percent = 0–100. */
@@ -176,6 +179,7 @@ export function parseSchoolProfile(raw: string | null | undefined): SchoolProfil
     strengths: arr(j.strengths).map(s => ({ strength: str(s.strength, 120), example: str(s.example) })).filter(s => s.strength),
     tests: arr(j.tests).map(normalizeTest).filter((t): t is SchoolTest => !!t),
     ...(j.ravRegistered === true ? { ravRegistered: true } : {}),
+    ...(j.cv && typeof j.cv === "object" ? { cv: normalizeCvData(j.cv) } : {}),
   };
 }
 
