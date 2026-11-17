@@ -74,6 +74,7 @@ import { STAGE_COLORS, STAGE_ORDER } from "../lib/stages";
 import { taskTitle, activityTitle } from "../lib/stageText";
 import { ApplicationKindFields, SalutationField } from "./LetterKindFields";
 import { SchoolLetterQuestions, type SchoolAnswers } from "./SchoolLetterQuestions";
+import { SchoolReview, type SchoolReviewData } from "./SchoolReview";
 
 const STAGES = STAGE_ORDER.map((id) => ({ id }));
 
@@ -4507,7 +4508,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const review      = reviewEntry?.data as {
     gesamteindruck?: string; staerken?: string[]; verbesserungen?: string[]; cliches?: string[];
     tonalitaet?: string; laenge?: string; personalisierung?: string; promptVorschlaege?: string[];
-  } | undefined;
+  } & SchoolReviewData | undefined;
   const versions    = ((aiResults?.["letter-versions"]?.data as { versions?: LetterVersion[] } | undefined)?.versions) ?? [];
 
   // Which stored version the currently-shown letter matches (for the "Version N / M" label)
@@ -4974,6 +4975,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
               ? <><Check width={11} height={11} /> {currentVersionIdx >= 0 ? t("letterDraft.reviewCurrentHint", { version: currentVersionIdx + 1 }) : t("letterDraft.reviewCurrentHintNoVer")}</>
               : <><WarningTriangle width={11} height={11} /> {t("letterDraft.reviewStaleHint")}</>}
           </div>
+          {(review.kriterien || review.checks?.length) && <SchoolReview data={review} labelStyle={sectionLabel} />}
           {review.gesamteindruck && <AiSection title={t("aiResult.overallImpression")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{review.gesamteindruck}</div></AiSection>}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {(review.staerken?.length ?? 0) > 0 && <AiSection title={t("aiResult.relevantStrengths")}><BulletList items={review.staerken!} accent="#34d399" /></AiSection>}

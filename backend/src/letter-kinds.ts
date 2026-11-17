@@ -306,3 +306,104 @@ Extrahiere jeden Test mit Name, Datum/Semester und den Ergebnissen pro Bereich. 
 - Lernpass plus PSM (Persönlichkeitsprofil): Werte 1–9 aus der Spalte "SW" pro Inhalt (z.B. "Belastbarkeit 2") → "scale": "stanine".
 - Multicheck / Basic-Check: Prozentwerte → "scale": "percent".
 Antworte NUR mit JSON: { "tests": [ { "name": "<z.B. Stellwerk 8>", "date": "<z.B. Frühjahr 2025>", "scale": "stellwerk|stanine|percent", "results": [ { "area": "<Bereich, z.B. Mathematik>", "score": <Zahl> } ] } ] }`;
+
+// ─── Deterministic checklist for school-leaver letters (no AI) ─────────────
+// The review shows these next to the model's assessment. Params are data only — the
+// frontend turns them into text (i18n "schoolReview.checks.<id>.<status>").
+
+export type CheckStatus = "ok" | "warn" | "fail" | "na";
+export type LetterCheck = { id: string; status: CheckStatus; params?: Record<string, string | number> };
+
+const NO_GO: Record<Lang, RegExp[]> = {
+  de: [/hiermit\s+(bewerbe|möchte|moechte|sende)/i, /mit grossem interesse/i, /mit großem interesse/i, /fleissige[rn]?\s+mitarbeiter/i, /ich bin (sehr )?(kreativ|teamfähig|motiviert|zuverlässig|flexibel)( und (kreativ|teamfähig|motiviert|zuverlässig|flexibel))?\s*[.!]/i, /\bihr (geschätztes|renommiertes) unternehmen/i],
+  en: [/i am writing to apply/i, /\bherewith\b/i, /i am (very )?(creative|a team player|motivated|reliable|hard-?working)\s*[.!]/i],
+  fr: [/par la présente/i, /je me permets de/i, /je suis (très )?(créati(f|ve)|motivé(e)?|fiable|travailleu(r|se))\s*[.!]/i],
+};
+const WRONG_SALUTATION = /sehr geehrtes\s+(herrn?|frau)\b|sehr geehrte\s+herrn?\b|sehr geehrter\s+frau\b|sehr geehrte[rs]?\s+herrn\b/i;
+const CLOSING: Record<Lang, RegExp> = {
+  de: /(freundliche[n]? grüsse|freundliche[n]? grüße|mit freundlichen grüssen|mit freundlichen grüßen|liebe grüsse|beste grüsse)/i,
+  en: /(kind regards|best regards|yours sincerely|yours faithfully|sincerely)/i,
+  fr: /(salutations|meilleures salutations|cordialement|veuillez agréer)/i,
+};
+const STOP = new Set(("ich mich mir meine meiner meinen meinem mein sie ihnen ihre ihrem ihren ihr und oder aber dass eine einer einen einem nicht noch auch sehr schon habe haben hat bin wäre würde werden wird kann können möchte gerne gern diese dieser dieses diesen dem den der die das des mit von für auf bei aus nach über unter durch beim zum zur vom ins im am um als wie wenn weil damit dabei denn dann immer etwas viel mehr hier dort ganz bereits sowie ihrem ihrer unternehmen betrieb " +
+  "the and that with your have this from would very which their about been were into also " +
+  "les des une pour avec dans vous votre mais plus très être avoir cette comme").split(" "));
+
+const words = (s: string) => s.toLowerCase().match(/[a-zäöüéèàçâêîôûß]+/g) ?? [];
+
+/**
+ * Checks a school-leaver letter against the checklist: salutation (correct + matching the
+ * contact), company named, length (half A4), repeated words, sentences starting with "Ich",
+ * no-go phrases, direct opening, unfilled placeholders, closing, Swiss spelling.
+ */
+export function schoolLetterChecks(body: string, ctx: {
+  lang?: string | null; kind: ApplicationKind; company: string; contactPerson?: string | null; contactGender?: string | null;
+}): LetterCheck[] {
+  const l = langKey(ctx.lang);
+  const text = body.replace(/\r/g, "").trim();
+  const lines = text.split("\n").map(x => x.trim()).filter(Boolean);
+  const out: LetterCheck[] = [];
+
+  // Salutation: grammar + the expected line when the gender is known
+  const first = lines[0] ?? "";
+  const expected = buildSalutation(l, ctx.contactPerson, ctx.contactGender);
+  if (WRONG_SALUTATION.test(text)) out.push({ id: "salutation", status: "fail", params: { found: (text.match(WRONG_SALUTATION)?.[0] ?? "").trim() } });
+  else if (expected) out.push({ id: "salutation", status: first.toLowerCase().startsWith(expected.toLowerCase().replace(/,$/, "")) ? "ok" : "warn", params: { expected } });
+  else out.push({ id: "salutation", status: "na" });
+
+  // Contact person addressed by name (if one is known)
+  const cp = (ctx.contactPerson ?? "").trim();
+  if (cp) out.push({ id: "contact", status: text.toLowerCase().includes(lastName(cp).toLowerCase()) ? "ok" : "warn", params: { name: cp } });
+  else out.push({ id: "contact", status: "na" });
+
+  // Company named — not only "Ihr Unternehmen"
+  const companyCore = ctx.company.replace(/\b(ag|gmbh|sa|sàrl|sarl|ltd|inc|group|gruppe|holding)\b\.?/gi, "").replace(/[^\p{L}\p{N} &-]/gu, " ").trim();
+  const firstToken = companyCore.split(/\s+/).find(w => w.length >= 3) ?? companyCore;
+  out.push({ id: "company", status: firstToken && text.toLowerCase().includes(firstToken.toLowerCase()) ? "ok" : "fail", params: { company: ctx.company } });
+
+  // Length: half an A4 page
+  const count = words(text).length;
+  const limit = letterWordLimit(ctx.kind);
+  out.push({ id: "length", status: count > limit + 20 ? "fail" : count > limit ? "warn" : count < 90 ? "warn" : "ok", params: { count, limit } });
+
+  // Repeated content words (≥ 3×)
+  const freq = new Map<string, number>();
+  for (const w of words(text)) if (w.length >= 4 && !STOP.has(w)) freq.set(w, (freq.get(w) ?? 0) + 1);
+  const companyWords = new Set(words(ctx.company));
+  const repeated = [...freq].filter(([w, n]) => n >= 3 && !companyWords.has(w)).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  out.push({ id: "repetition", status: repeated.length ? "warn" : "ok", params: { words: repeated.map(([w, n]) => `${w} (${n}×)`).join(", ") } });
+
+  // Too many sentences starting with "Ich" / "I" / "Je"
+  const starter = l === "en" ? /^i\b/i : l === "fr" ? /^(je|j')/i : /^ich\b/i;
+  const sentences = text.split(/(?<=[.!?])\s+|\n+/).map(x => x.trim()).filter(x => x.length > 3);
+  const ichCount = sentences.filter(x => starter.test(x)).length;
+  out.push({ id: "ichStarts", status: ichCount >= 4 ? "warn" : "ok", params: { count: ichCount } });
+
+  // No-go phrases
+  const found = NO_GO[l].map(r => text.match(r)?.[0]).filter((x): x is string => !!x);
+  out.push({ id: "phrases", status: found.length ? "fail" : "ok", params: { found: found.map(f => `«${f.trim()}»`).join(", ") } });
+
+  // Direct opening: first sentence after the salutation
+  const opening = (expected || WRONG_SALUTATION.test(first) || /^(sehr geehrte|guten tag|liebe|dear|madame|monsieur|bonjour)/i.test(first) ? lines[1] : lines[0]) ?? "";
+  out.push({ id: "opening", status: /^(hiermit|mit diesem schreiben|herewith|par la présente)/i.test(opening) ? "fail" : "ok" });
+
+  // Unfilled placeholders
+  const ph = (text.match(/\[[^\]]{1,120}\]/g) ?? []).length;
+  out.push({ id: "placeholders", status: ph ? "fail" : "ok", params: { count: ph } });
+
+  // Closing formula
+  out.push({ id: "closing", status: CLOSING[l].test(text.slice(-300)) ? "ok" : "warn" });
+
+  // Swiss spelling
+  if (l === "de") out.push({ id: "swiss", status: text.includes("ß") ? "warn" : "ok" });
+
+  return out;
+}
+
+/** Failed/warned checks as hints for the review prompt, so the suggestions address them. */
+export function checksForPrompt(checks: LetterCheck[]): string {
+  const bad = checks.filter(c => c.status === "fail" || c.status === "warn");
+  if (!bad.length) return "";
+  const p = (c: LetterCheck) => Object.entries(c.params ?? {}).map(([k, v]) => `${k}=${v}`).join(", ");
+  return `Die automatische Prüfung hat gefunden (berücksichtige das in "verbesserungen" und "promptVorschlaege"):\n${bad.map(c => `- ${c.id}: ${c.status}${c.params ? ` (${p(c)})` : ""}`).join("\n")}`;
+}

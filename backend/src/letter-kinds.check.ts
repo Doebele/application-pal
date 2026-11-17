@@ -80,3 +80,42 @@ assert.doesNotMatch(tb, /Zuverlässigkeit/);
 assert.match(tb, /Teamorientierung/);
 assert.equal(formatSchoolTests([{ name: "Stellwerk 8", scale: "stellwerk", results: [{ area: "Mathe", score: 480 }] }]), "");
 console.log("letter-kinds: school test checks passed");
+
+// ─── school letter checks ───
+import { schoolLetterChecks, checksForPrompt } from "./letter-kinds.js";
+const good = `Sehr geehrte Frau Muster
+
+Ich bewerbe mich um eine Lehrstelle als Schreinerin EFZ bei der Holzbau Muster AG. Auf Ihrer Website habe ich das Projekt mit dem Schulhaus aus Holz gesehen.
+Im Werkunterricht habe ich ein Regal aus Massivholz gebaut. Dass am Schluss etwas Echtes dasteht, hat mir am meisten Spass gemacht.
+Seit zwei Jahren trage ich jeden Mittwoch Zeitungen aus. Darauf kann man sich verlassen.
+Während meiner Schnupperwoche durfte ich Fenster montieren. Die Arbeit mit den Maschinen hat mir gefallen und das Team war hilfsbereit.
+Gerne zeige ich Ihnen in einem Gespräch, was ich kann.
+
+Freundliche Grüsse
+Lea Beispiel`;
+const ctx = { lang: "de", kind: "lehrstelle" as const, company: "Holzbau Muster AG", contactPerson: "Maria Muster", contactGender: "f" };
+const byId = (cs: ReturnType<typeof schoolLetterChecks>) => Object.fromEntries(cs.map(c => [c.id, c.status]));
+const g = byId(schoolLetterChecks(good, ctx));
+assert.deepEqual(g, { salutation: "ok", contact: "ok", company: "ok", length: "ok", repetition: "ok", ichStarts: "ok", phrases: "ok", opening: "ok", placeholders: "ok", closing: "ok", swiss: "ok" });
+const bad = `Sehr geehrtes Herrn Muster
+
+Hiermit bewerbe ich mich mit grossem Interesse bei Ihrem Unternehmen. Ich bin kreativ und teamfähig.
+Ich mag Holz. Ich mag Holz sehr. Ich arbeite gerne mit Holz und Holz ist toll. [Beispiel ergänzen]
+Ich freue mich auf eine Antwort. Grüße`;
+const b = byId(schoolLetterChecks(bad, ctx));
+assert.equal(b.salutation, "fail");
+assert.equal(b.company, "fail");
+assert.equal(b.phrases, "fail");
+assert.equal(b.opening, "fail");
+assert.equal(b.placeholders, "fail");
+assert.equal(b.ichStarts, "warn");
+assert.equal(b.repetition, "warn");
+assert.equal(b.swiss, "warn");
+assert.equal(b.closing, "warn");
+assert.equal(b.length, "warn");
+assert.match(checksForPrompt(schoolLetterChecks(bad, ctx)), /company: fail/);
+assert.equal(checksForPrompt(schoolLetterChecks(good, ctx)), "");
+const neutral = byId(schoolLetterChecks(good.replace("Sehr geehrte Frau Muster", "Sehr geehrte Damen und Herren"), { ...ctx, contactPerson: null, contactGender: null }));
+assert.equal(neutral.salutation, "ok");
+assert.equal(neutral.contact, "na");
+console.log("letter-kinds: school letter checks passed");

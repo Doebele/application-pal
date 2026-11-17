@@ -2437,5 +2437,72 @@
     "no": "Non",
     "schnupperNotesPlaceholder": "Qu'as-tu fait, qu'est-ce qui t'a plu ?",
     "schnupperHint": "Un stage découverte dans la même entreprise est l'argument le plus fort pour une place d'apprentissage."
+  },
+  "schoolReview": {
+    "criteriaTitle": "Ce que l'entreprise veut voir",
+    "tip": "Astuce",
+    "levels": {
+      "strong": "fort",
+      "ok": "correct",
+      "weak": "faible"
+    },
+    "criteria": {
+      "motivation": "Motivation",
+      "passung": "Adéquation au métier",
+      "zuverlaessigkeit": "Fiabilité",
+      "persoenlichkeit": "Personnalité"
+    },
+    "checklistTitle": "Check-list",
+    "openCount": "{{count}} point(s) ouvert(s)",
+    "allOk": "tout est rempli",
+    "spellingTitle": "Orthographe",
+    "checks": {
+      "salutation": {
+        "ok": "La formule d'appel est correcte",
+        "warn": "La formule d'appel devrait être : « {{expected}} »",
+        "fail": "Formule d'appel incorrecte : « {{found}} »"
+      },
+      "contact": {
+        "ok": "{{name}} est interpellé·e personnellement",
+        "warn": "{{name}} n'est pas nommé·e"
+      },
+      "company": {
+        "ok": "L'entreprise est nommée",
+        "fail": "L'entreprise n'est pas nommée — écris « {{company}} » et pas seulement « votre entreprise »"
+      },
+      "length": {
+        "ok": "Longueur adaptée ({{count}} mots, max. {{limit}} — une demi-page)",
+        "warn": "Vérifie la longueur : {{count}} mots (objectif : une demi-page, env. 100–{{limit}})",
+        "fail": "Trop long : {{count}} mots — au maximum {{limit}} (une demi-page)"
+      },
+      "repetition": {
+        "ok": "Pas de répétitions marquantes",
+        "warn": "Mots répétés : {{words}}"
+      },
+      "ichStarts": {
+        "ok": "Débuts de phrase variés",
+        "warn": "{{count}} phrases commencent par « Je » — reformule-en quelques-unes"
+      },
+      "phrases": {
+        "ok": "Aucune formule toute faite",
+        "fail": "Supprime les formules toutes faites : {{found}}"
+      },
+      "opening": {
+        "ok": "Entrée en matière directe",
+        "fail": "La première phrase commence par « Par la présente … » — mieux : « Je postule pour … »"
+      },
+      "placeholders": {
+        "ok": "Aucun espace réservé ouvert",
+        "fail": "Complète {{count}} espace(s) réservé(s) entre [crochets]"
+      },
+      "closing": {
+        "ok": "Formule de politesse présente",
+        "warn": "Formule de politesse manquante (p. ex. « Meilleures salutations »)"
+      },
+      "swiss": {
+        "ok": "Orthographe suisse (ss)",
+        "warn": "« ß » trouvé — en Suisse on écrit « ss »"
+      }
+    }
   }
 }

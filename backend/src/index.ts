@@ -1,5 +1,5 @@
 import "./sidecar-polyfill.js";
-import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote, parseSchoolProfile, formatSchoolProfile, formatSchoolAnswers, schoolAnglesTask, normalizeTest, SCHOOL_TEST_EXTRACT_PROMPT, type SchoolAnswers, type SchoolTest } from "./letter-kinds.js";
+import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote, parseSchoolProfile, formatSchoolProfile, formatSchoolAnswers, schoolAnglesTask, normalizeTest, schoolLetterChecks, checksForPrompt, SCHOOL_TEST_EXTRACT_PROMPT, type SchoolAnswers, type SchoolTest } from "./letter-kinds.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
@@ -4066,7 +4066,11 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
   const reviewGuidance = buildLetterGuidance(reviewProfile?.letterConfig, reviewProfile?.persona);
   const reviewHumanize = humanizerPrompt(lang_, reviewProfile?.letterConfig);
   const letterLangName = REVIEW_LANG_NAMES[lang_] ?? REVIEW_LANG_NAMES.de;
-  const system = `${reviewLangDirective(uiLang_, lang_)}\n\nDu bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch. Die Korrespondenzsprache dieser Bewerbung ist ${letterLangName}: Beurteile Rechtschreibung, Grammatik, Stil, Anrede, Grussformel und Formulierungen nach den Regeln und Gepflogenheiten dieser Sprache. Ist das Anschreiben ganz oder teilweise in einer anderen Sprache verfasst, nenne das als erste Verbesserung und als ersten Eintrag in "promptVorschlaege".${schoolLeaverReviewNote(normalizeKind(app_.applicationKind)) ? `\n\n${schoolLeaverReviewNote(normalizeKind(app_.applicationKind))}` : ""}${salutationPrompt(lang_, app_.contactPerson, app_.contactGender) ? `\nDie korrekte Anrede für diesen Brief lautet: "${(salutationPrompt(lang_, app_.contactPerson, app_.contactGender).match(/"([^"]+)"/) ?? [])[1]}" — weicht die Anrede im Brief davon ab oder ist sie grammatisch falsch, nenne das als Verbesserung.` : ""}${reviewGuidance ? ` Prüfe zusätzlich, ob es die folgenden Vorgaben des Kandidaten erfüllt, und nenne Abweichungen in "verbesserungen":\n\n${reviewGuidance}` : ""}${reviewHumanize ? `\n\nBewerte das Anschreiben außerdem an diesen Maßstäben für menschliches Schreiben und nenne Verstöße in "verbesserungen" bzw. "cliches":\n${reviewHumanize}` : ""} Antworte NUR mit JSON:
+  const reviewKind = normalizeKind(app_.applicationKind);
+  const schoolReview = isSchoolKind(reviewKind);
+  // Body for the deterministic checks (subject excluded) — set below together with letterText
+  let letterBody = coverLetterContent?.trim() ?? "";
+  let system = `${reviewLangDirective(uiLang_, lang_)}\n\nDu bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch. Die Korrespondenzsprache dieser Bewerbung ist ${letterLangName}: Beurteile Rechtschreibung, Grammatik, Stil, Anrede, Grussformel und Formulierungen nach den Regeln und Gepflogenheiten dieser Sprache. Ist das Anschreiben ganz oder teilweise in einer anderen Sprache verfasst, nenne das als erste Verbesserung und als ersten Eintrag in "promptVorschlaege".${schoolLeaverReviewNote(normalizeKind(app_.applicationKind)) ? `\n\n${schoolLeaverReviewNote(normalizeKind(app_.applicationKind))}` : ""}${salutationPrompt(lang_, app_.contactPerson, app_.contactGender) ? `\nDie korrekte Anrede für diesen Brief lautet: "${(salutationPrompt(lang_, app_.contactPerson, app_.contactGender).match(/"([^"]+)"/) ?? [])[1]}" — weicht die Anrede im Brief davon ab oder ist sie grammatisch falsch, nenne das als Verbesserung.` : ""}${reviewGuidance ? ` Prüfe zusätzlich, ob es die folgenden Vorgaben des Kandidaten erfüllt, und nenne Abweichungen in "verbesserungen":\n\n${reviewGuidance}` : ""}${reviewHumanize ? `\n\nBewerte das Anschreiben außerdem an diesen Maßstäben für menschliches Schreiben und nenne Verstöße in "verbesserungen" bzw. "cliches":\n${reviewHumanize}` : ""} Antworte NUR mit JSON:
 { "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "too_long | appropriate | too_short", "personalisierung": "weak | medium | strong", "promptVorschlaege": ["<string>"] }
 "laenge" und "personalisierung": genau einer der englischen Codes, nicht übersetzen.
 "promptVorschlaege": 2-4 fertig formulierte, direkt einsetzbare Anweisungen, mit denen der Kandidat das Anschreiben gezielt anpassen lassen kann (z.B. sinngemäss "Kürze den zweiten Absatz auf zwei Sätze." oder "Ersetze das Klischee '…' durch einen konkreten Beleg aus dem Lebenslauf."). Jede Anweisung muss eigenständig verständlich sein, ohne den Review-Text zu kennen.
@@ -4079,14 +4083,28 @@ ${reviewLangDirective(uiLang_, lang_)}`;
       const [cacheRow] = await db.select({ c: applications.aiResultsCache }).from(applications).where(eq(applications.id, id)).limit(1);
       const cache = JSON.parse(cacheRow?.c ?? "{}") as Record<string, { body?: string; subject?: string }>;
       const cached = cache["cover-letter"];
-      if (cached?.body) letterText = cached.subject ? `${cached.subject}\n\n${cached.body}` : cached.body;
+      if (cached?.body) { letterText = cached.subject ? `${cached.subject}\n\n${cached.body}` : cached.body; letterBody = cached.body; }
     } catch { /* ignore */ }
   }
   if (!letterText) letterText = "Kein Anschreiben vorhanden. Bitte zuerst im Tab 'Aktionen' → Phase Anschreiben ein Anschreiben generieren.";
+  // School leavers: deterministic checklist + the four criteria the company looks for
+  const checks = schoolReview && letterBody
+    ? schoolLetterChecks(letterBody, { lang: lang_, kind: reviewKind, company: app_.company, contactPerson: app_.contactPerson, contactGender: app_.contactGender })
+    : undefined;
+  if (schoolReview) {
+    const hint = checks ? checksForPrompt(checks) : "";
+    system += `\n\nZusätzlich für diese Schulabgänger-Bewerbung: Bewerte die vier Kriterien, auf die der Betrieb achtet, und finde Rechtschreib- und Grammatikfehler. Ergänze das JSON um:
+"kriterien": { "motivation": K, "passung": K, "zuverlaessigkeit": K, "persoenlichkeit": K } mit K = { "stufe": "strong | ok | weak", "begruendung": "<1 Satz, per Du>", "tipp": "<1 konkreter Tipp, per Du>" },
+"rechtschreibung": [{ "fehler": "<Wortlaut im Brief>", "korrektur": "<richtig>" }] (leer, wenn alles stimmt; Schweizer Schreibweise ss statt ß ist korrekt).
+"stufe": genau einer der englischen Codes. Motivation = warum dieser Beruf UND dieser Betrieb, konkret belegt; Passung = passt das Profil zum Berufsbild; Zuverlässigkeit = belegt durch Beispiele (Ämtli, Job, Verein …), nicht behauptet; Persönlichkeit = wirkt die Person echt und sympathisch.${hint ? `\n\n${hint}` : ""}
+
+${reviewLangDirective(uiLang_, lang_)}`;
+  }
   const user = `Stelle: ${app_.role} bei ${app_.company}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}\n\nAnschreiben:\n${letterText}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
-    const parsed = extractJson(raw) as { gesamteindruck: string; staerken: string[]; verbesserungen: string[]; cliches: string[]; tonalitaet: string; laenge: string; personalisierung: string; promptVorschlaege?: string[] };
+    const parsed = extractJson(raw) as { gesamteindruck: string; staerken: string[]; verbesserungen: string[]; cliches: string[]; tonalitaet: string; laenge: string; personalisierung: string; promptVorschlaege?: string[]; checks?: unknown; kind?: string };
+    if (checks) { parsed.checks = checks; parsed.kind = reviewKind; }
     await persistAiResult(id, "letter-review", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {

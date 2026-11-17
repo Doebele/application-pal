@@ -2437,5 +2437,72 @@
     "no": "Nein",
     "schnupperNotesPlaceholder": "Was hast du gemacht, was hat dir gefallen?",
     "schnupperHint": "Eine Schnupperlehre im selben Betrieb ist das stärkste Argument für eine Lehrstelle."
+  },
+  "schoolReview": {
+    "criteriaTitle": "Was der Betrieb sehen will",
+    "tip": "Tipp",
+    "levels": {
+      "strong": "stark",
+      "ok": "okay",
+      "weak": "schwach"
+    },
+    "criteria": {
+      "motivation": "Motivation",
+      "passung": "Passung zum Beruf",
+      "zuverlaessigkeit": "Zuverlässigkeit",
+      "persoenlichkeit": "Persönlichkeit"
+    },
+    "checklistTitle": "Checkliste",
+    "openCount": "{{count}} Punkt(e) offen",
+    "allOk": "alles erfüllt",
+    "spellingTitle": "Rechtschreibung",
+    "checks": {
+      "salutation": {
+        "ok": "Anrede stimmt",
+        "warn": "Anrede sollte lauten: «{{expected}}»",
+        "fail": "Anrede ist grammatisch falsch: «{{found}}» — richtig ist z.B. «Sehr geehrter Herr …» oder «Sehr geehrte Frau …»"
+      },
+      "contact": {
+        "ok": "Ansprechperson {{name}} wird persönlich angesprochen",
+        "warn": "Ansprechperson {{name}} wird nicht beim Namen genannt"
+      },
+      "company": {
+        "ok": "Betrieb wird beim Namen genannt",
+        "fail": "Betrieb wird nicht beim Namen genannt — schreib «{{company}}» statt nur «Ihr Unternehmen»"
+      },
+      "length": {
+        "ok": "Länge passt ({{count}} Wörter, max. {{limit}} — eine halbe Seite)",
+        "warn": "Länge prüfen: {{count}} Wörter (Ziel: eine halbe Seite, ca. 100–{{limit}})",
+        "fail": "Zu lang: {{count}} Wörter — höchstens {{limit}} (eine halbe Seite)"
+      },
+      "repetition": {
+        "ok": "Keine auffälligen Wortwiederholungen",
+        "warn": "Wörter wiederholen sich: {{words}}"
+      },
+      "ichStarts": {
+        "ok": "Abwechslungsreiche Satzanfänge",
+        "warn": "{{count}} Sätze beginnen mit «Ich» — stell ein paar Sätze um"
+      },
+      "phrases": {
+        "ok": "Keine Floskeln gefunden",
+        "fail": "Floskeln streichen: {{found}}"
+      },
+      "opening": {
+        "ok": "Direkter Einstieg",
+        "fail": "Erster Satz beginnt mit «Hiermit …» — besser direkt: «Ich bewerbe mich um …»"
+      },
+      "placeholders": {
+        "ok": "Keine offenen Platzhalter",
+        "fail": "{{count}} Platzhalter in [eckigen Klammern] noch ausfüllen"
+      },
+      "closing": {
+        "ok": "Grussformel vorhanden",
+        "warn": "Grussformel fehlt (z.B. «Freundliche Grüsse»)"
+      },
+      "swiss": {
+        "ok": "Schweizer Schreibweise (ss)",
+        "warn": "«ß» gefunden — in der Schweiz schreibt man «ss»"
+      }
+    }
   }
 }

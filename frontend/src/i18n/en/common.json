@@ -2437,5 +2437,72 @@
     "no": "No",
     "schnupperNotesPlaceholder": "What did you do, what did you like?",
     "schnupperHint": "A taster apprenticeship at the same company is the strongest argument for an apprenticeship."
+  },
+  "schoolReview": {
+    "criteriaTitle": "What the company wants to see",
+    "tip": "Tip",
+    "levels": {
+      "strong": "strong",
+      "ok": "okay",
+      "weak": "weak"
+    },
+    "criteria": {
+      "motivation": "Motivation",
+      "passung": "Fit with the trade",
+      "zuverlaessigkeit": "Reliability",
+      "persoenlichkeit": "Personality"
+    },
+    "checklistTitle": "Checklist",
+    "openCount": "{{count}} point(s) open",
+    "allOk": "all met",
+    "spellingTitle": "Spelling",
+    "checks": {
+      "salutation": {
+        "ok": "Salutation is right",
+        "warn": "Salutation should read: “{{expected}}”",
+        "fail": "Salutation is grammatically wrong: “{{found}}”"
+      },
+      "contact": {
+        "ok": "Contact {{name}} is addressed personally",
+        "warn": "Contact {{name}} is not addressed by name"
+      },
+      "company": {
+        "ok": "Company is named",
+        "fail": "Company is not named — write “{{company}}”, not just “your company”"
+      },
+      "length": {
+        "ok": "Length fits ({{count}} words, max. {{limit}} — half a page)",
+        "warn": "Check the length: {{count}} words (target: half a page, about 100–{{limit}})",
+        "fail": "Too long: {{count}} words — at most {{limit}} (half a page)"
+      },
+      "repetition": {
+        "ok": "No noticeable repeated words",
+        "warn": "Repeated words: {{words}}"
+      },
+      "ichStarts": {
+        "ok": "Varied sentence openings",
+        "warn": "{{count}} sentences start with “I” — rephrase a few"
+      },
+      "phrases": {
+        "ok": "No clichés found",
+        "fail": "Remove clichés: {{found}}"
+      },
+      "opening": {
+        "ok": "Direct opening",
+        "fail": "The first sentence starts with “Herewith …” — better: “I am applying for …”"
+      },
+      "placeholders": {
+        "ok": "No open placeholders",
+        "fail": "Fill in {{count}} placeholder(s) in [square brackets]"
+      },
+      "closing": {
+        "ok": "Closing present",
+        "warn": "Closing missing (e.g. “Kind regards”)"
+      },
+      "swiss": {
+        "ok": "Swiss spelling (ss)",
+        "warn": "“ß” found — Swiss German uses “ss”"
+      }
+    }
   }
 }
