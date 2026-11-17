@@ -31,7 +31,8 @@
     "desiredSalary": "Wunschgehalt (CHF, Jahresbrutto)",
     "desiredSalaryPlaceholder": "z.B. 110000",
     "desiredSalaryHint": "Wird in der Salary-Check-Grafik als Referenzlinie angezeigt",
-    "autosave": "Wird beim Verlassen des Felds gespeichert."
+    "autosave": "Wird beim Verlassen des Felds gespeichert.",
+    "subSchool": "Schülerprofil und persönliche Angaben für alle Bewerbungen"
   },
   "persona": {
     "schulabgaenger": "Schulabgänger",
@@ -849,7 +850,10 @@
       "updatedAt": "Aktualisiert",
       "jobType": "Pensum",
       "workModel": "Modell",
-      "contractType": "Vertrag"
+      "contractType": "Vertrag",
+      "apprenticeship": "Beruf",
+      "applicationKind": "Art",
+      "interview1School": "Schnuppern / Gespräch"
     },
     "showArchived": "Archiv",
     "columnsBtn": "Spalten",
@@ -1974,7 +1978,9 @@
     "reopen": "Assistent öffnen",
     "aiLocalLmStudio": "App öffnen, ein Modell herunterladen (z. B. Qwen) und unter „Developer“ den Server starten.",
     "aiLocalOllama": "App öffnen und ein Modell laden, z. B. „ollama pull qwen3“ im Terminal.",
-    "aiLocalThen": "Danach hier:"
+    "aiLocalThen": "Danach hier:",
+    "parentHint": "Dieser Schritt ist technisch – am besten erledigt ihn ein Elternteil. Er lässt sich auch überspringen und später in den Einstellungen nachholen.",
+    "schoolTogether": "Tipp: Richtet die App am besten zusammen mit deinen Eltern ein. Die Einstellungen für KI und Google übernehmen sie, die Bewerbungen machst du."
   },
   "appUpdate": {
     "label": "App-Version",
@@ -2447,6 +2453,11 @@
       "noDocs": "Keine Dokumente in der Kategorie „Schultests“ gefunden.",
       "extracted": "{{count}} Test(s) übernommen",
       "extractFailed": "Auslesen fehlgeschlagen."
+    },
+    "rav": {
+      "title": "RAV",
+      "sub": "Nur nötig, wenn du beim RAV angemeldet bist – zum Beispiel im Motivationssemester (SEMO) oder in einem Brückenangebot.",
+      "label": "Ich bin beim RAV angemeldet und muss meine Bewerbungen nachweisen – RAV-Export einblenden."
     }
   },
   "schoolLetter": {
@@ -2590,5 +2601,21 @@
     "more_one": "(und {{count}} weiteren).",
     "more_other": "(und {{count}} weiteren).",
     "tip": "Betriebe merken das. Schreib den Einstieg und «Warum dieser Betrieb» neu."
+  },
+  "schoolPrep": {
+    "questions": "Fragen, die kommen können",
+    "prepare": "So bereitest du dich vor",
+    "examples": "Beispiele zum Erzählen",
+    "examplesShort": "Beispiele",
+    "prepareShort": "Vorbereitung",
+    "situation": "Was war los?",
+    "task": "Deine Aufgabe",
+    "action": "Was du gemacht hast",
+    "result": "Wie es ausging"
+  },
+  "schoolResearch": {
+    "overview": "Was der Betrieb macht",
+    "culture": "So arbeitet man dort",
+    "ideas": "Ideen für «Warum dieser Betrieb»"
   }
 }

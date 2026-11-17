@@ -4,6 +4,7 @@ import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Do
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useProfileBasics } from "../lib/persona";
 import { Topbar } from "../components/Topbar";
 import { useUiStore, type Accent, type Density, type CardVariant, type AiProvider, type AiSecretProvider, DEFAULT_FOLDER_RULE, DEFAULT_DOC_RULE } from "../lib/store";
 import { api } from "../lib/api";
@@ -854,6 +855,7 @@ function RavSheetSubSection({ onReconnect }: { onReconnect: () => void }) {
 
 // ─── Google OAuth section ─────────────────────────────────────
 function GoogleSection() {
+  const { ravEnabled } = useProfileBasics();
   const { t } = useTranslation();
   const desktop = useAuth().user?.mode === "desktop";
   const [waiting, setWaiting] = useState(false);
@@ -1070,7 +1072,7 @@ function GoogleSection() {
       )}
 
       {/* RAV proof sheet — only when connected */}
-      {status === "connected" && <RavSheetSubSection onReconnect={connect} />}
+      {status === "connected" && ravEnabled && <RavSheetSubSection onReconnect={connect} />}
 
       {/* Google Calendar — only when connected */}
       {status === "connected" && (

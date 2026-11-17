@@ -76,7 +76,8 @@
   "interview-prep": {
     "label": "Préparation à l'entretien",
     "tooltip": "Générer questions, exemples STAR et contre-questions",
-    "empty": "Générer la préparation"
+    "empty": "Générer la préparation",
+    "schoolLabel": "Préparer l'entretien"
   },
   "salary-tips": {
     "label": "Négociation salariale",
@@ -103,5 +104,9 @@
     "tooltip": "Créer le dossier de candidature Google Drive"
   },
   "generating": "Génération en cours…",
-  "generateFailed": "La génération a échoué"
+  "generateFailed": "La génération a échoué",
+  "email-thanks": {
+    "label": "E-mail de remerciement",
+    "tooltip": "Rédiger un e-mail de remerciement après le stage ou l'entretien"
+  }
 }

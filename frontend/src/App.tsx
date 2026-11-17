@@ -11,6 +11,7 @@ import { SetupWizard } from "./components/SetupWizard";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Rail } from "./components/Rail";
 import { TourProvider } from "./components/Tour";
+import { PersonaStageNames } from "./lib/persona";
 import { BoardPage } from "./pages/BoardPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
@@ -90,6 +91,7 @@ function MainApp() {
     <TourProvider key={user?.id} userId={user?.id ?? ""} persona={persona}>
     <div className="app-shell">
       {user?.id && <SettingsSync key={user.id} userId={user.id} />}
+      <PersonaStageNames />
       <Rail applications={applications} />
       <div className="app-main">
         <Routes>

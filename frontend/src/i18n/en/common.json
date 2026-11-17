@@ -31,7 +31,8 @@
     "desiredSalary": "Desired salary (CHF, annual gross)",
     "desiredSalaryPlaceholder": "e.g. 110000",
     "desiredSalaryHint": "Shown as a reference line in the Salary Check chart",
-    "autosave": "Changes are saved when leaving a field."
+    "autosave": "Changes are saved when leaving a field.",
+    "subSchool": "Pupil profile and personal details for all applications"
   },
   "persona": {
     "schulabgaenger": "School leaver",
@@ -849,7 +850,10 @@
       "updatedAt": "Updated",
       "jobType": "Pensum",
       "workModel": "Model",
-      "contractType": "Contract"
+      "contractType": "Contract",
+      "apprenticeship": "Trade",
+      "applicationKind": "Kind",
+      "interview1School": "Taster / interview"
     },
     "showArchived": "Archive",
     "columnsBtn": "Columns",
@@ -1974,7 +1978,9 @@
     "reopen": "Open wizard",
     "aiLocalLmStudio": "open the app, download a model (e.g. Qwen) and start the server under “Developer”.",
     "aiLocalOllama": "open the app and pull a model, e.g. “ollama pull qwen3” in the Terminal.",
-    "aiLocalThen": "Then here:"
+    "aiLocalThen": "Then here:",
+    "parentHint": "This step is technical – ideally a parent does it. You can also skip it and do it later in Settings.",
+    "schoolTogether": "Tip: set up the app together with your parents. They take care of the AI and Google settings, you do the applications."
   },
   "appUpdate": {
     "label": "App version",
@@ -2447,6 +2453,11 @@
       "noDocs": "No documents in the category “School tests”.",
       "extracted": "{{count}} test(s) imported",
       "extractFailed": "Reading failed."
+    },
+    "rav": {
+      "title": "RAV (unemployment office)",
+      "sub": "Only needed if you are registered with the RAV – for example in a motivation semester (SEMO) or a bridge-year programme.",
+      "label": "I'm registered with the RAV and must prove my applications – show the RAV export."
     }
   },
   "schoolLetter": {
@@ -2590,5 +2601,21 @@
     "more_one": "(and {{count}} more).",
     "more_other": "(and {{count}} more).",
     "tip": "Companies notice that. Rewrite the opening and “why this company”."
+  },
+  "schoolPrep": {
+    "questions": "Questions you may be asked",
+    "prepare": "How to prepare",
+    "examples": "Examples to tell",
+    "examplesShort": "Examples",
+    "prepareShort": "Prep",
+    "situation": "What happened?",
+    "task": "Your task",
+    "action": "What you did",
+    "result": "How it turned out"
+  },
+  "schoolResearch": {
+    "overview": "What the company does",
+    "culture": "What working there is like",
+    "ideas": "Ideas for “why this company”"
   }
 }

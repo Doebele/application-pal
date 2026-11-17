@@ -134,6 +134,7 @@ export type SchoolProfile = {
   experiences?: { kind: SchoolExperienceKind; title: string; what?: string; liked?: string; company?: string }[];
   strengths?: { strength: string; example?: string }[];              // strength → example
   tests?: SchoolTest[];                                              // Stellwerk, Lernpass plus, Multicheck, Basic-Check
+  ravRegistered?: boolean;                                           // registered with the RAV (SEMO, bridge year) → RAV export visible
 };
 
 /** Scale of a school test: stellwerk = 200–800 (norm mean 500), stanine = 1–9 (Lernpass plus PSM), percent = 0–100. */
@@ -174,6 +175,7 @@ export function parseSchoolProfile(raw: string | null | undefined): SchoolProfil
     })).filter(e => e.title),
     strengths: arr(j.strengths).map(s => ({ strength: str(s.strength, 120), example: str(s.example) })).filter(s => s.strength),
     tests: arr(j.tests).map(normalizeTest).filter((t): t is SchoolTest => !!t),
+    ...(j.ravRegistered === true ? { ravRegistered: true } : {}),
   };
 }
 

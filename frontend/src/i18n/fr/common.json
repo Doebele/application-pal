@@ -31,7 +31,8 @@
     "desiredSalary": "Salaire souhaité (CHF, brut annuel)",
     "desiredSalaryPlaceholder": "p. ex. 110000",
     "desiredSalaryHint": "Affiché comme ligne de référence dans le graphique de vérification salariale",
-    "autosave": "Enregistré automatiquement en quittant le champ."
+    "autosave": "Enregistré automatiquement en quittant le champ.",
+    "subSchool": "Profil d'élève et coordonnées pour toutes les candidatures"
   },
   "persona": {
     "schulabgaenger": "Sortant·e d'école",
@@ -849,7 +850,10 @@
       "updatedAt": "Mise à jour",
       "jobType": "Taux d'activité",
       "workModel": "Mode",
-      "contractType": "Contrat"
+      "contractType": "Contrat",
+      "apprenticeship": "Métier",
+      "applicationKind": "Type",
+      "interview1School": "Stage / entretien"
     },
     "showArchived": "Archives",
     "columnsBtn": "Colonnes",
@@ -1974,7 +1978,9 @@
     "reopen": "Ouvrir l’assistant",
     "aiLocalLmStudio": "ouvre l’app, télécharge un modèle (p. ex. Qwen) et démarre le serveur sous « Developer ».",
     "aiLocalOllama": "ouvre l’app et charge un modèle, p. ex. « ollama pull qwen3 » dans le Terminal.",
-    "aiLocalThen": "Ensuite ici :"
+    "aiLocalThen": "Ensuite ici :",
+    "parentHint": "Cette étape est technique – idéalement, un parent s'en occupe. Tu peux aussi la passer et la faire plus tard dans les réglages.",
+    "schoolTogether": "Astuce : configurez l'app avec tes parents. Ils s'occupent de l'IA et de Google, toi des candidatures."
   },
   "appUpdate": {
     "label": "Version de l’app",
@@ -2447,6 +2453,11 @@
       "noDocs": "Aucun document dans la catégorie « Tests scolaires ».",
       "extracted": "{{count}} test(s) repris",
       "extractFailed": "Échec de la lecture."
+    },
+    "rav": {
+      "title": "ORP",
+      "sub": "Seulement si tu es inscrit·e à l'ORP – par exemple au semestre de motivation (SeMo) ou dans une solution transitoire.",
+      "label": "Je suis inscrit·e à l'ORP et dois prouver mes recherches – afficher l'export ORP."
     }
   },
   "schoolLetter": {
@@ -2590,5 +2601,21 @@
     "more_one": "(et {{count}} autre).",
     "more_other": "(et {{count}} autres).",
     "tip": "Les entreprises le remarquent. Réécris l'introduction et « pourquoi cette entreprise »."
+  },
+  "schoolPrep": {
+    "questions": "Questions qu'on peut te poser",
+    "prepare": "Comment te préparer",
+    "examples": "Exemples à raconter",
+    "examplesShort": "Exemples",
+    "prepareShort": "Préparation",
+    "situation": "Que s'est-il passé ?",
+    "task": "Ta tâche",
+    "action": "Ce que tu as fait",
+    "result": "Le résultat"
+  },
+  "schoolResearch": {
+    "overview": "Ce que fait l'entreprise",
+    "culture": "Comment on y travaille",
+    "ideas": "Idées pour « pourquoi cette entreprise »"
   }
 }

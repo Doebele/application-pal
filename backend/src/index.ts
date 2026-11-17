@@ -2159,6 +2159,11 @@ app.delete("/api/documents/:id", async (c) => {
 const CONTEXT_DOC_CATEGORIES = ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"];
 
 // Pupil profile (+ strong test results) for school-leaver letters; "" for everyone else.
+/** School-leaver view: persona Schulabgänger, or a Schnupperlehre / Lehrstelle / Praktikum. */
+function isSchoolApp(profile: { persona?: string | null } | undefined, app_: { applicationKind?: string | null }): boolean {
+  return profile?.persona === "schulabgaenger" || isSchoolKind(normalizeKind(app_.applicationKind));
+}
+
 function schoolContext(profile: { persona?: string | null; schoolProfile?: string | null } | undefined, app_: { applicationKind?: string | null; apprenticeship?: string | null; company: string }): string {
   if (profile?.persona !== "schulabgaenger" && !isSchoolKind(normalizeKind(app_.applicationKind))) return "";
   return formatSchoolProfile(parseSchoolProfile(profile?.schoolProfile), app_.apprenticeship, app_.company);
@@ -3490,7 +3495,7 @@ app.post("/api/applications/:id/ai/cover-letter/export-doc", async (c) => {
 app.post("/api/applications/:id/ai/email-draft", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, type, additionalContext } = await c.req.json<{ ai: AiConfig; type: "application" | "followup" | "decline" | "feedback" | "linkedin"; additionalContext?: string }>();
+  const { ai, type, additionalContext } = await c.req.json<{ ai: AiConfig; type: "application" | "followup" | "decline" | "feedback" | "linkedin" | "thanks"; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
@@ -3499,15 +3504,23 @@ app.post("/api/applications/:id/ai/email-draft", async (c) => {
     followup: "eine freundliche Follow-up-Email (3-4 Wochen nach Bewerbung, höflich nach Stand fragen)",
     decline: "eine höfliche Absage-Email (du hast eine andere Stelle angenommen)",
     feedback: "eine höfliche Email um konstruktives Feedback zur Absage zu bitten (kurz und professionell, max. 100 Wörter im Body)",
-    linkedin: "eine kurze LinkedIn-Vernetzungsnachricht an HR/Hiring Manager (max. 300 Zeichen, freundlich und professionell)"
+    linkedin: "eine kurze LinkedIn-Vernetzungsnachricht an HR/Hiring Manager (max. 300 Zeichen, freundlich und professionell)",
+    thanks: normalizeKind(app_.applicationKind) === "schnupperlehre"
+      ? "eine kurze Dankesmail nach der Schnupperlehre (Dank für die Schnuppertage, ein konkretes Erlebnis, Interesse an einer Lehrstelle ausdrücken)"
+      : "eine kurze Dankesmail nach dem Vorstellungsgespräch (Dank für das Gespräch, Interesse bekräftigen)"
   };
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
-  const system = `${langPrompt(lang_)} Schreibe ${typeDescriptions[type]}. Professionell, klar, nicht zu lang (max. 150 Wörter im Body, ausser bei linkedin: max. 300 Zeichen).
+  const schoolMail = isSchoolApp(profile, app_)
+    ? `\nAbsender ist eine Schülerin oder ein Schüler (14–16 Jahre), es geht um ${normalizeKind(app_.applicationKind) === "schnupperlehre" ? "eine Schnupperlehre" : "eine Lehrstelle"}${app_.apprenticeship ? ` als ${app_.apprenticeship}` : ""}. Schreib höflich (Sie-Form an den Betrieb), einfach und echt wie ein Jugendlicher, ohne Business-Floskeln, max. 100 Wörter im Body, Schweizer Schreibweise (ss statt ß). Konkrete Erlebnisse nur, wenn sie unten genannt sind, sonst [Platzhalter].`
+    : "";
+  const system = `${langPrompt(lang_)} Schreibe ${typeDescriptions[type]}. Professionell, klar, nicht zu lang (max. 150 Wörter im Body, ausser bei linkedin: max. 300 Zeichen).${schoolMail}
 Erkenne die Sprache der Stellenbeschreibung und schreibe in dieser Sprache.
 Antworte NUR mit JSON: { "subject": "<Betreff>", "body": "<Email-Text>" }`;
   const contacts = await db.select().from(applicationContacts).where(eq(applicationContacts.applicationId, id)).limit(1);
   const contact = contacts[0];
-  const user = `Absender: ${profile?.name ?? ""} (${profile?.email ?? ""})\nEmpfänger: ${contact ? `${contact.name}${contact.role ? ` (${contact.role})` : ""}` : "HR-Team"} bei ${app_.company}\nStelle: ${app_.role}\nStellenbeschreibung: ${app_.description?.slice(0, 500) ?? ""}`;
+  const debrief = type === "thanks" ? debriefNotes(normalizeDebrief(readCache(app_.aiResultsCache)["schnupper-debrief"])) : "";
+  const recipient = contact ? `${contact.name}${contact.role ? ` (${contact.role})` : ""}` : app_.contactPerson ? `${app_.contactPerson}${salutationPrompt(lang_, app_.contactPerson, app_.contactGender) ? ` — ${salutationPrompt(lang_, app_.contactPerson, app_.contactGender)}` : ""}` : schoolMail ? "Ansprechperson für Lernende" : "HR-Team";
+  const user = `Absender: ${profile?.name ?? ""} (${profile?.email ?? ""})\nEmpfänger: ${recipient} bei ${app_.company}\nStelle: ${app_.role}\nStellenbeschreibung: ${app_.description?.slice(0, 500) ?? ""}${debrief ? `\nErlebnisse aus der Schnupperlehre: ${debrief}` : ""}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { subject: string; body: string };
@@ -3527,6 +3540,31 @@ app.post("/api/applications/:id/ai/interview-prep", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  if (isSchoolApp(profile, app_)) {
+    // School leavers: taster days / apprenticeship interview — same JSON keys, school meaning
+    const kind = normalizeKind(app_.applicationKind);
+    const taster = kind === "schnupperlehre";
+    const what = taster ? "die Schnuppertage" : kind === "praktikum" ? "das Gespräch für das Praktikum" : "das Vorstellungsgespräch für die Lehrstelle";
+    const trade = app_.apprenticeship?.trim() || app_.role;
+    const sys = `${langPrompt(lang_)} Du bereitest eine Schülerin oder einen Schüler (14–16 Jahre) auf ${what} als ${trade} bei ${app_.company} vor. Schreib per Du, einfach, konkret und ermutigend. Keine Verhandlungstaktik, keine Fachbegriffe aus dem Recruiting.
+Antworte NUR mit diesem JSON:
+{ "rollenFragen": ["<Frage — Tipp: …>", ...], "starBeispiele": [{ "frage": "<Frage>", "situation": "<Was war los?>", "aufgabe": "<Was war deine Aufgabe?>", "aktion": "<Was hast du gemacht?>", "ergebnis": "<Wie ging es aus?>" }], "vossFragenWhatHow": ["<Vorbereitungspunkt>", ...], "rueckfragen": ["<Frage an den Betrieb>", ...] }
+Regeln:
+- rollenFragen: 8 Fragen, die ${taster ? "dir während oder am Ende der Schnuppertage gestellt werden" : "Lehrbetriebe Jugendlichen typischerweise stellen"} (z.B. Warum dieser Beruf? Warum unser Betrieb? Was machst du in der Freizeit? Was ist dein Lieblingsfach? Was kannst du gut, was weniger? Wo hast du schon geschnuppert?). Jede als "Frage — Tipp: …" mit einem kurzen Tipp, wie du aus deinem Schülerprofil antworten kannst.
+- starBeispiele: 3 kurze Beispiele zum Erzählen, nur aus echten Erfahrungen im Schülerprofil (Ämtli, Verein, Taschengeldjob, Schulprojekt, Schnupperlehre). Fehlt ein passendes Erlebnis, schreib "[eigenes Beispiel einsetzen]" — nichts erfinden.
+- vossFragenWhatHow: 6 praktische Punkte zur Vorbereitung (${taster ? "Kleidung, Material, Znüni, Anreise und Pünktlichkeit, Handy, Verhalten im Betrieb" : "Unterlagen mitnehmen, Kleidung, Anreise und Pünktlichkeit, Begrüssung, Handy aus, Nachfragen zum Ablauf"}).
+- rueckfragen: 5 Fragen, die du dem Betrieb stellen kannst (z.B. Wie sieht ein typischer Arbeitstag aus? Wie viele Lernende gibt es? Wo ist die Berufsschule?).
+- Testresultate und Noten nur erwähnen, wenn sie im Schülerprofil als gut aufgeführt sind.`;
+    const ctx = schoolContext(profile, app_);
+    const usr = `Beruf: ${trade}\nBetrieb: ${app_.company}\nInserat: ${app_.description?.slice(0, 1500) ?? ""}\n\n${ctx || "Kein Schülerprofil hinterlegt."}`;
+    try {
+      const parsed = extractJson(await callAi(sys, usr, ai, additionalContext)) as Record<string, unknown>;
+      return c.json({ ...parsed, school: true, kind });
+    } catch (err) {
+      console.error("interview-prep (school) error:", err);
+      return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+    }
+  }
   const system = `${langPrompt(lang_)} Du bist ein erfahrener Interview-Coach und kennst die Methoden von Chris Voss ("Never Split the Difference").
 Erstelle eine umfassende Interviewvorbereitung basierend auf der Rolle und dem Kandidatenprofil.
 Antworte NUR mit diesem JSON:
@@ -3976,6 +4014,25 @@ app.post("/api/applications/:id/ai/company-research", async (c) => {
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const [crProfile] = await db.select({ persona: userProfile.persona }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  if (isSchoolApp(crProfile, app_)) {
+    // School leavers: what the company does + ideas for "why this company" — no market analysis
+    const trade = app_.apprenticeship?.trim() || app_.role;
+    const sys = `${langPrompt(lang_)} Du hilfst einer Schülerin oder einem Schüler (14–16 Jahre), den Lehrbetrieb ${app_.company} kennen zu lernen, um sich als ${trade} zu bewerben. Schreib per Du und in einfachen Worten.
+Antworte NUR mit JSON: { "unternehmensueberblick": "<2–3 Sätze: was der Betrieb macht, für wen>", "branche": "<Branche>", "unternehmenskultur": "<was man über die Arbeit und die Lernenden dort weiss>", "aktuelleThemen": ["<Idee für «Warum dieser Betrieb»>", ...], "marktposition": "", "wettbewerber": [], "gespraechsthemen": [] }
+Regeln:
+- Nur was im Inserat steht oder über diesen Betrieb allgemein bekannt ist. Bei kleinen Betrieben weisst du oft nichts Sicheres: dann schreib "[auf der Website nachschauen: …]" mit dem, was die Schülerin nachschauen soll (z.B. Projekte, Produkte, Anzahl Lernende). Erfinde keine Zahlen, Auszeichnungen oder Projekte.
+- aktuelleThemen: 4 konkrete Ideen, was die Schülerin im Anschreiben bei «Warum dieser Betrieb» schreiben könnte, jeweils mit dem Hinweis, was sie dafür selbst nachschauen oder erlebt haben muss.`;
+    const usr = `Betrieb: ${app_.company}\nBeruf: ${trade}\nOrt: ${app_.location ?? ""}\nInserat:\n${app_.description?.slice(0, 2000) ?? ""}`;
+    try {
+      const parsed = { ...(extractJson(await callAi(sys, usr, ai, additionalContext)) as Record<string, unknown>), marktposition: "", wettbewerber: [], gespraechsthemen: [], school: true };
+      await persistAiResult(id, "company-research", parsed);
+      return c.json(parsed);
+    } catch (err) {
+      console.error("company-research (school) error:", err);
+      return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+    }
+  }
   const system = `${langPrompt(lang_)} Du bist ein Business-Analyst. Erstelle eine strukturierte Unternehmens- und Branchenrecherche basierend auf den verfügbaren Informationen. Antworte NUR mit JSON:
 { "unternehmensueberblick": "<string>", "branche": "<string>", "marktposition": "<string>", "unternehmenskultur": "<string>", "wettbewerber": ["<string>"], "aktuelleThemen": ["<string>"], "gespraechsthemen": ["<string>"] }`;
   const user = `Unternehmen: ${app_.company}\nRolle: ${app_.role}\nStellenbeschreibung:\n${app_.description?.slice(0, 2000) ?? ""}`;

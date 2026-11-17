@@ -77,6 +77,16 @@ import { SchoolLetterQuestions, type SchoolAnswers } from "./SchoolLetterQuestio
 import { SchoolReview, type SchoolReviewData } from "./SchoolReview";
 import { SchnupperDebriefPanel, SchnupperSourceNote, DEBRIEF_STAGES } from "./SchnupperDebrief";
 import { SimilarLetterWarning } from "./SimilarLetterWarning";
+import { useProfileBasics, ADULT_ONLY_TILES } from "../lib/persona";
+
+/** School-leaver view: persona Schulabgänger, or a Schnupperlehre / Lehrstelle of any persona. */
+function useSchoolView(app: Application): { school: boolean; ravEnabled: boolean } {
+  const { isSchool, ravEnabled } = useProfileBasics();
+  const kindSchool = app.applicationKind === "schnupperlehre" || app.applicationKind === "lehrstelle";
+  return { school: isSchool || kindSchool, ravEnabled };
+}
+/** Tiles hidden in the school-leaver view (adult job-seeker topics). */
+const hiddenForSchool = (id: string) => ADULT_ONLY_TILES.has(id) || id === "cv-doc" || id === "email-linkedin";
 
 const STAGES = STAGE_ORDER.map((id) => ({ id }));
 
@@ -364,6 +374,7 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
   onSave: (patch: Partial<Application>) => void
 }) {
   const { t } = useTranslation();
+  const { school, ravEnabled } = useSchoolView(app);
   const [company, setCompany]       = useState(app.company);
   const [role, setRole]             = useState(app.role);
   const [contactPerson, setContactPerson] = useState((app as Application & { contactPerson?: string }).contactPerson ?? "");
@@ -448,19 +459,19 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
 
       {/* Row 4: Salary + Nächster Schritt */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div className="field">
+        {!school && <div className="field">
           <label>{t("overview.salary")}</label>
           <input value={salary} onChange={(e) => setSalary(e.target.value)} onBlur={() => save({ salary })} placeholder="e.g. €80–100k" />
-        </div>
+        </div>}
         <div className="field">
           <label>{t("overview.nextStep")}</label>
           <input value={app.nextDeadline ?? ""} onChange={(e) => save({ nextDeadline: e.target.value })} placeholder="z.B. Interview 15. Mai" />
         </div>
       </div>
 
-      {/* Row 5: Pensum + Work Model + Contract */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-        <div className="field">
+      {/* Row 5: Pensum + Work Model + Contract (job seekers) · RAV overrides (when the RAV export is on) */}
+      {(!school || ravEnabled) && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        {!school && <><div className="field">
           <label>{t("overview.pensum")}</label>
           <PensumField
             value={jobType}
@@ -486,9 +497,9 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
             value={contractType}
             onChange={v => { setContractType(v); save({ contractType: v || null } as Partial<Application>); }}
           />
-        </div>
+        </div></>}
         {/* RAV proof overrides — empty means the export derives the value */}
-        <div className="field">
+        {ravEnabled && <><div className="field">
           <label>{t("rav.type")}</label>
           <select
             value={ravType}
@@ -514,8 +525,8 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
             <option value="linkedin">{t("rav.proofLinkedin")}</option>
             <option value="other">{t("rav.proofOther")}</option>
           </select>
-        </div>
-      </div>
+        </div></>}
+      </div>}
 
       {/* Tags */}
       <div className="field">
@@ -625,7 +636,7 @@ function aiResultSummary(id: string, data: unknown): string {
       const q = (d.rollenFragen as string[] | undefined ?? []).length;
       const s = (d.starBeispiele as unknown[] | undefined ?? []).length;
       const v = (d.vossFragenWhatHow as string[] | undefined ?? []).length;
-      return `${q} Fragen · ${s} STAR · ${v} Voss`;
+      return d.school ? `${q} Fragen · ${s} ${i18n.t("schoolPrep.examplesShort")} · ${v} ${i18n.t("schoolPrep.prepareShort")}` : `${q} Fragen · ${s} STAR · ${v} Voss`;
     }
     case "salary-tips":
       return ((d["markteinschätzung"] as string | undefined) ?? "").slice(0, 80);
@@ -926,13 +937,13 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
   const copyAll = () => {
     const sep = "─".repeat(40);
     const text = [
-      "ROLLENSPEZIFISCHE FRAGEN",
+      (iv.school ? i18n.t("schoolPrep.questions") : "ROLLENSPEZIFISCHE FRAGEN").toUpperCase(),
       sep,
       iv.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"),
-      `\nCHRIS VOSS FRAGEN`,
+      `\n${iv.school ? i18n.t("schoolPrep.prepare").toUpperCase() : "CHRIS VOSS FRAGEN"}`,
       sep,
       iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"),
-      `\nSTAR-BEISPIELE`,
+      `\n${iv.school ? i18n.t("schoolPrep.examples").toUpperCase() : "STAR-BEISPIELE"}`,
       sep,
       iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"),
       `\nMEINE RÜCKFRAGEN`,
@@ -979,7 +990,7 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
       </div>
 
       {/* Rollenspezifische Fragen */}
-      <Accordion title={i18n.t("ui.roleQuestions")} count={iv.rollenFragen?.length ?? 0} color="#a78bfa"
+      <Accordion title={iv.school ? i18n.t("schoolPrep.questions") : i18n.t("ui.roleQuestions")} count={iv.rollenFragen?.length ?? 0} color="#a78bfa"
         onCopy={() => copyText(iv.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"))}>
         {iv.rollenFragen?.map((q, i) => (
           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < iv.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
@@ -994,9 +1005,9 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
       </Accordion>
 
       {/* Chris Voss Fragen */}
-      <Accordion title='Chris Voss "What / How"-Fragen' count={iv.vossFragenWhatHow?.length ?? 0} color="#34d399"
+      <Accordion title={iv.school ? i18n.t("schoolPrep.prepare") : 'Chris Voss "What / How"-Fragen'} count={iv.vossFragenWhatHow?.length ?? 0} color="#34d399"
         onCopy={() => copyText(iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"))}>
-        <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>
+        {!iv.school && <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>}
         {iv.vossFragenWhatHow?.map((q, i) => (
           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < iv.vossFragenWhatHow.length - 1 ? "1px solid var(--border)" : "none" }}>
             <span style={{ color: "#34d399", flexShrink: 0 }}>→</span>
@@ -1010,7 +1021,7 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
       </Accordion>
 
       {/* STAR-Beispiele */}
-      <Accordion title="STAR-Beispiele" count={iv.starBeispiele?.length ?? 0} color="#fbbf24"
+      <Accordion title={iv.school ? i18n.t("schoolPrep.examples") : "STAR-Beispiele"} count={iv.starBeispiele?.length ?? 0} color="#fbbf24"
         onCopy={() => copyText(iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"))}>
         {iv.starBeispiele?.map((s, i) => (
           <div key={i} style={{ position: "relative", marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -1020,7 +1031,9 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
               <IcCopy width={11} height={11} />
             </button>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 6, paddingRight: 20 }}>❓ {s.frage}</div>
-            {([["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]] as [string, string][]).map(([k, v]) => (
+            {(iv.school
+              ? [[i18n.t("schoolPrep.situation"), s.situation], [i18n.t("schoolPrep.task"), s.aufgabe], [i18n.t("schoolPrep.action"), s.aktion], [i18n.t("schoolPrep.result"), s.ergebnis]]
+              : [["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]] as [string, string][]).map(([k, v]) => (
               <div key={k} style={{ fontSize: 11, color: "var(--fg-2)", padding: "2px 0" }}>
                 <span style={{ fontWeight: 700, color: "#fbbf24", marginRight: 6 }}>{k}:</span>{v}
               </div>
@@ -1258,11 +1271,11 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
     const cr = data as CompanyResearch;
     return (
       <>
-        {cr.unternehmensueberblick && <AiSection title={t("aiResult.overview")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmensueberblick}</div></AiSection>}
-        {cr.unternehmenskultur     && <AiSection title={t("aiResult.culture")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmenskultur}</div></AiSection>}
+        {cr.unternehmensueberblick && <AiSection title={cr.school ? t("schoolResearch.overview") : t("aiResult.overview")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmensueberblick}</div></AiSection>}
+        {cr.unternehmenskultur     && <AiSection title={cr.school ? t("schoolResearch.culture") : t("aiResult.culture")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmenskultur}</div></AiSection>}
         {cr.marktposition          && <AiSection title={t("aiResult.marketPosition")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.marktposition}</div></AiSection>}
         {cr.wettbewerber?.length > 0  && <AiSection title={t("aiResult.competitors")}>{cr.wettbewerber.map((w, i) => <TagBadge key={i} text={w} />)}</AiSection>}
-        {cr.aktuelleThemen?.length > 0 && <AiSection title={t("aiResult.currentTopics")}><BulletList items={cr.aktuelleThemen} /></AiSection>}
+        {cr.aktuelleThemen?.length > 0 && <AiSection title={cr.school ? t("schoolResearch.ideas") : t("aiResult.currentTopics")}><BulletList items={cr.aktuelleThemen} /></AiSection>}
       </>
     );
   }
@@ -1502,7 +1515,7 @@ function renderTileContent(id: string, data: unknown): React.ReactNode {
     const v = (d.vossFragenWhatHow as string[] | undefined ?? []).length;
     return (
       <div style={{ display: "flex", gap: 10 }}>
-        {[{ val: q, label: "Fragen", color: "var(--accent)" }, { val: s, label: "STAR", color: "#34d399" }, { val: v, label: "Voss", color: "#fbbf24" }].map(({ val, label, color }) => (
+        {[{ val: q, label: "Fragen", color: "var(--accent)" }, { val: s, label: d.school ? i18n.t("schoolPrep.examplesShort") : "STAR", color: "#34d399" }, { val: v, label: d.school ? i18n.t("schoolPrep.prepareShort") : "Voss", color: "#fbbf24" }].map(({ val, label, color }) => (
           <div key={label} style={{ textAlign: "center" }}>
             <div style={{ fontSize: 18, fontWeight: 800, color, lineHeight: 1 }}>{val}</div>
             <div style={{ fontSize: 8, color: "var(--fg-4)", marginTop: 2 }}>{label}</div>
@@ -1831,7 +1844,7 @@ function renderTileContentLarge(id: string, data: unknown): React.ReactNode {
     const v = (d.vossFragenWhatHow as string[] | undefined ?? []).length;
     return (
       <div style={{ display: "flex", gap: 16 }}>
-        {[{ val: q, label: "Fragen", color: "var(--accent)" }, { val: s, label: "STAR", color: "#34d399" }, { val: v, label: "Voss", color: "#fbbf24" }].map(({ val, label, color }) => (
+        {[{ val: q, label: "Fragen", color: "var(--accent)" }, { val: s, label: d.school ? i18n.t("schoolPrep.examplesShort") : "STAR", color: "#34d399" }, { val: v, label: d.school ? i18n.t("schoolPrep.prepareShort") : "Voss", color: "#fbbf24" }].map(({ val, label, color }) => (
           <div key={label} style={{ textAlign: "center" }}>
             <div style={{ fontSize: 32, fontWeight: 800, color, lineHeight: 1 }}>{val}</div>
             <div style={{ fontSize: 10, color: "var(--fg-4)", marginTop: 4 }}>{label}</div>
@@ -2053,8 +2066,8 @@ function tileTextContent(id: string, data: unknown): string {
     case "interview-prep": {
       const iv = d as InterviewPrep;
       if (iv.rollenFragen?.length)   lines.push("ROLLENSPEZIFISCHE FRAGEN\n" + iv.rollenFragen.map((q,i) => `${i+1}. ${q}`).join("\n"));
-      if (iv.vossFragenWhatHow?.length) lines.push("CHRIS VOSS FRAGEN\n" + iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"));
-      if (iv.starBeispiele?.length)  lines.push("STAR-BEISPIELE\n" + iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"));
+      if (iv.vossFragenWhatHow?.length) lines.push(`${iv.school ? i18n.t("schoolPrep.prepare").toUpperCase() : "CHRIS VOSS FRAGEN"}\n` + iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"));
+      if (iv.starBeispiele?.length)  lines.push(`${iv.school ? i18n.t("schoolPrep.examples").toUpperCase() : "STAR-BEISPIELE"}\n` + iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"));
       if (iv.rueckfragen?.length)    lines.push("RÜCKFRAGEN\n"     + iv.rueckfragen.map(q => `? ${q}`).join("\n"));
       break;
     }
@@ -3376,7 +3389,7 @@ const ACTIVITY_TYPES = [
 
 type Task = { id: string; stage: string; title: string; done: boolean; isDefault: boolean; sortOrder: number; createdAt: string };
 type CvHighlights = { highlights: string[]; keywords: string[]; gaps: string[] };
-type InterviewPrep = { rollenFragen: string[]; starBeispiele: { frage: string; situation: string; aufgabe: string; aktion: string; ergebnis: string }[]; vossFragenWhatHow: string[]; rueckfragen: string[] };
+type InterviewPrep = { rollenFragen: string[]; starBeispiele: { frage: string; situation: string; aufgabe: string; aktion: string; ergebnis: string }[]; vossFragenWhatHow: string[]; rueckfragen: string[]; school?: boolean; kind?: string };
 type EmailDraft = { subject: string; body: string };
 type SalaryTips = { "markteinschätzung": string; taktiken: string[]; formulierungen: string[]; vossAnker: string };
 
@@ -3428,6 +3441,7 @@ type AtsKeywords = {
   tools: string[];
 };
 type CompanyResearch = {
+  school?: boolean;
   unternehmensueberblick: string;
   branche: string;
   marktposition: string;
@@ -3627,6 +3641,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
   onSave?: (patch: Partial<Application>) => void;
   onAiResult?: (id: string, data: unknown) => void;
 }) {
+  const { school } = useSchoolView(app);
   const { ai } = useUiStore();
   const { t } = useTranslation("actions");
   const { t: tc } = useTranslation();
@@ -3820,6 +3835,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
   };
 
   const AiBtn = ({ id, label, icon }: { id: string; label: string; icon: React.ReactNode }) => {
+    if (school && hiddenForSchool(id)) return null;
     const ts = resultTimes[id];
     const tsLabel = ts ? ts.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : undefined;
     const tooltip = t(`${id}.tooltip`, { defaultValue: label });
@@ -3844,6 +3860,9 @@ function StageAiActions({ app, onSave, onAiResult }: {
           setEmailModal(r.data);
         } else if (id === "email-follow") {
           const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "followup" });
+          setEmailModal(r.data);
+        } else if (id === "email-thanks") {
+          const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "thanks" });
           setEmailModal(r.data);
         } else if (id === "email-decline") {
           const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "decline" });
@@ -3940,6 +3959,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
       {/* Inbox Phase */}
       {showInbox && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+          {school && <AiBtn id="company-research" icon={<Building width={12} height={12} />} label={t("company-research.label")} />}
           <AiBtn id="match-score"     icon={<Sparks width={12} height={12} />}   label={t("match-score.label")} />
           <AiBtn id="glassdoor-check" icon={<Building width={12} height={12} />} label={t("glassdoor-check.label")} />
           <AiBtn id="kununu-check"    icon={<Star width={12} height={12} />}     label={t("kununu-check.label")} />
@@ -4012,7 +4032,8 @@ function StageAiActions({ app, onSave, onAiResult }: {
       {showIv && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: interviewPrep ? 8 : 0 }}>
-            <AiBtn id="interview-prep" icon={interviewPrep ? <Refresh width={12} height={12} /> : <Brain width={12} height={12} />} label={interviewPrep ? tc("tileExpand.refresh") : t("interview-prep.label")} />
+            <AiBtn id="interview-prep" icon={interviewPrep ? <Refresh width={12} height={12} /> : <Brain width={12} height={12} />} label={interviewPrep ? tc("tileExpand.refresh") : t(school ? "interview-prep.schoolLabel" : "interview-prep.label")} />
+            {school && <AiBtn id="email-thanks" icon={<SendMail width={12} height={12} />} label={t("email-thanks.label")} />}
             {showSalary && <AiBtn id="salary-tips" icon={<Coins width={12} height={12} />} label={t("salary-tips.label")} />}
             {interviewPrep && <>
               <button className="btn btn-ghost" style={{ fontSize: 11, gap: 5 }}
@@ -5087,6 +5108,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
 }) {
   const { t } = useTranslation();
   const { t: tStagesAct } = useTranslation("stages");
+  const { school, ravEnabled } = useSchoolView(app);
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const { data: activities = [], refetch } = useQuery<ApplicationActivity[]>({
@@ -5134,7 +5156,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
       </div>
 
       {/* RAV proof sheet — available in every stage, the sheet tracks pre-application states too */}
-      <RavExportBtn app={app} />
+      {ravEnabled && <RavExportBtn app={app} />}
 
       {/* Lehrstelle created from a Schnupperlehre → link back */}
       {app.applicationKind === "lehrstelle" && <SchnupperSourceNote app={app} />}
@@ -5170,7 +5192,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
 
       {/* Phase KI-Kacheln */}
       {(() => {
-        const stageTileIds = STAGE_TILES[app.stage] ?? [];
+        const stageTileIds = (STAGE_TILES[app.stage] ?? []).filter(id => !(school && hiddenForSchool(id)));
         if (stageTileIds.length === 0) return null;
         return (
           <>
@@ -5329,6 +5351,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
   onAiResultUpdate?: (id: string, data: unknown) => void;
 }) {
   const { t } = useTranslation();
+  const { school } = useSchoolView(app);
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
@@ -5408,7 +5431,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
 
       {/* Alle KI-Auswertungen — match-score tile is first */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 6 }}>
-        {ALL_TILE_IDS.map(id => {
+        {ALL_TILE_IDS.filter(id => !(school && hiddenForSchool(id))).map(id => {
           // match-score uses the local runAnalysis (has AgentStep animation)
           const runHandler = id === "match-score"
             ? runAnalysis

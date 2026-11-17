@@ -20,6 +20,8 @@ export type SchoolProfile = {
   experiences?: { kind: ExperienceKind; title: string; what?: string; liked?: string; company?: string }[];
   strengths?: { strength: string; example?: string }[];
   tests?: SchoolTest[];
+  /** Registered with the RAV (SEMO, bridge year): shows the RAV export again (lib/persona.tsx). */
+  ravRegistered?: boolean;
 };
 
 export const EXPERIENCE_KINDS: ExperienceKind[] = ["schule", "hobby", "verein", "job", "schnupper", "anderes"];
@@ -260,6 +262,14 @@ export function SchoolProfileSection({ value, onSave }: { value: SchoolProfile; 
             <StatsReport width={12} height={12} style={{ flexShrink: 0, marginTop: 2 }} /> {t("school.tests.rule")}
           </div>
         )}
+      </Block>
+
+      <Block title={t("school.rav.title")} sub={t("school.rav.sub")}>
+        <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 12.5, color: "var(--fg-1)", cursor: "pointer", lineHeight: 1.5 }}>
+          <input type="checkbox" checked={!!p.ravRegistered} style={{ marginTop: 3 }}
+            onChange={e => change({ ravRegistered: e.target.checked || undefined })} />
+          {t("school.rav.label")}
+        </label>
       </Block>
     </div>
   );

@@ -76,7 +76,8 @@
   "interview-prep": {
     "label": "Interview Prep",
     "tooltip": "Generate questions, STAR examples and follow-up questions",
-    "empty": "Generate prep"
+    "empty": "Generate prep",
+    "schoolLabel": "Prepare the meeting"
   },
   "salary-tips": {
     "label": "Salary Negotiation",
@@ -103,5 +104,9 @@
     "tooltip": "Create Google Drive application folder"
   },
   "generating": "Generating…",
-  "generateFailed": "Generation failed"
+  "generateFailed": "Generation failed",
+  "email-thanks": {
+    "label": "Thank-you email",
+    "tooltip": "Write a thank-you email after the taster or interview"
+  }
 }

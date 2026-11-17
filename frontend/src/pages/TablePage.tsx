@@ -31,6 +31,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
 import { RavReportDialog } from "../components/RavReportDialog";
+import { useProfileBasics, ADULT_ONLY_COLUMNS } from "../lib/persona";
 import { DetailDrawer } from "../components/DetailDrawer";
 import { ImportDrawer } from "../components/ImportDrawer";
 import { STAGE_COLORS, ALL_STAGES } from "../lib/stages";
@@ -160,6 +161,7 @@ const ch = createColumnHelper<Application>();
 export function TablePage() {
   const { t: tStages } = useTranslation("stages");
   const { t } = useTranslation();
+  const { isSchool, ravEnabled } = useProfileBasics();
   const {
     tableColumnOrder, tableColumnVisibility, tableColumnPinning, tableColumnSizing,
     setTableColumnOrder, setTableColumnVisibility, setTableColumnPinning, setTableColumnSizing,
@@ -396,7 +398,7 @@ export function TablePage() {
     }),
     ch.display({
       id: "interview1",
-      header: t("table.columns.interview1"),
+      header: isSchool ? t("table.columns.interview1School") : t("table.columns.interview1"),
       cell: ({ row }) => {
         const d = getInterview1Date(row.original);
         return <span style={{ color: "var(--fg-3)", fontVariantNumeric: "tabular-nums" }}>{d ? fmtDate(d) : "—"}</span>;
@@ -424,7 +426,18 @@ export function TablePage() {
       header: t("table.columns.updatedAt"),
       cell: ({ getValue }) => <span style={{ color: "var(--fg-4)", fontVariantNumeric: "tabular-nums" }}>{fmtDate(getValue())}</span>,
     }),
-  ], [t, tStages]);
+    // School leavers: trade + kind instead of salary / pensum / ratings
+    ...(isSchool ? [
+      ch.accessor("apprenticeship", {
+        header: t("table.columns.apprenticeship"),
+        cell: ({ getValue }) => <span style={{ color: "var(--fg-2)" }}>{getValue() || "—"}</span>,
+      }),
+      ch.accessor("applicationKind", {
+        header: t("table.columns.applicationKind"),
+        cell: ({ getValue }) => <span style={{ color: "var(--fg-2)" }}>{t(`letterKind.kinds.${getValue() || "job"}`)}</span>,
+      }),
+    ] : []),
+  ].filter(c => !(isSchool && ADULT_ONLY_COLUMNS.has((c as { id?: string; accessorKey?: string }).id ?? (c as { accessorKey?: string }).accessorKey ?? ""))), [t, tStages, isSchool]);
 
   // Resolve column config from store (with defaults)
   const columnOrder: ColumnOrderState      = tableColumnOrder.length > 0 ? tableColumnOrder : DEFAULT_ORDER;
@@ -502,10 +515,10 @@ export function TablePage() {
   const actions = (
     <>
       {/* RAV report — opens the dialog with the currently visible rows */}
-      <button data-tour="table.rav" onClick={() => setRavOpen(true)} className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}
+      {ravEnabled && <button data-tour="table.rav" onClick={() => setRavOpen(true)} className="btn btn-secondary" style={{ fontSize: 11, gap: 5 }}
         disabled={filtered.length === 0} title={t("rav.exportViewHint")}>
         <Table2Columns width={12} height={12} /> {t("rav.reportBtn")}
-      </button>
+      </button>}
 
       {/* Column settings — left of filter */}
       <div style={{ position: "relative" }} ref={colPanelRef}>
