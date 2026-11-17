@@ -41,18 +41,6 @@ function FlagIcon({ lang, size = 15 }: { lang: string; size?: number }) {
 const RAIL_EXPANDED  = 220;
 const RAIL_COLLAPSED = 52;
 
-const STAGES = [
-  { id: "import_validating", title: "Inbox" },
-  { id: "preparing_cv",      title: "Preparing CV" },
-  { id: "preparing_letter",  title: "Preparing Letter" },
-  { id: "application_sent",  title: "Submitted" },
-  { id: "pending",           title: "Pending" },
-  { id: "interview_1",       title: "1st Interview" },
-  { id: "interview_2",       title: "2nd Interview" },
-  { id: "rejected",          title: "Rejected" },
-  { id: "accepted",          title: "Accepted" },
-];
-
 // ── Tooltip shown on hover when rail is collapsed ─────────────
 function RailTooltip({ label, visible }: { label: string; visible: boolean }) {
   return (

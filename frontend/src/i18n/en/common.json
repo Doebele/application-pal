@@ -137,7 +137,65 @@
     "label": "Tasks",
     "addTask": "+ Add task",
     "none": "No tasks for this phase",
-    "newTask": "New task…"
+    "newTask": "New task…",
+    "defaults": {
+      "import_validating": {
+        "0": "Check relevance",
+        "1": "Run the checks",
+        "2": "Review LinkedIn profile",
+        "3": "Format the description",
+        "4": "Job description fully captured",
+        "5": "AI match score run",
+        "6": "Relevance decided"
+      },
+      "preparing_cv": {
+        "0": "Master CV updated",
+        "1": "Relevant experience identified",
+        "2": "CV document created",
+        "3": "Formatting checked"
+      },
+      "preparing_letter": {
+        "0": "Cover letter draft created",
+        "1": "Personalised for the company",
+        "2": "Spelling checked",
+        "3": "Length appropriate (max. 1 page)"
+      },
+      "application_sent": {
+        "0": "Application fully submitted",
+        "1": "Confirmation received",
+        "2": "Follow-up date set",
+        "3": "HR contact noted"
+      },
+      "pending": {
+        "0": "Company website analysed",
+        "1": "Glassdoor reviews checked",
+        "2": "Contacts’ LinkedIn profiles reviewed",
+        "3": "Latest company news read"
+      },
+      "interview_1": {
+        "0": "Logistics confirmed (time / place / format)",
+        "1": "Documents prepared",
+        "2": "Role-specific questions prepared",
+        "3": "STAR examples from experience noted",
+        "4": "Own questions written down"
+      },
+      "interview_2": {
+        "0": "Learnings from interview 1 noted",
+        "1": "Salary negotiation prepared",
+        "2": "References ready",
+        "3": "Advanced technical questions researched"
+      },
+      "rejected": {
+        "0": "Reason for rejection (if known) noted",
+        "1": "Learnings for next applications recorded"
+      },
+      "accepted": {
+        "0": "Contract details checked",
+        "1": "Start date confirmed",
+        "2": "Other ongoing applications informed",
+        "3": "Withdrawals for other positions prepared"
+      }
+    }
   },
   "activities": {
     "label": "Activities",
@@ -146,7 +204,9 @@
     "titlePlaceholder": "Title…",
     "descPlaceholder": "Description (optional)…",
     "minimize": "Minimize",
-    "maximize": "Maximize"
+    "maximize": "Maximize",
+    "stageChange": "Stage",
+    "contractOffer": "Contract offer"
   },
   "kiResults": "AI Analysis",
   "driveFolder": {
@@ -2164,5 +2224,73 @@
       "resetBtn": "Reset",
       "resetDone": "Reset done"
     }
+  },
+  "timelineEvents": {
+    "created": "Created application at {{company}}",
+    "submitted": "Submitted application to {{company}}",
+    "updated": "Updated — now in “{{stage}}”"
+  },
+  "ui": {
+    "copy": "Copy",
+    "open": "Open",
+    "save": "Save",
+    "cancel": "Cancel",
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "fullscreen": "Full screen",
+    "remove": "Remove",
+    "openOriginal": "Open original posting",
+    "openInDrive": "Open in Drive",
+    "testConnection": "Test connection",
+    "deleteApplication": "Delete application",
+    "copySection": "Copy section",
+    "copyPhrase": "Copy wording",
+    "copyFailed": "Copy failed",
+    "enterDateFirst": "Please enter the date first",
+    "openedInGcal": "Opened in Google Calendar",
+    "icalDownloaded": "iCal downloaded",
+    "driveNotConnected": "Google Drive is not connected. Connect it in Settings → Integrations.",
+    "sessionExpired": "Session expired — please reload the page",
+    "roleQuestions": "Role-specific questions",
+    "myQuestions": "My questions",
+    "employees": "Employees",
+    "points": "Points",
+    "targetSalary": "Target salary",
+    "anchor": "Anchor",
+    "noData": "No data",
+    "positive": "Positive",
+    "critical": "Critical",
+    "locationPh": "1 Main Street, London",
+    "interviewerPh": "Jane Doe (HR), John Smith (team lead)",
+    "ivNotesPh": "Bring portfolio, prepare laptop…",
+    "description": "Description",
+    "jobDescriptionPh": "Job description…",
+    "pasteJobDescription": "Paste the job description here…",
+    "autoFilled": "Filled in automatically…",
+    "fetchingPage": "Fetching page",
+    "textInput": "text input",
+    "readingJob": "Reading job description",
+    "analyzing": "analyzing content",
+    "extracting": "Extracting fields",
+    "extractMeta": "company · role · location · salary",
+    "pensum": "Workload",
+    "workModel": "Work model",
+    "contract": "Contract",
+    "onsite": "On-site",
+    "kbSourceFailed": "The source could not be processed.",
+    "kbSearchPh": "Search company or industry…",
+    "kbAddSource": "Add source",
+    "kbSourceHint": "Job posting or company profile",
+    "kbRoleDetail": "Role detail",
+    "seniority": "Seniority",
+    "salary": "Salary",
+    "requirements": "Requirements",
+    "sources": "Sources",
+    "cultureNotes": "Culture notes",
+    "linkedRoles": "Linked roles",
+    "noRoles": "No roles linked.",
+    "noSources": "No sources linked.",
+    "light": "Light",
+    "dark": "Dark"
   }
 }

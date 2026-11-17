@@ -33,15 +33,15 @@ export function TimelinePage() {
   const events: ActivityEvent[] = applications
     .flatMap((app) => {
       const evs: ActivityEvent[] = [
-        { app, text: `Created application at ${app.company}`, time: new Date(app.createdAt) }
+        { app, text: t("timelineEvents.created", { company: app.company }), time: new Date(app.createdAt) }
       ];
       if (app.appliedAt) {
-        evs.push({ app, text: `Submitted application to ${app.company}`, time: new Date(app.appliedAt) });
+        evs.push({ app, text: t("timelineEvents.submitted", { company: app.company }), time: new Date(app.appliedAt) });
       }
       if (new Date(app.updatedAt).getTime() !== new Date(app.createdAt).getTime()) {
         evs.push({
           app,
-          text: `Updated — now in "${tStages(app.stage, { defaultValue: app.stage })}"`,
+          text: t("timelineEvents.updated", { stage: tStages(app.stage, { defaultValue: app.stage }) }),
           time: new Date(app.updatedAt)
         });
       }

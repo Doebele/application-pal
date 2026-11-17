@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import i18n from "../i18n";
 import { Xmark, Link, Sparks, Check, ArrowRight, Cpu, Cloud, Plus, NavArrowDown, Expand, Collapse } from "iconoir-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
+import { useTranslation } from "react-i18next";
 
 type ExtractionPhase = "idle" | "reading" | "extracting" | "done";
 
@@ -69,6 +71,7 @@ function StagePicker({ value, onChange }: { value: string; onChange: (v: string)
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const current = STAGES.find((s) => s.id === value) ?? STAGES[0];
+  const { t: tStages } = useTranslation("stages");
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -93,7 +96,7 @@ function StagePicker({ value, onChange }: { value: string; onChange: (v: string)
         }}
       >
         <span style={{ width: 7, height: 7, borderRadius: 999, background: current.color, flexShrink: 0 }} />
-        {current.label}
+        {tStages(current.id, { defaultValue: current.label })}
         <NavArrowDown width={11} height={11} style={{ opacity: 0.7, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </button>
 
@@ -114,7 +117,7 @@ function StagePicker({ value, onChange }: { value: string; onChange: (v: string)
               cursor: "pointer", fontFamily: "var(--font-sans)", textAlign: "left"
             }}>
               <span style={{ width: 8, height: 8, borderRadius: 999, background: s.color, flexShrink: 0 }} />
-              {s.label}
+              {tStages(s.id, { defaultValue: s.label })}
               {value === s.id && <Check width={11} height={11} style={{ marginLeft: "auto", color: s.color }} />}
             </button>
           ))}
@@ -309,8 +312,8 @@ export function ImportDrawer({ onClose }: Props) {
       display: "flex", flexDirection: "column", padding: "20px 24px"
     }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-        <span style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", flex: 1 }}>Beschreibung</span>
-        <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} onClick={() => setDescExpanded(false)} title="Minimieren">
+        <span style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", flex: 1 }}>{i18n.t("ui.description")}</span>
+        <button className="btn btn-ghost btn-icon" style={{ padding: 4 }} onClick={() => setDescExpanded(false)} title={i18n.t("ui.minimize")}>
           <Collapse width={13} height={13} />
         </button>
       </div>
@@ -318,7 +321,7 @@ export function ImportDrawer({ onClose }: Props) {
         value={form.description}
         onChange={(e) => patch("description", e.target.value)}
         style={{ flex: 1, resize: "none", border: "none", background: "transparent", color: "var(--fg-1)", fontSize: 13, fontFamily: "var(--font-sans)", outline: "none", lineHeight: 1.7 }}
-        placeholder="Stellenbeschreibung…"
+        placeholder={i18n.t("ui.jobDescriptionPh")}
       />
     </div>
   );
@@ -386,7 +389,7 @@ export function ImportDrawer({ onClose }: Props) {
           ) : (
             <AutoResizeTextarea
               value={pasteText} onChange={(e) => setPasteText(e.target.value)}
-              placeholder="Stellenbeschreibung hier einfügen…" minRows={4}
+              placeholder={i18n.t("ui.pasteJobDescription")} minRows={4}
             />
           )}
 
@@ -407,9 +410,9 @@ export function ImportDrawer({ onClose }: Props) {
               <div className="eyebrow" style={{ marginBottom: 8, fontSize: 8 }}>
                 {usingAi ? `${ai.provider === "lm-studio" ? "LM Studio" : "Anthropic"} · Live` : "Regex · Live"}
               </div>
-              <AgentStep done={step >= 1} active={step === 0} label="Fetching page"              meta={url || "text input"} />
-              <AgentStep done={step >= 2} active={step === 1} label="Reading job description"    meta="analyzing content" />
-              <AgentStep done={step >= 3} active={step === 2} label="Extracting fields"          meta="company · role · location · salary" />
+              <AgentStep done={step >= 1} active={step === 0} label={i18n.t("ui.fetchingPage")} meta={url || i18n.t("ui.textInput")} />
+              <AgentStep done={step >= 2} active={step === 1} label={i18n.t("ui.readingJob")} meta={i18n.t("ui.analyzing")} />
+              <AgentStep done={step >= 3} active={step === 2} label={i18n.t("ui.extracting")} meta={i18n.t("ui.extractMeta")} />
               <AgentStep done={step >= 4} active={step === 3} label={usingAi ? "Generating tags" : "Pattern matching complete"} />
             </div>
           )}
@@ -457,19 +460,19 @@ export function ImportDrawer({ onClose }: Props) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 12px", marginBottom: 10 }}>
               {/* Job Type */}
               <div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Pensum</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>{i18n.t("ui.pensum")}</div>
                 {ready ? (
                   <PensumField value={form.jobType} onChange={v => patch("jobType", v)} compact />
                 ) : phase !== "idle" ? <Skeleton height={28} /> : <div style={{ height: 28 }} />}
               </div>
               {/* Work Model */}
               <div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Arbeitsmodell</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>{i18n.t("ui.workModel")}</div>
                 {ready ? (
                   <select value={form.workModel} onChange={e => patch("workModel", e.target.value)}
                     style={{ width: "100%", padding: "4px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontSize: 12, fontFamily: "var(--font-sans)", outline: "none" }}>
                     <option value="">—</option>
-                    <option value="onsite">Vor Ort</option>
+                    <option value="onsite">{i18n.t("ui.onsite")}</option>
                     <option value="hybrid">Hybrid</option>
                     <option value="remote">Remote</option>
                   </select>
@@ -477,7 +480,7 @@ export function ImportDrawer({ onClose }: Props) {
               </div>
               {/* Contract */}
               <div>
-                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>Vertrag</div>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>{i18n.t("ui.contract")}</div>
                 {ready ? (
                   <ContractField value={form.contractType} onChange={v => patch("contractType", v)} compact />
                 ) : phase !== "idle" ? <Skeleton height={28} /> : <div style={{ height: 28 }} />}
@@ -509,9 +512,9 @@ export function ImportDrawer({ onClose }: Props) {
             {/* Description with Expand-Logik */}
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", flex: 1 }}>Beschreibung</span>
+                <span style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", flex: 1 }}>{i18n.t("ui.description")}</span>
                 {ready && (
-                  <button className="btn btn-ghost btn-icon" style={{ padding: 3 }} onClick={() => setDescExpanded(true)} title="Maximieren">
+                  <button className="btn btn-ghost btn-icon" style={{ padding: 3 }} onClick={() => setDescExpanded(true)} title={i18n.t("ui.maximize")}>
                     <Expand width={12} height={12} />
                   </button>
                 )}
@@ -520,13 +523,13 @@ export function ImportDrawer({ onClose }: Props) {
                 ? <AutoResizeTextarea value={form.description} onChange={(e) => patch("description", e.target.value)} minRows={3} style={{ fontSize: 12 }} />
                 : phase !== "idle"
                   ? <div style={{ display: "flex", flexDirection: "column", gap: 5 }}><Skeleton height={10} /><Skeleton width="90%" height={10} /><Skeleton height={10} /><Skeleton width="55%" height={10} /></div>
-                  : <AutoResizeTextarea value="" placeholder="Wird automatisch befüllt…" disabled minRows={3} style={{ fontSize: 12 }} />}
+                  : <AutoResizeTextarea value="" placeholder={i18n.t("ui.autoFilled")} disabled minRows={3} style={{ fontSize: 12 }} />}
             </div>
           </div>
         </div>
 
         <div className="drawer-footer">
-          <button className="btn btn-secondary" onClick={onClose}>Abbrechen</button>
+          <button className="btn btn-secondary" onClick={onClose}>{i18n.t("ui.cancel")}</button>
           <button className="btn btn-primary" disabled={!canCreate || createMutation.isPending} onClick={() => createMutation.mutate()}>
             {createMutation.isPending ? "Anlegen…" : "Anlegen"}
             <ArrowRight width={13} height={13} />
