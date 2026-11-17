@@ -194,6 +194,44 @@
         "1": "Startdatum bestätigt",
         "2": "Andere laufende Bewerbungen informiert",
         "3": "Absagen für andere Stellen vorbereitet"
+      },
+      "school": {
+        "0": "Beruf und Betrieb angeschaut",
+        "1": "Schnuppermöglichkeit geklärt (Website / Telefon)",
+        "2": "Eltern / Lehrperson informiert",
+        "3": "Lebenslauf mit Foto aktuell",
+        "4": "Zeugnisse und Testresultate bereit",
+        "5": "Ansprechperson richtig angesprochen",
+        "6": "Gegenlesen lassen (Eltern / Lehrperson)",
+        "7": "Höchstens eine halbe Seite",
+        "8": "Unterlagen vollständig geschickt (Brief, Lebenslauf, Zeugnisse)",
+        "9": "Nach einer Woche nachfragen, falls keine Antwort",
+        "10": "Schnuppertage bestätigt (Datum, Zeit, Ort)",
+        "11": "Kleidung und Material geklärt",
+        "12": "Anreise geplant – pünktlich sein",
+        "13": "Fragen an den Betrieb notiert",
+        "14": "Schnupper-Rückblick ausgefüllt",
+        "15": "Bewertung des Betriebs erhalten",
+        "16": "Dankesmail nach der Schnupperlehre geschickt",
+        "17": "Nach einer freien Lehrstelle gefragt",
+        "18": "Schnupper-Rückblick ins Schülerprofil übernommen",
+        "19": "Rückmeldung erfragt, was ich besser machen kann",
+        "20": "Nächsten Betrieb ausgesucht",
+        "21": "Lehrstelle passt zu meinen Wunschberufen",
+        "22": "In diesem Beruf geschnuppert",
+        "23": "Bewerbungsfrist notiert",
+        "24": "Schnupperberichte beigelegt",
+        "25": "Dossier vollständig geschickt (Brief, Lebenslauf, Zeugnisse, Tests)",
+        "26": "Termin bestätigt (Zeit, Ort)",
+        "27": "„Warum dieser Beruf? Warum hier?“ geübt",
+        "28": "Eigene Fragen vorbereitet",
+        "29": "Eltern über den Termin informiert",
+        "30": "Selektionstage oder Eignungstest vorbereitet",
+        "31": "Dankesmail nach dem Gespräch geschickt",
+        "32": "Lehrvertrag mit den Eltern durchgelesen",
+        "33": "Lehrvertrag unterschrieben zurückgeschickt",
+        "34": "Anderen Betrieben abgesagt",
+        "35": "Weitere Lehrstellen gesucht"
       }
     }
   },
@@ -2502,7 +2540,55 @@
       "swiss": {
         "ok": "Schweizer Schreibweise (ss)",
         "warn": "«ß» gefunden — in der Schweiz schreibt man «ss»"
+      },
+      "unique": {
+        "label": "Eigener Brief für diesen Betrieb",
+        "ok": "Eigener Brief – nicht kopiert",
+        "warn": "Zu {{pct}} % gleich wie dein Brief an {{company}} – Einstieg und «Warum dieser Betrieb» neu schreiben"
       }
     }
+  },
+  "schnupperDebrief": {
+    "title": "Rückblick auf die Schnupperlehre",
+    "intro": "Halte fest, wie es war – solange du dich gut erinnerst. Daraus wird später dein stärkstes Argument für die Lehrstelle.",
+    "dates": "Wann?",
+    "datesPlaceholder": "z.B. 3.–5. März 2026",
+    "did": "Was hast du gemacht?",
+    "didPlaceholder": "z.B. Eine Kiste aus Massivholz gebaut, beim Montieren einer Küche geholfen",
+    "liked": "Was hat dir gefallen?",
+    "likedPlaceholder": "z.B. Dass man am Abend sieht, was man geschafft hat",
+    "hard": "Was war schwierig?",
+    "hardPlaceholder": "z.B. Früh aufstehen, lange stehen",
+    "hardHint": "Nur für dich – das kommt nie ins Anschreiben.",
+    "feedback": "Wie hat dich der Betrieb bewertet?",
+    "feedbackOptions": {
+      "good": "Gut",
+      "ok": "Okay",
+      "bad": "Eher schlecht"
+    },
+    "feedbackNotes": "Was haben sie gesagt?",
+    "feedbackNotesPlaceholder": "z.B. «Du arbeitest sehr exakt»",
+    "fit": "Kannst du dir die Lehre bei {{company}} vorstellen?",
+    "fitOptions": {
+      "yes": "Ja",
+      "maybe": "Vielleicht",
+      "no": "Nein"
+    },
+    "toProfile": "Ins Schülerprofil übernehmen",
+    "updateProfile": "Im Schülerprofil aktualisieren",
+    "savedToProfile": "Im Schülerprofil gespeichert.",
+    "needContent": "Fülle zuerst aus, was du gemacht hast oder was dir gefallen hat.",
+    "createLehrstelle": "Lehrstelle bei {{company}} anlegen",
+    "openLehrstelle": "Zur Lehrstellen-Bewerbung",
+    "bridgeHint": "Legt eine neue Bewerbung für die Lehrstelle an: Betrieb, Beruf und Ansprechperson werden übernommen, die Schnupperlehre landet im Schülerprofil und im Anschreiben steht schon «hier geschnuppert». Was schwierig war und eine schwache Bewertung kommen nicht ins Anschreiben.",
+    "bridgeFailed": "Die Lehrstelle konnte nicht angelegt werden.",
+    "fromTaster": "Diese Bewerbung stammt aus deiner Schnupperlehre im selben Betrieb – die Erfahrung ist im Anschreiben schon eingeplant.",
+    "openTaster": "Schnupperlehre öffnen"
+  },
+  "similarLetter": {
+    "warning": "Dieser Brief ist zu {{pct}} % gleich wie dein Brief an",
+    "more_one": "(und {{count}} weiteren).",
+    "more_other": "(und {{count}} weiteren).",
+    "tip": "Betriebe merken das. Schreib den Einstieg und «Warum dieser Betrieb» neu."
   }
 }

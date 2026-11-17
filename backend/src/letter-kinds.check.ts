@@ -82,7 +82,7 @@ assert.equal(formatSchoolTests([{ name: "Stellwerk 8", scale: "stellwerk", resul
 console.log("letter-kinds: school test checks passed");
 
 // ─── school letter checks ───
-import { schoolLetterChecks, checksForPrompt } from "./letter-kinds.js";
+import { schoolLetterChecks, checksForPrompt, stageTasksFor, normalizeDebrief, debriefNotes, upsertTasterExperience, letterSimilarity, SIMILAR_LETTER_THRESHOLD, type SchoolProfile } from "./letter-kinds.js";
 const good = `Sehr geehrte Frau Muster
 
 Ich bewerbe mich um eine Lehrstelle als Schreinerin EFZ bei der Holzbau Muster AG. Auf Ihrer Website habe ich das Projekt mit dem Schulhaus aus Holz gesehen.
@@ -119,3 +119,53 @@ const neutral = byId(schoolLetterChecks(good.replace("Sehr geehrte Frau Muster",
 assert.equal(neutral.salutation, "ok");
 assert.equal(neutral.contact, "na");
 console.log("letter-kinds: school letter checks passed");
+
+// ─── Phase 4: stage tasks, taster debrief, near-duplicate letters ─────────
+{
+  const job = { preparing_cv: ["Master-CV aktualisiert"] };
+  assert.deepEqual(stageTasksFor("job", "preparing_cv", job), ["Master-CV aktualisiert"]);
+  assert.deepEqual(stageTasksFor("praktikum", "preparing_cv", job), ["Master-CV aktualisiert"]);
+  assert.ok(stageTasksFor("lehrstelle", "preparing_letter", job).includes("Gegenlesen lassen (Eltern / Lehrperson)"));
+  assert.ok(stageTasksFor("schnupperlehre", "interview_2", job).includes("Dankesmail nach der Schnupperlehre geschickt"));
+  assert.deepEqual(stageTasksFor("lehrstelle", "unknown_stage", job), []);
+
+  const d = normalizeDebrief({ dates: "3.–5. März", did: "Eine Kiste gebaut", liked: "Mit Holz arbeiten", hard: "Früh aufstehen", feedback: "good", feedbackNotes: "Sehr exakt gearbeitet", fit: "yes", bridgedTo: 42 });
+  assert.equal(d.bridgedTo, undefined);
+  const notes = debriefNotes(d);
+  assert.match(notes, /Eine Kiste gebaut/);
+  assert.match(notes, /Sehr exakt gearbeitet/);
+  assert.doesNotMatch(notes, /aufstehen/, "what was hard never goes into a letter");
+  assert.doesNotMatch(debriefNotes({ ...d, feedback: "bad" }), /exakt/, "weak feedback is not quoted");
+  assert.equal(normalizeDebrief({ feedback: "super", fit: 1 }).feedback, "");
+
+  const p0: SchoolProfile = { experiences: [{ kind: "verein", title: "Fussball" }] };
+  const p1 = upsertTasterExperience(p0, d, { company: "Holzbau Muster AG", apprenticeship: "Schreiner/in EFZ" });
+  assert.equal(p1.experiences?.length, 2);
+  assert.equal(p1.experiences?.[1].kind, "schnupper");
+  assert.equal(p1.experiences?.[1].title, "Schreiner/in EFZ (3.–5. März)");
+  const p2 = upsertTasterExperience(p1, { ...d, did: "Fenster eingebaut" }, { company: "Holzbau Muster", apprenticeship: "Schreiner/in EFZ" });
+  assert.equal(p2.experiences?.length, 2, "same company + trade updates in place");
+  assert.equal(p2.experiences?.[1].what, "Fenster eingebaut");
+  const p3 = upsertTasterExperience(p2, d, { company: "Andere Firma AG", apprenticeship: "Schreiner/in EFZ" });
+  assert.equal(p3.experiences?.length, 3);
+
+  const letterA = `Sehr geehrte Frau Muster
+Seit ich mit meinem Grossvater ein Vogelhaus gebaut habe, weiss ich, dass ich mit Holz arbeiten will. Ich interessiere mich für eine Lehrstelle als Schreinerin bei der Holzbau Muster AG, weil Sie Möbel nach Mass herstellen.
+In der Schule mag ich Werken und Geometrie am liebsten. Jeden Samstag trage ich Zeitungen aus und bin dabei immer pünktlich.
+Gerne zeige ich Ihnen in einer Schnupperlehre, was ich kann. Freundliche Grüsse Lea Beispiel`;
+  const letterB = letterA.replace(/Holzbau Muster AG/g, "Schreinerei Beispiel GmbH").replace("Frau Muster", "Herr Beispiel");
+  const letterC = `Sehr geehrter Herr Huber
+Beim Zukunftstag durfte ich in einer Gärtnerei mithelfen und habe gemerkt, wie gern ich draussen arbeite. Deshalb bewerbe ich mich bei der Gärtnerei Grün für eine Schnupperlehre als Gärtner.
+Zu Hause pflege ich unseren Gemüsegarten und im Turnverein helfe ich beim Aufbau der Geräte. Ich packe gerne an und gebe nicht schnell auf.
+Ich würde mich freuen, Ihren Betrieb kennen zu lernen. Freundliche Grüsse Tim Muster`;
+  assert.ok(letterSimilarity(letterA, letterB) >= SIMILAR_LETTER_THRESHOLD, "swapping the company keeps it nearly the same");
+  assert.ok(letterSimilarity(letterA, letterC) < 0.2, "different letters are not similar");
+  assert.equal(letterSimilarity("zu kurz", letterA), 0);
+
+  const ctx2 = { lang: "de", kind: "lehrstelle" as const, company: "Holzbau Muster AG", contactPerson: "Maria Muster", contactGender: "f" };
+  const u = (sim: { company: string; pct: number } | null | undefined) => schoolLetterChecks(letterA, { ...ctx2, similar: sim }).find(c => c.id === "unique");
+  assert.equal(u(undefined), undefined);
+  assert.equal(u(null)?.status, "ok");
+  assert.equal(u({ company: "Schreinerei Beispiel GmbH", pct: 91 })?.status, "warn");
+  console.log("letter-kinds: phase 4 (tasks, debrief, similarity) passed");
+}

@@ -338,6 +338,8 @@ const words = (s: string) => s.toLowerCase().match(/[a-zäöüéèàçâêîôû
  */
 export function schoolLetterChecks(body: string, ctx: {
   lang?: string | null; kind: ApplicationKind; company: string; contactPerson?: string | null; contactGender?: string | null;
+  /** Most similar letter to another company (letterSimilarity ≥ threshold), null = none; omitted = not checked. */
+  similar?: { company: string; pct: number } | null;
 }): LetterCheck[] {
   const l = langKey(ctx.lang);
   const text = body.replace(/\r/g, "").trim();
@@ -397,6 +399,9 @@ export function schoolLetterChecks(body: string, ctx: {
   // Swiss spelling
   if (l === "de") out.push({ id: "swiss", status: text.includes("ß") ? "warn" : "ok" });
 
+  // Nearly the same letter as one sent to another company
+  if (ctx.similar !== undefined) out.push(ctx.similar ? { id: "unique", status: "warn", params: ctx.similar } : { id: "unique", status: "ok" });
+
   return out;
 }
 
@@ -407,3 +412,113 @@ export function checksForPrompt(checks: LetterCheck[]): string {
   const p = (c: LetterCheck) => Object.entries(c.params ?? {}).map(([k, v]) => `${k}=${v}`).join(", ");
   return `Die automatische Prüfung hat gefunden (berücksichtige das in "verbesserungen" und "promptVorschlaege"):\n${bad.map(c => `- ${c.id}: ${c.status}${c.params ? ` (${p(c)})` : ""}`).join("\n")}`;
 }
+
+// ─── Phase 4: school stage tasks, taster debrief → apprenticeship, near-duplicate letters ─
+
+/**
+ * Default stage tasks for school kinds (replace the job-seeker tasks). German titles like
+ * STAGE_TASK_TEMPLATES; the frontend translates them (frontend/src/lib/stageText.ts — keep in sync).
+ * For a Schnupperlehre "1st interview" = the taster days, "2nd interview" = the feedback afterwards.
+ */
+export const SCHOOL_STAGE_TASKS: Record<"schnupperlehre" | "lehrstelle", Record<string, string[]>> = {
+  schnupperlehre: {
+    import_validating: ["Beruf und Betrieb angeschaut", "Schnuppermöglichkeit geklärt (Website / Telefon)", "Eltern / Lehrperson informiert"],
+    preparing_cv: ["Lebenslauf mit Foto aktuell", "Zeugnisse und Testresultate bereit"],
+    preparing_letter: ["Anschreiben-Entwurf erstellt", "Ansprechperson richtig angesprochen", "Gegenlesen lassen (Eltern / Lehrperson)", "Höchstens eine halbe Seite"],
+    application_sent: ["Unterlagen vollständig geschickt (Brief, Lebenslauf, Zeugnisse)", "Nach einer Woche nachfragen, falls keine Antwort"],
+    interview_1: ["Schnuppertage bestätigt (Datum, Zeit, Ort)", "Kleidung und Material geklärt", "Anreise geplant – pünktlich sein", "Fragen an den Betrieb notiert"],
+    interview_2: ["Schnupper-Rückblick ausgefüllt", "Bewertung des Betriebs erhalten", "Dankesmail nach der Schnupperlehre geschickt"],
+    accepted: ["Nach einer freien Lehrstelle gefragt", "Schnupper-Rückblick ins Schülerprofil übernommen"],
+    rejected: ["Rückmeldung erfragt, was ich besser machen kann", "Nächsten Betrieb ausgesucht"],
+  },
+  lehrstelle: {
+    import_validating: ["Lehrstelle passt zu meinen Wunschberufen", "In diesem Beruf geschnuppert", "Bewerbungsfrist notiert"],
+    preparing_cv: ["Lebenslauf mit Foto aktuell", "Zeugnisse und Testresultate bereit", "Schnupperberichte beigelegt"],
+    preparing_letter: ["Anschreiben-Entwurf erstellt", "Ansprechperson richtig angesprochen", "Gegenlesen lassen (Eltern / Lehrperson)", "Höchstens eine halbe Seite"],
+    application_sent: ["Dossier vollständig geschickt (Brief, Lebenslauf, Zeugnisse, Tests)", "Nach einer Woche nachfragen, falls keine Antwort"],
+    interview_1: ["Termin bestätigt (Zeit, Ort)", "„Warum dieser Beruf? Warum hier?“ geübt", "Eigene Fragen vorbereitet", "Eltern über den Termin informiert"],
+    interview_2: ["Selektionstage oder Eignungstest vorbereitet", "Dankesmail nach dem Gespräch geschickt"],
+    accepted: ["Lehrvertrag mit den Eltern durchgelesen", "Lehrvertrag unterschrieben zurückgeschickt", "Anderen Betrieben abgesagt"],
+    rejected: ["Rückmeldung erfragt, was ich besser machen kann", "Weitere Lehrstellen gesucht"],
+  },
+};
+
+/** Default tasks for a stage: school kinds get their own list, everything else the job list. */
+export function stageTasksFor(kind: ApplicationKind, stage: string, jobTemplates: Record<string, string[]>): string[] {
+  if (kind === "schnupperlehre" || kind === "lehrstelle") return SCHOOL_STAGE_TASKS[kind][stage] ?? [];
+  return jobTemplates[stage] ?? [];
+}
+
+/** Taster debrief (aiResultsCache["schnupper-debrief"]) — filled in after the Schnupperlehre. */
+export type SchnupperDebrief = {
+  dates?: string;                                // "3.–5. März 2026"
+  did?: string;                                  // what I did
+  liked?: string;                                // what I liked
+  hard?: string;                                 // what was hard (never goes into a letter)
+  feedback?: "good" | "ok" | "bad" | "";         // how the company rated me
+  feedbackNotes?: string;                        // what they said
+  fit?: "yes" | "maybe" | "no" | "";             // can I imagine the apprenticeship here?
+  bridgedTo?: string;                            // id of the Lehrstelle application created from it
+  savedToProfile?: boolean;
+};
+
+const oneOf = <T extends string>(v: unknown, allowed: readonly T[]): T | "" => (allowed.includes(v as T) ? (v as T) : "");
+
+export function normalizeDebrief(raw: unknown): SchnupperDebrief {
+  const j = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  return {
+    dates: str(j.dates, 120), did: str(j.did, 1200), liked: str(j.liked, 800), hard: str(j.hard, 800),
+    feedback: oneOf(j.feedback, ["good", "ok", "bad"] as const), feedbackNotes: str(j.feedbackNotes, 800),
+    fit: oneOf(j.fit, ["yes", "maybe", "no"] as const),
+    ...(typeof j.bridgedTo === "string" && j.bridgedTo ? { bridgedTo: j.bridgedTo.slice(0, 64) } : {}),
+    ...(j.savedToProfile === true ? { savedToProfile: true } : {}),
+  };
+}
+
+/**
+ * Taster notes for the apprenticeship letter (SchoolAnswers.schnupperNotes). Only what may be
+ * quoted: what was done, what was liked, and the company's feedback when it was good.
+ * "hard" and a weak rating never reach a letter.
+ */
+export function debriefNotes(d: SchnupperDebrief): string {
+  const parts: string[] = [];
+  if (d.dates) parts.push(`Schnupperlehre ${d.dates}`);
+  if (d.did) parts.push(`Gemacht: ${d.did}`);
+  if (d.liked) parts.push(`Gefallen: ${d.liked}`);
+  if (d.feedback === "good") parts.push(d.feedbackNotes ? `Rückmeldung des Betriebs: ${d.feedbackNotes}` : "Der Betrieb war mit mir zufrieden");
+  return parts.join(". ").slice(0, 1200);
+}
+
+/** Adds the taster to the pupil profile, or updates the taster already recorded for this company. */
+export function upsertTasterExperience(p: SchoolProfile, d: SchnupperDebrief, ctx: { company: string; apprenticeship?: string | null }): SchoolProfile {
+  const title = `${ctx.apprenticeship?.trim() || "Schnupperlehre"}${d.dates ? ` (${d.dates})` : ""}`.slice(0, 160);
+  const entry = { kind: "schnupper" as const, title, company: ctx.company.slice(0, 160), what: d.did ?? "", liked: d.liked ?? "" };
+  const list = [...(p.experiences ?? [])];
+  const i = list.findIndex(e => e.kind === "schnupper" && !!e.company && sameCompany(e.company, ctx.company)
+    && (!ctx.apprenticeship || !e.title || sameTrade(e.title, ctx.apprenticeship) || norm(e.title).startsWith("schnupperlehre")));
+  if (i >= 0) list[i] = { ...list[i], ...entry, what: entry.what || list[i].what, liked: entry.liked || list[i].liked };
+  else list.push(entry);
+  return { ...p, experiences: list };
+}
+
+/**
+ * How much of the shorter letter also appears in the other one: share of shared 3-word
+ * sequences (0–1). Salutation, closing and the company names are compared like any text,
+ * so two letters that only swap the company still score high. Under 12 sequences → 0.
+ */
+export function letterSimilarity(a: string, b: string): number {
+  const shingles = (s: string) => {
+    const w = words(s);
+    const set = new Set<string>();
+    for (let i = 0; i + 2 < w.length; i++) set.add(`${w[i]} ${w[i + 1]} ${w[i + 2]}`);
+    return set;
+  };
+  const x = shingles(a), y = shingles(b);
+  if (x.size < 12 || y.size < 12) return 0;
+  let shared = 0;
+  for (const s of x) if (y.has(s)) shared++;
+  return shared / Math.min(x.size, y.size);
+}
+
+/** From this share of shared phrases on, a letter counts as "nearly the same" as another one. */
+export const SIMILAR_LETTER_THRESHOLD = 0.6;

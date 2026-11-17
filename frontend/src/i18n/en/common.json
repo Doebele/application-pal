@@ -194,6 +194,44 @@
         "1": "Start date confirmed",
         "2": "Other ongoing applications informed",
         "3": "Withdrawals for other positions prepared"
+      },
+      "school": {
+        "0": "Looked into the trade and the company",
+        "1": "Checked how to get a taster (website / phone)",
+        "2": "Parents / teacher informed",
+        "3": "CV with photo up to date",
+        "4": "School reports and test results ready",
+        "5": "Contact person addressed correctly",
+        "6": "Had it proofread (parents / teacher)",
+        "7": "At most half a page",
+        "8": "Sent everything (letter, CV, school reports)",
+        "9": "Follow up after a week if there is no answer",
+        "10": "Taster days confirmed (date, time, place)",
+        "11": "Clothing and materials clarified",
+        "12": "Journey planned – be on time",
+        "13": "Questions for the company noted",
+        "14": "Taster debrief filled in",
+        "15": "Got the company's assessment",
+        "16": "Thank-you email sent after the taster",
+        "17": "Asked about an open apprenticeship",
+        "18": "Taster debrief added to the pupil profile",
+        "19": "Asked for feedback on what to improve",
+        "20": "Picked the next company",
+        "21": "Apprenticeship fits my dream jobs",
+        "22": "Did a taster in this trade",
+        "23": "Application deadline noted",
+        "24": "Taster reports attached",
+        "25": "Full dossier sent (letter, CV, reports, tests)",
+        "26": "Appointment confirmed (time, place)",
+        "27": "Practised “Why this trade? Why here?”",
+        "28": "Own questions prepared",
+        "29": "Parents told about the appointment",
+        "30": "Prepared for selection days or aptitude test",
+        "31": "Thank-you email sent after the interview",
+        "32": "Read the apprenticeship contract with parents",
+        "33": "Signed contract sent back",
+        "34": "Told the other companies",
+        "35": "Looked for more apprenticeships"
       }
     }
   },
@@ -2502,7 +2540,55 @@
       "swiss": {
         "ok": "Swiss spelling (ss)",
         "warn": "“ß” found — Swiss German uses “ss”"
+      },
+      "unique": {
+        "label": "Own letter for this company",
+        "ok": "Own letter – not copied",
+        "warn": "{{pct}}% the same as your letter to {{company}} – rewrite the opening and “why this company”"
       }
     }
+  },
+  "schnupperDebrief": {
+    "title": "Taster debrief",
+    "intro": "Write down how it went while you still remember it well. It becomes your strongest argument for the apprenticeship.",
+    "dates": "When?",
+    "datesPlaceholder": "e.g. 3–5 March 2026",
+    "did": "What did you do?",
+    "didPlaceholder": "e.g. built a box from solid wood, helped fit a kitchen",
+    "liked": "What did you like?",
+    "likedPlaceholder": "e.g. seeing in the evening what you have made",
+    "hard": "What was hard?",
+    "hardPlaceholder": "e.g. getting up early, standing for long",
+    "hardHint": "Just for you – this never goes into a letter.",
+    "feedback": "How did the company rate you?",
+    "feedbackOptions": {
+      "good": "Good",
+      "ok": "Okay",
+      "bad": "Rather poor"
+    },
+    "feedbackNotes": "What did they say?",
+    "feedbackNotesPlaceholder": "e.g. “You work very precisely”",
+    "fit": "Can you see yourself doing the apprenticeship at {{company}}?",
+    "fitOptions": {
+      "yes": "Yes",
+      "maybe": "Maybe",
+      "no": "No"
+    },
+    "toProfile": "Add to pupil profile",
+    "updateProfile": "Update in pupil profile",
+    "savedToProfile": "Saved to your pupil profile.",
+    "needContent": "First fill in what you did or what you liked.",
+    "createLehrstelle": "Create apprenticeship application at {{company}}",
+    "openLehrstelle": "Open apprenticeship application",
+    "bridgeHint": "Creates a new application for the apprenticeship: company, trade and contact are copied, the taster goes into your pupil profile and the letter already knows you did a taster here. What was hard and a weak rating never go into the letter.",
+    "bridgeFailed": "The apprenticeship application could not be created.",
+    "fromTaster": "This application comes from your taster at the same company – the experience is already planned into the letter.",
+    "openTaster": "Open taster"
+  },
+  "similarLetter": {
+    "warning": "This letter is {{pct}}% the same as your letter to",
+    "more_one": "(and {{count}} more).",
+    "more_other": "(and {{count}} more).",
+    "tip": "Companies notice that. Rewrite the opening and “why this company”."
   }
 }

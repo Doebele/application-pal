@@ -1,5 +1,5 @@
 import "./sidecar-polyfill.js";
-import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote, parseSchoolProfile, formatSchoolProfile, formatSchoolAnswers, schoolAnglesTask, normalizeTest, schoolLetterChecks, checksForPrompt, SCHOOL_TEST_EXTRACT_PROMPT, type SchoolAnswers, type SchoolTest } from "./letter-kinds.js";
+import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote, parseSchoolProfile, formatSchoolProfile, formatSchoolAnswers, schoolAnglesTask, normalizeTest, schoolLetterChecks, checksForPrompt, SCHOOL_TEST_EXTRACT_PROMPT, stageTasksFor, SCHOOL_STAGE_TASKS, normalizeDebrief, debriefNotes, upsertTasterExperience, letterSimilarity, SIMILAR_LETTER_THRESHOLD, type SchoolAnswers, type SchoolTest } from "./letter-kinds.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
@@ -702,7 +702,8 @@ const STAGE_TASK_TEMPLATES: Record<string, string[]> = {
 };
 
 async function initTasksForStage(applicationId: string, stage: string): Promise<void> {
-  const templates = STAGE_TASK_TEMPLATES[stage];
+  const [appRow] = await db.select({ kind: applications.applicationKind }).from(applications).where(eq(applications.id, applicationId)).limit(1);
+  const templates = stageTasksFor(normalizeKind(appRow?.kind), stage, STAGE_TASK_TEMPLATES);
   if (!templates?.length) return;
   // Check which default tasks for this stage already exist (avoid duplicates)
   const existing = await db.select({ title: applicationTasks.title })
@@ -715,6 +716,21 @@ async function initTasksForStage(applicationId: string, stage: string): Promise<
   if (newTasks.length > 0) {
     await db.insert(applicationTasks).values(newTasks);
   }
+}
+
+/**
+ * After a kind change: removes the current stage's default tasks that are still open and no
+ * longer in the new kind's list, then adds the new kind's defaults. Ticked tasks stay.
+ */
+async function swapDefaultTasks(applicationId: string, stage: string): Promise<void> {
+  const [appRow] = await db.select({ kind: applications.applicationKind }).from(applications).where(eq(applications.id, applicationId)).limit(1);
+  const keep = new Set(stageTasksFor(normalizeKind(appRow?.kind), stage, STAGE_TASK_TEMPLATES));
+  const allDefaults = new Set([...Object.values(STAGE_TASK_TEMPLATES).flat(), ...Object.values(SCHOOL_STAGE_TASKS).flatMap(k => Object.values(k).flat())]);
+  const rows = await db.select().from(applicationTasks)
+    .where(and(eq(applicationTasks.applicationId, applicationId), eq(applicationTasks.stage, stage), eq(applicationTasks.isDefault, true)));
+  const drop = rows.filter(r => !r.done && !keep.has(r.title) && allDefaults.has(r.title)).map(r => r.id);
+  if (drop.length) await db.delete(applicationTasks).where(inArray(applicationTasks.id, drop));
+  await initTasksForStage(applicationId, stage);
 }
 
 const roleKeywords = [
@@ -1623,6 +1639,11 @@ app.patch("/api/applications/:id", zValidator("json", applicationPatchSchema), a
     });
     // Auto-create tasks for the new stage
     await initTasksForStage(id, stage);
+  }
+
+  // Kind changed (e.g. Stelle → Lehrstelle): swap the untouched default tasks of the current stage
+  if (payload.applicationKind !== undefined && normalizeKind(payload.applicationKind) !== normalizeKind(existing[0].applicationKind)) {
+    await swapDefaultTasks(id, updated.stage);
   }
 
   // Recolor the Drive folder when stage or archived status changed
@@ -3253,6 +3274,115 @@ app.patch("/api/applications/:id/letter-inputs", async (c) => {
   return c.json({ ok: true });
 });
 
+// ─── Near-duplicate letters ───────────────────────────────────
+/** Other applications of this user whose current letter shares ≥ SIMILAR_LETTER_THRESHOLD of its phrases with `body`. */
+async function findSimilarLetters(userId: string, appId: string, body: string): Promise<{ id: string; company: string; role: string; pct: number }[]> {
+  if (!body.trim()) return [];
+  const rows = await db.select({ id: applications.id, company: applications.company, role: applications.role, cache: applications.aiResultsCache })
+    .from(applications).where(and(eq(applications.userId, userId), ne(applications.id, appId)));
+  const out: { id: string; company: string; role: string; pct: number }[] = [];
+  for (const r of rows) {
+    let other = "";
+    try { other = (JSON.parse(r.cache ?? "{}") as Record<string, { body?: string }>)["cover-letter"]?.body ?? ""; } catch { /* ignore */ }
+    const sim = other ? letterSimilarity(body, other) : 0;
+    if (sim >= SIMILAR_LETTER_THRESHOLD) out.push({ id: r.id, company: r.company, role: r.role, pct: Math.round(sim * 100) });
+  }
+  return out.sort((a, b) => b.pct - a.pct).slice(0, 3);
+}
+
+// Letters to other companies that are nearly the same as this application's current letter
+app.get("/api/applications/:id/letter-similarity", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  let body = "";
+  try { body = (JSON.parse(app_.aiResultsCache ?? "{}") as Record<string, { body?: string }>)["cover-letter"]?.body ?? ""; } catch { /* ignore */ }
+  return c.json({ similar: await findSimilarLetters(userId, id, body) });
+});
+
+// ─── Schnupperlehre debrief → Lehrstelle ──────────────────────
+function readCache(raw: string | null | undefined): Record<string, Record<string, unknown>> {
+  try { return JSON.parse(raw ?? "{}"); } catch { return {}; }
+}
+
+// Saves the taster debrief (aiResultsCache["schnupper-debrief"]); bridge markers are kept server-side
+app.patch("/api/applications/:id/schnupper-debrief", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const prev = normalizeDebrief(readCache(app_.aiResultsCache)["schnupper-debrief"]);
+  const next = { ...normalizeDebrief(await c.req.json()), bridgedTo: prev.bridgedTo, savedToProfile: prev.savedToProfile };
+  await persistAiResult(id, "schnupper-debrief", next as Record<string, unknown>);
+  return c.json(next);
+});
+
+/** Writes the taster into the pupil profile (experience of kind "schnupper" for this company). */
+async function saveTasterToProfile(userId: string, app_: { company: string; apprenticeship: string | null }, debrief: ReturnType<typeof normalizeDebrief>) {
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  if (!profile) return;
+  const next = upsertTasterExperience(parseSchoolProfile(profile.schoolProfile), debrief, { company: app_.company, apprenticeship: app_.apprenticeship });
+  await db.update(userProfile).set({ schoolProfile: JSON.stringify(next) }).where(eq(userProfile.userId, userId));
+}
+
+app.post("/api/applications/:id/schnupper-debrief/to-profile", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const debrief = normalizeDebrief(readCache(app_.aiResultsCache)["schnupper-debrief"]);
+  await saveTasterToProfile(userId, app_, debrief);
+  await persistAiResult(id, "schnupper-debrief", { ...debrief, savedToProfile: true });
+  return c.json({ ok: true });
+});
+
+/**
+ * Creates the Lehrstelle application at the same company from a finished Schnupperlehre:
+ * copies company, trade and contact, records the taster in the pupil profile and prefills the
+ * letter answers ("schon hier geschnuppert" + notes from the debrief). Runs once per taster.
+ */
+app.post("/api/applications/:id/lehrstelle-from-schnupper", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const [src] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!src) return c.json({ error: "Nicht gefunden" }, 404);
+  if (normalizeKind(src.applicationKind) !== "schnupperlehre") return c.json({ error: "Nur für Schnupperlehren" }, 400);
+  const cache = readCache(src.aiResultsCache);
+  const debrief = normalizeDebrief(cache["schnupper-debrief"]);
+  if (debrief.bridgedTo) {
+    const [exists] = await db.select({ id: applications.id }).from(applications).where(and(eq(applications.id, debrief.bridgedTo), eq(applications.userId, userId))).limit(1);
+    if (exists) return c.json({ id: exists.id, existed: true });
+  }
+  const trade = src.apprenticeship?.trim() || null;
+  const school: SchoolAnswers = { knownFrom: "Schnupperlehre", schnupperHere: "yes", schnupperNotes: debriefNotes(debrief) };
+  const prevInputs = cache["letter-inputs"] as { school?: SchoolAnswers } | undefined;
+  if (prevInputs?.school?.whyJob) school.whyJob = prevInputs.school.whyJob;
+  const [created] = await db.insert(applications).values({
+    userId,
+    company: src.company,
+    role: trade ? `Lehrstelle ${trade}` : "Lehrstelle",
+    stage: "import_validating",
+    location: src.location,
+    url: src.url,
+    contactPerson: src.contactPerson,
+    contactGender: src.contactGender,
+    language: src.language,
+    applicationKind: "lehrstelle",
+    apprenticeship: trade,
+    source: "Schnupperlehre",
+    aiResultsCache: JSON.stringify({
+      "letter-inputs": { school, _savedAt: new Date().toISOString() },
+      "schnupper-source": { id: src.id, _savedAt: new Date().toISOString() },
+    }),
+  }).returning();
+  await initTasksForStage(created.id, created.stage);
+  await db.insert(applicationActivities).values({ applicationId: created.id, type: "note", title: `Aus Schnupperlehre bei ${src.company} erstellt` });
+  await saveTasterToProfile(userId, src, debrief);
+  await persistAiResult(id, "schnupper-debrief", { ...debrief, bridgedTo: created.id, savedToProfile: true });
+  return c.json({ id: created.id, existed: false }, 201);
+});
+
 // Append the freshly-generated cover letter as a version, and restore a chosen version.
 // Versions live in aiResultsCache["letter-versions"] = { versions: [{ subject, body, createdAt }] }.
 app.post("/api/applications/:id/ai/letter-versions/save", async (c) => {
@@ -4089,7 +4219,8 @@ ${reviewLangDirective(uiLang_, lang_)}`;
   if (!letterText) letterText = "Kein Anschreiben vorhanden. Bitte zuerst im Tab 'Aktionen' → Phase Anschreiben ein Anschreiben generieren.";
   // School leavers: deterministic checklist + the four criteria the company looks for
   const checks = schoolReview && letterBody
-    ? schoolLetterChecks(letterBody, { lang: lang_, kind: reviewKind, company: app_.company, contactPerson: app_.contactPerson, contactGender: app_.contactGender })
+    ? schoolLetterChecks(letterBody, { lang: lang_, kind: reviewKind, company: app_.company, contactPerson: app_.contactPerson, contactGender: app_.contactGender,
+        similar: await findSimilarLetters(userId, id, letterBody).then(r => r[0] ? { company: r[0].company, pct: r[0].pct } : null) })
     : undefined;
   if (schoolReview) {
     const hint = checks ? checksForPrompt(checks) : "";

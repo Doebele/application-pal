@@ -194,6 +194,44 @@
         "1": "Date de début confirmée",
         "2": "Autres candidatures en cours informées",
         "3": "Désistements pour d’autres postes préparés"
+      },
+      "school": {
+        "0": "Métier et entreprise découverts",
+        "1": "Possibilité de stage d'essai vérifiée (site / téléphone)",
+        "2": "Parents / enseignant·e informés",
+        "3": "CV avec photo à jour",
+        "4": "Bulletins et résultats de tests prêts",
+        "5": "Personne de contact correctement saluée",
+        "6": "Fait relire (parents / enseignant·e)",
+        "7": "Une demi-page au maximum",
+        "8": "Dossier complet envoyé (lettre, CV, bulletins)",
+        "9": "Relancer après une semaine sans réponse",
+        "10": "Jours de stage confirmés (date, heure, lieu)",
+        "11": "Tenue et matériel clarifiés",
+        "12": "Trajet prévu – être ponctuel·le",
+        "13": "Questions pour l'entreprise notées",
+        "14": "Bilan du stage rempli",
+        "15": "Évaluation de l'entreprise reçue",
+        "16": "E-mail de remerciement envoyé après le stage",
+        "17": "Demandé s'il y a une place d'apprentissage",
+        "18": "Bilan du stage ajouté au profil d'élève",
+        "19": "Demandé ce que je peux améliorer",
+        "20": "Prochaine entreprise choisie",
+        "21": "La place correspond à mes métiers souhaités",
+        "22": "Stage d'essai fait dans ce métier",
+        "23": "Délai de candidature noté",
+        "24": "Rapports de stage joints",
+        "25": "Dossier complet envoyé (lettre, CV, bulletins, tests)",
+        "26": "Rendez-vous confirmé (heure, lieu)",
+        "27": "Préparé « Pourquoi ce métier ? Pourquoi ici ? »",
+        "28": "Mes propres questions préparées",
+        "29": "Parents informés du rendez-vous",
+        "30": "Journées de sélection ou test d'aptitude préparés",
+        "31": "E-mail de remerciement envoyé après l'entretien",
+        "32": "Contrat d'apprentissage lu avec les parents",
+        "33": "Contrat signé renvoyé",
+        "34": "Autres entreprises informées",
+        "35": "Autres places d'apprentissage cherchées"
       }
     }
   },
@@ -2502,7 +2540,55 @@
       "swiss": {
         "ok": "Orthographe suisse (ss)",
         "warn": "« ß » trouvé — en Suisse on écrit « ss »"
+      },
+      "unique": {
+        "label": "Lettre propre à cette entreprise",
+        "ok": "Lettre propre – pas copiée",
+        "warn": "Identique à {{pct}} % à ta lettre pour {{company}} – réécris l'introduction et « pourquoi cette entreprise »"
       }
     }
+  },
+  "schnupperDebrief": {
+    "title": "Bilan du stage d'essai",
+    "intro": "Note comment ça s'est passé tant que tu t'en souviens bien. Ce sera ton meilleur argument pour la place d'apprentissage.",
+    "dates": "Quand ?",
+    "datesPlaceholder": "p. ex. 3–5 mars 2026",
+    "did": "Qu'as-tu fait ?",
+    "didPlaceholder": "p. ex. construit une caisse en bois massif, aidé à monter une cuisine",
+    "liked": "Qu'est-ce qui t'a plu ?",
+    "likedPlaceholder": "p. ex. voir le soir ce qu'on a réalisé",
+    "hard": "Qu'est-ce qui était difficile ?",
+    "hardPlaceholder": "p. ex. se lever tôt, rester debout longtemps",
+    "hardHint": "Rien que pour toi – cela n'apparaît jamais dans une lettre.",
+    "feedback": "Comment l'entreprise t'a-t-elle évalué·e ?",
+    "feedbackOptions": {
+      "good": "Bien",
+      "ok": "Correct",
+      "bad": "Plutôt mal"
+    },
+    "feedbackNotes": "Qu'ont-ils dit ?",
+    "feedbackNotesPlaceholder": "p. ex. « Tu travailles très précisément »",
+    "fit": "Peux-tu t'imaginer faire l'apprentissage chez {{company}} ?",
+    "fitOptions": {
+      "yes": "Oui",
+      "maybe": "Peut-être",
+      "no": "Non"
+    },
+    "toProfile": "Ajouter au profil d'élève",
+    "updateProfile": "Mettre à jour le profil d'élève",
+    "savedToProfile": "Enregistré dans ton profil d'élève.",
+    "needContent": "Remplis d'abord ce que tu as fait ou ce qui t'a plu.",
+    "createLehrstelle": "Créer la candidature d'apprentissage chez {{company}}",
+    "openLehrstelle": "Ouvrir la candidature d'apprentissage",
+    "bridgeHint": "Crée une nouvelle candidature pour l'apprentissage : entreprise, métier et contact sont repris, le stage est ajouté à ton profil d'élève et la lettre sait déjà que tu as fait un stage ici. Ce qui était difficile et une évaluation faible n'apparaissent jamais dans la lettre.",
+    "bridgeFailed": "Impossible de créer la candidature d'apprentissage.",
+    "fromTaster": "Cette candidature vient de ton stage d'essai dans la même entreprise – l'expérience est déjà prévue dans la lettre.",
+    "openTaster": "Ouvrir le stage d'essai"
+  },
+  "similarLetter": {
+    "warning": "Cette lettre est identique à {{pct}} % à ta lettre pour",
+    "more_one": "(et {{count}} autre).",
+    "more_other": "(et {{count}} autres).",
+    "tip": "Les entreprises le remarquent. Réécris l'introduction et « pourquoi cette entreprise »."
   }
 }

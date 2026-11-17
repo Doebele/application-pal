@@ -75,6 +75,8 @@ import { taskTitle, activityTitle } from "../lib/stageText";
 import { ApplicationKindFields, SalutationField } from "./LetterKindFields";
 import { SchoolLetterQuestions, type SchoolAnswers } from "./SchoolLetterQuestions";
 import { SchoolReview, type SchoolReviewData } from "./SchoolReview";
+import { SchnupperDebriefPanel, SchnupperSourceNote, DEBRIEF_STAGES } from "./SchnupperDebrief";
+import { SimilarLetterWarning } from "./SimilarLetterWarning";
 
 const STAGES = STAGE_ORDER.map((id) => ({ id }));
 
@@ -4917,6 +4919,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
       <div style={{ fontSize: 10, color: "var(--fg-4)", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}>
         <EditPencil width={9} height={9} /> {t("letterDraft.editHint")}
       </div>
+      {!draftRunning && <SimilarLetterWarning appId={app.id} body={letter.body} />}
       {letterTemplateMissing && (
         <div style={{ marginBottom: 10 }}>
           <MissingTemplateNotice templateId={letterTemplateMissing} appId={app.id} fallbackDocUrl={exportUrl} onRetry={exportLetter} />
@@ -5133,6 +5136,9 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
       {/* RAV proof sheet — available in every stage, the sheet tracks pre-application states too */}
       <RavExportBtn app={app} />
 
+      {/* Lehrstelle created from a Schnupperlehre → link back */}
+      {app.applicationKind === "lehrstelle" && <SchnupperSourceNote app={app} />}
+
       {/* 1. Prozess-spezifische Inhalte (Interview-Termin) */}
       {(app.stage === "interview_1" || app.stage === "interview_2") && onSave && (
         <div style={interviewExpanded ? expandStyle : {}}>
@@ -5145,6 +5151,9 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
           />
         </div>
       )}
+
+      {/* Schnupperlehre: debrief after the taster days + bridge to a Lehrstelle */}
+      {app.applicationKind === "schnupperlehre" && DEBRIEF_STAGES.has(app.stage) && <SchnupperDebriefPanel key={app.id} app={app} />}
 
       {/* 1b. Letter-Draft-Assistent (Anschreiben-Phase) */}
       {app.stage === "preparing_letter" && (
