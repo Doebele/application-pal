@@ -1,4 +1,5 @@
 import { useState } from "react";
+import i18n from "../i18n";
 import { Clock, MapPin, MoreHoriz, OpenNewWindow, Archive, RefreshCircle, Sparks } from "iconoir-react";
 import type { Application } from "@application-pal/shared";
 import { type CardVariant, useUiStore } from "../lib/store";
@@ -174,7 +175,7 @@ export function CardRich({ app, onClick, isSelected }: CardProps) {
         {app.url && (
           <a href={app.url} target="_blank" rel="noreferrer"
             className="btn btn-ghost btn-icon" style={{ padding: 3, color: "var(--fg-3)" }}
-            onClick={(e) => e.stopPropagation()} title="Open original posting">
+            onClick={(e) => e.stopPropagation()} title={i18n.t("ui.openOriginal")}>
             <OpenNewWindow width={11} height={11} />
           </a>
         )}

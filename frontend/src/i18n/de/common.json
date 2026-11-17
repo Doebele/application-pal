@@ -137,7 +137,65 @@
     "label": "Aufgaben",
     "addTask": "+ Aufgabe hinzufügen",
     "none": "Keine Aufgaben für diese Phase",
-    "newTask": "Neue Aufgabe…"
+    "newTask": "Neue Aufgabe…",
+    "defaults": {
+      "import_validating": {
+        "0": "Relevanz abklären",
+        "1": "Checks durchführen",
+        "2": "LinkedIn Profil überprüfen",
+        "3": "Beschreibung formatieren",
+        "4": "Stellenbeschreibung vollständig erfasst",
+        "5": "KI Match Score ausgeführt",
+        "6": "Relevanz entschieden"
+      },
+      "preparing_cv": {
+        "0": "Master-CV aktualisiert",
+        "1": "Relevante Erfahrungen identifiziert",
+        "2": "CV-Dokument erstellt",
+        "3": "Formatierung geprüft"
+      },
+      "preparing_letter": {
+        "0": "Anschreiben-Entwurf erstellt",
+        "1": "Auf Unternehmen personalisiert",
+        "2": "Rechtschreibung kontrolliert",
+        "3": "Länge angemessen (max. 1 Seite)"
+      },
+      "application_sent": {
+        "0": "Bewerbung vollständig eingereicht",
+        "1": "Bestätigung erhalten",
+        "2": "Follow-up-Termin gesetzt",
+        "3": "HR-Kontakt notiert"
+      },
+      "pending": {
+        "0": "Unternehmenswebseite analysiert",
+        "1": "Glassdoor-Bewertungen geprüft",
+        "2": "LinkedIn-Profile der Kontakte angeschaut",
+        "3": "Aktuelle News zum Unternehmen gelesen"
+      },
+      "interview_1": {
+        "0": "Logistik bestätigt (Zeit / Ort / Format)",
+        "1": "Unterlagen vorbereitet",
+        "2": "Rollenspezifische Fragen vorbereitet",
+        "3": "STAR-Beispiele aus Erfahrungen notiert",
+        "4": "Eigene Rückfragen formuliert"
+      },
+      "interview_2": {
+        "0": "Learnings aus Interview 1 notiert",
+        "1": "Gehaltsverhandlung vorbereitet",
+        "2": "Referenzen bereit",
+        "3": "Fortgeschrittene Fachfragen recherchiert"
+      },
+      "rejected": {
+        "0": "Absage-Grund (falls bekannt) notiert",
+        "1": "Learnings für nächste Bewerbungen festgehalten"
+      },
+      "accepted": {
+        "0": "Vertragsdetails geprüft",
+        "1": "Startdatum bestätigt",
+        "2": "Andere laufende Bewerbungen informiert",
+        "3": "Absagen für andere Stellen vorbereitet"
+      }
+    }
   },
   "activities": {
     "label": "Aktivitäten",
@@ -146,7 +204,9 @@
     "titlePlaceholder": "Titel…",
     "descPlaceholder": "Beschreibung (optional)…",
     "minimize": "Minimieren",
-    "maximize": "Maximieren"
+    "maximize": "Maximieren",
+    "stageChange": "Phase",
+    "contractOffer": "Vertragsangebot"
   },
   "kiResults": "KI-Auswertungen",
   "driveFolder": {
@@ -2164,5 +2224,73 @@
       "resetBtn": "Zurücksetzen",
       "resetDone": "Zurückgesetzt"
     }
+  },
+  "timelineEvents": {
+    "created": "Bewerbung bei {{company}} angelegt",
+    "submitted": "Bewerbung an {{company}} geschickt",
+    "updated": "Aktualisiert — jetzt in „{{stage}}“"
+  },
+  "ui": {
+    "copy": "Kopieren",
+    "open": "Öffnen",
+    "save": "Speichern",
+    "cancel": "Abbrechen",
+    "minimize": "Minimieren",
+    "maximize": "Maximieren",
+    "fullscreen": "Vollbild",
+    "remove": "Entfernen",
+    "openOriginal": "Originalinserat öffnen",
+    "openInDrive": "In Drive öffnen",
+    "testConnection": "Verbindung testen",
+    "deleteApplication": "Bewerbung löschen",
+    "copySection": "Abschnitt kopieren",
+    "copyPhrase": "Formulierung kopieren",
+    "copyFailed": "Kopieren fehlgeschlagen",
+    "enterDateFirst": "Bitte zuerst Termin erfassen",
+    "openedInGcal": "In Google Kalender geöffnet",
+    "icalDownloaded": "iCal heruntergeladen",
+    "driveNotConnected": "Google Drive nicht verbunden. Bitte in Einstellungen → Integrationen verbinden.",
+    "sessionExpired": "Session abgelaufen — bitte Seite neu laden",
+    "roleQuestions": "Rollenspezifische Fragen",
+    "myQuestions": "Meine Rückfragen",
+    "employees": "Mitarbeitende",
+    "points": "Punkte",
+    "targetSalary": "Zielgehalt",
+    "anchor": "Anker",
+    "noData": "Keine Daten",
+    "positive": "Positiv",
+    "critical": "Kritisch",
+    "locationPh": "Bahnhofstrasse 1, 8001 Zürich",
+    "interviewerPh": "Max Muster (HR), Anna Schmidt (Fachteam)",
+    "ivNotesPh": "Portfolio mitbringen, Laptop vorbereiten…",
+    "description": "Beschreibung",
+    "jobDescriptionPh": "Stellenbeschreibung…",
+    "pasteJobDescription": "Stellenbeschreibung hier einfügen…",
+    "autoFilled": "Wird automatisch befüllt…",
+    "fetchingPage": "Seite wird geladen",
+    "textInput": "Texteingabe",
+    "readingJob": "Stellenbeschreibung wird gelesen",
+    "analyzing": "Inhalt wird analysiert",
+    "extracting": "Felder werden extrahiert",
+    "extractMeta": "Firma · Rolle · Ort · Gehalt",
+    "pensum": "Pensum",
+    "workModel": "Arbeitsmodell",
+    "contract": "Vertrag",
+    "onsite": "Vor Ort",
+    "kbSourceFailed": "Quelle konnte nicht verarbeitet werden.",
+    "kbSearchPh": "Firma oder Branche suchen…",
+    "kbAddSource": "Quelle hinzufügen",
+    "kbSourceHint": "Stelleninserat oder Firmenprofil",
+    "kbRoleDetail": "Rollendetails",
+    "seniority": "Seniorität",
+    "salary": "Salär",
+    "requirements": "Anforderungen",
+    "sources": "Quellen",
+    "cultureNotes": "Kultur-Notizen",
+    "linkedRoles": "Verknüpfte Rollen",
+    "noRoles": "Keine Rollen verknüpft.",
+    "noSources": "Keine Quellen verknüpft.",
+    "light": "Hell",
+    "dark": "Dunkel"
   }
 }

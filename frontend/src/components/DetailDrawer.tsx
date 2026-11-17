@@ -70,13 +70,16 @@ async function copyText(text: string): Promise<void> {
 
 // TABS are computed inside DetailDrawer using i18n — see useTabs() below
 
-import { STAGE_COLORS, STAGE_LABELS_DE as STAGE_LABELS, STAGE_ORDER } from "../lib/stages";
+import { STAGE_COLORS, STAGE_ORDER } from "../lib/stages";
+import { taskTitle, activityTitle } from "../lib/stageText";
 
-const STAGES = STAGE_ORDER.map((id) => ({
-  id,
-  label: STAGE_LABELS[id] ?? id,
-  short: STAGE_LABELS[id] ?? id,
-}));
+const STAGES = STAGE_ORDER.map((id) => ({ id }));
+
+/** Stage name in the UI language. */
+function useStageLabel() {
+  const { t } = useTranslation("stages");
+  return (id: string) => t(id, { defaultValue: id });
+}
 
 export const ARCHIVE_REASON_LABELS: Record<string, string> = {
   rejected:    "Abgelehnt",
@@ -109,8 +112,9 @@ const ALL_TILE_IDS = [
 function StagePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const stageLabel = useStageLabel();
   const color = STAGE_COLORS[value] ?? "#94a3b8";
-  const label = STAGE_LABELS[value] ?? value;
+  const label = stageLabel(value);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -153,7 +157,7 @@ function StagePicker({ value, onChange }: { value: string; onChange: (v: string)
                 cursor: "pointer", fontFamily: "var(--font-sans)", textAlign: "left"
               }}>
                 <span style={{ width: 8, height: 8, borderRadius: 999, background: sc, flexShrink: 0 }} />
-                {s.label}
+                {stageLabel(s.id)}
                 {value === s.id && <Check width={11} height={11} style={{ marginLeft: "auto", color: sc }} />}
               </button>
             );
@@ -224,6 +228,8 @@ function AgentStep({ done, active, label, meta }: { done: boolean; active: boole
 
 // ─── Stage Progress Bar ───────────────────────────────────────
 function StageProgressBar({ stage }: { stage: string }) {
+  const stageLabel = useStageLabel();
+  const { t } = useTranslation();
   // Linear stages: Inbox → 2nd Itw (fork terminals excluded)
   const LINEAR = STAGES.filter(s => s.id !== "rejected" && s.id !== "accepted");
   const linIdx    = LINEAR.findIndex(s => s.id === stage); // -1 when on fork
@@ -287,7 +293,7 @@ function StageProgressBar({ stage }: { stage: string }) {
                 fontSize: 9, fontWeight: active ? 700 : 500,
                 color: active ? A : "var(--fg-3)", whiteSpace: "nowrap",
                 opacity: past ? 0.55 : 1,
-              }}>{s.short}</div>
+              }}>{stageLabel(s.id)}</div>
             </div>
           );
         })}
@@ -305,7 +311,7 @@ function StageProgressBar({ stage }: { stage: string }) {
             <div style={{ width: 10, height: 2, background: onAccepted ? P : F }} />
             <div style={forkDot(onAccepted)} />
             <span style={{ fontSize: 9, fontWeight: onAccepted ? 700 : 500, color: onAccepted ? A : "var(--fg-3)", whiteSpace: "nowrap" }}>
-              Contract offer
+              {t("activities.contractOffer")}
             </span>
           </div>
 
@@ -314,7 +320,7 @@ function StageProgressBar({ stage }: { stage: string }) {
             <div style={{ width: 10, height: 2, background: onRejected ? P : F }} />
             <div style={forkDot(onRejected)} />
             <span style={{ fontSize: 9, fontWeight: onRejected ? 700 : 500, color: onRejected ? A : "var(--fg-3)", whiteSpace: "nowrap" }}>
-              Rejected
+              {stageLabel("rejected")}
             </span>
           </div>
         </div>
@@ -720,7 +726,7 @@ function GlassdoorCardDetail({ data, appId, onUpdate }: {
             placeholder="https://www.glassdoor.com/..."
             style={{ flex: 1, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 11, color: "var(--fg-1)", outline: "none", padding: "3px 0", fontFamily: "var(--font-sans)" }} />
           {editUrl && (
-            <a href={editUrl} target="_blank" rel="noopener noreferrer" title="Öffnen"
+            <a href={editUrl} target="_blank" rel="noopener noreferrer" title={i18n.t("ui.open")}
               style={{ display: "flex", alignItems: "center", color: "var(--fg-3)", padding: 3, borderRadius: 4, flexShrink: 0, textDecoration: "none" }}>
               <OpenNewWindow width={13} height={13} />
             </a>
@@ -964,13 +970,13 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
       </div>
 
       {/* Rollenspezifische Fragen */}
-      <Accordion title="Rollenspezifische Fragen" count={iv.rollenFragen?.length ?? 0} color="#a78bfa"
+      <Accordion title={i18n.t("ui.roleQuestions")} count={iv.rollenFragen?.length ?? 0} color="#a78bfa"
         onCopy={() => copyText(iv.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"))}>
         {iv.rollenFragen?.map((q, i) => (
           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < iv.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
             <span style={{ color: "var(--fg-3)", flexShrink: 0 }}>{i + 1}.</span>
             <span style={{ flex: 1 }}>{q}</span>
-            <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+            <button onClick={() => copyText(q)} title={i18n.t("ui.copy")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
               onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
               <IcCopy width={10} height={10} />
             </button>
@@ -986,7 +992,7 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < iv.vossFragenWhatHow.length - 1 ? "1px solid var(--border)" : "none" }}>
             <span style={{ color: "#34d399", flexShrink: 0 }}>→</span>
             <span style={{ flex: 1 }}>{q}</span>
-            <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+            <button onClick={() => copyText(q)} title={i18n.t("ui.copy")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
               onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
               <IcCopy width={10} height={10} />
             </button>
@@ -999,7 +1005,7 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
         onCopy={() => copyText(iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"))}>
         {iv.starBeispiele?.map((s, i) => (
           <div key={i} style={{ position: "relative", marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
-            <button onClick={() => copyText(`${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`)} title="Kopieren"
+            <button onClick={() => copyText(`${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`)} title={i18n.t("ui.copy")}
               style={{ position: "absolute", top: 8, right: 8, background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
               onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
               <IcCopy width={11} height={11} />
@@ -1015,13 +1021,13 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
       </Accordion>
 
       {/* Rückfragen */}
-      <Accordion title="Meine Rückfragen" count={iv.rueckfragen?.length ?? 0} color="#60a5fa"
+      <Accordion title={i18n.t("ui.myQuestions")} count={iv.rueckfragen?.length ?? 0} color="#60a5fa"
         onCopy={() => copyText(iv.rueckfragen.map(q => `? ${q}`).join("\n"))}>
         {iv.rueckfragen?.map((q, i) => (
           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < iv.rueckfragen.length - 1 ? "1px solid var(--border)" : "none" }}>
             <span style={{ color: "#60a5fa", flexShrink: 0 }}>?</span>
             <span style={{ flex: 1 }}>{q}</span>
-            <button onClick={() => copyText(q)} title="Kopieren" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
+            <button onClick={() => copyText(q)} title={i18n.t("ui.copy")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, flexShrink: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
               onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
               <IcCopy width={10} height={10} />
             </button>
@@ -1107,7 +1113,7 @@ function AckermannScriptDetail({ script, appId }: { script: AckermannScript; app
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
               <span style={{ fontSize: 15, fontWeight: 800, color: "var(--accent)" }}>CHF {s.angebot?.toLocaleString("de-CH")}</span>
-              <button onClick={() => copyText(`${s.formulierung}`)} title="Formulierung kopieren"
+              <button onClick={() => copyText(`${s.formulierung}`)} title={i18n.t("ui.copyPhrase")}
                 style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
                 onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
                 <IcCopy width={10} height={10} />
@@ -1124,7 +1130,7 @@ function AckermannScriptDetail({ script, appId }: { script: AckermannScript; app
         <div style={{ marginTop: 14, padding: "10px 14px", borderRadius: 8, background: "rgba(52,211,153,0.06)", border: "1px solid rgba(52,211,153,0.25)" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
             <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", textTransform: "uppercase", letterSpacing: "0.06em" }}>Chris Voss Anker-Formulierung</div>
-            <button onClick={() => copyText(script.vossAnker)} title="Kopieren"
+            <button onClick={() => copyText(script.vossAnker)} title={i18n.t("ui.copy")}
               style={{ background: "none", border: "none", cursor: "pointer", color: "var(--fg-3)", padding: 0, display: "flex", alignItems: "center", opacity: 0.6 }}
               onMouseEnter={e => (e.currentTarget.style.opacity = "1")} onMouseLeave={e => (e.currentTarget.style.opacity = "0.6")}>
               <IcCopy width={10} height={10} />
@@ -1438,7 +1444,7 @@ function renderTileContent(id: string, data: unknown): React.ReactNode {
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
         {emp && <span style={{ fontSize: 14, fontWeight: 800, color: "var(--accent)" }}>{emp}</span>}
-        <span style={{ fontSize: 9, color: "var(--fg-4)" }}>Mitarbeitende</span>
+        <span style={{ fontSize: 9, color: "var(--fg-4)" }}>{i18n.t("ui.employees")}</span>
       </div>
     );
   }
@@ -1517,7 +1523,7 @@ function renderTileContent(id: string, data: unknown): React.ReactNode {
     return (
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 26, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{t}</div>
-        <div style={{ fontSize: 9, color: "var(--fg-4)", marginTop: 2 }}>Punkte</div>
+        <div style={{ fontSize: 9, color: "var(--fg-4)", marginTop: 2 }}>{i18n.t("ui.points")}</div>
       </div>
     );
   }
@@ -1662,7 +1668,7 @@ function AiResultTile({ id, entry, onExpand, onRun }: {
       {/* Expand icon — always opens expand, stops propagation */}
       <div
         role="button"
-        aria-label="Vollbild"
+        aria-label={i18n.t("ui.fullscreen")}
         onClick={e => { e.stopPropagation(); onExpand(); }}
         style={{ position: "absolute", top: 8, right: 8, color: expandColor, display: "flex", padding: 2, borderRadius: 4, cursor: "pointer" }}
       >
@@ -1729,6 +1735,7 @@ function buildTileRunner(
     if (ai.provider === "none") throw new Error("Kein KI-Modell konfiguriert");
     const aiBody: Record<string, unknown> = { ai: { ...ai } };
     if (language) aiBody.language = language;
+    aiBody.uiLang = i18n.language;
     const r = await api.post<Record<string, unknown>>(`/api/applications/${appId}${endpoint}`, aiBody);
     onRegister(id, r.data);
     queryClient.invalidateQueries({ queryKey: ["applications"] });
@@ -1778,7 +1785,7 @@ function renderTileContentLarge(id: string, data: unknown): React.ReactNode {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
         {emp && <span style={{ fontSize: 26, fontWeight: 800, color: "var(--accent)" }}>{emp}</span>}
-        <span style={{ fontSize: 13, color: "var(--fg-4)" }}>Mitarbeitende</span>
+        <span style={{ fontSize: 13, color: "var(--fg-4)" }}>{i18n.t("ui.employees")}</span>
       </div>
     );
   }
@@ -1831,7 +1838,7 @@ function renderTileContentLarge(id: string, data: unknown): React.ReactNode {
     return (
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 56, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{t}</div>
-        <div style={{ fontSize: 13, color: "var(--fg-4)", marginTop: 6 }}>Punkte</div>
+        <div style={{ fontSize: 13, color: "var(--fg-4)", marginTop: 6 }}>{i18n.t("ui.points")}</div>
       </div>
     );
   }
@@ -1841,9 +1848,9 @@ function renderTileContentLarge(id: string, data: unknown): React.ReactNode {
     return (
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 20, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{ziel?.toLocaleString("de-CH") ?? "—"}</div>
-        <div style={{ fontSize: 11, color: "var(--fg-4)", margin: "4px 0 10px" }}>Zielgehalt</div>
+        <div style={{ fontSize: 11, color: "var(--fg-4)", margin: "4px 0 10px" }}>{i18n.t("ui.targetSalary")}</div>
         <div style={{ fontSize: 16, fontWeight: 700, color: "#34d399" }}>{anker?.toLocaleString("de-CH") ?? "—"}</div>
-        <div style={{ fontSize: 11, color: "var(--fg-4)", marginTop: 2 }}>Anker</div>
+        <div style={{ fontSize: 11, color: "var(--fg-4)", marginTop: 2 }}>{i18n.t("ui.anchor")}</div>
       </div>
     );
   }
@@ -3044,7 +3051,7 @@ function DocumentsTab({ app }: { app: Application }) {
                           {f.name}
                         </span>
                         <a href={f.webViewLink} target="_blank" rel="noreferrer"
-                          style={{ color: "var(--fg-3)", display: "flex", flexShrink: 0, opacity: 0.6 }} title="Öffnen">
+                          style={{ color: "var(--fg-3)", display: "flex", flexShrink: 0, opacity: 0.6 }} title={i18n.t("ui.open")}>
                           <OpenNewWindow width={10} height={10} />
                         </a>
                         <button className="btn btn-ghost btn-icon" style={{ padding: 2, flexShrink: 0, opacity: 0.5 }}
@@ -3445,12 +3452,6 @@ type OnboardingChecklist = {
   allgemein: string[];
 };
 
-const STAGE_LABELS_DE: Record<string, string> = {
-  import_validating: "Inbox", preparing_cv: "CV vorbereiten", preparing_letter: "Anschreiben",
-  application_sent: "Beworben", pending: "Wartend", interview_1: "Interview 1",
-  interview_2: "Interview 2", rejected: "Abgelehnt", accepted: "Zugesagt"
-};
-
 // ── Accordion helper ──
 function Accordion({ title, count, color, children, onCopy, defaultOpen = true }: {
   title: string; count: number; color?: string; children: React.ReactNode;
@@ -3469,7 +3470,7 @@ function Accordion({ title, count, color, children, onCopy, defaultOpen = true }
           <span style={{ fontSize: 10, color: "var(--fg-3)", fontWeight: 600 }}>{count}</span>
         </button>
         {onCopy && (
-          <button onClick={onCopy} title="Abschnitt kopieren" style={{
+          <button onClick={onCopy} title={i18n.t("ui.copySection")} style={{
             marginLeft: 8, background: "none", border: "none", cursor: "pointer",
             color: "var(--fg-3)", display: "flex", alignItems: "center", padding: "0 2px",
             borderRadius: 4, transition: "color 0.15s"
@@ -3715,7 +3716,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
   };
   const copySection = async (text: string, label = "Kopiert") => {
     try { await copyText(text); showToast(label); }
-    catch { showToast("Kopieren fehlgeschlagen", "error"); }
+    catch { showToast(i18n.t("ui.copyFailed"), "error"); }
   };
 
   // Calendar / iCal (interview stages)
@@ -3728,7 +3729,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
     enabled: stage === "interview_1" || stage === "interview_2",
   });
   const openGoogleCalendar = () => {
-    if (!ivDetails.date || !ivDetails.time) { showToast("Bitte zuerst Termin erfassen", "error"); return; }
+    if (!ivDetails.date || !ivDetails.time) { showToast(i18n.t("ui.enterDateFirst"), "error"); return; }
     const timeStr = ivDetails.time.replace(":", "");
     const start   = ivDetails.date.replace(/-/g, "") + "T" + timeStr + "00";
     const endDt   = new Date(`${ivDetails.date}T${ivDetails.time}:00`);
@@ -3752,10 +3753,10 @@ function StageAiActions({ app, onSave, onAiResult }: {
     url.searchParams.set("details", desc);
     if (calProfile?.googleCalendarId) url.searchParams.set("calid", calProfile.googleCalendarId);
     window.open(url.toString(), "_blank");
-    showToast("In Google Kalender geöffnet");
+    showToast(i18n.t("ui.openedInGcal"));
   };
   const downloadIcal = () => {
-    if (!ivDetails.date || !ivDetails.time) { showToast("Bitte zuerst Termin erfassen", "error"); return; }
+    if (!ivDetails.date || !ivDetails.time) { showToast(i18n.t("ui.enterDateFirst"), "error"); return; }
     const timeStr = ivDetails.time.replace(":", "");
     const dtStart = ivDetails.date.replace(/-/g, "") + "T" + timeStr + "00";
     const endDt   = new Date(`${ivDetails.date}T${ivDetails.time}:00`);
@@ -3786,7 +3787,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
     a.href     = URL.createObjectURL(blob);
     a.download = `interview-${app.company.replace(/[^a-z0-9]/gi, "-")}-runde${ivRound}.ics`;
     a.click(); URL.revokeObjectURL(a.href);
-    showToast("iCal heruntergeladen");
+    showToast(i18n.t("ui.icalDownloaded"));
   };
 
   // Always include current language in AI bodies so backends prefer it over potentially-stale DB value
@@ -3824,7 +3825,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
         if (id === "cv-doc") {
           const r = await api.post<{ docUrl?: string }>(`/api/applications/${app.id}/ai/cv-doc`, aiBody);
           if (r.data.docUrl) window.open(r.data.docUrl, "_blank");
-          else setErr("Google Drive nicht verbunden. Bitte in Settings → Integrationen verbinden.");
+          else setErr(i18n.t("ui.driveNotConnected"));
         } else if (id === "cv-highlights") {
           const r = await api.post<CvHighlights>(`/api/applications/${app.id}/ai/cv-highlights`, aiBody);
           updateCvHighlights(r.data);
@@ -4033,7 +4034,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
                   } catch (e: unknown) {
                     const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
                     if (msg === "Unauthorized" || (e as { response?: { status?: number } })?.response?.status === 401) {
-                      showToast("Session abgelaufen — bitte Seite neu laden", "error");
+                      showToast(i18n.t("ui.sessionExpired"), "error");
                     } else {
                       showToast(msg ?? tc("tileExpand.exportFailed"), "error");
                     }
@@ -4114,12 +4115,12 @@ function GlassdoorPanel({ data, appId, onChange }: {
             placeholder="https://www.glassdoor.com/..."
             style={{ width: 220, background: "none", border: "none", borderBottom: "1px solid var(--border)", fontSize: 10, color: "var(--fg-2)", outline: "none", padding: "2px 0", fontFamily: "var(--font-sans)" }} />
           {editUrl && (
-            <a href={editUrl} target="_blank" rel="noopener noreferrer" title="Öffnen"
+            <a href={editUrl} target="_blank" rel="noopener noreferrer" title={i18n.t("ui.open")}
               style={{ display: "flex", alignItems: "center", color: "var(--fg-3)", padding: 3, borderRadius: 4, textDecoration: "none", flexShrink: 0 }}>
               <OpenNewWindow width={12} height={12} />
             </a>
           )}
-          <button onClick={save} disabled={saving} title="Speichern"
+          <button onClick={save} disabled={saving} title={i18n.t("ui.save")}
             style={{ display: "flex", alignItems: "center", background: "none", border: "none", cursor: "pointer", color: saving ? "var(--fg-4)" : "var(--fg-3)", padding: 3, borderRadius: 4, flexShrink: 0 }}>
             {saving ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> : <Refresh width={12} height={12} />}
           </button>
@@ -4134,7 +4135,7 @@ function GlassdoorPanel({ data, appId, onChange }: {
             ? <><div style={{ fontSize: 28, fontWeight: 800, color: "var(--accent)", lineHeight: 1 }}>{data.rating.toFixed(1)}</div>
                <div style={{ fontSize: 11, color: "#fbbf24", marginTop: 2 }}>{stars}</div>
                {data.reviewCount && <div style={{ fontSize: 10, color: "var(--fg-3)", marginTop: 2 }}>~{data.reviewCount} Reviews</div>}</>
-            : <div style={{ fontSize: 12, color: "var(--fg-3)" }}>Keine Daten</div>}
+            : <div style={{ fontSize: 12, color: "var(--fg-3)" }}>{i18n.t("ui.noData")}</div>}
         </div>
         {(data.ceoApproval !== null || data.recommendToFriend !== null) && (
           <div style={{ flex: 1, minWidth: 120, padding: "12px 14px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -4162,13 +4163,13 @@ function GlassdoorPanel({ data, appId, onChange }: {
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
           {data.pros?.length > 0 && (
             <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 5 }}>Positiv</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#34d399", textTransform: "uppercase", marginBottom: 5 }}>{i18n.t("ui.positive")}</div>
               {data.pros.map((p, i) => <div key={i} style={{ fontSize: 11, color: "var(--fg-1)", padding: "2px 0" }}>+ {p}</div>)}
             </div>
           )}
           {data.cons?.length > 0 && (
             <div>
-              <div style={{ fontSize: 9, fontWeight: 700, color: "#f87171", textTransform: "uppercase", marginBottom: 5 }}>Kritisch</div>
+              <div style={{ fontSize: 9, fontWeight: 700, color: "#f87171", textTransform: "uppercase", marginBottom: 5 }}>{i18n.t("ui.critical")}</div>
               {data.cons.map((c, i) => <div key={i} style={{ fontSize: 11, color: "var(--fg-1)", padding: "2px 0" }}>− {c}</div>)}
             </div>
           )}
@@ -4186,6 +4187,7 @@ function GlassdoorPanel({ data, appId, onChange }: {
 
 function TaskChecklist({ app }: { app: Application }) {
   const { t } = useTranslation();
+  const tCommon = t;
   const { data: tasks = [], refetch } = useQuery<Task[]>({
     queryKey: ["tasks", app.id],
     queryFn: () => api.get(`/api/applications/${app.id}/tasks`).then(r => r.data)
@@ -4262,7 +4264,7 @@ function TaskChecklist({ app }: { app: Application }) {
               {t.done && <Check width={10} height={10} style={{ color: "#34d399", marginBottom: 1 }} />}
             </button>
             <span style={{ flex: 1, fontSize: 12.5, color: t.done ? "var(--fg-3)" : "var(--fg-1)", textDecoration: t.done ? "line-through" : "none", transition: "all 0.15s" }}>
-              {t.title}
+              {taskTitle(tCommon, t)}
             </span>
             <button className="btn btn-ghost btn-icon task-del" style={{ padding: 2, opacity: 0 }} onClick={() => del(t)}>
               <Trash width={11} height={11} />
@@ -4396,7 +4398,7 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
       {details.format === "onsite" && (
         <div style={{ marginBottom: 14 }}>
           <div style={lbl}>{t("interview.address")}</div>
-          <input type="text" value={details.location ?? ""} placeholder="Bahnhofstrasse 1, 8001 Zürich" style={inp}
+          <input type="text" value={details.location ?? ""} placeholder={i18n.t("ui.locationPh")} style={inp}
             onChange={e => setDetails(d => ({ ...d, location: e.target.value }))}
             onBlur={e => save({ location: e.target.value || undefined })} />
         </div>
@@ -4433,7 +4435,7 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
       {/* Interviewer */}
       <div style={{ marginBottom: 14 }}>
         <div style={lbl}>{t("interview.interviewers")}</div>
-        <input type="text" value={details.interviewer ?? ""} placeholder="Max Muster (HR), Anna Schmidt (Fachteam)" style={inp}
+        <input type="text" value={details.interviewer ?? ""} placeholder={i18n.t("ui.interviewerPh")} style={inp}
           onChange={e => setDetails(d => ({ ...d, interviewer: e.target.value }))}
           onBlur={e => save({ interviewer: e.target.value || undefined })} />
       </div>
@@ -4441,7 +4443,7 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
       {/* Notes */}
       <div style={{ marginBottom: 14 }}>
         <div style={lbl}>{t("interview.notes")}</div>
-        <textarea value={details.notes ?? ""} placeholder="Portfolio mitbringen, Laptop vorbereiten…" rows={2}
+        <textarea value={details.notes ?? ""} placeholder={i18n.t("ui.ivNotesPh")} rows={2}
           style={{ ...inp, resize: "vertical", lineHeight: 1.5 }}
           onChange={e => setDetails(d => ({ ...d, notes: e.target.value }))}
           onBlur={e => save({ notes: e.target.value || undefined })} />
@@ -5043,6 +5045,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
   aiResults?: Record<string, { data: unknown; createdAt: Date }>;
 }) {
   const { t } = useTranslation();
+  const { t: tStagesAct } = useTranslation("stages");
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const { data: activities = [], refetch } = useQuery<ApplicationActivity[]>({
@@ -5203,7 +5206,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
               {i < activities.length - 1 && <div style={{ width: 1, flex: 1, background: "var(--border-2)", marginTop: 4 }} />}
             </div>
             <div style={{ flex: 1, paddingBottom: 4 }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-1)" }}>{act.title}</div>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: "var(--fg-1)" }}>{activityTitle(t, tStagesAct, act)}</div>
               {act.description && <div style={{ fontSize: 11.5, color: "var(--fg-2)", marginTop: 2 }}>{act.description}</div>}
               <div style={{ fontSize: 10.5, color: "var(--fg-3)", fontFamily: "var(--font-mono)", marginTop: 3 }}>
                 {new Date(act.activityDate).toLocaleString()}
@@ -5922,7 +5925,7 @@ export function DetailDrawer({ app, onClose, onArchived }: Props) {
 
       {showDeleteModal && (
         <ConfirmModal
-          title="Bewerbung löschen"
+          title={i18n.t("ui.deleteApplication")}
           description={`„${app.role}" bei ${app.company} wird endgültig gelöscht — alle Angaben, Dokumente, Aktivitäten und Kontakte werden entfernt. Diese Aktion kann nicht rückgängig gemacht werden.`}
           confirmLabel="Endgültig löschen"
           confirmColor="#f43f5e"

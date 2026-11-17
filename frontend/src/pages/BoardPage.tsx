@@ -62,6 +62,7 @@ function FilterDropdown({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const { t: tStages } = useTranslation("stages");
   const ref = useRef<HTMLDivElement>(null);
   const allSelected = visible.length === 0 || visible.length === ALL_STAGES.length;
 
@@ -104,7 +105,7 @@ function FilterDropdown({
             cursor: "pointer", fontFamily: "var(--font-sans)", transition: "background 0.1s"
           }}>
             <span style={{ width: 10, height: 10, borderRadius: 3, flexShrink: 0, background: active ? s.color : "var(--border)", transition: "background 0.1s" }} />
-            <span style={{ flex: 1, fontSize: 13, fontWeight: active ? 600 : 400, color: active ? "var(--fg-1)" : "var(--fg-3)", textAlign: "left" }}>{s.label}</span>
+            <span style={{ flex: 1, fontSize: 13, fontWeight: active ? 600 : 400, color: active ? "var(--fg-1)" : "var(--fg-3)", textAlign: "left" }}>{tStages(s.id, { defaultValue: s.label })}</span>
             {active && !allSelected && <Check width={12} height={12} style={{ color: s.color, flexShrink: 0 }} />}
           </button>
         );

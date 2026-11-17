@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import i18n from "../i18n";
 import { Refresh, CheckCircle, WarningCircle, RefreshCircle, Link, LinkSlash, Download, Upload, Database, Shield, Key, LogOut, Trash, Folder, OpenNewWindow, Calendar, InfoCircle, Table2Columns } from "iconoir-react";
 import { useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -81,7 +82,7 @@ function LmStudioSection() {
           <button
             className="btn btn-secondary btn-icon"
             onClick={() => fetchModels(ai.lmStudioUrl || "http://localhost:1234")}
-            title="Test connection"
+            title={i18n.t("ui.testConnection")}
           >
             {status === "loading"
               ? <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} />
@@ -431,7 +432,7 @@ function OllamaSection() {
           <button
             className="btn btn-secondary btn-icon"
             onClick={() => fetchModels(ai.ollamaUrl || "http://localhost:11434")}
-            title="Test connection"
+            title={i18n.t("ui.testConnection")}
           >
             {status === "loading"
               ? <RefreshCircle width={13} height={13} style={{ animation: "spin 1s linear infinite" }} />
@@ -1019,7 +1020,7 @@ function GoogleSection() {
                 <div style={{ fontSize: 10, color: "var(--fg-3)", fontFamily: "var(--font-mono)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{folderInfo.id}</div>
               </div>
               <a href={folderInfo.url} target="_blank" rel="noreferrer"
-                style={{ color: "var(--accent)", display: "flex", flexShrink: 0 }} title="In Drive öffnen">
+                style={{ color: "var(--accent)", display: "flex", flexShrink: 0 }} title={i18n.t("ui.openInDrive")}>
                 <OpenNewWindow width={12} height={12} />
               </a>
               <button className="btn btn-ghost" style={{ fontSize: 11, padding: "3px 8px" }} onClick={clearFolder}>
@@ -1671,7 +1672,7 @@ function SecuritySection() {
                       <div style={{ fontSize: 12, fontWeight: 600, color: "var(--fg-1)" }}>{cr.deviceName ?? t("settings.passkeyUnknown")}</div>
                       <div style={{ fontSize: 11, color: "var(--fg-3)" }}>{t("settings.passkeyAddedOn")} {new Date(cr.createdAt).toLocaleDateString()}</div>
                     </div>
-                    <button className="btn btn-ghost btn-icon" onClick={() => deleteCred(cr.id)} title="Entfernen"><Trash width={12} height={12} /></button>
+                    <button className="btn btn-ghost btn-icon" onClick={() => deleteCred(cr.id)} title={i18n.t("ui.remove")}><Trash width={12} height={12} /></button>
                   </div>
                 ))}
               </div>
@@ -1725,8 +1726,8 @@ export function SettingsPage() {
               </div>
               <div className="settings-row-right">
                 <div className="theme-toggle">
-                  <button className={theme === "light" ? "active" : ""} onClick={() => setTheme("light")}>Light</button>
-                  <button className={theme === "dark"  ? "active" : ""} onClick={() => setTheme("dark")}>Dark</button>
+                  <button className={theme === "light" ? "active" : ""} onClick={() => setTheme("light")}>{i18n.t("ui.light")}</button>
+                  <button className={theme === "dark"  ? "active" : ""} onClick={() => setTheme("dark")}>{i18n.t("ui.dark")}</button>
                 </div>
               </div>
             </div>

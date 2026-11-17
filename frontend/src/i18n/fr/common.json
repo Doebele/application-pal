@@ -137,7 +137,65 @@
     "label": "Tâches",
     "addTask": "+ Ajouter une tâche",
     "none": "Aucune tâche pour cette phase",
-    "newTask": "Nouvelle tâche…"
+    "newTask": "Nouvelle tâche…",
+    "defaults": {
+      "import_validating": {
+        "0": "Vérifier la pertinence",
+        "1": "Effectuer les vérifications",
+        "2": "Vérifier le profil LinkedIn",
+        "3": "Mettre en forme la description",
+        "4": "Description du poste entièrement saisie",
+        "5": "Score de correspondance IA calculé",
+        "6": "Pertinence décidée"
+      },
+      "preparing_cv": {
+        "0": "CV principal mis à jour",
+        "1": "Expériences pertinentes identifiées",
+        "2": "Document CV créé",
+        "3": "Mise en forme vérifiée"
+      },
+      "preparing_letter": {
+        "0": "Brouillon de lettre créé",
+        "1": "Personnalisée pour l’entreprise",
+        "2": "Orthographe vérifiée",
+        "3": "Longueur adaptée (1 page max.)"
+      },
+      "application_sent": {
+        "0": "Candidature entièrement déposée",
+        "1": "Confirmation reçue",
+        "2": "Date de relance fixée",
+        "3": "Contact RH noté"
+      },
+      "pending": {
+        "0": "Site web de l’entreprise analysé",
+        "1": "Avis Glassdoor vérifiés",
+        "2": "Profils LinkedIn des contacts consultés",
+        "3": "Actualités de l’entreprise lues"
+      },
+      "interview_1": {
+        "0": "Logistique confirmée (heure / lieu / format)",
+        "1": "Documents préparés",
+        "2": "Questions spécifiques au poste préparées",
+        "3": "Exemples STAR tirés de l’expérience notés",
+        "4": "Questions personnelles formulées"
+      },
+      "interview_2": {
+        "0": "Enseignements du 1er entretien notés",
+        "1": "Négociation salariale préparée",
+        "2": "Références prêtes",
+        "3": "Questions techniques avancées étudiées"
+      },
+      "rejected": {
+        "0": "Motif du refus (si connu) noté",
+        "1": "Enseignements pour les prochaines candidatures consignés"
+      },
+      "accepted": {
+        "0": "Détails du contrat vérifiés",
+        "1": "Date de début confirmée",
+        "2": "Autres candidatures en cours informées",
+        "3": "Désistements pour d’autres postes préparés"
+      }
+    }
   },
   "activities": {
     "label": "Activités",
@@ -146,7 +204,9 @@
     "titlePlaceholder": "Titre…",
     "descPlaceholder": "Description (facultatif)…",
     "minimize": "Réduire",
-    "maximize": "Agrandir"
+    "maximize": "Agrandir",
+    "stageChange": "Étape",
+    "contractOffer": "Offre de contrat"
   },
   "kiResults": "Analyses IA",
   "driveFolder": {
@@ -2164,5 +2224,73 @@
       "resetBtn": "Réinitialiser",
       "resetDone": "Réinitialisé"
     }
+  },
+  "timelineEvents": {
+    "created": "Candidature créée chez {{company}}",
+    "submitted": "Candidature envoyée à {{company}}",
+    "updated": "Mise à jour — maintenant en « {{stage}} »"
+  },
+  "ui": {
+    "copy": "Copier",
+    "open": "Ouvrir",
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "minimize": "Réduire",
+    "maximize": "Agrandir",
+    "fullscreen": "Plein écran",
+    "remove": "Supprimer",
+    "openOriginal": "Ouvrir l'annonce d'origine",
+    "openInDrive": "Ouvrir dans Drive",
+    "testConnection": "Tester la connexion",
+    "deleteApplication": "Supprimer la candidature",
+    "copySection": "Copier la section",
+    "copyPhrase": "Copier la formulation",
+    "copyFailed": "Échec de la copie",
+    "enterDateFirst": "Veuillez d'abord saisir la date",
+    "openedInGcal": "Ouvert dans Google Agenda",
+    "icalDownloaded": "iCal téléchargé",
+    "driveNotConnected": "Google Drive n'est pas connecté. Connectez-le dans Paramètres → Intégrations.",
+    "sessionExpired": "Session expirée — veuillez recharger la page",
+    "roleQuestions": "Questions spécifiques au poste",
+    "myQuestions": "Mes questions",
+    "employees": "Collaborateurs",
+    "points": "Points",
+    "targetSalary": "Salaire visé",
+    "anchor": "Ancrage",
+    "noData": "Aucune donnée",
+    "positive": "Positif",
+    "critical": "Critique",
+    "locationPh": "1 rue du Rhône, 1204 Genève",
+    "interviewerPh": "Marie Dupont (RH), Jean Martin (équipe)",
+    "ivNotesPh": "Apporter le portfolio, préparer l'ordinateur…",
+    "description": "Description",
+    "jobDescriptionPh": "Description du poste…",
+    "pasteJobDescription": "Collez la description du poste ici…",
+    "autoFilled": "Rempli automatiquement…",
+    "fetchingPage": "Chargement de la page",
+    "textInput": "saisie de texte",
+    "readingJob": "Lecture de l'offre",
+    "analyzing": "analyse du contenu",
+    "extracting": "Extraction des champs",
+    "extractMeta": "entreprise · poste · lieu · salaire",
+    "pensum": "Taux d'activité",
+    "workModel": "Modèle de travail",
+    "contract": "Contrat",
+    "onsite": "Sur site",
+    "kbSourceFailed": "La source n'a pas pu être traitée.",
+    "kbSearchPh": "Rechercher une entreprise ou un secteur…",
+    "kbAddSource": "Ajouter une source",
+    "kbSourceHint": "Annonce ou profil d'entreprise",
+    "kbRoleDetail": "Détail du poste",
+    "seniority": "Séniorité",
+    "salary": "Salaire",
+    "requirements": "Exigences",
+    "sources": "Sources",
+    "cultureNotes": "Notes sur la culture",
+    "linkedRoles": "Postes liés",
+    "noRoles": "Aucun poste lié.",
+    "noSources": "Aucune source liée.",
+    "light": "Clair",
+    "dark": "Sombre"
   }
 }

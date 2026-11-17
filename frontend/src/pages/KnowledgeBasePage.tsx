@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import i18n from "../i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
@@ -54,7 +55,7 @@ function AddSourceModal({ onClose, onCreated }: {
       return res.data;
     },
     onSuccess: onCreated,
-    onError: () => setError("Quelle konnte nicht verarbeitet werden.")
+    onError: () => setError(i18n.t("ui.kbSourceFailed"))
   });
 
   return (
@@ -64,7 +65,7 @@ function AddSourceModal({ onClose, onCreated }: {
         <div className="drawer-head">
           <div style={{ flex: 1 }}>
             <div className="eyebrow">Knowledge Base</div>
-            <h2 style={{ margin: "3px 0 0", fontSize: 20 }}>Quelle hinzufügen</h2>
+            <h2 style={{ margin: "3px 0 0", fontSize: 20 }}>{i18n.t("ui.kbAddSource")}</h2>
           </div>
           <button className="icon-btn" onClick={onClose}><Xmark width={15} height={15} /></button>
         </div>
@@ -100,7 +101,7 @@ function AddSourceModal({ onClose, onCreated }: {
             <Upload width={17} height={17} style={{ color: "var(--accent)" }} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700 }}>{file ? file.name : "PDF auswählen"}</div>
-              <div style={{ color: "var(--fg-3)", fontSize: 11 }}>Stelleninserat oder Firmenprofil</div>
+              <div style={{ color: "var(--fg-3)", fontSize: 11 }}>{i18n.t("ui.kbSourceHint")}</div>
             </div>
             <input
               type="file"
@@ -116,7 +117,7 @@ function AddSourceModal({ onClose, onCreated }: {
           {error && <div style={{ color: "var(--red)", fontSize: 12 }}>{error}</div>}
         </div>
         <div className="drawer-footer">
-          <button className="btn btn-ghost" onClick={onClose}>Abbrechen</button>
+          <button className="btn btn-ghost" onClick={onClose}>{i18n.t("ui.cancel")}</button>
           <button
             className="btn btn-primary"
             disabled={ingest.isPending || (!url.trim() && !file)}
@@ -143,7 +144,7 @@ function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () => void }
       <aside className="drawer" style={{ width: 520 }}>
         <div className="drawer-head">
           <div style={{ flex: 1 }}>
-            <div className="eyebrow">Role Detail</div>
+            <div className="eyebrow">{i18n.t("ui.kbRoleDetail")}</div>
             <h2 style={{ margin: "3px 0 0", fontSize: 20 }}>{role?.title ?? "Lade Rolle..."}</h2>
             {role?.company && <div style={{ color: "var(--fg-3)", fontSize: 12 }}>{role.company.name}</div>}
           </div>
@@ -151,15 +152,15 @@ function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () => void }
         </div>
         <div className="drawer-body">
           <div className="stat-box">
-            <div className="stat-label">Seniority</div>
+            <div className="stat-label">{i18n.t("ui.seniority")}</div>
             <div className="stat-value small">{role?.seniority ?? "Nicht erfasst"}</div>
           </div>
           <div className="stat-box">
-            <div className="stat-label">Salär</div>
+            <div className="stat-label">{i18n.t("ui.salary")}</div>
             <div className="stat-value small">{role?.salaryRange ?? "Nicht erfasst"}</div>
           </div>
           <div className="card">
-            <div className="eyebrow" style={{ marginBottom: 8 }}>Anforderungen</div>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>{i18n.t("ui.requirements")}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {(normalizeRequirements(role?.requirements).length ? normalizeRequirements(role?.requirements) : ["Keine Anforderungen erfasst"]).map((item) => (
                 <div key={item} style={{ color: "var(--fg-2)", fontSize: 12 }}>• {item}</div>
@@ -167,7 +168,7 @@ function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () => void }
             </div>
           </div>
           <div className="card">
-            <div className="eyebrow" style={{ marginBottom: 8 }}>Quellen</div>
+            <div className="eyebrow" style={{ marginBottom: 8 }}>{i18n.t("ui.sources")}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {(role?.sources ?? []).map((source) => (
                 <div key={source.id} style={{ display: "flex", gap: 8, alignItems: "center", color: "var(--fg-2)" }}>
@@ -225,7 +226,7 @@ export function KnowledgeBasePage() {
               className="input-line"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Firma oder Branche suchen..."
+              placeholder={i18n.t("ui.kbSearchPh")}
             />
           </div>
 
@@ -282,13 +283,13 @@ export function KnowledgeBasePage() {
               </div>
 
               <div className="card" style={{ marginBottom: 14 }}>
-                <div className="eyebrow" style={{ marginBottom: 8 }}>Culture Notes</div>
+                <div className="eyebrow" style={{ marginBottom: 8 }}>{i18n.t("ui.cultureNotes")}</div>
                 <div style={{ color: "var(--fg-2)" }}>{selectedCompany.cultureNotes ?? "Keine Kulturnotizen extrahiert."}</div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div className="card">
-                  <div className="eyebrow" style={{ marginBottom: 10 }}>Linked Roles</div>
+                  <div className="eyebrow" style={{ marginBottom: 10 }}>{i18n.t("ui.linkedRoles")}</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {selectedCompany.roles.map((role) => (
                       <button
@@ -314,12 +315,12 @@ export function KnowledgeBasePage() {
                         </div>
                       </button>
                     ))}
-                    {selectedCompany.roles.length === 0 && <div style={{ color: "var(--fg-3)" }}>Keine Rollen verknüpft.</div>}
+                    {selectedCompany.roles.length === 0 && <div style={{ color: "var(--fg-3)" }}>{i18n.t("ui.noRoles")}</div>}
                   </div>
                 </div>
 
                 <div className="card">
-                  <div className="eyebrow" style={{ marginBottom: 10 }}>Sources</div>
+                  <div className="eyebrow" style={{ marginBottom: 10 }}>{i18n.t("ui.sources")}</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {selectedCompany.sources.map((source) => (
                       <div key={source.id} style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--fg-2)" }}>
@@ -330,7 +331,7 @@ export function KnowledgeBasePage() {
                         <span className="mono" style={{ fontSize: 10, color: "var(--fg-3)" }}>{source.status}</span>
                       </div>
                     ))}
-                    {selectedCompany.sources.length === 0 && <div style={{ color: "var(--fg-3)" }}>Keine Quellen verknüpft.</div>}
+                    {selectedCompany.sources.length === 0 && <div style={{ color: "var(--fg-3)" }}>{i18n.t("ui.noSources")}</div>}
                   </div>
                 </div>
               </div>
