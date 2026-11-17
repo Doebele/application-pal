@@ -385,6 +385,7 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
   const [ravType, setRavType]           = useState((app as Application & { ravApplicationType?: string }).ravApplicationType ?? "");
   const [ravProof, setRavProof]         = useState((app as Application & { ravProof?: string }).ravProof ?? "");
   const [contractType, setContractType] = useState((app as Application & { contractType?: string }).contractType ?? "");
+  const [applyDeadline, setApplyDeadline] = useState(app.applyDeadline ?? "");
   const [tags, setTags]             = useState<string[]>(parseTags(app.tags));
   const [newTag, setNewTag]         = useState("");
   const [saved, setSaved]           = useState(false);
@@ -457,12 +458,17 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
         </div>
       </div>
 
-      {/* Row 4: Salary + Nächster Schritt */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+      {/* Row 4: Salary + Bewerbungsfrist + Nächster Schritt */}
+      <div style={{ display: "grid", gridTemplateColumns: school ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12 }}>
         {!school && <div className="field">
           <label>{t("overview.salary")}</label>
           <input value={salary} onChange={(e) => setSalary(e.target.value)} onBlur={() => save({ salary })} placeholder="e.g. €80–100k" />
         </div>}
+        <div className="field">
+          <label>{t("agenda.applyDeadline")}</label>
+          <input type="date" value={applyDeadline}
+            onChange={(e) => { setApplyDeadline(e.target.value); save({ applyDeadline: e.target.value || null }); }} />
+        </div>
         <div className="field">
           <label>{t("overview.nextStep")}</label>
           <input value={app.nextDeadline ?? ""} onChange={(e) => save({ nextDeadline: e.target.value })} placeholder="z.B. Interview 15. Mai" />
@@ -4337,6 +4343,7 @@ type InterviewDetails = {
   format?: "onsite" | "video" | "phone";
   location?: string; videoUrl?: string; videoCode?: string; videoProvider?: string;
   interviewer?: string; notes?: string;
+  endDate?: string;   // Schnupperlehre round 1: last taster day (several days)
 };
 const VIDEO_PROVIDERS = ["Zoom", "Microsoft Teams", "Google Meet", "Webex", "Andere"];
 const DURATIONS = [30, 45, 60, 90, 120];
@@ -4406,6 +4413,15 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
             onChange={e => setDetails(d => ({ ...d, time: e.target.value }))}
             onBlur={e => save({ time: e.target.value || undefined })} />
         </div>
+        {/* Taster days usually span several days: "until" replaces the duration */}
+        {round === 1 && app.applicationKind === "schnupperlehre" ? (
+          <div>
+            <div style={lbl}>{t("agenda.tasterUntil")}</div>
+            <input type="date" value={details.endDate ?? ""} min={details.date || undefined} style={inp}
+              onChange={e => setDetails(d => ({ ...d, endDate: e.target.value }))}
+              onBlur={e => save({ endDate: e.target.value || undefined })} />
+          </div>
+        ) : (
         <div>
           <div style={lbl}>{t("interview.duration")}</div>
           <select value={details.duration ?? 60} style={{ ...inp, cursor: "pointer" }}
@@ -4413,6 +4429,7 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
             {DURATIONS.map(d => <option key={d} value={d}>{t("interview.minutes", { count: d })}</option>)}
           </select>
         </div>
+        )}
       </div>
 
       {/* Format */}

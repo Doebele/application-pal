@@ -21,6 +21,8 @@ import {
   applicationsToCalendarEvents,
   activityRowsToCalendarEvents,
   googleCalendarEventsToCalendarEvents,
+  personalDatesFromProfile,
+  personalDatesToCalendarEvents,
   stageColor,
   ALL_STAGES,
   type ActivityRow,
@@ -540,19 +542,27 @@ export function CalendarPage() {
     retry: false,
   });
 
+  // Personal dates from the pupil profile (Multicheck, Stellwerk, Berufsmesse …)
+  const { data: calProfile } = useQuery<{ schoolProfile?: string | null }>({
+    queryKey: ["profile"],
+    queryFn: () => api.get("/api/profile").then(r => r.data),
+  });
+  const personalDates = useMemo(() => personalDatesFromProfile(calProfile?.schoolProfile), [calProfile?.schoolProfile]);
+
   const selectedCalColor = gcalList.find((c) => c.id === filters.googleCalendarId)?.backgroundColor ?? "#a855f7";
 
   const allEvents = useMemo(() => {
     const fromApps       = applicationsToCalendarEvents(applications);
     const fromActivities = activityRowsToCalendarEvents(activityRows);
     const fromGcal       = googleCalendarEventsToCalendarEvents(gcalEvents, selectedCalColor);
+    const fromPersonal   = personalDatesToCalendarEvents(personalDates);
     const seen = new Set<string>();
     const merged: CalendarEvent[] = [];
-    for (const ev of [...fromActivities, ...fromApps, ...fromGcal]) {
+    for (const ev of [...fromActivities, ...fromApps, ...fromPersonal, ...fromGcal]) {
       if (!seen.has(ev.id)) { seen.add(ev.id); merged.push(ev); }
     }
     return merged;
-  }, [applications, activityRows, gcalEvents, selectedCalColor]);
+  }, [applications, activityRows, gcalEvents, selectedCalColor, personalDates]);
 
   const visibleEvents = useMemo(() => filterEvents(allEvents), [allEvents, filterEvents]);
 

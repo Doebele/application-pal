@@ -1,6 +1,7 @@
 import "./sidecar-polyfill.js";
 import { buildSchoolCv, normalizeCvData, schoolCvChecks, schoolCvText, type CvLang, type ProfileIn } from "./school-cv.js";
 import { schoolCvPdf } from "./school-cv-pdf.js";
+import { agendaIcs, buildAgenda, detectDeadline, isIsoDate, type AgendaApp } from "./school-dates.js";
 import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote, parseSchoolProfile, formatSchoolProfile, formatSchoolAnswers, schoolAnglesTask, normalizeTest, schoolLetterChecks, checksForPrompt, SCHOOL_TEST_EXTRACT_PROMPT, stageTasksFor, SCHOOL_STAGE_TASKS, normalizeDebrief, debriefNotes, upsertTasterExperience, letterSimilarity, SIMILAR_LETTER_THRESHOLD, type SchoolAnswers, type SchoolTest } from "./letter-kinds.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
@@ -1739,6 +1740,7 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
           contractType: llm.contractType ?? detectContractType(normalized),
           applicationKind: detectApplicationKind(normalized),
           apprenticeship: detectApprenticeship(normalized),
+          applyDeadline: detectDeadline(normalized, new Date().toISOString().slice(0, 10)),
         });
       }
     } catch (error) {
@@ -1764,6 +1766,7 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
     contractType: detectContractType(normalized),
     applicationKind: detectApplicationKind(normalized),
     apprenticeship: detectApprenticeship(normalized),
+    applyDeadline: detectDeadline(normalized, new Date().toISOString().slice(0, 10)),
   });
 });
 
@@ -3243,9 +3246,6 @@ Antworte NUR mit diesem JSON:
   }
 });
 
-// School tests (Stellwerk, Lernpass plus, Multicheck …): read every document in the category
-// "schultest" and let the model pull out the scores. The user reviews them in the pupil
-// profile — nothing is stored here.
 // ─── Pupil CV (persona Schulabgänger) ─────────────────────────
 const cvLang = (v: string | undefined): CvLang => (v === "en" || v === "fr" ? v : "de");
 
@@ -3311,6 +3311,43 @@ app.post("/api/school-cv/export-doc", async (c) => {
   }
 });
 
+// ─── Dates & reminders (deadlines, taster days, interviews, personal dates) ───
+// `today` comes from the client (its local date) — the container runs in UTC.
+function agendaToday(q: string | undefined): string {
+  return isIsoDate(q) ? q : new Date().toISOString().slice(0, 10);
+}
+
+async function loadAgenda(userId: string, today: string) {
+  const [p] = await db.select({ schoolProfile: userProfile.schoolProfile }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const rows = await db.select({
+    id: applications.id, company: applications.company, role: applications.role, stage: applications.stage,
+    archived: applications.archived, applicationKind: applications.applicationKind, apprenticeship: applications.apprenticeship,
+    applyDeadline: applications.applyDeadline, interview1Details: applications.interview1Details,
+    interview2Details: applications.interview2Details, aiResultsCache: applications.aiResultsCache,
+  }).from(applications).where(eq(applications.userId, userId));
+  return buildAgenda(rows as AgendaApp[], parseSchoolProfile(p?.schoolProfile).dates ?? [], today);
+}
+
+app.get("/api/agenda", async (c) => {
+  const today = agendaToday(c.req.query("today"));
+  return c.json({ today, items: await loadAgenda(getUserId(c), today) });
+});
+
+// Calendar file with alarms on the reminder days — import once into the phone / computer calendar
+app.get("/api/agenda/ics", async (c) => {
+  const today = agendaToday(c.req.query("today"));
+  const q = c.req.query("lang");
+  const lang = q === "en" || q === "fr" ? q : "de";
+  const ics = agendaIcs(await loadAgenda(getUserId(c), today), lang, APP_NAME);
+  return new Response(ics, { headers: {
+    "Content-Type": "text/calendar; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${APP_NAME}-${lang === "de" ? "Termine" : lang === "fr" ? "Rendez-vous" : "Dates"}.ics"`,
+  } });
+});
+
+// School tests (Stellwerk, Lernpass plus, Multicheck …): read every document in the category
+// "schultest" and let the model pull out the scores. The user reviews them in the pupil
+// profile — nothing is stored here.
 app.post("/api/school-profile/extract-tests", async (c) => {
   const userId = getUserId(c);
   const { ai } = await c.req.json<{ ai: AiConfig }>();

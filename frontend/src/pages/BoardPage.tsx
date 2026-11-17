@@ -5,6 +5,8 @@ import { Settings, Plus, Check, ViewGrid, List, NavArrowUp, NavArrowDown } from 
 import type { Application } from "@application-pal/shared";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
+import { AgendaBanner } from "../components/AgendaBanner";
+import { useProfileBasics } from "../lib/persona";
 import { useTranslation } from "react-i18next";
 import { Topbar } from "../components/Topbar";
 import { matchesSearch } from "../lib/search";
@@ -416,6 +418,7 @@ export function BoardPage() {
     ? applications.filter(a => matchesSearch(a, search))
     : applications;
 
+  const { isSchool } = useProfileBasics();
   const selectedApp = rawApplications.find((a) => a.id === selectedApplicationId) ?? null;
 
   const isFiltered = showArchived
@@ -535,6 +538,7 @@ export function BoardPage() {
         searchSuggestions={t("search.suggestions", { returnObjects: true }) as string[]}
         actions={headerActions}
       />
+      {isSchool && !showArchived && <AgendaBanner />}
       {showArchived ? (
         archiveView === "kanban"
           ? <ArchiveKanban applications={displayApplications} onCardClick={setSelectedApplicationId} selectedId={selectedApplicationId} />

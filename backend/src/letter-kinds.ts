@@ -3,6 +3,7 @@
 // Self-check: npx tsx backend/src/letter-kinds.check.ts
 
 import { normalizeCvData, type SchoolCvData } from "./school-cv.js";
+import { normalizePersonalDates, type PersonalDate } from "./school-dates.js";
 
 export type ApplicationKind = "job" | "schnupperlehre" | "lehrstelle" | "praktikum";
 export type ContactGender = "f" | "m" | "x";
@@ -138,6 +139,7 @@ export type SchoolProfile = {
   tests?: SchoolTest[];                                              // Stellwerk, Lernpass plus, Multicheck, Basic-Check
   ravRegistered?: boolean;                                           // registered with the RAV (SEMO, bridge year) → RAV export visible
   cv?: SchoolCvData;                                                 // CV-only fields (school-cv.ts)
+  dates?: PersonalDate[];                                            // Multicheck, Stellwerk, Berufsmesse … (school-dates.ts)
 };
 
 /** Scale of a school test: stellwerk = 200–800 (norm mean 500), stanine = 1–9 (Lernpass plus PSM), percent = 0–100. */
@@ -180,6 +182,7 @@ export function parseSchoolProfile(raw: string | null | undefined): SchoolProfil
     tests: arr(j.tests).map(normalizeTest).filter((t): t is SchoolTest => !!t),
     ...(j.ravRegistered === true ? { ravRegistered: true } : {}),
     ...(j.cv && typeof j.cv === "object" ? { cv: normalizeCvData(j.cv) } : {}),
+    ...(Array.isArray(j.dates) ? { dates: normalizePersonalDates(j.dates) } : {}),
   };
 }
 

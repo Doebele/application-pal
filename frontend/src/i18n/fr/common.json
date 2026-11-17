@@ -64,7 +64,8 @@
     "help": "Aide & vue d'ensemble",
     "setupAi": "Configurer l'IA",
     "setupGoogle": "Connecter Google",
-    "schoolCv": "CV"
+    "schoolCv": "CV",
+    "agenda": "Rendez-vous"
   },
   "tabs": {
     "actions": "Actions",
@@ -2735,5 +2736,67 @@
         "ok": "Astuce : joins tes résultats de tests ({{names}}) à la candidature comme document séparé."
       }
     }
+  },
+  "agenda": {
+    "title": "Rendez-vous & délais",
+    "sub": "Ce qui arrive — avec rappels",
+    "intro": "Délais de candidature, stages, entretiens et tes propres rendez-vous au même endroit. La cloche montre à quoi penser aujourd'hui.",
+    "empty": "Pas encore de rendez-vous. Indique le délai de candidature ou les jours de stage dans une candidature — ou ajoute ton propre rendez-vous à droite.",
+    "groups": {
+      "overdue": "Manqués",
+      "today": "Aujourd'hui",
+      "soon": "Cette semaine",
+      "later": "Plus tard"
+    },
+    "kinds": {
+      "deadline": "Délai de candidature",
+      "taster": "Stage d'observation",
+      "interview": "Entretien",
+      "followup": "Après le stage",
+      "personal": "Rendez-vous"
+    },
+    "personalKinds": {
+      "test": "Test",
+      "fair": "Salon des métiers",
+      "info": "Séance d'information",
+      "counselling": "Orientation professionnelle",
+      "other": "Rendez-vous"
+    },
+    "placeholders": {
+      "test": "p. ex. Multicheck, Stellwerk",
+      "fair": "p. ex. salon des métiers",
+      "info": "p. ex. soirée d'information",
+      "counselling": "p. ex. entretien à l'orientation",
+      "other": "Qu'est-ce qui est prévu ?"
+    },
+    "followupHint": "Remercie et note ton retour",
+    "running": "en cours",
+    "today": "aujourd'hui",
+    "tomorrow": "demain",
+    "inDays_one": "dans {{count}} jour",
+    "inDays_other": "dans {{count}} jours",
+    "overdue_one": "il y a {{count}} jour",
+    "overdue_other": "il y a {{count}} jours",
+    "reminderToday": "Rappel aujourd'hui",
+    "addGoogle": "Ajouter à Google Agenda",
+    "ics": "Ajouter au calendrier",
+    "fileName": "Rendez-vous",
+    "icsHint": "« Ajouter au calendrier » télécharge un fichier calendrier (.ics) avec rappels — ouvre-le sur ton téléphone ou ton ordinateur et ton calendrier te le rappellera à temps. Télécharge-le à nouveau après avoir ajouté des rendez-vous.",
+    "ownTitle": "Tes propres rendez-vous",
+    "ownSub": "Tests comme Multicheck ou Stellwerk, salons des métiers, soirées d'information, rendez-vous d'orientation.",
+    "kind": "Type",
+    "what": "Quoi",
+    "date": "Date",
+    "time": "Heure",
+    "place": "Lieu",
+    "add": "Ajouter",
+    "remove": "Retirer",
+    "whereDeadlines": "Indique le délai de candidature dans les détails de la candidature (l'import le détecte si possible). Les jours de stage s'indiquent dans la phase « Stage / entretien ».",
+    "applyDeadline": "Délai de candidature",
+    "tasterUntil": "jusqu'au (dernier jour)",
+    "bannerTitle_one": "1 rappel :",
+    "bannerTitle_other": "{{count}} rappels :",
+    "bannerOpen": "Tous les rendez-vous",
+    "bannerDismiss": "Masquer pour aujourd'hui"
   }
 }

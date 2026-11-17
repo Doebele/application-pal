@@ -64,7 +64,8 @@
     "help": "Hilfe & Übersicht",
     "setupAi": "KI-Modell einrichten",
     "setupGoogle": "Google verbinden",
-    "schoolCv": "Lebenslauf"
+    "schoolCv": "Lebenslauf",
+    "agenda": "Termine"
   },
   "tabs": {
     "actions": "Aktionen",
@@ -2735,5 +2736,67 @@
         "ok": "Tipp: Leg deine Testresultate ({{names}}) der Bewerbung als eigenes Dokument bei."
       }
     }
+  },
+  "agenda": {
+    "title": "Termine & Fristen",
+    "sub": "Was als Nächstes ansteht — mit Erinnerungen",
+    "intro": "Bewerbungsfristen, Schnuppertage, Gespräche und deine eigenen Termine an einem Ort. Die Glocke zeigt, woran du heute denken solltest.",
+    "empty": "Noch keine Termine. Trag bei einer Bewerbung die Bewerbungsfrist oder die Schnuppertage ein — oder rechts einen eigenen Termin.",
+    "groups": {
+      "overdue": "Verpasst",
+      "today": "Heute",
+      "soon": "Diese Woche",
+      "later": "Später"
+    },
+    "kinds": {
+      "deadline": "Bewerbungsfrist",
+      "taster": "Schnuppertage",
+      "interview": "Gespräch",
+      "followup": "Nach dem Schnuppern",
+      "personal": "Termin"
+    },
+    "personalKinds": {
+      "test": "Test",
+      "fair": "Berufsmesse",
+      "info": "Infoveranstaltung",
+      "counselling": "Berufsberatung",
+      "other": "Termin"
+    },
+    "placeholders": {
+      "test": "z. B. Multicheck, Stellwerk",
+      "fair": "z. B. Berufsmesse Zürich",
+      "info": "z. B. Infoabend Lehrbetrieb",
+      "counselling": "z. B. Gespräch BIZ",
+      "other": "Was steht an?"
+    },
+    "followupHint": "Bedank dich und trag deine Rückmeldung ein",
+    "running": "läuft gerade",
+    "today": "heute",
+    "tomorrow": "morgen",
+    "inDays_one": "in {{count}} Tag",
+    "inDays_other": "in {{count}} Tagen",
+    "overdue_one": "seit {{count}} Tag vorbei",
+    "overdue_other": "seit {{count}} Tagen vorbei",
+    "reminderToday": "Heute erinnern",
+    "addGoogle": "In Google Kalender eintragen",
+    "ics": "In Kalender übernehmen",
+    "fileName": "Termine",
+    "icsHint": "„In Kalender übernehmen“ lädt eine Kalenderdatei (.ics) mit Erinnerungen herunter — öffne sie auf dem Handy oder Computer, dann meldet sich dein Kalender rechtzeitig. Lade sie nach neuen Terminen einfach nochmals.",
+    "ownTitle": "Eigene Termine",
+    "ownSub": "Tests wie Multicheck oder Stellwerk, Berufsmessen, Infoabende, Termine bei der Berufsberatung.",
+    "kind": "Art",
+    "what": "Was",
+    "date": "Datum",
+    "time": "Zeit",
+    "place": "Ort",
+    "add": "Termin hinzufügen",
+    "remove": "Entfernen",
+    "whereDeadlines": "Die Bewerbungsfrist trägst du in der Bewerbung unter Details ein (beim Import wird sie, wenn möglich, erkannt). Schnuppertage trägst du in der Phase „Schnuppern / Gespräch“ ein.",
+    "applyDeadline": "Bewerbungsfrist",
+    "tasterUntil": "bis (letzter Tag)",
+    "bannerTitle_one": "1 Erinnerung:",
+    "bannerTitle_other": "{{count}} Erinnerungen:",
+    "bannerOpen": "Alle Termine",
+    "bannerDismiss": "Für heute ausblenden"
   }
 }

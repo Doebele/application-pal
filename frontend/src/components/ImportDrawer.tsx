@@ -141,6 +141,7 @@ type ExtractedRaw = {
   jobType?: string | null;
   workModel?: string | null;
   contractType?: string | null;
+  applyDeadline?: string | null;
   applicationKind?: string | null;
   apprenticeship?: string | null;
 };
@@ -148,7 +149,7 @@ type ExtractedRaw = {
 type FormState = {
   company: string; role: string; contactPerson: string; location: string;
   salary: string; description: string; tags: string[]; source: string;
-  jobType: string; workModel: string; contractType: string;
+  jobType: string; workModel: string; contractType: string; applyDeadline: string;
 };
 
 function parseTags(raw: string | null | undefined): string[] {
@@ -242,7 +243,7 @@ export function ImportDrawer({ onClose }: Props) {
 
   const [form, setForm] = useState<FormState>({
     company: "", role: "", contactPerson: "", location: "", salary: "", description: "", tags: [], source: "",
-    jobType: "", workModel: "", contractType: "",
+    jobType: "", workModel: "", contractType: "", applyDeadline: "",
   });
 
   const usingAi = ai.provider !== "none";
@@ -276,6 +277,7 @@ export function ImportDrawer({ onClose }: Props) {
         jobType:      form.jobType      || null,
         workModel:    form.workModel    || null,
         contractType: form.contractType || null,
+        applyDeadline: form.applyDeadline || null,
         applicationKind: persona === "schulabgaenger" ? kindInfo.applicationKind : null,
         apprenticeship: persona === "schulabgaenger" ? kindInfo.apprenticeship : null,
       }).then((r) => r.data),
@@ -284,7 +286,7 @@ export function ImportDrawer({ onClose }: Props) {
 
   const runExtraction = async () => {
     setPhase("reading"); setStep(0); setLogoUrl(null); setLogoOk(false); setDescExpanded(false);
-    setForm({ company: "", role: "", contactPerson: "", location: "", salary: "", description: "", tags: [], source: "", jobType: "", workModel: "", contractType: "" });
+    setForm({ company: "", role: "", contactPerson: "", location: "", salary: "", description: "", tags: [], source: "", jobType: "", workModel: "", contractType: "", applyDeadline: "" });
     const advance = (n: number, p: ExtractionPhase) => setTimeout(() => { setStep(n); setPhase(p); }, n * 600);
     advance(1, "reading"); advance(2, "extracting"); advance(3, "extracting");
     try {
@@ -305,6 +307,7 @@ export function ImportDrawer({ onClose }: Props) {
           jobType:      result.jobType      ?? "",
           workModel:    result.workModel    ?? "",
           contractType: result.contractType ?? "",
+          applyDeadline: result.applyDeadline ?? "",
         });
       }, 2400);
     } catch { setPhase("idle"); }
@@ -496,6 +499,14 @@ export function ImportDrawer({ onClose }: Props) {
                 ) : phase !== "idle" ? <Skeleton height={28} /> : <div style={{ height: 28 }} />}
               </div>
             </div>
+
+            {/* Application deadline (detected from "Bewerbungsfrist …", editable) */}
+            {ready && (
+              <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase" }}>{i18n.t("agenda.applyDeadline")}</div>
+                <input type="date" value={form.applyDeadline} onChange={e => patch("applyDeadline", e.target.value)}
+                  style={{ fontSize: 12, padding: "3px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontFamily: "var(--font-sans)" }} />              </div>
+            )}
 
             {/* Tags */}
             <div style={{ marginBottom: 10 }}>

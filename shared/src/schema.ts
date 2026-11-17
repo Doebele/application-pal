@@ -105,6 +105,7 @@ export const applications = pgTable("applications", {
   applicationKind: text("application_kind"),       // 'job' | 'schnupperlehre' | 'lehrstelle' | 'praktikum' — null = job
   apprenticeship: text("apprenticeship"),           // Lehrberuf, e.g. 'Schreiner/in EFZ'
   contactGender: text("contact_gender"),            // salutation of contactPerson: 'f' | 'm' | 'x' (neutral) — null = unknown
+  applyDeadline: text("apply_deadline"),            // application deadline 'YYYY-MM-DD' (Bewerbungsfrist) — null = none
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -64,7 +64,8 @@
     "help": "Help & overview",
     "setupAi": "Set up AI model",
     "setupGoogle": "Connect Google",
-    "schoolCv": "CV"
+    "schoolCv": "CV",
+    "agenda": "Dates"
   },
   "tabs": {
     "actions": "Actions",
@@ -2735,5 +2736,67 @@
         "ok": "Tip: attach your test results ({{names}}) to the application as a separate document."
       }
     }
+  },
+  "agenda": {
+    "title": "Dates & deadlines",
+    "sub": "What's coming up — with reminders",
+    "intro": "Application deadlines, taster days, interviews and your own dates in one place. The bell shows what to think of today.",
+    "empty": "No dates yet. Add the application deadline or taster days to an application — or your own date on the right.",
+    "groups": {
+      "overdue": "Missed",
+      "today": "Today",
+      "soon": "This week",
+      "later": "Later"
+    },
+    "kinds": {
+      "deadline": "Application deadline",
+      "taster": "Taster days",
+      "interview": "Interview",
+      "followup": "After the taster days",
+      "personal": "Appointment"
+    },
+    "personalKinds": {
+      "test": "Test",
+      "fair": "Career fair",
+      "info": "Information event",
+      "counselling": "Career counselling",
+      "other": "Appointment"
+    },
+    "placeholders": {
+      "test": "e.g. Multicheck, Stellwerk",
+      "fair": "e.g. career fair Zurich",
+      "info": "e.g. company open evening",
+      "counselling": "e.g. meeting at the careers centre",
+      "other": "What's on?"
+    },
+    "followupHint": "Say thank you and note your feedback",
+    "running": "happening now",
+    "today": "today",
+    "tomorrow": "tomorrow",
+    "inDays_one": "in {{count}} day",
+    "inDays_other": "in {{count}} days",
+    "overdue_one": "{{count}} day ago",
+    "overdue_other": "{{count}} days ago",
+    "reminderToday": "Reminder today",
+    "addGoogle": "Add to Google Calendar",
+    "ics": "Add to calendar",
+    "fileName": "Dates",
+    "icsHint": "“Add to calendar” downloads a calendar file (.ics) with reminders — open it on your phone or computer and your calendar will remind you in time. Download it again after adding new dates.",
+    "ownTitle": "Your own dates",
+    "ownSub": "Tests like Multicheck or Stellwerk, career fairs, open evenings, career counselling appointments.",
+    "kind": "Type",
+    "what": "What",
+    "date": "Date",
+    "time": "Time",
+    "place": "Place",
+    "add": "Add date",
+    "remove": "Remove",
+    "whereDeadlines": "Add the application deadline in the application's details (an import detects it where possible). Add taster days in the “Taster / interview” stage.",
+    "applyDeadline": "Application deadline",
+    "tasterUntil": "until (last day)",
+    "bannerTitle_one": "1 reminder:",
+    "bannerTitle_other": "{{count}} reminders:",
+    "bannerOpen": "All dates",
+    "bannerDismiss": "Hide for today"
   }
 }
