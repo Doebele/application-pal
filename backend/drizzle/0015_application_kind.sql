@@ -4,3 +4,4 @@
 ALTER TABLE "applications" ADD COLUMN IF NOT EXISTS "application_kind" text;
 ALTER TABLE "applications" ADD COLUMN IF NOT EXISTS "apprenticeship" text;
 ALTER TABLE "applications" ADD COLUMN IF NOT EXISTS "contact_gender" text;
+ALTER TABLE "user_profile" ADD COLUMN IF NOT EXISTS "school_profile" text;

@@ -463,7 +463,8 @@
       "zertifikat": "Certificates",
       "portfolio": "Portfolio",
       "figma": "Figma",
-      "sonstiges": "Other"
+      "sonstiges": "Other",
+      "schultest": "School tests"
     },
     "extraUrl": "Link / additional information",
     "linkBtn": "Link",
@@ -954,7 +955,8 @@
         "label": "What I'm good at (strength → example)",
         "hint": "Write each strength with an example that shows it — not “I am reliable” but when you were. One line per strength.",
         "placeholder": "Reliable → I have delivered newspapers every Wednesday for two years.\nGood with my hands → I repair my family's bikes myself.\nTeam player → At my football club I help train the juniors."
-      }
+      },
+      "movedToProfile": "Keep your motivation, experience and strengths with examples in the pupil profile — they are structured there and apply to every letter."
     }
   },
   "letterDraft": {
@@ -1011,7 +1013,12 @@
     "reviewBtnRefresh": "Refresh review",
     "reviewCurrentHintNoVer": "Refers to the current draft",
     "humanizeBtn": "Humanize",
-    "humanizeHint": "Rewrites the current letter to sound more human (style only, no facts changed) and saves it as a new version"
+    "humanizeHint": "Rewrites the current letter to sound more human (style only, no facts changed) and saves it as a new version",
+    "school": {
+      "touchpoints": "Link to the company",
+      "valuesMatch": "Why this trade",
+      "benefits": "What you bring"
+    }
   },
   "rav": {
     "section": "RAV proof sheet",
@@ -2329,5 +2336,106 @@
     "genderM": "Mr",
     "genderX": "Neutral (full name)",
     "salutationPick": "Choose a salutation — otherwise the AI decides"
+  },
+  "school": {
+    "title": "Pupil profile",
+    "intro": "Write this once — the AI uses it for every cover letter. The more concrete your examples, the better the letter. Nothing is invented: if something is missing, the AI leaves a placeholder.",
+    "school": "School & year",
+    "schoolPlaceholder": "e.g. Secondary A, year 9, leaving 2027",
+    "subjects": "Favourite subjects — and why",
+    "subjectsPlaceholder": "e.g. Woodwork (I like building things), Maths (I enjoy puzzles)",
+    "wish": {
+      "title": "Dream jobs & motivation",
+      "sub": "Why does this trade interest you? When did you notice? A concrete experience is stronger than “I am interested in …”.",
+      "add": "Add dream job",
+      "titlePlaceholder": "Trade, e.g. Carpenter EFZ",
+      "whyPlaceholder": "What attracts you to it?",
+      "sincePlaceholder": "When did you notice? e.g. built a shelf in woodwork class"
+    },
+    "exp": {
+      "title": "Experience",
+      "sub": "School projects, hobbies, clubs, chores, small jobs and taster apprenticeships so far — this is your practical background.",
+      "add": "Add experience",
+      "kinds": {
+        "schule": "School / project",
+        "hobby": "Hobby",
+        "verein": "Club / duty",
+        "job": "Small job",
+        "schnupper": "Taster apprenticeship",
+        "anderes": "Other"
+      },
+      "titlePlaceholder": {
+        "schule": "e.g. solid-wood shelf in woodwork class",
+        "hobby": "e.g. repairing bikes",
+        "verein": "e.g. junior training at the football club",
+        "job": "e.g. delivering newspapers",
+        "schnupper": "e.g. taster week carpenter",
+        "anderes": "What did you do?"
+      },
+      "companyPlaceholder": "Company, e.g. Muster Woodworks Ltd",
+      "whatPlaceholder": "What exactly did you do?",
+      "likedPlaceholder": "What did you like or learn?"
+    },
+    "str": {
+      "title": "What I'm good at (strength → example)",
+      "sub": "Not “I am reliable” but when you were. The AI won't claim a strength without an example.",
+      "add": "Add strength",
+      "strengthPlaceholder": "Strength, e.g. Reliable",
+      "examplePlaceholder": "Example, e.g. I have delivered newspapers every Wednesday for two years",
+      "needsExample": "When did you show this? Without an example the strength stays out of the letter."
+    },
+    "tests": {
+      "title": "School tests (Stellwerk, Lernpass plus, Multicheck)",
+      "sub": "Upload the test report under Documents in the category “School tests” and read the values here — or enter them yourself. Check the values: text recognition on scans can make mistakes.",
+      "extract": "Read from documents",
+      "extracting": "Reading…",
+      "add": "Add test",
+      "addResult": "Add area",
+      "toDocuments": "Go to documents",
+      "datePlaceholder": "e.g. Spring 2025",
+      "scales": {
+        "stellwerk": "Stellwerk (200–800)",
+        "stanine": "Profile 1–9 (e.g. Lernpass PSM)",
+        "percent": "Percent (Multicheck, Basic-Check)"
+      },
+      "levels": {
+        "high": "well above avg.",
+        "above": "above avg.",
+        "average": "average",
+        "low": "below avg."
+      },
+      "rule": "Only above-average results reach a cover letter — one or two at most, matching the trade. The personality profile is a self-assessment: it only shows which strengths you can prove with an example.",
+      "noAi": "Choose an AI model in Settings first.",
+      "noDocs": "No documents in the category “School tests”.",
+      "extracted": "{{count}} test(s) imported",
+      "extractFailed": "Reading failed."
+    }
+  },
+  "schoolLetter": {
+    "profileEmpty": "Your pupil profile is still empty. Dream jobs, experience and strengths (with examples) make the letter far more personal.",
+    "knownFrom": "How do you know the company?",
+    "knownFromOptions": {
+      "posting": "Job posting",
+      "website": "Company website",
+      "fair": "Careers fair",
+      "family": "Family / friends",
+      "taster": "Taster day",
+      "counselling": "Careers advice"
+    },
+    "knownFromPlaceholder": "e.g. My uncle did his apprenticeship there",
+    "whyJob": "Why this trade?",
+    "fromProfile": "From profile: {{job}}",
+    "noticed": "noticed",
+    "whyJobPlaceholder": "What attracts you? A concrete experience works best.",
+    "whyCompany": "Why this company?",
+    "whyCompanyPlaceholder": "What do you like about {{company}}? A project, a product, how they train …",
+    "whyCompanyHint": "Tip: “Suggest” below finds concrete links in the posting — pick one.",
+    "bring": "What do you bring? (from your profile)",
+    "bringHint": "Pick 1–2 points that fit the trade — less is more.",
+    "schnupperHere": "Have you done a taster at {{company}}?",
+    "yes": "Yes",
+    "no": "No",
+    "schnupperNotesPlaceholder": "What did you do, what did you like?",
+    "schnupperHint": "A taster apprenticeship at the same company is the strongest argument for an apprenticeship."
   }
 }

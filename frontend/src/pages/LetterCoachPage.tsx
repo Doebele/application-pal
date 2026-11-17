@@ -216,8 +216,22 @@ export function LetterCoachPage() {
         </div>
 
         <Section defaults={defaults} fieldKey="structure" label={t("letterCoach.structure.label")} hint={t(k("structure.hint"))} minRows={6} {...fieldProps("structure")} />
-        <Section defaults={defaults} fieldKey="values" label={t(k("values.label"))} hint={t(k("values.hint"))} placeholder={school ? t("letterCoach.school.values.placeholder") : undefined} {...fieldProps("values")} />
-        <Section defaults={defaults} fieldKey="strengths" label={t(k("strengths.label"))} hint={t(k("strengths.hint"))} placeholder={school ? t("letterCoach.school.strengths.placeholder") : undefined} {...fieldProps("strengths")} />
+        {school && (
+          <div style={{ display: "flex", gap: 10, padding: "12px 14px", borderRadius: 8, border: "1px solid var(--border)", marginBottom: 28, fontSize: 12, color: "var(--fg-2)", lineHeight: 1.6 }}>
+            <ProfileCircle width={16} height={16} style={{ color: "var(--accent)", flexShrink: 0, marginTop: 1 }} />
+            <div>
+              {t("letterCoach.school.movedToProfile")}{" "}
+              <Link to="/profile" style={{ color: "var(--accent)", fontWeight: 600, textDecoration: "none" }}>{t("letterCoach.linkProfile")}</Link>
+            </div>
+          </div>
+        )}
+        {/* School leavers keep motivation + strengths in the pupil profile; old coach text stays visible until emptied */}
+        {(!school || config.values?.trim()) && (
+          <Section defaults={defaults} fieldKey="values" label={t(k("values.label"))} hint={t(k("values.hint"))} placeholder={school ? t("letterCoach.school.values.placeholder") : undefined} {...fieldProps("values")} />
+        )}
+        {(!school || config.strengths?.trim()) && (
+          <Section defaults={defaults} fieldKey="strengths" label={t(k("strengths.label"))} hint={t(k("strengths.hint"))} placeholder={school ? t("letterCoach.school.strengths.placeholder") : undefined} {...fieldProps("strengths")} />
+        )}
         <Section defaults={defaults} fieldKey="phrases" label={t("letterCoach.phrases.label")} hint={t("letterCoach.phrases.hint")} {...fieldProps("phrases")} />
         <Section defaults={defaults} fieldKey="styleRules" label={t("letterCoach.styleRules.label")} hint={t("letterCoach.styleRules.hint")} {...fieldProps("styleRules")} />
         <Section defaults={defaults} fieldKey="noGos" label={t("letterCoach.noGos.label")} hint={t("letterCoach.noGos.hint")} {...fieldProps("noGos")} />

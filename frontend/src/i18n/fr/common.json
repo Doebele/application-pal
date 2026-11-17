@@ -463,7 +463,8 @@
       "zertifikat": "Attestations",
       "portfolio": "Portfolio",
       "figma": "Figma",
-      "sonstiges": "Autres"
+      "sonstiges": "Autres",
+      "schultest": "Tests scolaires"
     },
     "extraUrl": "Lien / informations complémentaires",
     "linkBtn": "Lien",
@@ -954,7 +955,8 @@
         "label": "Ce que je sais bien faire (force → exemple)",
         "hint": "Note chaque force avec un exemple qui la montre — pas « je suis fiable », mais quand tu l'as été. Une ligne par force.",
         "placeholder": "Fiable → Je distribue des journaux chaque mercredi depuis deux ans.\nHabile de mes mains → Je répare moi-même les vélos de ma famille.\nEsprit d'équipe → Au club de foot, j'aide à entraîner les juniors."
-      }
+      },
+      "movedToProfile": "Ta motivation, tes expériences et tes forces avec exemples se gèrent dans le profil d'élève — structurées et valables pour chaque lettre."
     }
   },
   "letterDraft": {
@@ -1011,7 +1013,12 @@
     "reviewBtnRefresh": "Actualiser la révision",
     "reviewCurrentHintNoVer": "Se réfère au brouillon actuel",
     "humanizeBtn": "Humaniser",
-    "humanizeHint": "Réécrit la lettre actuelle de façon plus humaine (style uniquement, sans changer les faits) et l'enregistre comme nouvelle version"
+    "humanizeHint": "Réécrit la lettre actuelle de façon plus humaine (style uniquement, sans changer les faits) et l'enregistre comme nouvelle version",
+    "school": {
+      "touchpoints": "Lien avec l'entreprise",
+      "valuesMatch": "Pourquoi ce métier",
+      "benefits": "Ce que tu apportes"
+    }
   },
   "rav": {
     "section": "Preuve RAV / ORP",
@@ -2329,5 +2336,106 @@
     "genderM": "Monsieur",
     "genderX": "Neutre (nom complet)",
     "salutationPick": "Choisis une formule — sinon l'IA décide"
+  },
+  "school": {
+    "title": "Profil d'élève",
+    "intro": "Tu l'écris une fois — l'IA l'utilise pour chaque lettre. Plus tes exemples sont concrets, meilleure est la lettre. Rien n'est inventé : s'il manque quelque chose, l'IA met un espace réservé.",
+    "school": "École & degré",
+    "schoolPlaceholder": "p. ex. Sec. 9e, fin de scolarité 2027",
+    "subjects": "Branches préférées — et pourquoi",
+    "subjectsPlaceholder": "p. ex. Travaux manuels (j'aime construire), Maths (j'aime réfléchir)",
+    "wish": {
+      "title": "Métiers souhaités & motivation",
+      "sub": "Pourquoi ce métier t'intéresse-t-il ? Quand l'as-tu remarqué ? Une expérience concrète vaut mieux que « Je m'intéresse à … ».",
+      "add": "Ajouter un métier",
+      "titlePlaceholder": "Métier, p. ex. Menuisier/ère CFC",
+      "whyPlaceholder": "Qu'est-ce qui t'attire ?",
+      "sincePlaceholder": "Quand l'as-tu remarqué ? p. ex. étagère construite en travaux manuels"
+    },
+    "exp": {
+      "title": "Expériences",
+      "sub": "Projets scolaires, loisirs, clubs, petits boulots et stages découverte déjà faits — c'est ton expérience pratique.",
+      "add": "Ajouter une expérience",
+      "kinds": {
+        "schule": "École / projet",
+        "hobby": "Loisir",
+        "verein": "Club / tâche",
+        "job": "Petit boulot",
+        "schnupper": "Stage découverte",
+        "anderes": "Autre"
+      },
+      "titlePlaceholder": {
+        "schule": "p. ex. étagère en bois massif",
+        "hobby": "p. ex. réparer des vélos",
+        "verein": "p. ex. entraînement des juniors au foot",
+        "job": "p. ex. distribuer des journaux",
+        "schnupper": "p. ex. semaine de stage menuisier",
+        "anderes": "Qu'as-tu fait ?"
+      },
+      "companyPlaceholder": "Entreprise, p. ex. Menuiserie Exemple SA",
+      "whatPlaceholder": "Qu'as-tu fait concrètement ?",
+      "likedPlaceholder": "Qu'est-ce qui t'a plu ou appris ?"
+    },
+    "str": {
+      "title": "Ce que je sais bien faire (force → exemple)",
+      "sub": "Pas « je suis fiable », mais quand tu l'as été. L'IA n'affirme aucune force sans exemple.",
+      "add": "Ajouter une force",
+      "strengthPlaceholder": "Force, p. ex. Fiable",
+      "examplePlaceholder": "Exemple, p. ex. Je distribue des journaux chaque mercredi depuis deux ans",
+      "needsExample": "Quand l'as-tu montré ? Sans exemple, cette force n'entre pas dans la lettre."
+    },
+    "tests": {
+      "title": "Tests scolaires (Stellwerk, Lernpass plus, Multicheck)",
+      "sub": "Ajoute le rapport sous Documents dans la catégorie « Tests scolaires » et lis les valeurs ici — ou saisis-les toi-même. Vérifie les valeurs : la reconnaissance de texte des scans peut se tromper.",
+      "extract": "Lire depuis les documents",
+      "extracting": "Lecture…",
+      "add": "Ajouter un test",
+      "addResult": "Ajouter un domaine",
+      "toDocuments": "Vers les documents",
+      "datePlaceholder": "p. ex. Printemps 2025",
+      "scales": {
+        "stellwerk": "Stellwerk (200–800)",
+        "stanine": "Profil 1–9 (p. ex. Lernpass PSM)",
+        "percent": "Pourcentage (Multicheck, Basic-Check)"
+      },
+      "levels": {
+        "high": "nettement > moy.",
+        "above": "> moyenne",
+        "average": "moyenne",
+        "low": "< moyenne"
+      },
+      "rule": "Seuls les résultats au-dessus de la moyenne entrent dans la lettre — un ou deux au plus, liés au métier. Le profil de personnalité est une auto-évaluation : il montre seulement quelles forces tu peux prouver par un exemple.",
+      "noAi": "Choisis d'abord un modèle d'IA dans les paramètres.",
+      "noDocs": "Aucun document dans la catégorie « Tests scolaires ».",
+      "extracted": "{{count}} test(s) repris",
+      "extractFailed": "Échec de la lecture."
+    }
+  },
+  "schoolLetter": {
+    "profileEmpty": "Ton profil d'élève est encore vide. Métiers souhaités, expériences et forces (avec exemples) rendent la lettre bien plus personnelle.",
+    "knownFrom": "Comment connais-tu l'entreprise ?",
+    "knownFromOptions": {
+      "posting": "Annonce",
+      "website": "Site de l'entreprise",
+      "fair": "Salon des métiers",
+      "family": "Famille / connaissances",
+      "taster": "Journée découverte",
+      "counselling": "Orientation professionnelle"
+    },
+    "knownFromPlaceholder": "p. ex. Mon oncle y a fait son apprentissage",
+    "whyJob": "Pourquoi ce métier ?",
+    "fromProfile": "Depuis le profil : {{job}}",
+    "noticed": "remarqué",
+    "whyJobPlaceholder": "Qu'est-ce qui t'attire ? Une expérience concrète fonctionne le mieux.",
+    "whyCompany": "Pourquoi cette entreprise ?",
+    "whyCompanyPlaceholder": "Qu'est-ce qui te plaît chez {{company}} ? Un projet, un produit, la formation …",
+    "whyCompanyHint": "Astuce : « Proposer » ci-dessous trouve des liens concrets dans l'annonce — choisis-en un.",
+    "bring": "Qu'apportes-tu ? (depuis ton profil)",
+    "bringHint": "Choisis 1–2 points liés au métier — moins, c'est mieux.",
+    "schnupperHere": "As-tu déjà fait un stage découverte chez {{company}} ?",
+    "yes": "Oui",
+    "no": "Non",
+    "schnupperNotesPlaceholder": "Qu'as-tu fait, qu'est-ce qui t'a plu ?",
+    "schnupperHint": "Un stage découverte dans la même entreprise est l'argument le plus fort pour une place d'apprentissage."
   }
 }

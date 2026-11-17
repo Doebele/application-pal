@@ -3,8 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   Page, Link, MediaImage, Plus, Trash, OpenNewWindow,
   Medal, Group, GraduationCap, Bag, Folder, EditPencil, Check, Xmark, WarningTriangle,
-  List, GridPlus, Expand, Collapse, RefreshCircle, PageEdit, Sparks
-} from "iconoir-react";
+  List, GridPlus, Expand, Collapse, RefreshCircle, PageEdit, Sparks, StatsReport } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
 import { GooglePickerButton, type PickedFile } from "../lib/googlePicker";
@@ -46,7 +45,7 @@ function useProfileDriveFolder(): string {
 import type { UserDocument } from "@application-pal/shared";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Category = "lebenslauf" | "motivationsschreiben" | "zeugnis" | "referenz" | "zertifikat" | "figma" | "portfolio" | "sonstiges";
+type Category = "lebenslauf" | "motivationsschreiben" | "zeugnis" | "referenz" | "zertifikat" | "schultest" | "figma" | "portfolio" | "sonstiges";
 type FileType  = "pdf" | "link" | "figma" | "image" | "gdoc";
 type ViewMode  = "list" | "tabs";
 
@@ -80,6 +79,7 @@ const CATEGORIES: { value: Category; label: string; icon: React.ReactNode; color
   { value: "zeugnis",             label: "Zeugnisse",            icon: <GraduationCap width={14} height={14} />, color: "#3b82f6" },
   { value: "referenz",            label: "Referenzen",           icon: <Group width={14} height={14} />,         color: "#10b981" },
   { value: "zertifikat",          label: "Zertifikate",          icon: <Medal width={14} height={14} />,         color: "#f59e0b" },
+  { value: "schultest",           label: "Schultests",           icon: <StatsReport width={14} height={14} />,   color: "#06b6d4" },
   { value: "portfolio",           label: "Portfolio",            icon: <Bag width={14} height={14} />,     color: "#8b5cf6" },
   { value: "figma",               label: "Figma",                icon: <FigmaIcon size={14} />,     color: "#f24e1e" },
   { value: "sonstiges",           label: "Sonstiges",            icon: <Folder width={14} height={14} />,    color: "var(--fg-3)" },

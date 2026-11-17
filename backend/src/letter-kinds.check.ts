@@ -32,3 +32,51 @@ assert.match(schoolLeaverRules("schnupperlehre", "Schreiner/in EFZ"), /kennenler
 assert.match(schoolLeaverRules("lehrstelle", null), /bei Ihnen lernen/);
 
 console.log("letter-kinds: all checks passed");
+
+// ─── pupil profile ───
+import { formatSchoolAnswers, formatSchoolProfile, parseSchoolProfile, sameTrade } from "./letter-kinds.js";
+assert.ok(sameTrade("Schreinerin", "Schreiner/in EFZ"));
+assert.ok(sameTrade("Informatiker", "Informatiker/in EFZ"));
+assert.ok(!sameTrade("Koch", "Kauffrau EFZ"));
+const sp = parseSchoolProfile(JSON.stringify({
+  school: "Sek A, 9. Klasse",
+  wishJobs: [{ title: "Koch" }, { title: "Schreinerin", why: "Holz", since: "Werkunterricht" }],
+  experiences: [{ kind: "schnupper", title: "Schnupperwoche", company: "Holzbau Muster AG", liked: "Maschinen" }, { kind: "bogus", title: "Ämtli" }, { title: "" }],
+  strengths: [{ strength: "Zuverlässig", example: "Zeitungen austragen" }, { strength: "Kreativ" }],
+}));
+assert.equal(sp.experiences?.length, 2);
+assert.equal(sp.experiences?.[1].kind, "anderes");
+const block = formatSchoolProfile(sp, "Schreiner/in EFZ", "Holzbau Muster");
+assert.ok(block.indexOf("Schreinerin (passt") < block.indexOf("Koch"));
+assert.match(block, /IN DIESEM BETRIEB/);
+assert.match(block, /Kreativ → \(noch kein Beispiel/);
+assert.equal(formatSchoolProfile({}, null, null), "");
+assert.equal(parseSchoolProfile("not json").school, undefined);
+assert.equal(formatSchoolAnswers({ whyJob: "x" }, "job"), "");
+assert.match(formatSchoolAnswers({ schnupperHere: "yes", schnupperNotes: "Fenster gebaut" }, "lehrstelle"), /stärkste Argument/);
+assert.doesNotMatch(formatSchoolAnswers({ schnupperHere: "yes" }, "schnupperlehre"), /geschnuppert/);
+console.log("letter-kinds: pupil profile checks passed");
+
+// ─── school tests ───
+import { formatSchoolTests, guessScale, normalizeTest, testLevel } from "./letter-kinds.js";
+assert.equal(guessScale("Stellwerk 8"), "stellwerk");
+assert.equal(guessScale("Lernpass plus PSM"), "stanine");
+assert.equal(guessScale("Multicheck Handwerk"), "percent");
+assert.equal(testLevel("stellwerk", 642), "high");
+assert.equal(testLevel("stellwerk", 569), "above");
+assert.equal(testLevel("stellwerk", 514), "average");
+assert.equal(testLevel("stanine", 8), "high");
+assert.equal(testLevel("stanine", 1), "low");
+const nt = normalizeTest({ name: "Stellwerk 8", results: [{ area: "Englisch", score: 642 }, { area: "Fehler", score: 1200 }, { area: "", score: 500 }] });
+assert.equal(nt?.results.length, 1);
+assert.equal(normalizeTest({ name: "" }), null);
+const tb = formatSchoolTests([
+  { name: "Stellwerk 8", date: "Frühjahr 2025", scale: "stellwerk", results: [{ area: "Englisch", score: 642 }, { area: "Französisch", score: 514 }] },
+  { name: "Lernpass plus PSM", scale: "stanine", results: [{ area: "Teamorientierung", score: 8 }, { area: "Zuverlässigkeit", score: 1 }] },
+]);
+assert.match(tb, /Englisch: 642 Punkte — deutlich über/);
+assert.doesNotMatch(tb, /Französisch/);
+assert.doesNotMatch(tb, /Zuverlässigkeit/);
+assert.match(tb, /Teamorientierung/);
+assert.equal(formatSchoolTests([{ name: "Stellwerk 8", scale: "stellwerk", results: [{ area: "Mathe", score: 480 }] }]), "");
+console.log("letter-kinds: school test checks passed");

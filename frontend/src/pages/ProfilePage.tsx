@@ -8,6 +8,7 @@ import imgBerufsumsteiger  from "../assets/personas/berufsumsteiger.png";
 import { OpenNewWindow, FloppyDisk, User, Linkedin, Page, RefreshCircle, Expand, Collapse, LightBulb } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { LinkedInConnection } from "../components/linkedin/LinkedInConnection";
+import { SchoolProfileSection, parseSchoolProfile } from "../components/SchoolProfileSection";
 import { api } from "../lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UserProfile } from "@application-pal/shared";
@@ -205,6 +206,12 @@ export function ProfilePage() {
             </div>
           )}
         </div>
+
+        {/* Pupil profile (school leavers): motivation, experiences, strength → example, school tests */}
+        {profile.persona === "schulabgaenger" && (
+          <SchoolProfileSection value={parseSchoolProfile(profile.schoolProfile)}
+            onSave={(next) => { void save({ schoolProfile: JSON.stringify(next) }).then(() => queryClient.invalidateQueries({ queryKey: ["profile"] })); }} />
+        )}
 
         {/* Personal Info */}
         <div style={{ marginBottom: 32 }}>

@@ -463,7 +463,8 @@
       "zertifikat": "Zertifikate",
       "portfolio": "Portfolio",
       "figma": "Figma",
-      "sonstiges": "Sonstiges"
+      "sonstiges": "Sonstiges",
+      "schultest": "Schultests"
     },
     "extraUrl": "Link / weitere Informationen",
     "linkBtn": "Link",
@@ -954,7 +955,8 @@
         "label": "Was ich gut kann (Stärke → Beispiel)",
         "hint": "Schreib jede Stärke mit einem Beispiel auf, das sie zeigt — nicht „ich bin zuverlässig“, sondern wann du es warst. Eine Zeile pro Stärke.",
         "placeholder": "Zuverlässig → Ich trage seit zwei Jahren jeden Mittwoch Zeitungen aus.\nGeschickt mit den Händen → Ich repariere die Velos meiner Familie selbst.\nTeamfähig → Im Fussballclub helfe ich beim Training der Junioren."
-      }
+      },
+      "movedToProfile": "Motivation, Erfahrungen und Stärken mit Beispielen pflegst du im Schülerprofil — dort sind sie strukturiert und gelten für jedes Anschreiben."
     }
   },
   "letterDraft": {
@@ -1011,7 +1013,12 @@
     "reviewBtnRefresh": "Review aktualisieren",
     "reviewCurrentHintNoVer": "Bezieht sich auf den aktuellen Entwurf",
     "humanizeBtn": "Vermenschlichen",
-    "humanizeHint": "Schreibt das aktuelle Anschreiben natürlicher/menschlicher um (nur Stil, keine Fakten) und speichert es als neue Version"
+    "humanizeHint": "Schreibt das aktuelle Anschreiben natürlicher/menschlicher um (nur Stil, keine Fakten) und speichert es als neue Version",
+    "school": {
+      "touchpoints": "Bezug zum Betrieb",
+      "valuesMatch": "Warum dieser Beruf",
+      "benefits": "Was du mitbringst"
+    }
   },
   "rav": {
     "section": "RAV-Nachweis",
@@ -2329,5 +2336,106 @@
     "genderM": "Herr",
     "genderX": "Neutral (voller Name)",
     "salutationPick": "Bitte Anrede wählen — sonst entscheidet die KI"
+  },
+  "school": {
+    "title": "Schülerprofil",
+    "intro": "Das schreibst du einmal — die KI nutzt es für jedes Anschreiben. Je konkreter deine Beispiele, desto besser der Brief. Erfunden wird nichts: Fehlt etwas, setzt die KI einen Platzhalter.",
+    "school": "Schule & Stufe",
+    "schoolPlaceholder": "z.B. Sek A, 9. Klasse, Abschluss 2027",
+    "subjects": "Lieblingsfächer — und warum",
+    "subjectsPlaceholder": "z.B. Werken (ich baue gerne Dinge), Mathe (Knobeln macht mir Spass)",
+    "wish": {
+      "title": "Wunschberufe & Motivation",
+      "sub": "Warum interessiert dich dieser Beruf? Wann hast du das gemerkt? Ein konkretes Erlebnis wirkt stärker als „Ich interessiere mich für …“.",
+      "add": "Wunschberuf hinzufügen",
+      "titlePlaceholder": "Beruf, z.B. Schreiner/in EFZ",
+      "whyPlaceholder": "Was reizt dich daran?",
+      "sincePlaceholder": "Wann hast du das gemerkt? z.B. Regal im Werkunterricht gebaut"
+    },
+    "exp": {
+      "title": "Erfahrungen",
+      "sub": "Schulprojekte, Hobbys, Vereine, Ämtli, Taschengeldjobs und bisherige Schnupperlehren — das ist dein Praxisbezug.",
+      "add": "Erfahrung hinzufügen",
+      "kinds": {
+        "schule": "Schule / Projekt",
+        "hobby": "Hobby",
+        "verein": "Verein / Ämtli",
+        "job": "Taschengeldjob",
+        "schnupper": "Schnupperlehre",
+        "anderes": "Sonstiges"
+      },
+      "titlePlaceholder": {
+        "schule": "z.B. Regal aus Massivholz im Werkunterricht",
+        "hobby": "z.B. Velos reparieren",
+        "verein": "z.B. Junioren-Training im Fussballclub",
+        "job": "z.B. Zeitungen austragen",
+        "schnupper": "z.B. Schnupperwoche Schreiner/in",
+        "anderes": "Was hast du gemacht?"
+      },
+      "companyPlaceholder": "Betrieb, z.B. Holzbau Muster AG",
+      "whatPlaceholder": "Was hast du konkret gemacht?",
+      "likedPlaceholder": "Was hat dir gefallen oder was hast du gelernt?"
+    },
+    "str": {
+      "title": "Was ich gut kann (Stärke → Beispiel)",
+      "sub": "Nicht „ich bin zuverlässig“, sondern wann du es warst. Eine Stärke ohne Beispiel behauptet die KI nicht.",
+      "add": "Stärke hinzufügen",
+      "strengthPlaceholder": "Stärke, z.B. Zuverlässig",
+      "examplePlaceholder": "Beispiel, z.B. Seit zwei Jahren trage ich jeden Mittwoch Zeitungen aus",
+      "needsExample": "Wann hast du das gezeigt? Ohne Beispiel kommt die Stärke nicht in den Brief."
+    },
+    "tests": {
+      "title": "Schultests (Stellwerk, Lernpass plus, Multicheck)",
+      "sub": "Lade den Testbericht unter Dokumente in der Kategorie „Schultests“ hoch und lies die Werte hier aus — oder trag sie selbst ein. Prüfe die Werte: Bei Scans kann die Texterkennung Fehler machen.",
+      "extract": "Aus Dokumenten auslesen",
+      "extracting": "Wird ausgelesen…",
+      "add": "Test hinzufügen",
+      "addResult": "Bereich hinzufügen",
+      "toDocuments": "Zu den Dokumenten",
+      "datePlaceholder": "z.B. Frühjahr 2025",
+      "scales": {
+        "stellwerk": "Stellwerk (200–800)",
+        "stanine": "Profil 1–9 (z.B. Lernpass PSM)",
+        "percent": "Prozent (Multicheck, Basic-Check)"
+      },
+      "levels": {
+        "high": "deutlich über Ø",
+        "above": "über Ø",
+        "average": "Durchschnitt",
+        "low": "unter Ø"
+      },
+      "rule": "Nur Ergebnisse über dem Durchschnitt gelangen in Anschreiben — höchstens ein bis zwei, die zum Beruf passen. Das Persönlichkeitsprofil ist eine Selbsteinschätzung: Es zeigt nur, welche Stärken du mit einem Beispiel belegen kannst.",
+      "noAi": "Bitte zuerst ein KI-Modell in den Einstellungen wählen.",
+      "noDocs": "Keine Dokumente in der Kategorie „Schultests“ gefunden.",
+      "extracted": "{{count}} Test(s) übernommen",
+      "extractFailed": "Auslesen fehlgeschlagen."
+    }
+  },
+  "schoolLetter": {
+    "profileEmpty": "Dein Schülerprofil ist noch leer. Mit Wunschberufen, Erfahrungen und Stärken (mit Beispielen) wird der Brief viel persönlicher.",
+    "knownFrom": "Woher kennst du den Betrieb?",
+    "knownFromOptions": {
+      "posting": "Stelleninserat",
+      "website": "Website des Betriebs",
+      "fair": "Berufsmesse",
+      "family": "Familie / Bekannte",
+      "taster": "Schnuppertag",
+      "counselling": "Berufsberatung"
+    },
+    "knownFromPlaceholder": "z.B. Mein Onkel hat dort seine Lehre gemacht",
+    "whyJob": "Warum dieser Beruf?",
+    "fromProfile": "Aus Profil: {{job}}",
+    "noticed": "gemerkt",
+    "whyJobPlaceholder": "Was reizt dich daran? Ein konkretes Erlebnis wirkt am stärksten.",
+    "whyCompany": "Warum dieser Betrieb?",
+    "whyCompanyPlaceholder": "Was gefällt dir an {{company}}? Ein Projekt, ein Produkt, wie sie ausbilden …",
+    "whyCompanyHint": "Tipp: „Vorschlagen“ unten liefert konkrete Bezüge aus dem Inserat — wähle einen aus.",
+    "bring": "Was bringst du mit? (aus deinem Profil)",
+    "bringHint": "Wähle 1–2 Punkte, die zum Beruf passen — weniger ist mehr.",
+    "schnupperHere": "Hast du bei {{company}} schon geschnuppert?",
+    "yes": "Ja",
+    "no": "Nein",
+    "schnupperNotesPlaceholder": "Was hast du gemacht, was hat dir gefallen?",
+    "schnupperHint": "Eine Schnupperlehre im selben Betrieb ist das stärkste Argument für eine Lehrstelle."
   }
 }

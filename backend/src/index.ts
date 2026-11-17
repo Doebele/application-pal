@@ -1,5 +1,5 @@
 import "./sidecar-polyfill.js";
-import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote } from "./letter-kinds.js";
+import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote, parseSchoolProfile, formatSchoolProfile, formatSchoolAnswers, schoolAnglesTask, normalizeTest, SCHOOL_TEST_EXTRACT_PROMPT, type SchoolAnswers, type SchoolTest } from "./letter-kinds.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
@@ -2137,6 +2137,12 @@ app.delete("/api/documents/:id", async (c) => {
 // the master CV, so every endpoint using masterCv as candidate context should also use this.
 const CONTEXT_DOC_CATEGORIES = ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"];
 
+// Pupil profile (+ strong test results) for school-leaver letters; "" for everyone else.
+function schoolContext(profile: { persona?: string | null; schoolProfile?: string | null } | undefined, app_: { applicationKind?: string | null; apprenticeship?: string | null; company: string }): string {
+  if (profile?.persona !== "schulabgaenger" && !isSchoolKind(normalizeKind(app_.applicationKind))) return "";
+  return formatSchoolProfile(parseSchoolProfile(profile?.schoolProfile), app_.apprenticeship, app_.company);
+}
+
 async function loadDocumentsContext(userId: string): Promise<string> {
   const docs = await db.select().from(userDocuments)
     .where(and(eq(userDocuments.userId, userId), inArray(userDocuments.category, CONTEXT_DOC_CATEGORIES)));
@@ -3072,7 +3078,7 @@ app.post("/api/applications/:id/ai/cover-letter", async (c) => {
   const id = c.req.param("id");
   const { ai, additionalContext, language: bodyLang, letterInputs } = await c.req.json<{
     ai: AiConfig; additionalContext?: string; language?: string;
-    letterInputs?: { angles?: string[]; jobNotes?: string; openingSentence?: string };
+    letterInputs?: { angles?: string[]; jobNotes?: string; openingSentence?: string; school?: SchoolAnswers };
   }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
@@ -3096,6 +3102,8 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
   if (profile?.personalNotes) candidateParts.push(`Persönliche Stichpunkte: ${profile.personalNotes.slice(0, 400)}`);
   const coverLetterDocsContext = await loadDocumentsContext(userId);
   if (coverLetterDocsContext) candidateParts.push(coverLetterDocsContext);
+  const coverSchool = schoolContext(profile, app_);
+  if (coverSchool) candidateParts.unshift(coverSchool);
   let user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}${app_.apprenticeship ? `\nLehrberuf: ${app_.apprenticeship}` : ""}\nUnternehmen: ${app_.company}\nAnsprechpartner: ${app_.contactPerson ?? ""}\nOrt: ${app_.location ?? ""}\nGehalt: ${app_.salary ?? ""}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
   if (letterInputs?.angles?.length) {
     user += `\n\n## Vom Kandidaten ausgewählte Kernaussagen für dieses Anschreiben (unbedingt verwenden)\n${letterInputs.angles.map(a => `- ${a}`).join("\n")}`;
@@ -3103,6 +3111,8 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
   if (letterInputs?.jobNotes?.trim()) {
     user += `\n\n## Individuelle Angaben zu dieser Stelle\n${letterInputs.jobNotes.trim().slice(0, 800)}`;
   }
+  const coverAnswers = formatSchoolAnswers(letterInputs?.school, kind);
+  if (coverAnswers) user += `\n\n${coverAnswers}`;
   if (letterInputs?.openingSentence?.trim()) {
     user += `\n\n## Gewählter Eröffnungssatz (beginne das Anschreiben mit diesem Satz — leichte Anpassungen erlaubt)\n${letterInputs.openingSentence.trim().slice(0, 500)}`;
   }
@@ -3170,7 +3180,11 @@ app.post("/api/applications/:id/ai/letter-angles", async (c) => {
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const letterGuidance = buildLetterGuidance(profile?.letterConfig, profile?.persona);
   const anglesHumanize = humanizerPrompt(lang_, profile?.letterConfig);
-  const system = `${langPrompt(lang_)} Du bist ein Karriere-Coach. Analysiere das Kandidatenprofil und die Stellenbeschreibung und schlage konkrete Bausteine für ein individuelles Anschreiben vor.${anglesHumanize ? `\n\n${anglesHumanize}` : ""}
+  const anglesKind = normalizeKind(app_.applicationKind);
+  const anglesTask = isSchoolKind(anglesKind)
+    ? schoolAnglesTask(anglesKind, app_.apprenticeship)
+    : "Du bist ein Karriere-Coach. Analysiere das Kandidatenprofil und die Stellenbeschreibung und schlage konkrete Bausteine für ein individuelles Anschreiben vor.";
+  const system = `${langPrompt(lang_)} ${anglesTask}${anglesHumanize ? `\n\n${anglesHumanize}` : ""}
 Antworte NUR mit diesem JSON:
 {
   "beruehrungspunkte": [{ "titel": "<kurzer Titel>", "text": "<1-2 Sätze konkreter Anknüpfungspunkt Kandidat↔Firma/Rolle, geeignet für die Einleitung>" }],  // 3-4
@@ -3183,6 +3197,8 @@ Antworte NUR mit diesem JSON:
   if (profile?.personalNotes) candidateParts.push(`Persönliche Stichpunkte: ${profile.personalNotes.slice(0, 400)}`);
   if (docsContext) candidateParts.push(docsContext);
   if (letterGuidance) candidateParts.push(letterGuidance);
+  const anglesSchool = schoolContext(profile, app_);
+  if (anglesSchool) candidateParts.unshift(anglesSchool);
   const user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
@@ -3197,6 +3213,32 @@ Antworte NUR mit diesem JSON:
     console.error("letter-angles error:", err);
     return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
   }
+});
+
+// School tests (Stellwerk, Lernpass plus, Multicheck …): read every document in the category
+// "schultest" and let the model pull out the scores. The user reviews them in the pupil
+// profile — nothing is stored here.
+app.post("/api/school-profile/extract-tests", async (c) => {
+  const userId = getUserId(c);
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Provider konfiguriert" }, 400);
+  const docs = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.userId, userId), eq(userDocuments.category, "schultest")));
+  if (docs.length === 0) return c.json({ tests: [], errors: [], docs: 0 });
+  const tests: SchoolTest[] = [];
+  const errors: { name: string; error: string }[] = [];
+  for (const doc of docs) {
+    try {
+      const text = await fetchDocumentText(doc, userId);
+      if (!text?.trim()) { errors.push({ name: doc.name, error: "Kein lesbarer Text (Scan ohne Texterkennung?)" }); continue; }
+      const raw = await callAi(SCHOOL_TEST_EXTRACT_PROMPT, `Dokument: ${doc.name}\n\n${text.slice(0, 12000)}`, ai);
+      const parsed = extractJson(raw) as { tests?: unknown[] };
+      for (const t of parsed.tests ?? []) { const n = normalizeTest(t); if (n?.results.length) tests.push(n); }
+    } catch (e) {
+      errors.push({ name: doc.name, error: (e as Error).message });
+    }
+  }
+  return c.json({ tests, errors, docs: docs.length });
 });
 
 // Persists the user's selection/edits from the letter-angles panel (not AI-generated,
@@ -4084,7 +4126,7 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   const id = c.req.param("id");
   const { ai, additionalContext, language: bodyLang, letterInputs } = await c.req.json<{
     ai: AiConfig; additionalContext?: string; language?: string;
-    letterInputs?: { angles?: string[]; jobNotes?: string };
+    letterInputs?: { angles?: string[]; jobNotes?: string; school?: SchoolAnswers };
   }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
@@ -4099,7 +4141,9 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   const system = `${langPrompt(lang_)} ${openingTask}${openingGuidance ? `\n\n${openingGuidance}` : ""}${openingHumanize ? `\n\n${openingHumanize}` : ""} Antworte NUR mit JSON:
 { "saetze": [{ "satz": "<der Eröffnungssatz>", "ansatz": "<kurzes Ansatz-Label>", "erklaerung": "<was diesen Satz in genau diesem Fall speziell/stark macht>", "empfehlung": "<konkrete Empfehlung, wann/wofür man diesen Satz wählen sollte>" }] }`;
   const openingDocsContext = await loadDocumentsContext(userId);
-  let user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}${openingDocsContext ? `\n\n${openingDocsContext}` : ""}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
+  const openingSchool = schoolContext(profile, app_);
+  const openingAnswers = formatSchoolAnswers(letterInputs?.school, openingKind);
+  let user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${openingSchool || (profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt")}${openingDocsContext ? `\n\n${openingDocsContext}` : ""}${openingAnswers ? `\n\n${openingAnswers}` : ""}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
   if (letterInputs?.angles?.length || letterInputs?.jobNotes?.trim()) {
     user += `\n\n## Vom Kandidaten gewählte Kernaussagen & individuelle Angaben — die Eröffnungssätze sollen hierauf konkret Bezug nehmen`;
     if (letterInputs.angles?.length) user += `\n${letterInputs.angles.map(a => `- ${a}`).join("\n")}`;

@@ -73,6 +73,7 @@ async function copyText(text: string): Promise<void> {
 import { STAGE_COLORS, STAGE_ORDER } from "../lib/stages";
 import { taskTitle, activityTitle } from "../lib/stageText";
 import { ApplicationKindFields, SalutationField } from "./LetterKindFields";
+import { SchoolLetterQuestions, type SchoolAnswers } from "./SchoolLetterQuestions";
 
 const STAGES = STAGE_ORDER.map((id) => ({ id }));
 
@@ -2654,6 +2655,7 @@ const LIB_CATEGORIES: { value: string; label: string; color: string }[] = [
   { value: "zeugnis",              label: "Zeugnisse",            color: "#3b82f6" },
   { value: "referenz",             label: "Referenzen",           color: "#10b981" },
   { value: "zertifikat",           label: "Zertifikate",          color: "#f59e0b" },
+  { value: "schultest",            label: "Schultests",           color: "#06b6d4" },
   { value: "portfolio",            label: "Portfolio",            color: "#8b5cf6" },
   { value: "figma",                label: "Figma",                color: "#f24e1e" },
   { value: "sonstiges",            label: "Sonstiges",            color: "var(--fg-3)" },
@@ -4468,7 +4470,7 @@ type LetterAngles = {
   werteMatch: { wert: string; bezug: string }[];
   nutzenArgumente: { argument: string; beleg: string }[];
 };
-type LetterInputs = { selectedAngles?: string[]; jobNotes?: string; openingSentence?: string };
+type LetterInputs = { selectedAngles?: string[]; jobNotes?: string; openingSentence?: string; school?: SchoolAnswers };
 type OpeningSentence = { satz: string; ansatz: string; erklaerung: string; empfehlung?: string };
 type LetterVersion = { subject: string; body: string; createdAt: string };
 
@@ -4520,6 +4522,10 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [jobNotes, setJobNotes] = useState("");
   const [openingSentence, setOpeningSentence] = useState("");
+  // School-leaver answers (Schnupperlehre / Lehrstelle / Praktikum); ref so persistInputs sees the latest
+  const isSchool = !!app.applicationKind && app.applicationKind !== "job";
+  const [school, setSchool] = useState<SchoolAnswers>(savedInputs?.school ?? {});
+  const schoolRef = useRef<SchoolAnswers>(savedInputs?.school ?? {});
   const [showAdjust, setShowAdjust] = useState(false);
   const [adjustPrompt, setAdjustPrompt] = useState("");
   const [copied, setCopied] = useState(false);
@@ -4531,11 +4537,13 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const [letterTemplateMissing, setLetterTemplateMissing] = useState<string | null>(null);
   const hydrated = useRef(false);
 
+  // School leavers: same three groups, school meaning (company link / why this trade / what you bring)
+  const groupLabel = useCallback((k: "touchpoints" | "valuesMatch" | "benefits") => t(isSchool ? `letterDraft.school.${k}` : `letterDraft.${k}`), [t, isSchool]);
   const items = useMemo(() => angles ? [
-    ...angles.beruehrungspunkte.map((it, i) => ({ id: `bp-${i}`, group: t("letterDraft.touchpoints"), text: `${it.titel}: ${it.text}` })),
-    ...angles.werteMatch.map((it, i) => ({ id: `wm-${i}`, group: t("letterDraft.valuesMatch"), text: `${it.wert} – ${it.bezug}` })),
-    ...angles.nutzenArgumente.map((it, i) => ({ id: `na-${i}`, group: t("letterDraft.benefits"), text: `${it.argument} (${it.beleg})` })),
-  ] : [], [angles, t]);
+    ...angles.beruehrungspunkte.map((it, i) => ({ id: `bp-${i}`, group: groupLabel("touchpoints"), text: `${it.titel}: ${it.text}` })),
+    ...angles.werteMatch.map((it, i) => ({ id: `wm-${i}`, group: groupLabel("valuesMatch"), text: `${it.wert} – ${it.bezug}` })),
+    ...angles.nutzenArgumente.map((it, i) => ({ id: `na-${i}`, group: groupLabel("benefits"), text: `${it.argument} (${it.beleg})` })),
+  ] : [], [angles, groupLabel]);
 
   // Hydrate selection + job notes + opening sentence from persisted letter-inputs
   useEffect(() => {
@@ -4544,6 +4552,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     if (savedInputs) {
       setJobNotes(savedInputs.jobNotes ?? "");
       setOpeningSentence(savedInputs.openingSentence ?? "");
+      if (savedInputs.school) { setSchool(savedInputs.school); schoolRef.current = savedInputs.school; }
       if (items.length > 0) {
         const savedTexts = new Set(savedInputs.selectedAngles ?? []);
         const seed: Record<string, string> = {};
@@ -4575,9 +4584,15 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   }, [app.id, jobCoverLetter?.at, jobReview?.at, markAiJobsSeen]);
 
   const persistInputs = (nextSelected: Record<string, string>, nextJobNotes: string, nextOpening: string) => {
-    const body: LetterInputs = { selectedAngles: Object.values(nextSelected), jobNotes: nextJobNotes, openingSentence: nextOpening };
+    const body: LetterInputs = { selectedAngles: Object.values(nextSelected), jobNotes: nextJobNotes, openingSentence: nextOpening, school: schoolRef.current };
     onAiResult?.("letter-inputs", body);
     api.patch(`/api/applications/${app.id}/letter-inputs`, body).catch(() => {});
+  };
+
+  const changeSchool = (patch: Partial<SchoolAnswers>, persist = false) => {
+    const next = { ...schoolRef.current, ...patch };
+    schoolRef.current = next; setSchool(next);
+    if (persist) persistInputs(selected, jobNotes, openingSentence);
   };
 
   const toggle = (id: string, text: string) => {
@@ -4624,7 +4639,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     try {
       const r = await api.post<{ saetze: OpeningSentence[] }>(`/api/applications/${app.id}/ai/opening-sentences`, {
         ai: aiBody(), language: appLang,
-        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined },
+        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined, school: isSchool ? schoolRef.current : undefined },
       });
       onAiResult?.("opening-sentences", r.data); invalidate();
     } catch (e) { setErr(errMsg(e)); } finally { setGeneratingOpenings(false); }
@@ -4639,7 +4654,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
       const r = await api.post<{ subject: string; body: string }>(`/api/applications/${app.id}/ai/cover-letter`, {
         ai: aiBody(), language: appLang,
         ...(hint?.trim() ? { additionalContext: hint.trim() } : {}),
-        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined, openingSentence: openingSentence.trim() || undefined },
+        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined, openingSentence: openingSentence.trim() || undefined, school: isSchool ? schoolRef.current : undefined },
       });
       onAiResult?.("cover-letter", r.data);
       setExportUrl(null);
@@ -4731,9 +4746,9 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   };
 
   const groupIcon: Record<string, React.ReactNode> = {
-    [t("letterDraft.touchpoints")]: <Spark width={11} height={11} />,
-    [t("letterDraft.valuesMatch")]: <Star width={11} height={11} />,
-    [t("letterDraft.benefits")]:    <CheckCircle width={11} height={11} />,
+    [groupLabel("touchpoints")]: <Spark width={11} height={11} />,
+    [groupLabel("valuesMatch")]: <Star width={11} height={11} />,
+    [groupLabel("benefits")]:    <CheckCircle width={11} height={11} />,
   };
   const inputStyle: React.CSSProperties = { width: "100%", resize: "vertical", background: "none", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 8px", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", lineHeight: 1.5, outline: "none" };
 
@@ -4772,6 +4787,10 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
         <ApplicationKindFields app={app} onSave={saveAppFields} />
         <SalutationField app={app} onSave={saveAppFields} compact />
       </div>
+      {isSchool && (
+        <SchoolLetterQuestions app={app} value={school} onChange={changeSchool}
+          onCommit={() => persistInputs(selected, jobNotes, openingSentence)} inputStyle={inputStyle} labelStyle={sectionLabel} />
+      )}
       <div style={{ marginBottom: 20 }}>
         <div style={sectionLabel}>{t("letterDraft.step1")}</div>
         <textarea value={jobNotes} onChange={e => setJobNotes(e.target.value)} onBlur={() => persistInputs(selected, jobNotes, openingSentence)}
@@ -4791,7 +4810,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
           <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>{t("letterDraft.emptyHint")}</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {[t("letterDraft.touchpoints"), t("letterDraft.valuesMatch"), t("letterDraft.benefits")].map(group => (
+            {[groupLabel("touchpoints"), groupLabel("valuesMatch"), groupLabel("benefits")].map(group => (
               <div key={group}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, fontWeight: 700, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
                   {groupIcon[group]} {group}
