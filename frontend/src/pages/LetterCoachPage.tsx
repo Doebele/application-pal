@@ -38,6 +38,29 @@ const DEFAULTS: Record<Exclude<StrKey, "referenceLetter">, string> = {
   noGos: "\"Hiermit bewerbe ich mich...\", generische Floskeln, unbelegte Superlative (\"hochmotiviert\", \"teamfähig\").",
 };
 
+// Persona "schulabgaenger": defaults for Schnupperlehre / Lehrstelle letters. The tone per
+// kind (curious vs. confident) comes from the backend rules — these cover both.
+type DefaultKey = Exclude<StrKey, "referenceLetter">;
+const SCHOOL_DEFAULTS: Record<DefaultKey, string> = {
+  structure:
+    "1. Einleitung: worauf ich mich bewerbe (Schnupperlehre oder Lehrstelle, Beruf) und woher ich den Betrieb kenne\n" +
+    "2. Warum dieser Beruf: was mich daran reizt, mit einem konkreten Erlebnis\n" +
+    "3. Warum dieser Betrieb: ein Projekt, Produkt oder die Philosophie des Betriebs — zeigt, dass ich recherchiert habe\n" +
+    "4. Was ich mitbringe: Schule, Hobbys, Projekte, Ämtli — jede Stärke mit einem Beispiel\n" +
+    "5. Schluss: Bitte um Schnuppertage bzw. ein Gespräch, freundlich und nicht unterwürfig\n" +
+    "Länge: höchstens eine halbe A4-Seite.",
+  values: "",
+  strengths: "",
+  phrases: "",
+  styleRules:
+    "Einfache, klare Sätze, ehrlich und persönlich. Erster Satz direkt: \"Ich bewerbe mich um …\". " +
+    "Den Betrieb beim Namen nennen, nicht nur \"Ihr Unternehmen\". Stärken mit Beispielen zeigen statt behaupten. " +
+    "Schweizer Rechtschreibung (ss statt ß), kein Wort auffällig oft wiederholen.",
+  noGos:
+    "\"Hiermit bewerbe ich mich mit grossem Interesse\", \"Hiermit möchte ich …\", \"Ich bin ein fleissiger Mitarbeiter\", " +
+    "Selbstbewertungen ohne Beispiel (\"ich bin kreativ und teamfähig\"), den Lebenslauf nacherzählen, private Gründe ohne Bezug zur Motivation.",
+};
+
 function AutoResizeTextarea({ value, onChange, onBlur, placeholder, minRows = 3 }: {
   value: string;
   onChange: (v: string) => void;
@@ -65,8 +88,10 @@ function AutoResizeTextarea({ value, onChange, onBlur, placeholder, minRows = 3 
   );
 }
 
-function Section({ fieldKey, label, hint, value, onChange, onBlur, minRows }: {
+function Section({ fieldKey, label, hint, value, onChange, onBlur, minRows, defaults = DEFAULTS, placeholder }: {
   fieldKey: StrKey;
+  defaults?: Record<DefaultKey, string>;
+  placeholder?: string;
   label: string;
   hint: string;
   value: string;
@@ -75,7 +100,7 @@ function Section({ fieldKey, label, hint, value, onChange, onBlur, minRows }: {
   minRows?: number;
 }) {
   const { t } = useTranslation();
-  const hasDefault = fieldKey !== "referenceLetter" && DEFAULTS[fieldKey].trim().length > 0;
+  const hasDefault = fieldKey !== "referenceLetter" && defaults[fieldKey].trim().length > 0;
   return (
     <div style={{ marginBottom: 28 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
@@ -84,14 +109,14 @@ function Section({ fieldKey, label, hint, value, onChange, onBlur, minRows }: {
           <button
             className="btn btn-ghost"
             style={{ fontSize: 11, padding: "3px 8px" }}
-            onClick={() => { onChange(DEFAULTS[fieldKey as Exclude<StrKey, "referenceLetter">]); onBlur(); }}
+            onClick={() => { onChange(defaults[fieldKey as DefaultKey]); onBlur(); }}
           >
             {t("letterCoach.useDefault")}
           </button>
         )}
       </div>
       <div style={{ fontSize: 12, color: "var(--fg-3)", marginBottom: 8, lineHeight: 1.5 }}>{hint}</div>
-      <AutoResizeTextarea value={value} onChange={onChange} onBlur={onBlur} minRows={minRows} />
+      <AutoResizeTextarea value={value} onChange={onChange} onBlur={onBlur} minRows={minRows} placeholder={placeholder} />
     </div>
   );
 }
@@ -101,10 +126,12 @@ export function LetterCoachPage() {
   const [config, setConfig] = useState<LetterConfig>({});
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
+  const [persona, setPersona] = useState<string | null>(null);
 
   useEffect(() => {
-    api.get<{ letterConfig?: string | null }>("/api/profile")
+    api.get<{ letterConfig?: string | null; persona?: string | null }>("/api/profile")
       .then(r => {
+        setPersona(r.data.persona ?? null);
         try { setConfig(r.data.letterConfig ? JSON.parse(r.data.letterConfig) : {}); }
         catch { setConfig({}); }
       })
@@ -125,6 +152,11 @@ export function LetterCoachPage() {
     onChange: (v: string) => setConfig(c => ({ ...c, [key]: v })),
     onBlur: () => save({ [key]: config[key] ?? "" }),
   });
+
+  const school = persona === "schulabgaenger";
+  const defaults = school ? SCHOOL_DEFAULTS : DEFAULTS;
+  // School leavers: "values" = motivation, "strengths" = strength → example pairs
+  const k = (field: string) => school && t(`letterCoach.school.${field}`, { defaultValue: "" }) ? `letterCoach.school.${field}` : `letterCoach.${field}`;
 
   if (loading) {
     return (
@@ -148,7 +180,7 @@ export function LetterCoachPage() {
         }}>
           <InfoCircle width={16} height={16} style={{ color: "var(--accent)", flexShrink: 0, marginTop: 1 }} />
           <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.6 }}>
-            {t("letterCoach.infoText")}
+            {t(k("infoText"))}
             <div style={{ display: "flex", gap: 14, marginTop: 8 }}>
               <Link to="/profile" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: "var(--accent)", textDecoration: "none", fontWeight: 600 }}>
                 <ProfileCircle width={12} height={12} /> {t("letterCoach.linkProfile")}
@@ -183,13 +215,13 @@ export function LetterCoachPage() {
           </button>
         </div>
 
-        <Section fieldKey="structure" label={t("letterCoach.structure.label")} hint={t("letterCoach.structure.hint")} minRows={6} {...fieldProps("structure")} />
-        <Section fieldKey="values" label={t("letterCoach.values.label")} hint={t("letterCoach.values.hint")} {...fieldProps("values")} />
-        <Section fieldKey="strengths" label={t("letterCoach.strengths.label")} hint={t("letterCoach.strengths.hint")} {...fieldProps("strengths")} />
-        <Section fieldKey="phrases" label={t("letterCoach.phrases.label")} hint={t("letterCoach.phrases.hint")} {...fieldProps("phrases")} />
-        <Section fieldKey="styleRules" label={t("letterCoach.styleRules.label")} hint={t("letterCoach.styleRules.hint")} {...fieldProps("styleRules")} />
-        <Section fieldKey="noGos" label={t("letterCoach.noGos.label")} hint={t("letterCoach.noGos.hint")} {...fieldProps("noGos")} />
-        <Section fieldKey="referenceLetter" label={t("letterCoach.referenceLetter.label")} hint={t("letterCoach.referenceLetter.hint")} minRows={6} {...fieldProps("referenceLetter")} />
+        <Section defaults={defaults} fieldKey="structure" label={t("letterCoach.structure.label")} hint={t(k("structure.hint"))} minRows={6} {...fieldProps("structure")} />
+        <Section defaults={defaults} fieldKey="values" label={t(k("values.label"))} hint={t(k("values.hint"))} placeholder={school ? t("letterCoach.school.values.placeholder") : undefined} {...fieldProps("values")} />
+        <Section defaults={defaults} fieldKey="strengths" label={t(k("strengths.label"))} hint={t(k("strengths.hint"))} placeholder={school ? t("letterCoach.school.strengths.placeholder") : undefined} {...fieldProps("strengths")} />
+        <Section defaults={defaults} fieldKey="phrases" label={t("letterCoach.phrases.label")} hint={t("letterCoach.phrases.hint")} {...fieldProps("phrases")} />
+        <Section defaults={defaults} fieldKey="styleRules" label={t("letterCoach.styleRules.label")} hint={t("letterCoach.styleRules.hint")} {...fieldProps("styleRules")} />
+        <Section defaults={defaults} fieldKey="noGos" label={t("letterCoach.noGos.label")} hint={t("letterCoach.noGos.hint")} {...fieldProps("noGos")} />
+        <Section defaults={defaults} fieldKey="referenceLetter" label={t("letterCoach.referenceLetter.label")} hint={t("letterCoach.referenceLetter.hint")} minRows={6} {...fieldProps("referenceLetter")} />
 
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11, color: saved ? "var(--accent)" : "var(--fg-3)", marginTop: 4 }}>
           <SendMail width={12} height={12} />

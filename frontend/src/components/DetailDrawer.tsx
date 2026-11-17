@@ -72,6 +72,7 @@ async function copyText(text: string): Promise<void> {
 
 import { STAGE_COLORS, STAGE_ORDER } from "../lib/stages";
 import { taskTitle, activityTitle } from "../lib/stageText";
+import { ApplicationKindFields, SalutationField } from "./LetterKindFields";
 
 const STAGES = STAGE_ORDER.map((id) => ({ id }));
 
@@ -414,6 +415,10 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
             placeholder={t("overview.contactPersonPlaceholder")} />
         </div>
       </div>
+
+      {/* Salutation (built in code, never by the model) + school-leaver kind / apprenticeship */}
+      <SalutationField app={{ ...app, contactPerson: contactPerson || null }} onSave={save} />
+      <ApplicationKindFields app={app} onSave={save} />
 
       {/* Row 3: Original URL + Bewerbungsportal */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -4753,8 +4758,20 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     </div>
   );
 
+  // Kind / salutation edited right in the workspace: PATCH + refresh the drawer's app
+  const saveAppFields = (patch: Partial<Application>) => {
+    api.patch(`/api/applications/${app.id}`, patch).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["application", app.id] });
+    }).catch(() => {});
+  };
+
   const prepTab = (
     <div>
+      <div style={{ marginBottom: 20, display: "grid", gap: 10 }}>
+        <ApplicationKindFields app={app} onSave={saveAppFields} />
+        <SalutationField app={app} onSave={saveAppFields} compact />
+      </div>
       <div style={{ marginBottom: 20 }}>
         <div style={sectionLabel}>{t("letterDraft.step1")}</div>
         <textarea value={jobNotes} onChange={e => setJobNotes(e.target.value)} onBlur={() => persistInputs(selected, jobNotes, openingSentence)}

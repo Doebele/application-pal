@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
 import { useTranslation } from "react-i18next";
+import { usePersona } from "./LetterKindFields";
 
 type ExtractionPhase = "idle" | "reading" | "extracting" | "done";
 
@@ -140,6 +141,8 @@ type ExtractedRaw = {
   jobType?: string | null;
   workModel?: string | null;
   contractType?: string | null;
+  applicationKind?: string | null;
+  apprenticeship?: string | null;
 };
 
 type FormState = {
@@ -232,6 +235,10 @@ export function ImportDrawer({ onClose }: Props) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoOk, setLogoOk]   = useState(false);
   const [descExpanded, setDescExpanded] = useState(false);
+  // Detected from the posting (Schnupperlehre / Lehrstelle / Praktikum) — edited later in Details
+  // Only school leavers get the kind applied: an adult posting that mentions "Lernende" must not switch the letter rules
+  const persona = usePersona();
+  const [kindInfo, setKindInfo] = useState<{ applicationKind: string | null; apprenticeship: string | null }>({ applicationKind: null, apprenticeship: null });
 
   const [form, setForm] = useState<FormState>({
     company: "", role: "", contactPerson: "", location: "", salary: "", description: "", tags: [], source: "",
@@ -269,6 +276,8 @@ export function ImportDrawer({ onClose }: Props) {
         jobType:      form.jobType      || null,
         workModel:    form.workModel    || null,
         contractType: form.contractType || null,
+        applicationKind: persona === "schulabgaenger" ? kindInfo.applicationKind : null,
+        apprenticeship: persona === "schulabgaenger" ? kindInfo.apprenticeship : null,
       }).then((r) => r.data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["applications"] }); onClose(); }
   });
@@ -283,6 +292,7 @@ export function ImportDrawer({ onClose }: Props) {
       setTimeout(() => {
         setStep(4); setPhase("done");
         setLogoUrl(result.logoUrl ?? null); setLogoOk(false);
+        setKindInfo({ applicationKind: result.applicationKind ?? null, apprenticeship: result.apprenticeship ?? null });
         setForm({
           company:      result.company      ?? "",
           role:         result.role         ?? "",

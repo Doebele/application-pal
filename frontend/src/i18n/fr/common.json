@@ -939,6 +939,22 @@
     "humanize": {
       "label": "Style d'écriture naturel (humanisation)",
       "hint": "Demande à l'IA d'écrire de façon humaine dans la langue de correspondance et d'éviter les marqueurs typiques de l'IA — pour les lettres, phrases d'accroche et points forts du CV. N'invente aucun fait et ne modifie pas votre CV principal."
+    },
+    "school": {
+      "infoText": "Tu postules en tant que jeune sortant·e de l'école. L'IA utilise ces informations pour chaque lettre — pour un stage découverte (curieux : « J'aimerais vous découvrir ») ou une place d'apprentissage (convaincu : « J'aimerais apprendre chez vous »). Tu choisis le type pour chaque candidature sous « Détails ».",
+      "structure": {
+        "hint": "Les cinq parties d'une bonne lettre pour un stage découverte ou un apprentissage — une demi-page A4 au maximum."
+      },
+      "values": {
+        "label": "Ma motivation",
+        "hint": "Pourquoi les métiers que tu vises t'intéressent-ils ? Quand l'as-tu remarqué ? Une expérience concrète vaut mieux que « Je m'intéresse à … ».",
+        "placeholder": "p. ex. Menuisier/ère : en cours de travaux manuels, j'ai construit une étagère en bois massif. Voir à la fin un objet réel et utile m'a beaucoup plu."
+      },
+      "strengths": {
+        "label": "Ce que je sais bien faire (force → exemple)",
+        "hint": "Note chaque force avec un exemple qui la montre — pas « je suis fiable », mais quand tu l'as été. Une ligne par force.",
+        "placeholder": "Fiable → Je distribue des journaux chaque mercredi depuis deux ans.\nHabile de mes mains → Je répare moi-même les vélos de ma famille.\nEsprit d'équipe → Au club de foot, j'aide à entraîner les juniors."
+      }
     }
   },
   "letterDraft": {
@@ -2292,5 +2308,26 @@
     "noSources": "Aucune source liée.",
     "light": "Clair",
     "dark": "Sombre"
+  },
+  "letterKind": {
+    "kind": "Type de candidature",
+    "kinds": {
+      "job": "Poste",
+      "schnupperlehre": "Stage découverte",
+      "lehrstelle": "Place d'apprentissage",
+      "praktikum": "Stage"
+    },
+    "focus": {
+      "schnupperlehre": "Ton curieux : « J'aimerais vous découvrir. » Conclusion : demander des jours de stage.",
+      "lehrstelle": "Ton assuré : « J'aimerais apprendre chez vous. » Un stage découverte est l'argument le plus fort."
+    },
+    "apprenticeship": "Métier",
+    "apprenticeshipPlaceholder": "p. ex. Menuisier/ère CFC",
+    "salutation": "Formule d'appel dans la lettre",
+    "genderUnknown": "Choisir la formule…",
+    "genderF": "Madame",
+    "genderM": "Monsieur",
+    "genderX": "Neutre (nom complet)",
+    "salutationPick": "Choisis une formule — sinon l'IA décide"
   }
 }

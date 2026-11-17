@@ -939,6 +939,22 @@
     "humanize": {
       "label": "Natürlicher Schreibstil (Vermenschlichung)",
       "hint": "Weist die KI an, in der Korrespondenzsprache menschlich zu schreiben und typische KI-Muster zu vermeiden — bei Anschreiben, Eröffnungssätzen und CV-Highlights. Erfindet keine Fakten und ändert deinen Master-CV nicht."
+    },
+    "school": {
+      "infoText": "Du bewirbst dich als Schulabgänger/in. Diese Angaben nutzt die KI für jedes Anschreiben — für eine Schnupperlehre (neugierig: „Ich möchte Sie kennenlernen“) oder eine Lehrstelle (überzeugt: „Ich möchte bei Ihnen lernen“). Die Art legst du pro Bewerbung unter „Details“ fest.",
+      "structure": {
+        "hint": "Die fünf Teile eines guten Anschreibens für Schnupperlehre oder Lehrstelle — höchstens eine halbe A4-Seite."
+      },
+      "values": {
+        "label": "Meine Motivation",
+        "hint": "Warum interessieren dich deine Wunschberufe? Wann hast du das gemerkt? Ein konkretes Erlebnis ist stärker als „Ich interessiere mich für …“.",
+        "placeholder": "z.B. Schreiner/in: Im Werkunterricht habe ich ein Regal aus Massivholz gebaut. Dass am Schluss etwas Echtes dasteht, das man benutzen kann, hat mir am meisten Spass gemacht."
+      },
+      "strengths": {
+        "label": "Was ich gut kann (Stärke → Beispiel)",
+        "hint": "Schreib jede Stärke mit einem Beispiel auf, das sie zeigt — nicht „ich bin zuverlässig“, sondern wann du es warst. Eine Zeile pro Stärke.",
+        "placeholder": "Zuverlässig → Ich trage seit zwei Jahren jeden Mittwoch Zeitungen aus.\nGeschickt mit den Händen → Ich repariere die Velos meiner Familie selbst.\nTeamfähig → Im Fussballclub helfe ich beim Training der Junioren."
+      }
     }
   },
   "letterDraft": {
@@ -2292,5 +2308,26 @@
     "noSources": "Keine Quellen verknüpft.",
     "light": "Hell",
     "dark": "Dunkel"
+  },
+  "letterKind": {
+    "kind": "Art der Bewerbung",
+    "kinds": {
+      "job": "Stelle",
+      "schnupperlehre": "Schnupperlehre",
+      "lehrstelle": "Lehrstelle",
+      "praktikum": "Praktikum"
+    },
+    "focus": {
+      "schnupperlehre": "Ton neugierig: „Ich möchte Sie kennenlernen.“ Schluss: Bitte um Schnuppertage.",
+      "lehrstelle": "Ton selbstbewusst: „Ich möchte bei Ihnen lernen.“ Eine Schnupperlehre ist das stärkste Argument."
+    },
+    "apprenticeship": "Lehrberuf",
+    "apprenticeshipPlaceholder": "z.B. Schreiner/in EFZ",
+    "salutation": "Anrede im Anschreiben",
+    "genderUnknown": "Anrede wählen…",
+    "genderF": "Frau",
+    "genderM": "Herr",
+    "genderX": "Neutral (voller Name)",
+    "salutationPick": "Bitte Anrede wählen — sonst entscheidet die KI"
   }
 }

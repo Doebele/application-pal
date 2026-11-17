@@ -102,6 +102,9 @@ export const applications = pgTable("applications", {
   language: text("language"),         // 'de' | 'en' — application language (default 'de')
   ravApplicationType: text("rav_application_type"), // RAV proof: 'online' | 'recruiter' | 'meeting_confirmed' | 'meeting_unconfirmed' — null = derive
   ravProof: text("rav_proof"),                     // RAV proof: 'email' | 'linkedin' | 'other' — null = derive
+  applicationKind: text("application_kind"),       // 'job' | 'schnupperlehre' | 'lehrstelle' | 'praktikum' — null = job
+  apprenticeship: text("apprenticeship"),           // Lehrberuf, e.g. 'Schreiner/in EFZ'
+  contactGender: text("contact_gender"),            // salutation of contactPerson: 'f' | 'm' | 'x' (neutral) — null = unknown
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

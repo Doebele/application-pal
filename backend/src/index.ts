@@ -1,4 +1,5 @@
 import "./sidecar-polyfill.js";
+import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote } from "./letter-kinds.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
@@ -1713,6 +1714,8 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
           jobType:      llm.jobType      ?? detectJobType(normalized),
           workModel:    llm.workModel    ?? detectWorkModel(normalized),
           contractType: llm.contractType ?? detectContractType(normalized),
+          applicationKind: detectApplicationKind(normalized),
+          apprenticeship: detectApprenticeship(normalized),
         });
       }
     } catch (error) {
@@ -1736,6 +1739,8 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
     jobType:      detectJobType(normalized),
     workModel:    detectWorkModel(normalized),
     contractType: detectContractType(normalized),
+    applicationKind: detectApplicationKind(normalized),
+    apprenticeship: detectApprenticeship(normalized),
   });
 });
 
@@ -2365,14 +2370,21 @@ const LETTER_GUIDANCE_LABELS: Record<Exclude<keyof LetterConfig, "referenceLette
   noGos: "Zu vermeiden",
 };
 
-function buildLetterGuidance(letterConfigRaw: string | null | undefined): string {
+// School leavers fill the same fields with motivation and "strength → example" pairs.
+const LETTER_GUIDANCE_LABELS_SCHOOL: Partial<typeof LETTER_GUIDANCE_LABELS> = {
+  values: "Meine Motivation (warum diese Berufe, was mich antreibt)",
+  strengths: "Was ich gut kann (Stärke → Beispiel)",
+};
+
+function buildLetterGuidance(letterConfigRaw: string | null | undefined, persona?: string | null): string {
   if (!letterConfigRaw) return "";
   let cfg: LetterConfig;
   try { cfg = JSON.parse(letterConfigRaw); } catch { return ""; }
   const parts: string[] = [];
   for (const key of Object.keys(LETTER_GUIDANCE_LABELS) as (keyof typeof LETTER_GUIDANCE_LABELS)[]) {
     const val = cfg[key];
-    if (val?.trim()) parts.push(`${LETTER_GUIDANCE_LABELS[key]}:\n${val.trim().slice(0, 800)}`);
+    const label = (persona === "schulabgaenger" ? LETTER_GUIDANCE_LABELS_SCHOOL[key] : undefined) ?? LETTER_GUIDANCE_LABELS[key];
+    if (val?.trim()) parts.push(`${label}:\n${val.trim().slice(0, 800)}`);
   }
   if (cfg.referenceLetter?.trim()) {
     parts.push(`Referenz-Anschreiben (Stil-Vorbild, nicht kopieren):\n${cfg.referenceLetter.trim().slice(0, 1500)}`);
@@ -3068,10 +3080,15 @@ app.post("/api/applications/:id/ai/cover-letter", async (c) => {
 
   // Prefer language from request body (avoids race condition when user just switched the toggle)
   const lang = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
-  const letterGuidance = buildLetterGuidance(profile?.letterConfig);
+  const letterGuidance = buildLetterGuidance(profile?.letterConfig, profile?.persona);
   const humanize = humanizerPrompt(lang, profile?.letterConfig);
-  const system = `${langPrompt(lang)} Du bist ein erfahrener HR-Berater und Karriere-Texter. Schreibe ein professionelles, individuelles Bewerbungsanschreiben (max. 350 Wörter).
-Vermeide generische Floskeln wie "Hiermit bewerbe ich mich" — starte mit einem konkreten, aufmerksamkeitsstarken Bezug zur Firma oder Rolle. Belege Stärken mit konkreten Ergebnissen/Zahlen aus dem Lebenslauf statt unbelegter Adjektive. Spiegle die Schlüsselbegriffe der Stellenbeschreibung. Aktive Sprache, kurze Sätze, kein Superlativ-Marketing.${app_.contactPerson ? `\nIst ein Ansprechpartner genannt, sprich diese Person in der Anrede persönlich an (z.B. "Sehr geehrte Frau …" / "Sehr geehrter Herr …"); sonst nutze "Sehr geehrte Damen und Herren".` : ""}${letterGuidance ? `\n\n${letterGuidance}\n\nDiese Vorgaben des Kandidaten sind verbindlich — respektiere Struktur, Stil und No-Gos.` : ""}${humanize ? `\n\n${humanize}` : ""}
+  const kind = normalizeKind(app_.applicationKind);
+  const salutation = salutationPrompt(lang, app_.contactPerson, app_.contactGender);
+  const baseTask = isSchoolKind(kind)
+    ? `Du hilfst einer Schulabgängerin / einem Schulabgänger, ein eigenes, ehrliches Bewerbungsanschreiben zu schreiben.\n\n${schoolLeaverRules(kind, app_.apprenticeship)}`
+    : `Du bist ein erfahrener HR-Berater und Karriere-Texter. Schreibe ein professionelles, individuelles Bewerbungsanschreiben (max. 350 Wörter).
+Vermeide generische Floskeln wie "Hiermit bewerbe ich mich" — starte mit einem konkreten, aufmerksamkeitsstarken Bezug zur Firma oder Rolle. Belege Stärken mit konkreten Ergebnissen/Zahlen aus dem Lebenslauf statt unbelegter Adjektive. Spiegle die Schlüsselbegriffe der Stellenbeschreibung. Aktive Sprache, kurze Sätze, kein Superlativ-Marketing.`;
+  const system = `${langPrompt(lang)} ${baseTask}${salutation ? `\n${salutation}` : app_.contactPerson ? `\nIst ein Ansprechpartner genannt, sprich diese Person in der Anrede persönlich an (z.B. "Sehr geehrte Frau …" / "Sehr geehrter Herr …"); sonst nutze "Sehr geehrte Damen und Herren".` : ""}${letterGuidance ? `\n\n${letterGuidance}\n\nDiese Vorgaben des Kandidaten sind verbindlich — respektiere Struktur, Stil und No-Gos.${isSchoolKind(kind) ? " Widersprechen Aufbau oder Länge den Regeln für Schulabgänger oben, gelten die Regeln für Schulabgänger." : ""}` : ""}${humanize ? `\n\n${humanize}` : ""}
 Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Text mit Absätzen durch \\n\\n getrennt>" }`;
   const candidateParts = [];
   if (profile?.headline) candidateParts.push(`Expertise: ${profile.headline}`);
@@ -3079,7 +3096,7 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
   if (profile?.personalNotes) candidateParts.push(`Persönliche Stichpunkte: ${profile.personalNotes.slice(0, 400)}`);
   const coverLetterDocsContext = await loadDocumentsContext(userId);
   if (coverLetterDocsContext) candidateParts.push(coverLetterDocsContext);
-  let user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\nAnsprechpartner: ${app_.contactPerson ?? ""}\nOrt: ${app_.location ?? ""}\nGehalt: ${app_.salary ?? ""}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
+  let user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}${app_.apprenticeship ? `\nLehrberuf: ${app_.apprenticeship}` : ""}\nUnternehmen: ${app_.company}\nAnsprechpartner: ${app_.contactPerson ?? ""}\nOrt: ${app_.location ?? ""}\nGehalt: ${app_.salary ?? ""}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
   if (letterInputs?.angles?.length) {
     user += `\n\n## Vom Kandidaten ausgewählte Kernaussagen für dieses Anschreiben (unbedingt verwenden)\n${letterInputs.angles.map(a => `- ${a}`).join("\n")}`;
   }
@@ -3151,7 +3168,7 @@ app.post("/api/applications/:id/ai/letter-angles", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
-  const letterGuidance = buildLetterGuidance(profile?.letterConfig);
+  const letterGuidance = buildLetterGuidance(profile?.letterConfig, profile?.persona);
   const anglesHumanize = humanizerPrompt(lang_, profile?.letterConfig);
   const system = `${langPrompt(lang_)} Du bist ein Karriere-Coach. Analysiere das Kandidatenprofil und die Stellenbeschreibung und schlage konkrete Bausteine für ein individuelles Anschreiben vor.${anglesHumanize ? `\n\n${anglesHumanize}` : ""}
 Antworte NUR mit diesem JSON:
@@ -4004,10 +4021,10 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
   // reader's UI language (everything that explains or instructs).
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const uiLang_ = REVIEW_LANG_NAMES[bodyUiLang ?? ""] ? bodyUiLang! : REVIEW_LANG_NAMES[reviewProfile?.uiLanguage ?? ""] ? reviewProfile!.uiLanguage! : lang_;
-  const reviewGuidance = buildLetterGuidance(reviewProfile?.letterConfig);
+  const reviewGuidance = buildLetterGuidance(reviewProfile?.letterConfig, reviewProfile?.persona);
   const reviewHumanize = humanizerPrompt(lang_, reviewProfile?.letterConfig);
   const letterLangName = REVIEW_LANG_NAMES[lang_] ?? REVIEW_LANG_NAMES.de;
-  const system = `${reviewLangDirective(uiLang_, lang_)}\n\nDu bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch. Die Korrespondenzsprache dieser Bewerbung ist ${letterLangName}: Beurteile Rechtschreibung, Grammatik, Stil, Anrede, Grussformel und Formulierungen nach den Regeln und Gepflogenheiten dieser Sprache. Ist das Anschreiben ganz oder teilweise in einer anderen Sprache verfasst, nenne das als erste Verbesserung und als ersten Eintrag in "promptVorschlaege".${reviewGuidance ? ` Prüfe zusätzlich, ob es die folgenden Vorgaben des Kandidaten erfüllt, und nenne Abweichungen in "verbesserungen":\n\n${reviewGuidance}` : ""}${reviewHumanize ? `\n\nBewerte das Anschreiben außerdem an diesen Maßstäben für menschliches Schreiben und nenne Verstöße in "verbesserungen" bzw. "cliches":\n${reviewHumanize}` : ""} Antworte NUR mit JSON:
+  const system = `${reviewLangDirective(uiLang_, lang_)}\n\nDu bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch. Die Korrespondenzsprache dieser Bewerbung ist ${letterLangName}: Beurteile Rechtschreibung, Grammatik, Stil, Anrede, Grussformel und Formulierungen nach den Regeln und Gepflogenheiten dieser Sprache. Ist das Anschreiben ganz oder teilweise in einer anderen Sprache verfasst, nenne das als erste Verbesserung und als ersten Eintrag in "promptVorschlaege".${schoolLeaverReviewNote(normalizeKind(app_.applicationKind)) ? `\n\n${schoolLeaverReviewNote(normalizeKind(app_.applicationKind))}` : ""}${salutationPrompt(lang_, app_.contactPerson, app_.contactGender) ? `\nDie korrekte Anrede für diesen Brief lautet: "${(salutationPrompt(lang_, app_.contactPerson, app_.contactGender).match(/"([^"]+)"/) ?? [])[1]}" — weicht die Anrede im Brief davon ab oder ist sie grammatisch falsch, nenne das als Verbesserung.` : ""}${reviewGuidance ? ` Prüfe zusätzlich, ob es die folgenden Vorgaben des Kandidaten erfüllt, und nenne Abweichungen in "verbesserungen":\n\n${reviewGuidance}` : ""}${reviewHumanize ? `\n\nBewerte das Anschreiben außerdem an diesen Maßstäben für menschliches Schreiben und nenne Verstöße in "verbesserungen" bzw. "cliches":\n${reviewHumanize}` : ""} Antworte NUR mit JSON:
 { "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "too_long | appropriate | too_short", "personalisierung": "weak | medium | strong", "promptVorschlaege": ["<string>"] }
 "laenge" und "personalisierung": genau einer der englischen Codes, nicht übersetzen.
 "promptVorschlaege": 2-4 fertig formulierte, direkt einsetzbare Anweisungen, mit denen der Kandidat das Anschreiben gezielt anpassen lassen kann (z.B. sinngemäss "Kürze den zweiten Absatz auf zwei Sätze." oder "Ersetze das Klischee '…' durch einen konkreten Beleg aus dem Lebenslauf."). Jede Anweisung muss eigenständig verständlich sein, ohne den Review-Text zu kennen.
@@ -4073,9 +4090,13 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
-  const openingGuidance = buildLetterGuidance(profile?.letterConfig);
+  const openingGuidance = buildLetterGuidance(profile?.letterConfig, profile?.persona);
   const openingHumanize = humanizerPrompt(lang_, profile?.letterConfig);
-  const system = `${langPrompt(lang_)} Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend).${openingGuidance ? `\n\n${openingGuidance}` : ""}${openingHumanize ? `\n\n${openingHumanize}` : ""} Antworte NUR mit JSON:
+  const openingKind = normalizeKind(app_.applicationKind);
+  const openingTask = isSchoolKind(openingKind)
+    ? `Du hilfst einer Schulabgängerin / einem Schulabgänger. Generiere 3 verschiedene Eröffnungssätze für ein Anschreiben für eine ${openingKind === "schnupperlehre" ? "Schnupperlehre" : openingKind === "lehrstelle" ? "Lehrstelle" : "Praktikumsstelle"}${app_.apprenticeship ? ` als ${app_.apprenticeship}` : ""}. Jeder Satz sagt direkt und selbstbewusst, worum es geht (z.B. "Ich bewerbe mich um …"), nie "Hiermit möchte ich …", und verbindet das mit einem konkreten Bezug (woher man den Betrieb kennt, ein Erlebnis mit dem Beruf, etwas Konkretes am Betrieb). Einfache Sprache, wie eine gut vorbereitete Jugendliche / ein gut vorbereiteter Jugendlicher schreibt; nichts erfinden. Ton: ${openingKind === "schnupperlehre" ? "neugierig, kennenlernen wollen" : "selbstbewusst, bei Ihnen lernen wollen"}.`
+    : `Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend).`;
+  const system = `${langPrompt(lang_)} ${openingTask}${openingGuidance ? `\n\n${openingGuidance}` : ""}${openingHumanize ? `\n\n${openingHumanize}` : ""} Antworte NUR mit JSON:
 { "saetze": [{ "satz": "<der Eröffnungssatz>", "ansatz": "<kurzes Ansatz-Label>", "erklaerung": "<was diesen Satz in genau diesem Fall speziell/stark macht>", "empfehlung": "<konkrete Empfehlung, wann/wofür man diesen Satz wählen sollte>" }] }`;
   const openingDocsContext = await loadDocumentsContext(userId);
   let user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}${openingDocsContext ? `\n\n${openingDocsContext}` : ""}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;

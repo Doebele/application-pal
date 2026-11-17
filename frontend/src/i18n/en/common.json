@@ -939,6 +939,22 @@
     "humanize": {
       "label": "Natural writing style (humanizer)",
       "hint": "Tells the AI to write like a human in the correspondence language and avoid typical AI patterns — for cover letters, opening sentences, and CV highlights. Never invents facts and does not change your Master CV."
+    },
+    "school": {
+      "infoText": "You are applying as a school leaver. The AI uses these details for every letter — for a taster apprenticeship (curious: “I'd like to get to know you”) or an apprenticeship (convinced: “I'd like to learn with you”). Set the kind per application under “Details”.",
+      "structure": {
+        "hint": "The five parts of a good letter for a taster or an apprenticeship — at most half an A4 page."
+      },
+      "values": {
+        "label": "My motivation",
+        "hint": "Why are you interested in the trades you want to learn? When did you notice it? A concrete experience is stronger than “I am interested in …”.",
+        "placeholder": "e.g. Carpenter: in woodwork class I built a shelf from solid wood. Seeing something real that people can use was what I enjoyed most."
+      },
+      "strengths": {
+        "label": "What I'm good at (strength → example)",
+        "hint": "Write each strength with an example that shows it — not “I am reliable” but when you were. One line per strength.",
+        "placeholder": "Reliable → I have delivered newspapers every Wednesday for two years.\nGood with my hands → I repair my family's bikes myself.\nTeam player → At my football club I help train the juniors."
+      }
     }
   },
   "letterDraft": {
@@ -2292,5 +2308,26 @@
     "noSources": "No sources linked.",
     "light": "Light",
     "dark": "Dark"
+  },
+  "letterKind": {
+    "kind": "Type of application",
+    "kinds": {
+      "job": "Job",
+      "schnupperlehre": "Taster apprenticeship",
+      "lehrstelle": "Apprenticeship",
+      "praktikum": "Internship"
+    },
+    "focus": {
+      "schnupperlehre": "Curious tone: “I'd like to get to know you.” Close: ask for taster days.",
+      "lehrstelle": "Confident tone: “I'd like to learn with you.” A taster apprenticeship is the strongest argument."
+    },
+    "apprenticeship": "Trade",
+    "apprenticeshipPlaceholder": "e.g. Carpenter EFZ",
+    "salutation": "Salutation in the letter",
+    "genderUnknown": "Choose salutation…",
+    "genderF": "Ms",
+    "genderM": "Mr",
+    "genderX": "Neutral (full name)",
+    "salutationPick": "Choose a salutation — otherwise the AI decides"
   }
 }
