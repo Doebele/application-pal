@@ -90,7 +90,7 @@ export function CareerPage() {
   return (
     <>
       <Topbar title={t("career.title")} sub={t("career.sub")} />
-      <div className="agenda-grid" style={{ padding: "20px 24px 40px", display: "grid", gridTemplateColumns: "minmax(300px, 1fr) minmax(340px, 1.4fr)", gap: 28, alignItems: "start" }}>
+      <div className="split-scroll" style={{ gridTemplateColumns: "minmax(300px, 1fr) minmax(340px, 1.4fr)" }}>
         {/* ── Interest check ── */}
         <div>
           <div className="eyebrow" style={{ marginBottom: 6 }}>{t("career.interestsTitle")}</div>

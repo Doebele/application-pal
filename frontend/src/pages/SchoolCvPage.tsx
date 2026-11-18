@@ -144,7 +144,7 @@ export function SchoolCvPage() {
   return (
     <>
       <Topbar title={t("schoolCv.title")} sub={t("schoolCv.sub")} />
-      <div style={{ padding: "20px 24px 40px", display: "grid", gridTemplateColumns: "minmax(320px, 1fr) minmax(360px, 1.1fr)", gap: 28, alignItems: "start" }} className="school-cv-grid">
+      <div className="split-scroll" style={{ gridTemplateColumns: "minmax(320px, 1fr) minmax(360px, 1.1fr)" }}>
         {/* ── Form ── */}
         <div>
           <div style={{ ...hint, padding: "8px 10px", borderRadius: 8, background: "var(--accent-08)", border: "1px solid var(--accent-15)", color: "var(--fg-2)", marginBottom: 20 }}>

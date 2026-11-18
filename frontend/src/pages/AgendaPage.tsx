@@ -107,7 +107,7 @@ export function AgendaPage() {
           {busy ? <RefreshCircle width={12} height={12} style={{ animation: "spin 1s linear infinite" }} /> : <Download width={12} height={12} />} {t("agenda.ics")}
         </button>
       } />
-      <div className="agenda-grid" style={{ padding: "20px 24px 40px", display: "grid", gridTemplateColumns: "minmax(340px, 1.4fr) minmax(280px, 1fr)", gap: 28, alignItems: "start" }}>
+      <div className="split-scroll" style={{ gridTemplateColumns: "minmax(340px, 1.4fr) minmax(280px, 1fr)" }}>
         {/* ── Agenda ── */}
         <div>
           <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5, marginBottom: 16 }}>{t("agenda.intro")}</div>
