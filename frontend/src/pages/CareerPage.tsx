@@ -172,12 +172,12 @@ export function CareerPage() {
                     <a className="btn btn-ghost" style={{ fontSize: 11.5, gap: 4, padding: "3px 8px" }} href={infoUrl(s)} target="_blank" rel="noreferrer">
                       <OpenNewWindow width={11} height={11} /> {t("career.info")}
                     </a>
-                    <a className="btn btn-ghost" style={{ fontSize: 11.5, gap: 4, padding: "3px 8px" }} href="https://www.yousty.ch/de-CH/lehrstellen" target="_blank" rel="noreferrer"
-                      title={t("career.searchHint", { term: s.searchTerm.de })}>
+                    <a className="btn btn-ghost" style={{ fontSize: 11.5, gap: 4, padding: "3px 8px" }} href={lang === "fr" ? "https://www.yousty.ch/fr-CH/places-d-apprentissage" : "https://www.yousty.ch/de-CH/lehrstellen"} target="_blank" rel="noreferrer"
+                      title={t("career.searchHint", { term: lang === "fr" ? s.searchTerm.fr : s.searchTerm.de })}>
                       <OpenNewWindow width={11} height={11} /> Yousty
                     </a>
-                    <a className="btn btn-ghost" style={{ fontSize: 11.5, gap: 4, padding: "3px 8px" }} href="https://www.berufsberatung.ch/de/suche/lehrstellen" target="_blank" rel="noreferrer"
-                      title={t("career.searchHint", { term: s.searchTerm.de })}>
+                    <a className="btn btn-ghost" style={{ fontSize: 11.5, gap: 4, padding: "3px 8px" }} href={lang === "fr" ? "https://www.orientation.ch/fr/accueil-recherche/apprentissages" : "https://www.berufsberatung.ch/de/start-suche/lehrstellen"} target="_blank" rel="noreferrer"
+                      title={t("career.searchHint", { term: lang === "fr" ? s.searchTerm.fr : s.searchTerm.de })}>
                       <OpenNewWindow width={11} height={11} /> LENA
                     </a>
                   </div>

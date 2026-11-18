@@ -25,8 +25,9 @@ export function isListUrl(url: string): boolean {
   try {
     const u = new URL(url);
     const h = u.hostname.replace(/^www\./, "");
-    if (h === "yousty.ch") return !/\/(lehrstellen|schnupperlehren)\/profile\/\d+/.test(u.pathname) && /\/(lehrstellen|schnupperlehren)\/?$/.test(u.pathname);
-    if (h === "berufsberatung.ch") return /\/suche\//.test(u.pathname) || /\/dyn\/show\//.test(u.pathname) || /^\/lena\/?$/.test(u.pathname);
+    if (h === "yousty.ch") return /\/(lehrstellen|schnupperlehren|places-d-apprentissage)\/?$/.test(u.pathname);
+    // "/de/suche/lehrstellen", "/de/start-suche/lehrstellen", orientation.ch "/fr/accueil-recherche/apprentissages"
+    if (h === "berufsberatung.ch" || h === "orientation.ch") return /(^|\/|-)(suche|recherche)\//.test(u.pathname) || /\/dyn\/show\//.test(u.pathname) || /^\/lena\/?$/.test(u.pathname);
   } catch { /* not a URL */ }
   return false;
 }

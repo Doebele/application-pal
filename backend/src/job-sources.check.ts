@@ -69,6 +69,9 @@ assert.equal(detectSource(yUrl), "yousty"); assert.equal(detectSource(lUrl), "le
 assert.ok(isListUrl("https://www.yousty.ch/de-CH/lehrstellen"));
 assert.ok(isListUrl("https://www.berufsberatung.ch/de/suche/lehrstellen"));
 assert.ok(!isListUrl(yUrl) && !isListUrl(lUrl));
+assert.ok(isListUrl("https://www.berufsberatung.ch/de/start-suche/lehrstellen"));
+assert.ok(isListUrl("https://www.orientation.ch/fr/accueil-recherche/apprentissages"));
+assert.ok(isListUrl("https://www.yousty.ch/fr-CH/places-d-apprentissage"));
 
 // Region
 assert.deepEqual(parsePlace("3422 Kirchberg BE"), { zip: "3422", town: "Kirchberg", canton: "BE" });
