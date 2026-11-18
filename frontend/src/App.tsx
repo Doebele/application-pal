@@ -24,6 +24,7 @@ import { LinkedInCheckPage } from "./pages/LinkedInCheckPage";
 import { CvCheckPage } from "./pages/CvCheckPage";
 import { SchoolCvPage } from "./pages/SchoolCvPage";
 import { AgendaPage } from "./pages/AgendaPage";
+import { CareerPage } from "./pages/CareerPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 import { TablePage } from "./pages/TablePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -108,6 +109,7 @@ function MainApp() {
           <Route path="/cv-check"      element={<CvCheckPage />} />
           <Route path="/school-cv"     element={<SchoolCvPage />} />
           <Route path="/dates"         element={<AgendaPage />} />
+          <Route path="/career"        element={<CareerPage />} />
           <Route path="/letter-coach"  element={<LetterCoachPage />} />
           <Route path="/linkedin"      element={<LinkedInCheckPage />} />
           <Route path="/knowledge"     element={<KnowledgeBasePage />} />

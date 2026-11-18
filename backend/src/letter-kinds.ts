@@ -4,6 +4,7 @@
 
 import { normalizeCvData, type SchoolCvData } from "./school-cv.js";
 import { normalizePersonalDates, type PersonalDate } from "./school-dates.js";
+import { normalizeInterests, type Interests } from "./career.js";
 
 export type ApplicationKind = "job" | "schnupperlehre" | "lehrstelle" | "praktikum";
 export type ContactGender = "f" | "m" | "x";
@@ -141,6 +142,7 @@ export type SchoolProfile = {
   cv?: SchoolCvData;                                                 // CV-only fields (school-cv.ts)
   dates?: PersonalDate[];                                            // Multicheck, Stellwerk, Berufsmesse … (school-dates.ts)
   maxCommuteMin?: number;                                            // longest acceptable ÖV commute (region check, job-sources.ts)
+  interests?: Interests;                                             // career-choice interest check, 0–2 per area (career.ts)
 };
 
 /** Scale of a school test: stellwerk = 200–800 (norm mean 500), stanine = 1–9 (Lernpass plus PSM), percent = 0–100. */
@@ -184,6 +186,7 @@ export function parseSchoolProfile(raw: string | null | undefined): SchoolProfil
     ...(j.ravRegistered === true ? { ravRegistered: true } : {}),
     ...(j.cv && typeof j.cv === "object" ? { cv: normalizeCvData(j.cv) } : {}),
     ...(Array.isArray(j.dates) ? { dates: normalizePersonalDates(j.dates) } : {}),
+    ...(j.interests && typeof j.interests === "object" ? { interests: normalizeInterests(j.interests) } : {}),
     ...(typeof j.maxCommuteMin === "number" && j.maxCommuteMin >= 10 && j.maxCommuteMin <= 240 ? { maxCommuteMin: Math.round(j.maxCommuteMin) } : {}),
   };
 }

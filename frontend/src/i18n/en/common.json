@@ -65,7 +65,8 @@
     "setupAi": "Set up AI model",
     "setupGoogle": "Connect Google",
     "schoolCv": "CV",
-    "agenda": "Dates"
+    "agenda": "Dates",
+    "career": "Career choice"
   },
   "tabs": {
     "actions": "Actions",
@@ -2846,5 +2847,125 @@
       "transport_failed": "The timetable could not be reached. Try again later."
     },
     "needZip": "add postcodes to compare"
+  },
+  "career": {
+    "title": "Career choice",
+    "sub": "Ideas for apprenticeships that could suit you",
+    "interestsTitle": "What are you interested in?",
+    "interestsIntro": "Tick how much each area interests you. Honest beats polite — there are no wrong answers.",
+    "rated": "{{n}} of {{total}} answered",
+    "rating": {
+      "0": "No",
+      "1": "A bit",
+      "2": "A lot"
+    },
+    "areas": {
+      "build": {
+        "title": "Building & crafts",
+        "hint": "Houses, wood, workshop, making things by hand"
+      },
+      "tech": {
+        "title": "Technology & machines",
+        "hint": "Electrics, mechanics, how things work"
+      },
+      "vehicles": {
+        "title": "Vehicles",
+        "hint": "Cars, bikes, trucks, farm machinery"
+      },
+      "it": {
+        "title": "Computers & IT",
+        "hint": "Coding, networks, apps, media"
+      },
+      "nature": {
+        "title": "Nature & animals",
+        "hint": "Plants, animals, farming"
+      },
+      "outdoor": {
+        "title": "Working outdoors",
+        "hint": "Out in the fresh air, in any weather"
+      },
+      "care": {
+        "title": "Supporting people",
+        "hint": "Children, elderly people, people with disabilities"
+      },
+      "health": {
+        "title": "Health",
+        "hint": "Practice, hospital, pharmacy, body and medicine"
+      },
+      "sales": {
+        "title": "Selling & advising",
+        "hint": "Customers, shop, conversations"
+      },
+      "office": {
+        "title": "Office & organising",
+        "hint": "Planning, numbers, phone, keeping things in order"
+      },
+      "creative": {
+        "title": "Design & creating",
+        "hint": "Drawing, colours, design, fashion, hair"
+      },
+      "food": {
+        "title": "Food & cooking",
+        "hint": "Kitchen, bakery, restaurant"
+      },
+      "lab": {
+        "title": "Lab & research",
+        "hint": "Experiments, chemistry, biology"
+      },
+      "logistics": {
+        "title": "Sorting & delivering",
+        "hint": "Warehouse, goods, transport, processes"
+      }
+    },
+    "skills": {
+      "math": "maths",
+      "german": "German",
+      "languages": "foreign languages",
+      "science": "science",
+      "design": "art",
+      "crafts": "crafts",
+      "sport": "PE",
+      "it": "computing",
+      "food": "home economics",
+      "spatial": "spatial reasoning",
+      "logic": "logical thinking",
+      "technical": "technical understanding"
+    },
+    "reasons": {
+      "wish": "Already on your wish list",
+      "interestStrong": "You ticked “{{area}}” as “A lot”",
+      "interest": "You ticked “{{area}}” as “A bit”",
+      "interestAlso": "Also involves “{{area}}”",
+      "subject": "Your favourite subject {{subject}} is useful here",
+      "test_high": "{{test}}, {{area}}: well above average",
+      "test_above": "{{test}}, {{area}}: above average",
+      "strength": "Your strength “{{strength}}” — e.g. {{example}}"
+    },
+    "fit": {
+      "strong": "Lots in common",
+      "good": "Some things in common",
+      "possible": "An idea"
+    },
+    "levels": {
+      "EFZ": "EFZ (federal certificate)",
+      "EBA": "EBA (federal attestation)"
+    },
+    "years_one": "{{count}} year",
+    "years_other": "{{count}} years",
+    "disclaimer": "These are ideas, not a decision. They only show what fits what you entered — many interesting trades are missing here. Taster days and a talk with a careers adviser (BIZ) help you most.",
+    "counselling": "Find careers advice",
+    "missing": {
+      "interests": "Answer a few areas on the left and ideas will appear.",
+      "subjects": "Add your favourite subjects in your profile.",
+      "strengths": "Add strengths with an example in your profile.",
+      "examples": "{{n}} strength(s) without an example don't count here — add an example in your profile."
+    },
+    "toProfile": "Go to profile",
+    "ideasTitle": "Ideas for you",
+    "empty": "No ideas yet. Tick on the left what interests you.",
+    "onWishList": "On your wish list",
+    "addWish": "Add to wish jobs",
+    "info": "About this trade",
+    "searchHint": "Search apprenticeships — look for “{{term}}” there"
   }
 }

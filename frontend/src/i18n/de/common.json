@@ -65,7 +65,8 @@
     "setupAi": "KI-Modell einrichten",
     "setupGoogle": "Google verbinden",
     "schoolCv": "Lebenslauf",
-    "agenda": "Termine"
+    "agenda": "Termine",
+    "career": "Berufswahl"
   },
   "tabs": {
     "actions": "Aktionen",
@@ -2846,5 +2847,125 @@
       "transport_failed": "Der Fahrplan war nicht erreichbar. Versuch es später nochmals."
     },
     "needZip": "mit Postleitzahl wird verglichen"
+  },
+  "career": {
+    "title": "Berufswahl",
+    "sub": "Ideen für Lehrberufe, die zu dir passen könnten",
+    "interestsTitle": "Was interessiert dich?",
+    "interestsIntro": "Kreuz bei jedem Bereich an, wie sehr er dich interessiert. Ehrlich ist besser als brav — es gibt keine falschen Antworten.",
+    "rated": "{{n}} von {{total}} beantwortet",
+    "rating": {
+      "0": "Nein",
+      "1": "Etwas",
+      "2": "Sehr"
+    },
+    "areas": {
+      "build": {
+        "title": "Bauen & Handwerk",
+        "hint": "Häuser, Holz, Werkstatt, etwas mit den Händen herstellen"
+      },
+      "tech": {
+        "title": "Technik & Maschinen",
+        "hint": "Elektrik, Mechanik, verstehen wie Dinge funktionieren"
+      },
+      "vehicles": {
+        "title": "Fahrzeuge",
+        "hint": "Autos, Velos, Lastwagen, Landmaschinen"
+      },
+      "it": {
+        "title": "Computer & Informatik",
+        "hint": "Programmieren, Netzwerke, Apps, Medien"
+      },
+      "nature": {
+        "title": "Natur & Tiere",
+        "hint": "Pflanzen, Tiere, Landwirtschaft"
+      },
+      "outdoor": {
+        "title": "Draussen arbeiten",
+        "hint": "Bei jedem Wetter an der frischen Luft"
+      },
+      "care": {
+        "title": "Menschen begleiten",
+        "hint": "Kinder, ältere Menschen, Menschen mit Beeinträchtigung"
+      },
+      "health": {
+        "title": "Gesundheit",
+        "hint": "Praxis, Spital, Apotheke, Körper und Medizin"
+      },
+      "sales": {
+        "title": "Verkaufen & beraten",
+        "hint": "Kundinnen und Kunden, Laden, Gespräche"
+      },
+      "office": {
+        "title": "Büro & Organisation",
+        "hint": "Planen, Zahlen, Telefon, Ordnung schaffen"
+      },
+      "creative": {
+        "title": "Gestalten",
+        "hint": "Zeichnen, Farben, Design, Mode, Frisuren"
+      },
+      "food": {
+        "title": "Essen & Kochen",
+        "hint": "Küche, Bäckerei, Restaurant"
+      },
+      "lab": {
+        "title": "Labor & Forschung",
+        "hint": "Experimente, Chemie, Biologie"
+      },
+      "logistics": {
+        "title": "Ordnen & liefern",
+        "hint": "Lager, Waren, Transport, Abläufe"
+      }
+    },
+    "skills": {
+      "math": "Mathematik",
+      "german": "Deutsch",
+      "languages": "Fremdsprachen",
+      "science": "Natur und Technik",
+      "design": "Bildnerisches Gestalten",
+      "crafts": "Werken / TTG",
+      "sport": "Sport",
+      "it": "Informatik",
+      "food": "Hauswirtschaft",
+      "spatial": "räumliches Vorstellungsvermögen",
+      "logic": "logisches Denken",
+      "technical": "technisches Verständnis"
+    },
+    "reasons": {
+      "wish": "Steht schon auf deiner Wunschliste",
+      "interestStrong": "Du hast „{{area}}“ mit „Sehr“ angekreuzt",
+      "interest": "Du hast „{{area}}“ mit „Etwas“ angekreuzt",
+      "interestAlso": "Hat auch mit „{{area}}“ zu tun",
+      "subject": "Dein Lieblingsfach {{subject}} brauchst du hier",
+      "test_high": "{{test}}, {{area}}: deutlich über dem Durchschnitt",
+      "test_above": "{{test}}, {{area}}: über dem Durchschnitt",
+      "strength": "Deine Stärke „{{strength}}“ — z.B. {{example}}"
+    },
+    "fit": {
+      "strong": "Viele Gemeinsamkeiten",
+      "good": "Einige Gemeinsamkeiten",
+      "possible": "Eine Idee"
+    },
+    "levels": {
+      "EFZ": "EFZ (Fähigkeitszeugnis)",
+      "EBA": "EBA (Berufsattest)"
+    },
+    "years_one": "{{count}} Jahr",
+    "years_other": "{{count}} Jahre",
+    "disclaimer": "Das sind Ideen, keine Entscheidung. Sie zeigen nur, was zu deinen Angaben passt — viele spannende Berufe fehlen hier. Schnuppern und ein Gespräch bei der Berufsberatung (BIZ) helfen dir am meisten.",
+    "counselling": "Berufsberatung finden",
+    "missing": {
+      "interests": "Beantworte links ein paar Bereiche, dann erscheinen Ideen.",
+      "subjects": "Trag im Profil deine Lieblingsfächer ein.",
+      "strengths": "Trag im Profil Stärken mit einem Beispiel ein.",
+      "examples": "{{n}} Stärke(n) ohne Beispiel zählen hier nicht — ergänze ein Beispiel im Profil."
+    },
+    "toProfile": "Zum Profil",
+    "ideasTitle": "Ideen für dich",
+    "empty": "Noch keine Ideen. Kreuz links an, was dich interessiert.",
+    "onWishList": "Auf der Wunschliste",
+    "addWish": "Zu Wunschberufen",
+    "info": "Infos zum Beruf",
+    "searchHint": "Lehrstellen suchen — dort nach „{{term}}“ suchen"
   }
 }

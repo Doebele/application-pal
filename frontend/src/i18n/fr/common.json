@@ -65,7 +65,8 @@
     "setupAi": "Configurer l'IA",
     "setupGoogle": "Connecter Google",
     "schoolCv": "CV",
-    "agenda": "Rendez-vous"
+    "agenda": "Rendez-vous",
+    "career": "Choix professionnel"
   },
   "tabs": {
     "actions": "Actions",
@@ -2846,5 +2847,125 @@
       "transport_failed": "L'horaire n'était pas joignable. Réessaie plus tard."
     },
     "needZip": "ajoute les NPA pour comparer"
+  },
+  "career": {
+    "title": "Choix professionnel",
+    "sub": "Des idées de métiers d'apprentissage qui pourraient te convenir",
+    "interestsTitle": "Qu'est-ce qui t'intéresse ?",
+    "interestsIntro": "Indique pour chaque domaine à quel point il t'intéresse. Mieux vaut être honnête que sage — il n'y a pas de mauvaise réponse.",
+    "rated": "{{n}} sur {{total}} répondus",
+    "rating": {
+      "0": "Non",
+      "1": "Un peu",
+      "2": "Beaucoup"
+    },
+    "areas": {
+      "build": {
+        "title": "Construction & artisanat",
+        "hint": "Maisons, bois, atelier, fabriquer de ses mains"
+      },
+      "tech": {
+        "title": "Technique & machines",
+        "hint": "Électricité, mécanique, comprendre comment ça marche"
+      },
+      "vehicles": {
+        "title": "Véhicules",
+        "hint": "Voitures, vélos, camions, machines agricoles"
+      },
+      "it": {
+        "title": "Ordinateurs & informatique",
+        "hint": "Programmer, réseaux, applis, médias"
+      },
+      "nature": {
+        "title": "Nature & animaux",
+        "hint": "Plantes, animaux, agriculture"
+      },
+      "outdoor": {
+        "title": "Travailler dehors",
+        "hint": "Au grand air, par tous les temps"
+      },
+      "care": {
+        "title": "Accompagner des personnes",
+        "hint": "Enfants, personnes âgées, personnes en situation de handicap"
+      },
+      "health": {
+        "title": "Santé",
+        "hint": "Cabinet, hôpital, pharmacie, corps et médecine"
+      },
+      "sales": {
+        "title": "Vendre & conseiller",
+        "hint": "Clientèle, magasin, discussions"
+      },
+      "office": {
+        "title": "Bureau & organisation",
+        "hint": "Planifier, chiffres, téléphone, mettre de l'ordre"
+      },
+      "creative": {
+        "title": "Créer",
+        "hint": "Dessin, couleurs, design, mode, coiffure"
+      },
+      "food": {
+        "title": "Cuisine & alimentation",
+        "hint": "Cuisine, boulangerie, restaurant"
+      },
+      "lab": {
+        "title": "Laboratoire & recherche",
+        "hint": "Expériences, chimie, biologie"
+      },
+      "logistics": {
+        "title": "Ranger & livrer",
+        "hint": "Entrepôt, marchandises, transport, processus"
+      }
+    },
+    "skills": {
+      "math": "les mathématiques",
+      "german": "l'allemand",
+      "languages": "les langues étrangères",
+      "science": "les sciences",
+      "design": "les arts visuels",
+      "crafts": "les activités créatrices",
+      "sport": "le sport",
+      "it": "l'informatique",
+      "food": "l'économie familiale",
+      "spatial": "la représentation spatiale",
+      "logic": "la logique",
+      "technical": "la compréhension technique"
+    },
+    "reasons": {
+      "wish": "Déjà sur ta liste de métiers souhaités",
+      "interestStrong": "Tu as coché « {{area}} » : « Beaucoup »",
+      "interest": "Tu as coché « {{area}} » : « Un peu »",
+      "interestAlso": "Touche aussi à « {{area}} »",
+      "subject": "Ta branche préférée, {{subject}}, est utile ici",
+      "test_high": "{{test}}, {{area}} : nettement au-dessus de la moyenne",
+      "test_above": "{{test}}, {{area}} : au-dessus de la moyenne",
+      "strength": "Ton point fort « {{strength}} » — p. ex. {{example}}"
+    },
+    "fit": {
+      "strong": "Beaucoup de points communs",
+      "good": "Quelques points communs",
+      "possible": "Une idée"
+    },
+    "levels": {
+      "EFZ": "CFC (certificat fédéral)",
+      "EBA": "AFP (attestation fédérale)"
+    },
+    "years_one": "{{count}} an",
+    "years_other": "{{count}} ans",
+    "disclaimer": "Ce sont des idées, pas une décision. Elles montrent seulement ce qui correspond à tes réponses — beaucoup de métiers intéressants manquent ici. Les stages d'orientation et un entretien à l'orientation professionnelle t'aident le plus.",
+    "counselling": "Trouver l'orientation professionnelle",
+    "missing": {
+      "interests": "Réponds à quelques domaines à gauche, des idées apparaîtront.",
+      "subjects": "Ajoute tes branches préférées dans ton profil.",
+      "strengths": "Ajoute des points forts avec un exemple dans ton profil.",
+      "examples": "{{n}} point(s) fort(s) sans exemple ne comptent pas ici — ajoute un exemple dans ton profil."
+    },
+    "toProfile": "Vers le profil",
+    "ideasTitle": "Des idées pour toi",
+    "empty": "Pas encore d'idées. Coche à gauche ce qui t'intéresse.",
+    "onWishList": "Sur ta liste",
+    "addWish": "Ajouter aux métiers souhaités",
+    "info": "Infos sur le métier",
+    "searchHint": "Chercher une place d'apprentissage — y chercher « {{term}} »"
   }
 }

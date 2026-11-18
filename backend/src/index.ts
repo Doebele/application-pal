@@ -1,6 +1,7 @@
 import "./sidecar-polyfill.js";
 import { buildSchoolCv, normalizeCvData, schoolCvChecks, schoolCvText, type CvLang, type ProfileIn } from "./school-cv.js";
 import { schoolCvPdf } from "./school-cv-pdf.js";
+import { suggestTrades } from "./career.js";
 import { agendaIcs, buildAgenda, detectDeadline, isIsoDate, type AgendaApp } from "./school-dates.js";
 import { durationMinutes, isListUrl, parsePlace, regionMatch, sourceHints, type Place, type SourceHints } from "./job-sources.js";
 import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote, parseSchoolProfile, formatSchoolProfile, formatSchoolAnswers, schoolAnglesTask, normalizeTest, schoolLetterChecks, checksForPrompt, SCHOOL_TEST_EXTRACT_PROMPT, stageTasksFor, SCHOOL_STAGE_TASKS, normalizeDebrief, debriefNotes, upsertTasterExperience, letterSimilarity, SIMILAR_LETTER_THRESHOLD, type SchoolAnswers, type SchoolTest } from "./letter-kinds.js";
@@ -3381,6 +3382,15 @@ async function schoolCvPhoto(profile: ProfileIn, photoUrl: string | null | undef
     return buf.length <= 3_000_000 ? { bytes: buf, type } : null;
   } catch { return null; }
 }
+
+// Career-choice ideas (phase 5e): interests, favourite subjects, strengths with an example and
+// strong test results matched to trades — no AI, no external call. Interests are saved with the
+// pupil profile (school_profile.interests) via PATCH /api/profile like every other profile field.
+app.get("/api/career/suggestions", async (c) => {
+  const userId = getUserId(c);
+  const [row] = await db.select({ schoolProfile: userProfile.schoolProfile }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  return c.json(suggestTrades(parseSchoolProfile(row?.schoolProfile)));
+});
 
 // CV model (sections) + deterministic checklist, for the preview
 app.get("/api/school-cv", async (c) => {

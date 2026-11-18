@@ -4,6 +4,7 @@ import {
   DashboardDots, Calendar, List, MultiplePages, Settings, Table2Columns,
   SidebarCollapse, SunLight, HalfMoon, DashboardSpeed, Sofa, ProfileCircle, Folder, Database, Archive,
   LogOut, SwitchOff, WarningCircle, Globe, SendMail, PageSearch, Linkedin, HelpCircle, Bell,
+  Compass,
 } from "iconoir-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -503,7 +504,9 @@ export function Rail({ applications }: Props) {
       // CV-Check scores adult CVs (impact, numbers) — not for school leavers (their CV comes from the pupil profile)
       ...(persona !== "schulabgaenger"
         ? [{ to: "/cv-check", label: t("nav.cvCheck"), icon: <PageSearch width={15} height={15} /> }]
-        : [{ to: "/school-cv", label: t("nav.schoolCv"), icon: <PageSearch width={15} height={15} /> }]),
+        : [{ to: "/school-cv", label: t("nav.schoolCv"), icon: <PageSearch width={15} height={15} /> },
+           // Career-choice ideas from interests, subjects, strengths and strong test results
+           { to: "/career", label: t("nav.career"), icon: <Compass width={15} height={15} /> }]),
       // LinkedIn-Check: Berufsumsteiger (check + build) and Berufseinsteiger (build first); hidden for Schulabgänger / no persona
       ...(persona === "berufsumsteiger" || persona === "berufseinsteiger"
         ? [{ to: "/linkedin", label: t("nav.linkedinCheck"), icon: <Linkedin width={15} height={15} /> }] : []),
