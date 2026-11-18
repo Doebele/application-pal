@@ -83,6 +83,19 @@ New users get an overview of what every screen does, and every screen has a guid
 - **Grouped navigation** — Applications (Board, List, Calendar, Timeline, Archive) · Me & my documents (Profile, Documents, CV-Check, LinkedIn-Check) · Writing & knowledge (Cover-letter coach, Templates, Knowledge) · Help & overview, Settings.
 - Progress is stored per user; **Settings → Help & tours → Reset all tours** shows the overview again on the next start. All texts in German, English and French.
 
+## For school leavers (Lehrstelle, Schnupperlehre)
+
+Pick the persona **Schulabgänger/in** in the profile and the app adapts to pupils looking for an apprenticeship in Switzerland:
+
+- **Simpler app** — adult-only tools (match score, salary, ATS, RAV, CV-Check, LinkedIn) are hidden; stages get school names (Entdeckt, Unterlagen, Schnuppern / Gespräch …). RAV comes back only for pupils registered with the RAV (SEMO, bridge year).
+- **Pupil profile** — school, favourite subjects, wish jobs with motivation, experiences, strengths with an example, and school tests (Stellwerk, Lernpass plus, Multicheck, read from the uploaded reports). Only strong test results are ever used; a weak one never reaches a letter.
+- **Letters** — half-page letters in a teen voice for Schnupperlehre, Lehrstelle and Praktikum, with guided questions per application, the salutation built from the contact's gender, and a review with criteria, spelling and automatic checks (no "Hiermit", no open placeholders, no near-duplicate letters).
+- **Taster days** — debrief after the Schnupperlehre, copy it into the profile, and create the Lehrstelle at the same company in one click.
+- **CV** (`/school-cv`) — pupil CV from the profile with photo, checklist, PDF and Google Doc.
+- **Dates** (`/dates`) — application deadlines, taster days, interviews and own dates (tests, fairs) with reminders on the board and a calendar file.
+- **Import from Yousty and LENA** — paste a posting link; company, trade, contact and places are read from the page. A region check compares the place with the pupil's home, and an optional public-transport check shows the travel time.
+- **Career choice** (`/career`) — a short interest check plus ideas for trades, each with its reasons (interests, favourite subjects, strengths, strong tests). Ideas, never a verdict — with a pointer to the Berufsberatung.
+
 ---
 
 ## Views
