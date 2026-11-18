@@ -1,4 +1,10 @@
 import "./sidecar-polyfill.js";
+import { buildSchoolCv, normalizeCvData, schoolCvChecks, schoolCvText, type CvLang, type ProfileIn } from "./school-cv.js";
+import { schoolCvPdf } from "./school-cv-pdf.js";
+import { suggestTrades } from "./career.js";
+import { agendaIcs, buildAgenda, detectDeadline, isIsoDate, type AgendaApp } from "./school-dates.js";
+import { durationMinutes, isListUrl, parsePlace, regionMatch, sourceHints, type Place, type SourceHints } from "./job-sources.js";
+import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote, parseSchoolProfile, formatSchoolProfile, formatSchoolAnswers, schoolAnglesTask, normalizeTest, schoolLetterChecks, checksForPrompt, SCHOOL_TEST_EXTRACT_PROMPT, stageTasksFor, SCHOOL_STAGE_TASKS, normalizeDebrief, debriefNotes, upsertTasterExperience, letterSimilarity, SIMILAR_LETTER_THRESHOLD, type SchoolAnswers, type SchoolTest } from "./letter-kinds.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
@@ -701,7 +707,8 @@ const STAGE_TASK_TEMPLATES: Record<string, string[]> = {
 };
 
 async function initTasksForStage(applicationId: string, stage: string): Promise<void> {
-  const templates = STAGE_TASK_TEMPLATES[stage];
+  const [appRow] = await db.select({ kind: applications.applicationKind }).from(applications).where(eq(applications.id, applicationId)).limit(1);
+  const templates = stageTasksFor(normalizeKind(appRow?.kind), stage, STAGE_TASK_TEMPLATES);
   if (!templates?.length) return;
   // Check which default tasks for this stage already exist (avoid duplicates)
   const existing = await db.select({ title: applicationTasks.title })
@@ -714,6 +721,21 @@ async function initTasksForStage(applicationId: string, stage: string): Promise<
   if (newTasks.length > 0) {
     await db.insert(applicationTasks).values(newTasks);
   }
+}
+
+/**
+ * After a kind change: removes the current stage's default tasks that are still open and no
+ * longer in the new kind's list, then adds the new kind's defaults. Ticked tasks stay.
+ */
+async function swapDefaultTasks(applicationId: string, stage: string): Promise<void> {
+  const [appRow] = await db.select({ kind: applications.applicationKind }).from(applications).where(eq(applications.id, applicationId)).limit(1);
+  const keep = new Set(stageTasksFor(normalizeKind(appRow?.kind), stage, STAGE_TASK_TEMPLATES));
+  const allDefaults = new Set([...Object.values(STAGE_TASK_TEMPLATES).flat(), ...Object.values(SCHOOL_STAGE_TASKS).flatMap(k => Object.values(k).flat())]);
+  const rows = await db.select().from(applicationTasks)
+    .where(and(eq(applicationTasks.applicationId, applicationId), eq(applicationTasks.stage, stage), eq(applicationTasks.isDefault, true)));
+  const drop = rows.filter(r => !r.done && !keep.has(r.title) && allDefaults.has(r.title)).map(r => r.id);
+  if (drop.length) await db.delete(applicationTasks).where(inArray(applicationTasks.id, drop));
+  await initTasksForStage(applicationId, stage);
 }
 
 const roleKeywords = [
@@ -1624,6 +1646,11 @@ app.patch("/api/applications/:id", zValidator("json", applicationPatchSchema), a
     await initTasksForStage(id, stage);
   }
 
+  // Kind changed (e.g. Stelle → Lehrstelle): swap the untouched default tasks of the current stage
+  if (payload.applicationKind !== undefined && normalizeKind(payload.applicationKind) !== normalizeKind(existing[0].applicationKind)) {
+    await swapDefaultTasks(id, updated.stage);
+  }
+
   // Recolor the Drive folder when stage or archived status changed
   if (updated.googleFolderId && (payload.stage !== undefined || payload.archived !== undefined)) {
     const accessToken = await getDriveAccessToken(userId);
@@ -1666,23 +1693,52 @@ async function resolveCompanyLogo(companyName: string | null): Promise<string | 
 }
 
 app.post("/api/applications/import", zValidator("json", applicationImportRequestSchema), async (c) => {
-  const _userId = getUserId(c);
+  const userId = getUserId(c);
   const payload = c.req.valid("json");
   let text = payload.text ?? "";
+  let hints: SourceHints | null = null;
+  let fetchError: string | null = null;
 
   if (payload.url) {
+    // A search / list page is not one posting — ask for the posting itself
+    if (isListUrl(payload.url) && !payload.text) return c.json({ error: "list_url" }, 400);
     try {
-      const response = await fetch(payload.url);
-      if (response.ok) {
-        const html = await response.text();
-        text = `${text} ${extractTextFromHtml(html)}`.trim();
-      }
+      // Every hop is checked against internal addresses; cookies are kept across redirects
+      // (berufsberatung.ch sets a session cookie on its first redirect and refuses without it).
+      const { html, finalUrl } = await fetchPostingHtml(payload.url);
+      hints = sourceHints(finalUrl, html);
+      const pageText = hints?.text || extractTextFromHtml(html);
+      text = `${text} ${pageText}`.trim();
     } catch (error) {
-      console.warn("Import URL fetch failed", error);
+      fetchError = error instanceof Error ? error.message : String(error);
+      console.warn("Import URL fetch failed", fetchError);
     }
   }
 
   const normalized = text.trim();
+  if (!normalized) return c.json({ error: "fetch_failed", detail: fetchError }, 422);
+
+  // Facts read from the page's structure beat the model and the regex guesses
+  const home = await loadHomePlace(userId);
+  const withHints = <T extends Record<string, unknown>>(r: T) => {
+    const out: Record<string, unknown> = { ...r };
+    if (hints) {
+      for (const k of ["company", "location", "contactPerson", "contactGender", "applicationKind", "apprenticeship"] as const)
+        if (hints[k]) out[k] = hints[k];
+      if (hints.role) out.role = hints.role;
+      if (hints.sourceLabel) out.source = hints.sourceLabel;
+      if (hints.source === "lena") {
+        // LENA has no free text: keep the labelled summary plus how to reach the company
+        out.description = [hints.text, hints.email && `E-Mail: ${hints.email}`, hints.phone && `Telefon: ${hints.phone}`].filter(Boolean).join("\n");
+      }
+      if (hints.startDate) out.startDate = hints.startDate;
+      if (hints.positions) out.positions = hints.positions;
+    }
+    const job = parsePlace(String(out.location ?? ""));
+    out.region = { level: regionMatch(home, job), home: [home.zip, home.town].filter(Boolean).join(" "), job: [job.zip, job.town, job.canton].filter(Boolean).join(" ") };
+    out.structured = hints?.source ?? null;
+    return out;
+  };
 
   // Detect work-type tags from raw text (runs for both AI and regex paths)
   const workTags = pickWorkTags(normalized);
@@ -1700,7 +1756,7 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
       if (llm) {
         const allTags = mergeTags(llm.tags);
         const logoUrl = await resolveCompanyLogo(llm.company);
-        return c.json({
+        return c.json(withHints({
           company:      llm.company,
           role:         llm.role,
           contactPerson: llm.contactPerson,
@@ -1713,7 +1769,10 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
           jobType:      llm.jobType      ?? detectJobType(normalized),
           workModel:    llm.workModel    ?? detectWorkModel(normalized),
           contractType: llm.contractType ?? detectContractType(normalized),
-        });
+          applicationKind: detectApplicationKind(normalized),
+          apprenticeship: detectApprenticeship(normalized),
+          applyDeadline: detectDeadline(normalized, new Date().toISOString().slice(0, 10)),
+        }));
       }
     } catch (error) {
       console.warn("LLM extraction failed, falling back to regex:", error);
@@ -1723,7 +1782,7 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
   // Regex fallback
   const company = pickCompany(normalized);
   const logoUrl = await resolveCompanyLogo(company);
-  return c.json({
+  return c.json(withHints({
     company,
     role:         pickRole(normalized),
     contactPerson: null,
@@ -1736,7 +1795,10 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
     jobType:      detectJobType(normalized),
     workModel:    detectWorkModel(normalized),
     contractType: detectContractType(normalized),
-  });
+    applicationKind: detectApplicationKind(normalized),
+    apprenticeship: detectApprenticeship(normalized),
+    applyDeadline: detectDeadline(normalized, new Date().toISOString().slice(0, 10)),
+  }));
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -1750,12 +1812,14 @@ function parseListLimit(value: string | undefined): number {
 
 app.post("/api/kb/ingest/url", zValidator("json", kbIngestUrlRequestSchema), async (c) => {
   const payload = c.req.valid("json");
-  const response = await fetch(payload.url, { signal: AbortSignal.timeout(30_000) });
-  if (!response.ok) {
-    return c.json({ error: "Source URL could not be fetched." }, 502);
+  let html: string;
+  try {
+    const r = await fetchPublicBytes(payload.url);
+    if (!r.ok) return c.json({ error: "Source URL could not be fetched." }, 502);
+    html = r.buf.toString("utf8");
+  } catch (err) {
+    return c.json({ error: `Source URL could not be fetched: ${err instanceof Error ? err.message : String(err)}` }, 400);
   }
-
-  const html = await response.text();
   const rawText = extractTextFromHtml(html);
   if (!rawText) return c.json({ error: "Source URL did not contain readable text." }, 422);
 
@@ -2132,6 +2196,17 @@ app.delete("/api/documents/:id", async (c) => {
 // the master CV, so every endpoint using masterCv as candidate context should also use this.
 const CONTEXT_DOC_CATEGORIES = ["zeugnis", "referenz", "zertifikat", "portfolio", "lebenslauf"];
 
+// Pupil profile (+ strong test results) for school-leaver letters; "" for everyone else.
+/** School-leaver view: persona Schulabgänger, or a Schnupperlehre / Lehrstelle / Praktikum. */
+function isSchoolApp(profile: { persona?: string | null } | undefined, app_: { applicationKind?: string | null }): boolean {
+  return profile?.persona === "schulabgaenger" || isSchoolKind(normalizeKind(app_.applicationKind));
+}
+
+function schoolContext(profile: { persona?: string | null; schoolProfile?: string | null } | undefined, app_: { applicationKind?: string | null; apprenticeship?: string | null; company: string }): string {
+  if (profile?.persona !== "schulabgaenger" && !isSchoolKind(normalizeKind(app_.applicationKind))) return "";
+  return formatSchoolProfile(parseSchoolProfile(profile?.schoolProfile), app_.apprenticeship, app_.company);
+}
+
 async function loadDocumentsContext(userId: string): Promise<string> {
   const docs = await db.select().from(userDocuments)
     .where(and(eq(userDocuments.userId, userId), inArray(userDocuments.category, CONTEXT_DOC_CATEGORIES)));
@@ -2250,6 +2325,79 @@ async function fetchWebsiteText(url: string): Promise<string | null> {
   return null; // images and other binary content
 }
 
+// Download of a user-supplied URL: every redirect hop is checked by assertPublicHost (no loopback,
+// private or link-local targets) and the body is capped. Use this — never a plain fetch(userUrl) —
+// for anything a user or a stored link points at.
+async function fetchPublicBytes(url: string, opts: { timeoutMs?: number; maxBytes?: number; headers?: Record<string, string> } = {}) {
+  const { timeoutMs = 30_000, maxBytes = WEBSITE_MAX_BYTES, headers = {} } = opts;
+  let res: Response | null = null;
+  for (let hop = 0; hop < 5; hop++) {
+    if (!/^https?:\/\//i.test(url)) throw new Error("Nur http(s)-Links werden gelesen");
+    await assertPublicHost(url);
+    res = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
+    const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!next) break;
+    url = new URL(next, url).toString();
+    res = null;
+  }
+  if (!res) throw new Error("Zu viele Weiterleitungen");
+  if (Number(res.headers.get("content-length") ?? 0) > maxBytes) throw new Error("Datei zu gross");
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > maxBytes) throw new Error("Datei zu gross");
+  return { ok: res.ok, status: res.status, headers: res.headers, buf, finalUrl: url };
+}
+
+// Posting page for the import: like fetchWebsiteText (every hop checked by assertPublicHost,
+// 5 MB cap) but keeps cookies across redirects and returns the raw HTML for sourceHints().
+async function fetchPostingHtml(url: string): Promise<{ html: string; finalUrl: string }> {
+  const jar = new Map<string, Map<string, string>>();   // host → cookie name → value
+  let res: Response | null = null;
+  for (let hop = 0; hop < 6; hop++) {
+    await assertPublicHost(url);
+    const host = hostOf(url);
+    const cookies = [...(jar.get(host) ?? new Map()).entries()].map(([k, v]) => `${k}=${v}`).join("; ");
+    res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ApplicationPal/1.0)",
+        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+        "Accept-Language": "de-CH,de;q=0.9,fr;q=0.6,en;q=0.5",
+        ...(cookies ? { Cookie: cookies } : {}),
+      },
+      redirect: "manual", signal: AbortSignal.timeout(20_000),
+    });
+    for (const sc of res.headers.getSetCookie?.() ?? []) {
+      const [pair] = sc.split(";");
+      const eq = pair.indexOf("=");
+      if (eq > 0) {
+        const m = jar.get(host) ?? new Map<string, string>();
+        m.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+        jar.set(host, m);
+      }
+    }
+    const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!next) break;
+    url = new URL(next, url).toString();
+    if (!/^https?:\/\//i.test(url)) throw new Error("Ungültige Weiterleitung");
+    res = null;
+  }
+  if (!res) throw new Error("Zu viele Weiterleitungen");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (Number(res.headers.get("content-length") ?? 0) > WEBSITE_MAX_BYTES) throw new Error("Seite zu gross");
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > WEBSITE_MAX_BYTES) throw new Error("Seite zu gross");
+  const html = buf.toString("utf8");
+  if (/CookieCheckError|Cookie not accepted/i.test(url + html.slice(0, 2000))) throw new Error("Cookie-Sperre");
+  return { html, finalUrl: url };
+}
+
+/** The pupil's home for the region check: postcode + town from the CV fields, else the profile location. */
+async function loadHomePlace(userId: string): Promise<Place> {
+  const [p] = await db.select({ location: userProfile.location, schoolProfile: userProfile.schoolProfile }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const cv = parseSchoolProfile(p?.schoolProfile).cv;
+  const fromCv = parsePlace(cv?.zipCity);
+  return fromCv.zip || fromCv.town ? fromCv : parsePlace(p?.location);
+}
+
 // Reads the document's content as plain text: a Drive PDF, a Google Doc, or a public web
 // page / online PDF. Returns null when there is nothing readable (Figma, Drive images, folders).
 async function fetchDocumentText(doc: UserDocument, userId: string): Promise<string | null> {
@@ -2270,8 +2418,9 @@ async function fetchDocumentText(doc: UserDocument, userId: string): Promise<str
     if (!res.ok) throw new Error(`Drive Download: HTTP ${res.status}`);
     if (isGDoc) return (await res.text()).trim();
   } else {
-    res = await fetch(doc.url, { signal: AbortSignal.timeout(60_000) });
-    if (!res.ok) throw new Error(`Download: HTTP ${res.status}`);
+    const r = await fetchPublicBytes(doc.url, { timeoutMs: 60_000, maxBytes: 25 * 1024 * 1024 });
+    if (!r.ok) throw new Error(`Download: HTTP ${r.status}`);
+    res = new Response(r.buf, { status: r.status, headers: r.headers });
   }
   const parser = new PDFParse({ data: Buffer.from(await res.arrayBuffer()) });
   try { return (await parser.getText()).text.trim(); } finally { await parser.destroy(); }
@@ -2365,14 +2514,21 @@ const LETTER_GUIDANCE_LABELS: Record<Exclude<keyof LetterConfig, "referenceLette
   noGos: "Zu vermeiden",
 };
 
-function buildLetterGuidance(letterConfigRaw: string | null | undefined): string {
+// School leavers fill the same fields with motivation and "strength → example" pairs.
+const LETTER_GUIDANCE_LABELS_SCHOOL: Partial<typeof LETTER_GUIDANCE_LABELS> = {
+  values: "Meine Motivation (warum diese Berufe, was mich antreibt)",
+  strengths: "Was ich gut kann (Stärke → Beispiel)",
+};
+
+function buildLetterGuidance(letterConfigRaw: string | null | undefined, persona?: string | null): string {
   if (!letterConfigRaw) return "";
   let cfg: LetterConfig;
   try { cfg = JSON.parse(letterConfigRaw); } catch { return ""; }
   const parts: string[] = [];
   for (const key of Object.keys(LETTER_GUIDANCE_LABELS) as (keyof typeof LETTER_GUIDANCE_LABELS)[]) {
     const val = cfg[key];
-    if (val?.trim()) parts.push(`${LETTER_GUIDANCE_LABELS[key]}:\n${val.trim().slice(0, 800)}`);
+    const label = (persona === "schulabgaenger" ? LETTER_GUIDANCE_LABELS_SCHOOL[key] : undefined) ?? LETTER_GUIDANCE_LABELS[key];
+    if (val?.trim()) parts.push(`${label}:\n${val.trim().slice(0, 800)}`);
   }
   if (cfg.referenceLetter?.trim()) {
     parts.push(`Referenz-Anschreiben (Stil-Vorbild, nicht kopieren):\n${cfg.referenceLetter.trim().slice(0, 1500)}`);
@@ -3060,7 +3216,7 @@ app.post("/api/applications/:id/ai/cover-letter", async (c) => {
   const id = c.req.param("id");
   const { ai, additionalContext, language: bodyLang, letterInputs } = await c.req.json<{
     ai: AiConfig; additionalContext?: string; language?: string;
-    letterInputs?: { angles?: string[]; jobNotes?: string; openingSentence?: string };
+    letterInputs?: { angles?: string[]; jobNotes?: string; openingSentence?: string; school?: SchoolAnswers };
   }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
@@ -3068,10 +3224,15 @@ app.post("/api/applications/:id/ai/cover-letter", async (c) => {
 
   // Prefer language from request body (avoids race condition when user just switched the toggle)
   const lang = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
-  const letterGuidance = buildLetterGuidance(profile?.letterConfig);
+  const letterGuidance = buildLetterGuidance(profile?.letterConfig, profile?.persona);
   const humanize = humanizerPrompt(lang, profile?.letterConfig);
-  const system = `${langPrompt(lang)} Du bist ein erfahrener HR-Berater und Karriere-Texter. Schreibe ein professionelles, individuelles Bewerbungsanschreiben (max. 350 Wörter).
-Vermeide generische Floskeln wie "Hiermit bewerbe ich mich" — starte mit einem konkreten, aufmerksamkeitsstarken Bezug zur Firma oder Rolle. Belege Stärken mit konkreten Ergebnissen/Zahlen aus dem Lebenslauf statt unbelegter Adjektive. Spiegle die Schlüsselbegriffe der Stellenbeschreibung. Aktive Sprache, kurze Sätze, kein Superlativ-Marketing.${app_.contactPerson ? `\nIst ein Ansprechpartner genannt, sprich diese Person in der Anrede persönlich an (z.B. "Sehr geehrte Frau …" / "Sehr geehrter Herr …"); sonst nutze "Sehr geehrte Damen und Herren".` : ""}${letterGuidance ? `\n\n${letterGuidance}\n\nDiese Vorgaben des Kandidaten sind verbindlich — respektiere Struktur, Stil und No-Gos.` : ""}${humanize ? `\n\n${humanize}` : ""}
+  const kind = normalizeKind(app_.applicationKind);
+  const salutation = salutationPrompt(lang, app_.contactPerson, app_.contactGender);
+  const baseTask = isSchoolKind(kind)
+    ? `Du hilfst einer Schulabgängerin / einem Schulabgänger, ein eigenes, ehrliches Bewerbungsanschreiben zu schreiben.\n\n${schoolLeaverRules(kind, app_.apprenticeship)}`
+    : `Du bist ein erfahrener HR-Berater und Karriere-Texter. Schreibe ein professionelles, individuelles Bewerbungsanschreiben (max. 350 Wörter).
+Vermeide generische Floskeln wie "Hiermit bewerbe ich mich" — starte mit einem konkreten, aufmerksamkeitsstarken Bezug zur Firma oder Rolle. Belege Stärken mit konkreten Ergebnissen/Zahlen aus dem Lebenslauf statt unbelegter Adjektive. Spiegle die Schlüsselbegriffe der Stellenbeschreibung. Aktive Sprache, kurze Sätze, kein Superlativ-Marketing.`;
+  const system = `${langPrompt(lang)} ${baseTask}${salutation ? `\n${salutation}` : app_.contactPerson ? `\nIst ein Ansprechpartner genannt, sprich diese Person in der Anrede persönlich an (z.B. "Sehr geehrte Frau …" / "Sehr geehrter Herr …"); sonst nutze "Sehr geehrte Damen und Herren".` : ""}${letterGuidance ? `\n\n${letterGuidance}\n\nDiese Vorgaben des Kandidaten sind verbindlich — respektiere Struktur, Stil und No-Gos.${isSchoolKind(kind) ? " Widersprechen Aufbau oder Länge den Regeln für Schulabgänger oben, gelten die Regeln für Schulabgänger." : ""}` : ""}${humanize ? `\n\n${humanize}` : ""}
 Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Text mit Absätzen durch \\n\\n getrennt>" }`;
   const candidateParts = [];
   if (profile?.headline) candidateParts.push(`Expertise: ${profile.headline}`);
@@ -3079,13 +3240,17 @@ Antworte NUR mit JSON: { "subject": "<Email-Betreff>", "body": "<Anschreiben-Tex
   if (profile?.personalNotes) candidateParts.push(`Persönliche Stichpunkte: ${profile.personalNotes.slice(0, 400)}`);
   const coverLetterDocsContext = await loadDocumentsContext(userId);
   if (coverLetterDocsContext) candidateParts.push(coverLetterDocsContext);
-  let user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\nAnsprechpartner: ${app_.contactPerson ?? ""}\nOrt: ${app_.location ?? ""}\nGehalt: ${app_.salary ?? ""}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
+  const coverSchool = schoolContext(profile, app_);
+  if (coverSchool) candidateParts.unshift(coverSchool);
+  let user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}${app_.apprenticeship ? `\nLehrberuf: ${app_.apprenticeship}` : ""}\nUnternehmen: ${app_.company}\nAnsprechpartner: ${app_.contactPerson ?? ""}\nOrt: ${app_.location ?? ""}\nGehalt: ${app_.salary ?? ""}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
   if (letterInputs?.angles?.length) {
     user += `\n\n## Vom Kandidaten ausgewählte Kernaussagen für dieses Anschreiben (unbedingt verwenden)\n${letterInputs.angles.map(a => `- ${a}`).join("\n")}`;
   }
   if (letterInputs?.jobNotes?.trim()) {
     user += `\n\n## Individuelle Angaben zu dieser Stelle\n${letterInputs.jobNotes.trim().slice(0, 800)}`;
   }
+  const coverAnswers = formatSchoolAnswers(letterInputs?.school, kind);
+  if (coverAnswers) user += `\n\n${coverAnswers}`;
   if (letterInputs?.openingSentence?.trim()) {
     user += `\n\n## Gewählter Eröffnungssatz (beginne das Anschreiben mit diesem Satz — leichte Anpassungen erlaubt)\n${letterInputs.openingSentence.trim().slice(0, 500)}`;
   }
@@ -3151,9 +3316,13 @@ app.post("/api/applications/:id/ai/letter-angles", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
-  const letterGuidance = buildLetterGuidance(profile?.letterConfig);
+  const letterGuidance = buildLetterGuidance(profile?.letterConfig, profile?.persona);
   const anglesHumanize = humanizerPrompt(lang_, profile?.letterConfig);
-  const system = `${langPrompt(lang_)} Du bist ein Karriere-Coach. Analysiere das Kandidatenprofil und die Stellenbeschreibung und schlage konkrete Bausteine für ein individuelles Anschreiben vor.${anglesHumanize ? `\n\n${anglesHumanize}` : ""}
+  const anglesKind = normalizeKind(app_.applicationKind);
+  const anglesTask = isSchoolKind(anglesKind)
+    ? schoolAnglesTask(anglesKind, app_.apprenticeship)
+    : "Du bist ein Karriere-Coach. Analysiere das Kandidatenprofil und die Stellenbeschreibung und schlage konkrete Bausteine für ein individuelles Anschreiben vor.";
+  const system = `${langPrompt(lang_)} ${anglesTask}${anglesHumanize ? `\n\n${anglesHumanize}` : ""}
 Antworte NUR mit diesem JSON:
 {
   "beruehrungspunkte": [{ "titel": "<kurzer Titel>", "text": "<1-2 Sätze konkreter Anknüpfungspunkt Kandidat↔Firma/Rolle, geeignet für die Einleitung>" }],  // 3-4
@@ -3166,6 +3335,8 @@ Antworte NUR mit diesem JSON:
   if (profile?.personalNotes) candidateParts.push(`Persönliche Stichpunkte: ${profile.personalNotes.slice(0, 400)}`);
   if (docsContext) candidateParts.push(docsContext);
   if (letterGuidance) candidateParts.push(letterGuidance);
+  const anglesSchool = schoolContext(profile, app_);
+  if (anglesSchool) candidateParts.unshift(anglesSchool);
   const user = `## Kandidatenprofil\n${candidateParts.join("\n\n")}\n\n## Stelle\nRolle: ${app_.role}\nUnternehmen: ${app_.company}\n\n## Stellenbeschreibung\n${app_.description?.slice(0, 2000) ?? ""}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
@@ -3182,6 +3353,187 @@ Antworte NUR mit diesem JSON:
   }
 });
 
+// ─── Pupil CV (persona Schulabgänger) ─────────────────────────
+const cvLang = (v: string | undefined): CvLang => (v === "en" || v === "fr" ? v : "de");
+
+async function loadSchoolCvInput(userId: string) {
+  const [p] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const person = { name: p?.name, email: p?.email, phone: p?.phone, location: p?.location, photoUrl: p?.photoUrl };
+  let profile: ProfileIn = {};
+  try { profile = JSON.parse(p?.schoolProfile ?? "{}") as ProfileIn; } catch { /* empty */ }
+  return { p, person, profile: { ...parseSchoolProfile(p?.schoolProfile), cv: profile.cv } as ProfileIn };
+}
+
+/** Photo bytes: the uploaded photo (data URL) first, else the profile photo URL (public hosts only, ≤ 3 MB). */
+async function schoolCvPhoto(profile: ProfileIn, photoUrl: string | null | undefined): Promise<{ bytes: Uint8Array; type: "jpeg" | "png" } | null> {
+  const data = normalizeCvData(profile.cv).photo;
+  if (data) {
+    const m = data.match(/^data:image\/(jpeg|png);base64,(.+)$/);
+    if (m) return { bytes: new Uint8Array(Buffer.from(m[2], "base64")), type: m[1] as "jpeg" | "png" };
+  }
+  const url = (photoUrl ?? "").trim();
+  if (!/^https?:\/\//i.test(url)) return null;
+  try {
+    await assertPublicHost(url);
+    const r = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(8000) });
+    const type = (r.headers.get("content-type") ?? "").includes("png") ? "png" : (r.headers.get("content-type") ?? "").includes("jpeg") || (r.headers.get("content-type") ?? "").includes("jpg") ? "jpeg" : null;
+    if (!r.ok || !type) return null;
+    const buf = new Uint8Array(await r.arrayBuffer());
+    return buf.length <= 3_000_000 ? { bytes: buf, type } : null;
+  } catch { return null; }
+}
+
+// Career-choice ideas (phase 5e): interests, favourite subjects, strengths with an example and
+// strong test results matched to trades — no AI, no external call. Interests are saved with the
+// pupil profile (school_profile.interests) via PATCH /api/profile like every other profile field.
+app.get("/api/career/suggestions", async (c) => {
+  const userId = getUserId(c);
+  const [row] = await db.select({ schoolProfile: userProfile.schoolProfile }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  return c.json(suggestTrades(parseSchoolProfile(row?.schoolProfile)));
+});
+
+// CV model (sections) + deterministic checklist, for the preview
+app.get("/api/school-cv", async (c) => {
+  const userId = getUserId(c);
+  const { person, profile } = await loadSchoolCvInput(userId);
+  const lang = cvLang(c.req.query("lang"));
+  return c.json({ model: buildSchoolCv(person, profile, lang), checks: schoolCvChecks(person, profile) });
+});
+
+// PDF download (A4, photo top right)
+app.get("/api/school-cv/pdf", async (c) => {
+  const userId = getUserId(c);
+  const { person, profile } = await loadSchoolCvInput(userId);
+  const model = buildSchoolCv(person, profile, cvLang(c.req.query("lang")));
+  const pdf = await schoolCvPdf(model, await schoolCvPhoto(profile, person.photoUrl));
+  const file = `${model.title}_${(model.name || "CV").replace(/[^\p{L}\p{N}]+/gu, "_")}.pdf`;
+  return new Response(Buffer.from(pdf), { headers: { "Content-Type": "application/pdf", "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file)}` } });
+});
+
+// Editable copy as Google Doc (text only — Google Docs can't take the inline photo from here)
+app.post("/api/school-cv/export-doc", async (c) => {
+  const userId = getUserId(c);
+  const { lang } = await c.req.json<{ lang?: string }>().catch(() => ({ lang: undefined }));
+  const { p, person, profile } = await loadSchoolCvInput(userId);
+  const token = await getDriveAccessToken(userId);
+  if (!token) return c.json({ error: "Google Drive nicht verbunden" }, 400);
+  const model = buildSchoolCv(person, profile, cvLang(lang));
+  try {
+    const { docUrl } = await createBlankDoc(token, `${model.title} ${model.name}`.trim(), schoolCvText(model), p?.driveApplicationsFolderId ?? null);
+    return c.json({ docUrl });
+  } catch (err) {
+    console.error("school-cv export-doc error:", err);
+    return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
+  }
+});
+
+// ─── Commute by public transport (phase 5d, region check) ─────
+// On demand only: sends the home town and the workplace town (no street, no name) to
+// transport.opendata.ch and stores the fastest weekday-morning connection in aiResultsCache["commute"].
+function nextWeekdayMorning(): string {
+  const d = new Date();
+  do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+
+app.post("/api/applications/:id/commute", async (c) => {
+  const userId = getUserId(c);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, c.req.param("id")), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Not found" }, 404);
+  const home = await loadHomePlace(userId);
+  const job = parsePlace(app_.location);
+  // Station lookup works on "Town" / "Town KT" — a postcode makes it match street names instead
+  const from = [home.town, home.canton].filter(Boolean).join(" ");
+  const to = [job.town, job.canton].filter(Boolean).join(" ");
+  if (!from) return c.json({ error: "no_home" }, 400);
+  if (!to) return c.json({ error: "no_location" }, 400);
+  const q = new URLSearchParams({ from, to, date: nextWeekdayMorning(), time: "07:00", limit: "4" });
+  try {
+    const r = await fetch(`https://transport.opendata.ch/v1/connections?${q}`, { signal: AbortSignal.timeout(15_000), headers: { Accept: "application/json" } });
+    if (!r.ok) return c.json({ error: "transport_failed" }, 502);
+    const j = await r.json() as { connections?: { duration?: string; transfers?: number }[]; from?: { name?: string }; to?: { name?: string } };
+    const options = (j.connections ?? []).map(x => ({ minutes: durationMinutes(x.duration), transfers: x.transfers ?? 0 })).filter(x => x.minutes != null) as { minutes: number; transfers: number }[];
+    if (!options.length) return c.json({ error: "no_connection" }, 404);
+    const best = options.sort((a, b) => a.minutes - b.minutes)[0];
+    const result = { minutes: best.minutes, transfers: best.transfers, from: j.from?.name ?? from, to: j.to?.name ?? to, region: regionMatch(home, job) };
+    await persistAiResult(app_.id, "commute", result);
+    return c.json(result);
+  } catch (err) {
+    console.error("commute error:", err);
+    return c.json({ error: "transport_failed" }, 502);
+  }
+});
+
+// Region level for one application (no external call) — drives the badge in the drawer
+app.get("/api/applications/:id/region", async (c) => {
+  const userId = getUserId(c);
+  const [app_] = await db.select({ location: applications.location }).from(applications).where(and(eq(applications.id, c.req.param("id")), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Not found" }, 404);
+  const home = await loadHomePlace(userId);
+  const job = parsePlace(app_.location);
+  return c.json({ level: regionMatch(home, job), home: [home.zip, home.town].filter(Boolean).join(" "), job: [job.zip, job.town, job.canton].filter(Boolean).join(" ") });
+});
+
+// ─── Dates & reminders (deadlines, taster days, interviews, personal dates) ───
+// `today` comes from the client (its local date) — the container runs in UTC.
+function agendaToday(q: string | undefined): string {
+  return isIsoDate(q) ? q : new Date().toISOString().slice(0, 10);
+}
+
+async function loadAgenda(userId: string, today: string) {
+  const [p] = await db.select({ schoolProfile: userProfile.schoolProfile }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const rows = await db.select({
+    id: applications.id, company: applications.company, role: applications.role, stage: applications.stage,
+    archived: applications.archived, applicationKind: applications.applicationKind, apprenticeship: applications.apprenticeship,
+    applyDeadline: applications.applyDeadline, interview1Details: applications.interview1Details,
+    interview2Details: applications.interview2Details, aiResultsCache: applications.aiResultsCache,
+  }).from(applications).where(eq(applications.userId, userId));
+  return buildAgenda(rows as AgendaApp[], parseSchoolProfile(p?.schoolProfile).dates ?? [], today);
+}
+
+app.get("/api/agenda", async (c) => {
+  const today = agendaToday(c.req.query("today"));
+  return c.json({ today, items: await loadAgenda(getUserId(c), today) });
+});
+
+// Calendar file with alarms on the reminder days — import once into the phone / computer calendar
+app.get("/api/agenda/ics", async (c) => {
+  const today = agendaToday(c.req.query("today"));
+  const q = c.req.query("lang");
+  const lang = q === "en" || q === "fr" ? q : "de";
+  const ics = agendaIcs(await loadAgenda(getUserId(c), today), lang, APP_NAME);
+  return new Response(ics, { headers: {
+    "Content-Type": "text/calendar; charset=utf-8",
+    "Content-Disposition": `attachment; filename="${APP_NAME}-${lang === "de" ? "Termine" : lang === "fr" ? "Rendez-vous" : "Dates"}.ics"`,
+  } });
+});
+
+// School tests (Stellwerk, Lernpass plus, Multicheck …): read every document in the category
+// "schultest" and let the model pull out the scores. The user reviews them in the pupil
+// profile — nothing is stored here.
+app.post("/api/school-profile/extract-tests", async (c) => {
+  const userId = getUserId(c);
+  const { ai } = await c.req.json<{ ai: AiConfig }>();
+  if (!ai || ai.provider === "none") return c.json({ error: "Kein KI-Provider konfiguriert" }, 400);
+  const docs = await db.select().from(userDocuments)
+    .where(and(eq(userDocuments.userId, userId), eq(userDocuments.category, "schultest")));
+  if (docs.length === 0) return c.json({ tests: [], errors: [], docs: 0 });
+  const tests: SchoolTest[] = [];
+  const errors: { name: string; error: string }[] = [];
+  for (const doc of docs) {
+    try {
+      const text = await fetchDocumentText(doc, userId);
+      if (!text?.trim()) { errors.push({ name: doc.name, error: "Kein lesbarer Text (Scan ohne Texterkennung?)" }); continue; }
+      const raw = await callAi(SCHOOL_TEST_EXTRACT_PROMPT, `Dokument: ${doc.name}\n\n${text.slice(0, 12000)}`, ai);
+      const parsed = extractJson(raw) as { tests?: unknown[] };
+      for (const t of parsed.tests ?? []) { const n = normalizeTest(t); if (n?.results.length) tests.push(n); }
+    } catch (e) {
+      errors.push({ name: doc.name, error: (e as Error).message });
+    }
+  }
+  return c.json({ tests, errors, docs: docs.length });
+});
+
 // Persists the user's selection/edits from the letter-angles panel (not AI-generated,
 // just a plain save into the same aiResultsCache slot the panel reads on reopen).
 app.patch("/api/applications/:id/letter-inputs", async (c) => {
@@ -3192,6 +3544,115 @@ app.patch("/api/applications/:id/letter-inputs", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   await persistAiResult(id, "letter-inputs", body as unknown as Record<string, unknown>);
   return c.json({ ok: true });
+});
+
+// ─── Near-duplicate letters ───────────────────────────────────
+/** Other applications of this user whose current letter shares ≥ SIMILAR_LETTER_THRESHOLD of its phrases with `body`. */
+async function findSimilarLetters(userId: string, appId: string, body: string): Promise<{ id: string; company: string; role: string; pct: number }[]> {
+  if (!body.trim()) return [];
+  const rows = await db.select({ id: applications.id, company: applications.company, role: applications.role, cache: applications.aiResultsCache })
+    .from(applications).where(and(eq(applications.userId, userId), ne(applications.id, appId)));
+  const out: { id: string; company: string; role: string; pct: number }[] = [];
+  for (const r of rows) {
+    let other = "";
+    try { other = (JSON.parse(r.cache ?? "{}") as Record<string, { body?: string }>)["cover-letter"]?.body ?? ""; } catch { /* ignore */ }
+    const sim = other ? letterSimilarity(body, other) : 0;
+    if (sim >= SIMILAR_LETTER_THRESHOLD) out.push({ id: r.id, company: r.company, role: r.role, pct: Math.round(sim * 100) });
+  }
+  return out.sort((a, b) => b.pct - a.pct).slice(0, 3);
+}
+
+// Letters to other companies that are nearly the same as this application's current letter
+app.get("/api/applications/:id/letter-similarity", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  let body = "";
+  try { body = (JSON.parse(app_.aiResultsCache ?? "{}") as Record<string, { body?: string }>)["cover-letter"]?.body ?? ""; } catch { /* ignore */ }
+  return c.json({ similar: await findSimilarLetters(userId, id, body) });
+});
+
+// ─── Schnupperlehre debrief → Lehrstelle ──────────────────────
+function readCache(raw: string | null | undefined): Record<string, Record<string, unknown>> {
+  try { return JSON.parse(raw ?? "{}"); } catch { return {}; }
+}
+
+// Saves the taster debrief (aiResultsCache["schnupper-debrief"]); bridge markers are kept server-side
+app.patch("/api/applications/:id/schnupper-debrief", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const prev = normalizeDebrief(readCache(app_.aiResultsCache)["schnupper-debrief"]);
+  const next = { ...normalizeDebrief(await c.req.json()), bridgedTo: prev.bridgedTo, savedToProfile: prev.savedToProfile };
+  await persistAiResult(id, "schnupper-debrief", next as Record<string, unknown>);
+  return c.json(next);
+});
+
+/** Writes the taster into the pupil profile (experience of kind "schnupper" for this company). */
+async function saveTasterToProfile(userId: string, app_: { company: string; apprenticeship: string | null }, debrief: ReturnType<typeof normalizeDebrief>) {
+  const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  if (!profile) return;
+  const next = upsertTasterExperience(parseSchoolProfile(profile.schoolProfile), debrief, { company: app_.company, apprenticeship: app_.apprenticeship });
+  await db.update(userProfile).set({ schoolProfile: JSON.stringify(next) }).where(eq(userProfile.userId, userId));
+}
+
+app.post("/api/applications/:id/schnupper-debrief/to-profile", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
+  const debrief = normalizeDebrief(readCache(app_.aiResultsCache)["schnupper-debrief"]);
+  await saveTasterToProfile(userId, app_, debrief);
+  await persistAiResult(id, "schnupper-debrief", { ...debrief, savedToProfile: true });
+  return c.json({ ok: true });
+});
+
+/**
+ * Creates the Lehrstelle application at the same company from a finished Schnupperlehre:
+ * copies company, trade and contact, records the taster in the pupil profile and prefills the
+ * letter answers ("schon hier geschnuppert" + notes from the debrief). Runs once per taster.
+ */
+app.post("/api/applications/:id/lehrstelle-from-schnupper", async (c) => {
+  const userId = getUserId(c);
+  const id = c.req.param("id");
+  const [src] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
+  if (!src) return c.json({ error: "Nicht gefunden" }, 404);
+  if (normalizeKind(src.applicationKind) !== "schnupperlehre") return c.json({ error: "Nur für Schnupperlehren" }, 400);
+  const cache = readCache(src.aiResultsCache);
+  const debrief = normalizeDebrief(cache["schnupper-debrief"]);
+  if (debrief.bridgedTo) {
+    const [exists] = await db.select({ id: applications.id }).from(applications).where(and(eq(applications.id, debrief.bridgedTo), eq(applications.userId, userId))).limit(1);
+    if (exists) return c.json({ id: exists.id, existed: true });
+  }
+  const trade = src.apprenticeship?.trim() || null;
+  const school: SchoolAnswers = { knownFrom: "Schnupperlehre", schnupperHere: "yes", schnupperNotes: debriefNotes(debrief) };
+  const prevInputs = cache["letter-inputs"] as { school?: SchoolAnswers } | undefined;
+  if (prevInputs?.school?.whyJob) school.whyJob = prevInputs.school.whyJob;
+  const [created] = await db.insert(applications).values({
+    userId,
+    company: src.company,
+    role: trade ? `Lehrstelle ${trade}` : "Lehrstelle",
+    stage: "import_validating",
+    location: src.location,
+    url: src.url,
+    contactPerson: src.contactPerson,
+    contactGender: src.contactGender,
+    language: src.language,
+    applicationKind: "lehrstelle",
+    apprenticeship: trade,
+    source: "Schnupperlehre",
+    aiResultsCache: JSON.stringify({
+      "letter-inputs": { school, _savedAt: new Date().toISOString() },
+      "schnupper-source": { id: src.id, _savedAt: new Date().toISOString() },
+    }),
+  }).returning();
+  await initTasksForStage(created.id, created.stage);
+  await db.insert(applicationActivities).values({ applicationId: created.id, type: "note", title: `Aus Schnupperlehre bei ${src.company} erstellt` });
+  await saveTasterToProfile(userId, src, debrief);
+  await persistAiResult(id, "schnupper-debrief", { ...debrief, bridgedTo: created.id, savedToProfile: true });
+  return c.json({ id: created.id, existed: false }, 201);
 });
 
 // Append the freshly-generated cover letter as a version, and restore a chosen version.
@@ -3301,7 +3762,7 @@ app.post("/api/applications/:id/ai/cover-letter/export-doc", async (c) => {
 app.post("/api/applications/:id/ai/email-draft", async (c) => {
   const userId = getUserId(c);
   const id = c.req.param("id");
-  const { ai, type, additionalContext } = await c.req.json<{ ai: AiConfig; type: "application" | "followup" | "decline" | "feedback" | "linkedin"; additionalContext?: string }>();
+  const { ai, type, additionalContext } = await c.req.json<{ ai: AiConfig; type: "application" | "followup" | "decline" | "feedback" | "linkedin" | "thanks"; additionalContext?: string }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
@@ -3310,15 +3771,23 @@ app.post("/api/applications/:id/ai/email-draft", async (c) => {
     followup: "eine freundliche Follow-up-Email (3-4 Wochen nach Bewerbung, höflich nach Stand fragen)",
     decline: "eine höfliche Absage-Email (du hast eine andere Stelle angenommen)",
     feedback: "eine höfliche Email um konstruktives Feedback zur Absage zu bitten (kurz und professionell, max. 100 Wörter im Body)",
-    linkedin: "eine kurze LinkedIn-Vernetzungsnachricht an HR/Hiring Manager (max. 300 Zeichen, freundlich und professionell)"
+    linkedin: "eine kurze LinkedIn-Vernetzungsnachricht an HR/Hiring Manager (max. 300 Zeichen, freundlich und professionell)",
+    thanks: normalizeKind(app_.applicationKind) === "schnupperlehre"
+      ? "eine kurze Dankesmail nach der Schnupperlehre (Dank für die Schnuppertage, ein konkretes Erlebnis, Interesse an einer Lehrstelle ausdrücken)"
+      : "eine kurze Dankesmail nach dem Vorstellungsgespräch (Dank für das Gespräch, Interesse bekräftigen)"
   };
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
-  const system = `${langPrompt(lang_)} Schreibe ${typeDescriptions[type]}. Professionell, klar, nicht zu lang (max. 150 Wörter im Body, ausser bei linkedin: max. 300 Zeichen).
+  const schoolMail = isSchoolApp(profile, app_)
+    ? `\nAbsender ist eine Schülerin oder ein Schüler (14–16 Jahre), es geht um ${normalizeKind(app_.applicationKind) === "schnupperlehre" ? "eine Schnupperlehre" : "eine Lehrstelle"}${app_.apprenticeship ? ` als ${app_.apprenticeship}` : ""}. Schreib höflich (Sie-Form an den Betrieb), einfach und echt wie ein Jugendlicher, ohne Business-Floskeln, max. 100 Wörter im Body, Schweizer Schreibweise (ss statt ß). Konkrete Erlebnisse nur, wenn sie unten genannt sind, sonst [Platzhalter].`
+    : "";
+  const system = `${langPrompt(lang_)} Schreibe ${typeDescriptions[type]}. Professionell, klar, nicht zu lang (max. 150 Wörter im Body, ausser bei linkedin: max. 300 Zeichen).${schoolMail}
 Erkenne die Sprache der Stellenbeschreibung und schreibe in dieser Sprache.
 Antworte NUR mit JSON: { "subject": "<Betreff>", "body": "<Email-Text>" }`;
   const contacts = await db.select().from(applicationContacts).where(eq(applicationContacts.applicationId, id)).limit(1);
   const contact = contacts[0];
-  const user = `Absender: ${profile?.name ?? ""} (${profile?.email ?? ""})\nEmpfänger: ${contact ? `${contact.name}${contact.role ? ` (${contact.role})` : ""}` : "HR-Team"} bei ${app_.company}\nStelle: ${app_.role}\nStellenbeschreibung: ${app_.description?.slice(0, 500) ?? ""}`;
+  const debrief = type === "thanks" ? debriefNotes(normalizeDebrief(readCache(app_.aiResultsCache)["schnupper-debrief"])) : "";
+  const recipient = contact ? `${contact.name}${contact.role ? ` (${contact.role})` : ""}` : app_.contactPerson ? `${app_.contactPerson}${salutationPrompt(lang_, app_.contactPerson, app_.contactGender) ? ` — ${salutationPrompt(lang_, app_.contactPerson, app_.contactGender)}` : ""}` : schoolMail ? "Ansprechperson für Lernende" : "HR-Team";
+  const user = `Absender: ${profile?.name ?? ""} (${profile?.email ?? ""})\nEmpfänger: ${recipient} bei ${app_.company}\nStelle: ${app_.role}\nStellenbeschreibung: ${app_.description?.slice(0, 500) ?? ""}${debrief ? `\nErlebnisse aus der Schnupperlehre: ${debrief}` : ""}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
     const parsed = extractJson(raw) as { subject: string; body: string };
@@ -3338,6 +3807,31 @@ app.post("/api/applications/:id/ai/interview-prep", async (c) => {
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  if (isSchoolApp(profile, app_)) {
+    // School leavers: taster days / apprenticeship interview — same JSON keys, school meaning
+    const kind = normalizeKind(app_.applicationKind);
+    const taster = kind === "schnupperlehre";
+    const what = taster ? "die Schnuppertage" : kind === "praktikum" ? "das Gespräch für das Praktikum" : "das Vorstellungsgespräch für die Lehrstelle";
+    const trade = app_.apprenticeship?.trim() || app_.role;
+    const sys = `${langPrompt(lang_)} Du bereitest eine Schülerin oder einen Schüler (14–16 Jahre) auf ${what} als ${trade} bei ${app_.company} vor. Schreib per Du, einfach, konkret und ermutigend. Keine Verhandlungstaktik, keine Fachbegriffe aus dem Recruiting.
+Antworte NUR mit diesem JSON:
+{ "rollenFragen": ["<Frage — Tipp: …>", ...], "starBeispiele": [{ "frage": "<Frage>", "situation": "<Was war los?>", "aufgabe": "<Was war deine Aufgabe?>", "aktion": "<Was hast du gemacht?>", "ergebnis": "<Wie ging es aus?>" }], "vossFragenWhatHow": ["<Vorbereitungspunkt>", ...], "rueckfragen": ["<Frage an den Betrieb>", ...] }
+Regeln:
+- rollenFragen: 8 Fragen, die ${taster ? "dir während oder am Ende der Schnuppertage gestellt werden" : "Lehrbetriebe Jugendlichen typischerweise stellen"} (z.B. Warum dieser Beruf? Warum unser Betrieb? Was machst du in der Freizeit? Was ist dein Lieblingsfach? Was kannst du gut, was weniger? Wo hast du schon geschnuppert?). Jede als "Frage — Tipp: …" mit einem kurzen Tipp, wie du aus deinem Schülerprofil antworten kannst.
+- starBeispiele: 3 kurze Beispiele zum Erzählen, nur aus echten Erfahrungen im Schülerprofil (Ämtli, Verein, Taschengeldjob, Schulprojekt, Schnupperlehre). Fehlt ein passendes Erlebnis, schreib "[eigenes Beispiel einsetzen]" — nichts erfinden.
+- vossFragenWhatHow: 6 praktische Punkte zur Vorbereitung (${taster ? "Kleidung, Material, Znüni, Anreise und Pünktlichkeit, Handy, Verhalten im Betrieb" : "Unterlagen mitnehmen, Kleidung, Anreise und Pünktlichkeit, Begrüssung, Handy aus, Nachfragen zum Ablauf"}).
+- rueckfragen: 5 Fragen, die du dem Betrieb stellen kannst (z.B. Wie sieht ein typischer Arbeitstag aus? Wie viele Lernende gibt es? Wo ist die Berufsschule?).
+- Testresultate und Noten nur erwähnen, wenn sie im Schülerprofil als gut aufgeführt sind.`;
+    const ctx = schoolContext(profile, app_);
+    const usr = `Beruf: ${trade}\nBetrieb: ${app_.company}\nInserat: ${app_.description?.slice(0, 1500) ?? ""}\n\n${ctx || "Kein Schülerprofil hinterlegt."}`;
+    try {
+      const parsed = extractJson(await callAi(sys, usr, ai, additionalContext)) as Record<string, unknown>;
+      return c.json({ ...parsed, school: true, kind });
+    } catch (err) {
+      console.error("interview-prep (school) error:", err);
+      return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+    }
+  }
   const system = `${langPrompt(lang_)} Du bist ein erfahrener Interview-Coach und kennst die Methoden von Chris Voss ("Never Split the Difference").
 Erstelle eine umfassende Interviewvorbereitung basierend auf der Rolle und dem Kandidatenprofil.
 Antworte NUR mit diesem JSON:
@@ -3787,6 +4281,25 @@ app.post("/api/applications/:id/ai/company-research", async (c) => {
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const lang_ = (app_ as typeof app_ & { language?: string }).language;
+  const [crProfile] = await db.select({ persona: userProfile.persona }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  if (isSchoolApp(crProfile, app_)) {
+    // School leavers: what the company does + ideas for "why this company" — no market analysis
+    const trade = app_.apprenticeship?.trim() || app_.role;
+    const sys = `${langPrompt(lang_)} Du hilfst einer Schülerin oder einem Schüler (14–16 Jahre), den Lehrbetrieb ${app_.company} kennen zu lernen, um sich als ${trade} zu bewerben. Schreib per Du und in einfachen Worten.
+Antworte NUR mit JSON: { "unternehmensueberblick": "<2–3 Sätze: was der Betrieb macht, für wen>", "branche": "<Branche>", "unternehmenskultur": "<was man über die Arbeit und die Lernenden dort weiss>", "aktuelleThemen": ["<Idee für «Warum dieser Betrieb»>", ...], "marktposition": "", "wettbewerber": [], "gespraechsthemen": [] }
+Regeln:
+- Nur was im Inserat steht oder über diesen Betrieb allgemein bekannt ist. Bei kleinen Betrieben weisst du oft nichts Sicheres: dann schreib "[auf der Website nachschauen: …]" mit dem, was die Schülerin nachschauen soll (z.B. Projekte, Produkte, Anzahl Lernende). Erfinde keine Zahlen, Auszeichnungen oder Projekte.
+- aktuelleThemen: 4 konkrete Ideen, was die Schülerin im Anschreiben bei «Warum dieser Betrieb» schreiben könnte, jeweils mit dem Hinweis, was sie dafür selbst nachschauen oder erlebt haben muss.`;
+    const usr = `Betrieb: ${app_.company}\nBeruf: ${trade}\nOrt: ${app_.location ?? ""}\nInserat:\n${app_.description?.slice(0, 2000) ?? ""}`;
+    try {
+      const parsed = { ...(extractJson(await callAi(sys, usr, ai, additionalContext)) as Record<string, unknown>), marktposition: "", wettbewerber: [], gespraechsthemen: [], school: true };
+      await persistAiResult(id, "company-research", parsed);
+      return c.json(parsed);
+    } catch (err) {
+      console.error("company-research (school) error:", err);
+      return c.json({ error: "KI-Anfrage fehlgeschlagen" }, 502);
+    }
+  }
   const system = `${langPrompt(lang_)} Du bist ein Business-Analyst. Erstelle eine strukturierte Unternehmens- und Branchenrecherche basierend auf den verfügbaren Informationen. Antworte NUR mit JSON:
 { "unternehmensueberblick": "<string>", "branche": "<string>", "marktposition": "<string>", "unternehmenskultur": "<string>", "wettbewerber": ["<string>"], "aktuelleThemen": ["<string>"], "gespraechsthemen": ["<string>"] }`;
   const user = `Unternehmen: ${app_.company}\nRolle: ${app_.role}\nStellenbeschreibung:\n${app_.description?.slice(0, 2000) ?? ""}`;
@@ -4004,10 +4517,14 @@ app.post("/api/applications/:id/ai/letter-review", async (c) => {
   // reader's UI language (everything that explains or instructs).
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
   const uiLang_ = REVIEW_LANG_NAMES[bodyUiLang ?? ""] ? bodyUiLang! : REVIEW_LANG_NAMES[reviewProfile?.uiLanguage ?? ""] ? reviewProfile!.uiLanguage! : lang_;
-  const reviewGuidance = buildLetterGuidance(reviewProfile?.letterConfig);
+  const reviewGuidance = buildLetterGuidance(reviewProfile?.letterConfig, reviewProfile?.persona);
   const reviewHumanize = humanizerPrompt(lang_, reviewProfile?.letterConfig);
   const letterLangName = REVIEW_LANG_NAMES[lang_] ?? REVIEW_LANG_NAMES.de;
-  const system = `${reviewLangDirective(uiLang_, lang_)}\n\nDu bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch. Die Korrespondenzsprache dieser Bewerbung ist ${letterLangName}: Beurteile Rechtschreibung, Grammatik, Stil, Anrede, Grussformel und Formulierungen nach den Regeln und Gepflogenheiten dieser Sprache. Ist das Anschreiben ganz oder teilweise in einer anderen Sprache verfasst, nenne das als erste Verbesserung und als ersten Eintrag in "promptVorschlaege".${reviewGuidance ? ` Prüfe zusätzlich, ob es die folgenden Vorgaben des Kandidaten erfüllt, und nenne Abweichungen in "verbesserungen":\n\n${reviewGuidance}` : ""}${reviewHumanize ? `\n\nBewerte das Anschreiben außerdem an diesen Maßstäben für menschliches Schreiben und nenne Verstöße in "verbesserungen" bzw. "cliches":\n${reviewHumanize}` : ""} Antworte NUR mit JSON:
+  const reviewKind = normalizeKind(app_.applicationKind);
+  const schoolReview = isSchoolKind(reviewKind);
+  // Body for the deterministic checks (subject excluded) — set below together with letterText
+  let letterBody = coverLetterContent?.trim() ?? "";
+  let system = `${reviewLangDirective(uiLang_, lang_)}\n\nDu bist ein erfahrener Karriere-Coach. Analysiere das Anschreiben kritisch. Die Korrespondenzsprache dieser Bewerbung ist ${letterLangName}: Beurteile Rechtschreibung, Grammatik, Stil, Anrede, Grussformel und Formulierungen nach den Regeln und Gepflogenheiten dieser Sprache. Ist das Anschreiben ganz oder teilweise in einer anderen Sprache verfasst, nenne das als erste Verbesserung und als ersten Eintrag in "promptVorschlaege".${schoolLeaverReviewNote(normalizeKind(app_.applicationKind)) ? `\n\n${schoolLeaverReviewNote(normalizeKind(app_.applicationKind))}` : ""}${salutationPrompt(lang_, app_.contactPerson, app_.contactGender) ? `\nDie korrekte Anrede für diesen Brief lautet: "${(salutationPrompt(lang_, app_.contactPerson, app_.contactGender).match(/"([^"]+)"/) ?? [])[1]}" — weicht die Anrede im Brief davon ab oder ist sie grammatisch falsch, nenne das als Verbesserung.` : ""}${reviewGuidance ? ` Prüfe zusätzlich, ob es die folgenden Vorgaben des Kandidaten erfüllt, und nenne Abweichungen in "verbesserungen":\n\n${reviewGuidance}` : ""}${reviewHumanize ? `\n\nBewerte das Anschreiben außerdem an diesen Maßstäben für menschliches Schreiben und nenne Verstöße in "verbesserungen" bzw. "cliches":\n${reviewHumanize}` : ""} Antworte NUR mit JSON:
 { "gesamteindruck": "<string>", "staerken": ["<string>"], "verbesserungen": ["<string>"], "cliches": ["<string>"], "tonalitaet": "<string>", "laenge": "too_long | appropriate | too_short", "personalisierung": "weak | medium | strong", "promptVorschlaege": ["<string>"] }
 "laenge" und "personalisierung": genau einer der englischen Codes, nicht übersetzen.
 "promptVorschlaege": 2-4 fertig formulierte, direkt einsetzbare Anweisungen, mit denen der Kandidat das Anschreiben gezielt anpassen lassen kann (z.B. sinngemäss "Kürze den zweiten Absatz auf zwei Sätze." oder "Ersetze das Klischee '…' durch einen konkreten Beleg aus dem Lebenslauf."). Jede Anweisung muss eigenständig verständlich sein, ohne den Review-Text zu kennen.
@@ -4020,14 +4537,29 @@ ${reviewLangDirective(uiLang_, lang_)}`;
       const [cacheRow] = await db.select({ c: applications.aiResultsCache }).from(applications).where(eq(applications.id, id)).limit(1);
       const cache = JSON.parse(cacheRow?.c ?? "{}") as Record<string, { body?: string; subject?: string }>;
       const cached = cache["cover-letter"];
-      if (cached?.body) letterText = cached.subject ? `${cached.subject}\n\n${cached.body}` : cached.body;
+      if (cached?.body) { letterText = cached.subject ? `${cached.subject}\n\n${cached.body}` : cached.body; letterBody = cached.body; }
     } catch { /* ignore */ }
   }
   if (!letterText) letterText = "Kein Anschreiben vorhanden. Bitte zuerst im Tab 'Aktionen' → Phase Anschreiben ein Anschreiben generieren.";
+  // School leavers: deterministic checklist + the four criteria the company looks for
+  const checks = schoolReview && letterBody
+    ? schoolLetterChecks(letterBody, { lang: lang_, kind: reviewKind, company: app_.company, contactPerson: app_.contactPerson, contactGender: app_.contactGender,
+        similar: await findSimilarLetters(userId, id, letterBody).then(r => r[0] ? { company: r[0].company, pct: r[0].pct } : null) })
+    : undefined;
+  if (schoolReview) {
+    const hint = checks ? checksForPrompt(checks) : "";
+    system += `\n\nZusätzlich für diese Schulabgänger-Bewerbung: Bewerte die vier Kriterien, auf die der Betrieb achtet, und finde Rechtschreib- und Grammatikfehler. Ergänze das JSON um:
+"kriterien": { "motivation": K, "passung": K, "zuverlaessigkeit": K, "persoenlichkeit": K } mit K = { "stufe": "strong | ok | weak", "begruendung": "<1 Satz, per Du>", "tipp": "<1 konkreter Tipp, per Du>" },
+"rechtschreibung": [{ "fehler": "<Wortlaut im Brief>", "korrektur": "<richtig>" }] (leer, wenn alles stimmt; Schweizer Schreibweise ss statt ß ist korrekt).
+"stufe": genau einer der englischen Codes. Motivation = warum dieser Beruf UND dieser Betrieb, konkret belegt; Passung = passt das Profil zum Berufsbild; Zuverlässigkeit = belegt durch Beispiele (Ämtli, Job, Verein …), nicht behauptet; Persönlichkeit = wirkt die Person echt und sympathisch.${hint ? `\n\n${hint}` : ""}
+
+${reviewLangDirective(uiLang_, lang_)}`;
+  }
   const user = `Stelle: ${app_.role} bei ${app_.company}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}\n\nAnschreiben:\n${letterText}`;
   try {
     const raw = await callAi(system, user, ai, additionalContext);
-    const parsed = extractJson(raw) as { gesamteindruck: string; staerken: string[]; verbesserungen: string[]; cliches: string[]; tonalitaet: string; laenge: string; personalisierung: string; promptVorschlaege?: string[] };
+    const parsed = extractJson(raw) as { gesamteindruck: string; staerken: string[]; verbesserungen: string[]; cliches: string[]; tonalitaet: string; laenge: string; personalisierung: string; promptVorschlaege?: string[]; checks?: unknown; kind?: string };
+    if (checks) { parsed.checks = checks; parsed.kind = reviewKind; }
     await persistAiResult(id, "letter-review", parsed as Record<string, unknown>);
     return c.json(parsed);
   } catch (err) {
@@ -4067,18 +4599,24 @@ app.post("/api/applications/:id/ai/opening-sentences", async (c) => {
   const id = c.req.param("id");
   const { ai, additionalContext, language: bodyLang, letterInputs } = await c.req.json<{
     ai: AiConfig; additionalContext?: string; language?: string;
-    letterInputs?: { angles?: string[]; jobNotes?: string };
+    letterInputs?: { angles?: string[]; jobNotes?: string; school?: SchoolAnswers };
   }>();
   const [app_] = await db.select().from(applications).where(and(eq(applications.id, id), eq(applications.userId, userId))).limit(1);
   if (!app_) return c.json({ error: "Nicht gefunden" }, 404);
   const [profile] = await db.select().from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
   const lang_ = bodyLang ?? (app_ as typeof app_ & { language?: string }).language ?? "de";
-  const openingGuidance = buildLetterGuidance(profile?.letterConfig);
+  const openingGuidance = buildLetterGuidance(profile?.letterConfig, profile?.persona);
   const openingHumanize = humanizerPrompt(lang_, profile?.letterConfig);
-  const system = `${langPrompt(lang_)} Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend).${openingGuidance ? `\n\n${openingGuidance}` : ""}${openingHumanize ? `\n\n${openingHumanize}` : ""} Antworte NUR mit JSON:
+  const openingKind = normalizeKind(app_.applicationKind);
+  const openingTask = isSchoolKind(openingKind)
+    ? `Du hilfst einer Schulabgängerin / einem Schulabgänger. Generiere 3 verschiedene Eröffnungssätze für ein Anschreiben für eine ${openingKind === "schnupperlehre" ? "Schnupperlehre" : openingKind === "lehrstelle" ? "Lehrstelle" : "Praktikumsstelle"}${app_.apprenticeship ? ` als ${app_.apprenticeship}` : ""}. Jeder Satz sagt direkt und selbstbewusst, worum es geht (z.B. "Ich bewerbe mich um …"), nie "Hiermit möchte ich …", und verbindet das mit einem konkreten Bezug (woher man den Betrieb kennt, ein Erlebnis mit dem Beruf, etwas Konkretes am Betrieb). Einfache Sprache, wie eine gut vorbereitete Jugendliche / ein gut vorbereiteter Jugendlicher schreibt; nichts erfinden. Ton: ${openingKind === "schnupperlehre" ? "neugierig, kennenlernen wollen" : "selbstbewusst, bei Ihnen lernen wollen"}.`
+    : `Du bist ein Kreativtexter für Bewerbungsunterlagen. Generiere 3 verschiedene, aufmerksamkeitsstarke Eröffnungssätze für ein Anschreiben — keine generischen 'Hiermit bewerbe ich mich...' Sätze. Jeder soll einen anderen Ansatz haben (z.B. Ergebnis-orientiert, Neugier-weckend, Persönlich-verbindend).`;
+  const system = `${langPrompt(lang_)} ${openingTask}${openingGuidance ? `\n\n${openingGuidance}` : ""}${openingHumanize ? `\n\n${openingHumanize}` : ""} Antworte NUR mit JSON:
 { "saetze": [{ "satz": "<der Eröffnungssatz>", "ansatz": "<kurzes Ansatz-Label>", "erklaerung": "<was diesen Satz in genau diesem Fall speziell/stark macht>", "empfehlung": "<konkrete Empfehlung, wann/wofür man diesen Satz wählen sollte>" }] }`;
   const openingDocsContext = await loadDocumentsContext(userId);
-  let user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt"}${openingDocsContext ? `\n\n${openingDocsContext}` : ""}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
+  const openingSchool = schoolContext(profile, app_);
+  const openingAnswers = formatSchoolAnswers(letterInputs?.school, openingKind);
+  let user = `Stelle: ${app_.role} bei ${app_.company}\nMein Profil: ${openingSchool || (profile?.masterCv?.slice(0, 1500) ?? "Kein Profil hinterlegt")}${openingDocsContext ? `\n\n${openingDocsContext}` : ""}${openingAnswers ? `\n\n${openingAnswers}` : ""}\nStellenbeschreibung:\n${app_.description?.slice(0, 1000) ?? ""}`;
   if (letterInputs?.angles?.length || letterInputs?.jobNotes?.trim()) {
     user += `\n\n## Vom Kandidaten gewählte Kernaussagen & individuelle Angaben — die Eröffnungssätze sollen hierauf konkret Bezug nehmen`;
     if (letterInputs.angles?.length) user += `\n${letterInputs.angles.map(a => `- ${a}`).join("\n")}`;
@@ -4954,9 +5492,10 @@ app.post("/api/applications/:id/drive/upload-pdf-from-url", async (c) => {
       if (!fetchRes.ok) return c.json({ error: `Drive Download: HTTP ${fetchRes.status}` }, 502);
       fileBuffer = await fetchRes.arrayBuffer();
     } else {
-      const fetchRes = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-      if (!fetchRes.ok) return c.json({ error: `Datei nicht erreichbar: HTTP ${fetchRes.status}` }, 502);
-      fileBuffer = await fetchRes.arrayBuffer();
+      // Guarded: an internal URL here would copy internal content into the user's Drive
+      const r = await fetchPublicBytes(url, { maxBytes: 25 * 1024 * 1024 });
+      if (!r.ok) return c.json({ error: `Datei nicht erreichbar: HTTP ${r.status}` }, 502);
+      fileBuffer = r.buf.buffer.slice(r.buf.byteOffset, r.buf.byteOffset + r.buf.byteLength) as ArrayBuffer;
     }
   } catch {
     return c.json({ error: "Datei-URL nicht erreichbar" }, 502);
@@ -6986,10 +7525,10 @@ app.post("/api/drive/upload-pdf-from-url", async (c) => {
       if (!fetchRes.ok) return c.json({ error: `Drive Download: HTTP ${fetchRes.status}` }, 502);
       fileBuffer = await fetchRes.arrayBuffer();
     } else {
-      // Regular URL — fetch directly
-      const fetchRes = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-      if (!fetchRes.ok) return c.json({ error: `Datei konnte nicht geladen werden: HTTP ${fetchRes.status}` }, 502);
-      fileBuffer = await fetchRes.arrayBuffer();
+      // Regular URL — guarded: an internal URL here would copy internal content into the user's Drive
+      const r = await fetchPublicBytes(url, { maxBytes: 25 * 1024 * 1024 });
+      if (!r.ok) return c.json({ error: `Datei konnte nicht geladen werden: HTTP ${r.status}` }, 502);
+      fileBuffer = r.buf.buffer.slice(r.buf.byteOffset, r.buf.byteOffset + r.buf.byteLength) as ArrayBuffer;
     }
   } catch {
     return c.json({ error: "Datei-URL nicht erreichbar" }, 502);

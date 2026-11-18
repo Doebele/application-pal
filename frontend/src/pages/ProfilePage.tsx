@@ -8,6 +8,7 @@ import imgBerufsumsteiger  from "../assets/personas/berufsumsteiger.png";
 import { OpenNewWindow, FloppyDisk, User, Linkedin, Page, RefreshCircle, Expand, Collapse, LightBulb } from "iconoir-react";
 import { Topbar } from "../components/Topbar";
 import { LinkedInConnection } from "../components/linkedin/LinkedInConnection";
+import { SchoolProfileSection, parseSchoolProfile } from "../components/SchoolProfileSection";
 import { api } from "../lib/api";
 import { useQueryClient } from "@tanstack/react-query";
 import type { UserProfile } from "@application-pal/shared";
@@ -47,6 +48,7 @@ export function ProfilePage() {
     name: "", email: "", phone: "", location: "", headline: "",
     linkedinUrl: "", linkedinBio: "", photoUrl: "", masterCv: "", personalNotes: "", desiredSalary: ""
   });
+  const isSchool = profile.persona === "schulabgaenger";
   const [notesExpanded, setNotesExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -120,7 +122,7 @@ export function ProfilePage() {
     <>
       <Topbar
         title={t("profile.title")}
-        sub={t("profile.sub")}
+        sub={t(isSchool ? "profile.subSchool" : "profile.sub")}
         actions={
           <button
             className={"btn " + (saving ? "btn-secondary" : "btn-primary")}
@@ -206,6 +208,12 @@ export function ProfilePage() {
           )}
         </div>
 
+        {/* Pupil profile (school leavers): motivation, experiences, strength → example, school tests */}
+        {profile.persona === "schulabgaenger" && (
+          <SchoolProfileSection value={parseSchoolProfile(profile.schoolProfile)}
+            onSave={(next) => { void save({ schoolProfile: JSON.stringify(next) }).then(() => queryClient.invalidateQueries({ queryKey: ["profile"] })); }} />
+        )}
+
         {/* Personal Info */}
         <div style={{ marginBottom: 32 }}>
           <div data-tour="profile.personal" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
@@ -249,17 +257,19 @@ export function ProfilePage() {
                   </div>
                 ))}
               </div>
-              <div style={{ paddingBottom: 8 }}>
+              {!isSchool && <div style={{ paddingBottom: 8 }}>
                 <div style={{ fontSize: 9, fontWeight: 700, color: "var(--fg-3)", letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 2 }}>{t("profile.headline")}</div>
                 <input
                   {...field("headline")}
                   placeholder={t("profile.headlinePlaceholder")}
                 />
-              </div>
+              </div>}
             </div>
           </div>
         </div>
 
+        {/* LinkedIn + Master CV: job seekers only (school leavers: pupil profile above; their CV comes from it) */}
+        {!isSchool && <>
         {/* LinkedIn */}
         <div style={{
           marginBottom: 32,
@@ -417,6 +427,8 @@ export function ProfilePage() {
           </div>
         </div>
 
+        </>}
+
         {/* Personal Notes */}
         <div style={{
           marginBottom: 32,
@@ -506,8 +518,8 @@ export function ProfilePage() {
           </div>
         </div>
 
-        {/* Desired salary */}
-        <div className="settings-group">
+        {/* Desired salary (not for school leavers — apprentice pay is fixed) */}
+        {!isSchool && <div className="settings-group">
           <div className="settings-row">
             <div className="field" style={{ flex: 1 }}>
               <label>{t("profile.desiredSalary")}</label>
@@ -522,7 +534,7 @@ export function ProfilePage() {
               <span className="field-hint">{t("profile.desiredSalaryHint")}</span>
             </div>
           </div>
-        </div>
+        </div>}
 
         <div className="autosave-indicator">
           <span className="dot" style={{ background: saved ? "var(--accent)" : "var(--green)" }} />

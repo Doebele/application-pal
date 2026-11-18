@@ -1,6 +1,7 @@
 import { addMinutes, format, parseISO } from "date-fns";
 import type { Application } from "@application-pal/shared";
 import { type CalendarEvent, EVENT_COLORS } from "../types/calendar";
+import i18n from "../i18n";
 import { STAGE_COLORS as STAGE_COLORS_MAP, STAGE_LABELS_DE, ALL_STAGES } from "./stages";
 
 // ─── Stage color lookup ───────────────────────────────────────
@@ -24,6 +25,7 @@ interface InterviewDetails {
   videoProvider?: string;
   interviewer?: string;
   notes?: string;
+  endDate?: string;   // Schnupperlehre: last taster day
 }
 
 // ─── Interview JSON → CalendarEvent ──────────────────────────
@@ -32,11 +34,14 @@ function parseInterviewEvent(app: Application, round: 1 | 2): CalendarEvent | nu
   if (!raw) return null;
   let d: InterviewDetails;
   try { d = JSON.parse(raw); } catch { return null; }
-  if (!d.date || !d.time) return null;
+  if (!d.date) return null;
+  // Taster days (Schnupperlehre round 1) need no time and may span several days
+  const taster = round === 1 && app.applicationKind === "schnupperlehre";
+  if (!d.time && !taster) return null;
 
-  const start = new Date(`${d.date}T${d.time}`);
+  const start = new Date(`${d.date}T${d.time || "08:00"}`);
   if (isNaN(start.getTime())) return null;
-  const end = addMinutes(start, d.duration ?? 60);
+  const end = taster && d.endDate && d.endDate >= d.date ? new Date(`${d.endDate}T17:00`) : addMinutes(start, d.duration ?? 60);
 
   const formatLabel =
     d.format === "onsite" ? "Vor Ort" :
@@ -46,7 +51,7 @@ function parseInterviewEvent(app: Application, round: 1 | 2): CalendarEvent | nu
   const timeStr = format(start, "HH:mm");
   const descParts = [
     app.role,
-    `Interview ${round}`,
+    taster ? i18n.t("agenda.kinds.taster") : `Interview ${round}`,
     timeStr !== "00:00" ? timeStr : null,
     formatLabel || null,
     d.interviewer ? d.interviewer : null,
@@ -136,9 +141,23 @@ export function applicationsToCalendarEvents(apps: Application[]): CalendarEvent
     if (i1) events.push(i1);
     const i2 = parseInterviewEvent(app, 2);
     if (i2) events.push(i2);
-    // Deadline
+    // Deadline (free-text "next step", if it parses as a date)
     const dl = parseDeadlineEvent(app);
     if (dl) events.push(dl);
+    // Application deadline (Bewerbungsfrist, YYYY-MM-DD)
+    if (app.applyDeadline && /^\d{4}-\d{2}-\d{2}$/.test(app.applyDeadline)) {
+      events.push({
+        id:          `apply-deadline-${app.id}`,
+        title:       app.company,
+        start:       new Date(`${app.applyDeadline}T09:00`),
+        type:        "deadline",
+        phase:       app.stage,
+        source:      "local",
+        color:       EVENT_COLORS.deadline,
+        description: [i18n.t("agenda.applyDeadline"), app.apprenticeship || app.role].filter(Boolean).join(" · "),
+        metadata:    { appId: app.id, company: app.company, role: app.role, stage: app.stage },
+      });
+    }
     // Stage change (timeline)
     const updAt = new Date(app.updatedAt);
     const crAt  = new Date(app.createdAt);
@@ -213,6 +232,34 @@ export function googleCalendarEventsToCalendarEvents(
       color,
       description: [item.description, item.location].filter(Boolean).join(" · ") || undefined,
       metadata:    { gcalId: item.id, htmlLink: item.htmlLink, location: item.location },
+    };
+  });
+}
+
+// ─── Personal dates (pupil profile: Multicheck, Stellwerk, Berufsmesse …) ─────
+export type PersonalDate = { id: string; kind: "test" | "fair" | "info" | "counselling" | "other"; title: string; date: string; time?: string; place?: string; note?: string };
+
+export function personalDatesFromProfile(schoolProfile: string | null | undefined): PersonalDate[] {
+  try {
+    const j = JSON.parse(schoolProfile ?? "{}");
+    return Array.isArray(j?.dates) ? (j.dates as PersonalDate[]).filter(d => d && /^\d{4}-\d{2}-\d{2}$/.test(d.date)) : [];
+  } catch { return []; }
+}
+
+export function personalDatesToCalendarEvents(dates: PersonalDate[]): CalendarEvent[] {
+  return dates.map(d => {
+    const start = new Date(`${d.date}T${d.time || "08:00"}`);
+    return {
+      id:          `personal-${d.id}`,
+      title:       d.title || i18n.t(`agenda.personalKinds.${d.kind}`),
+      start,
+      end:         addMinutes(start, 60),
+      type:        "other" as const,
+      phase:       "",
+      source:      "local" as const,
+      color:       EVENT_COLORS["follow-up"],
+      description: [i18n.t(`agenda.personalKinds.${d.kind}`), d.time, d.place].filter(Boolean).join(" · "),
+      metadata:    { personal: true },
     };
   });
 }

@@ -31,7 +31,8 @@
     "desiredSalary": "Salaire souhaité (CHF, brut annuel)",
     "desiredSalaryPlaceholder": "p. ex. 110000",
     "desiredSalaryHint": "Affiché comme ligne de référence dans le graphique de vérification salariale",
-    "autosave": "Enregistré automatiquement en quittant le champ."
+    "autosave": "Enregistré automatiquement en quittant le champ.",
+    "subSchool": "Profil d'élève et coordonnées pour toutes les candidatures"
   },
   "persona": {
     "schulabgaenger": "Sortant·e d'école",
@@ -62,7 +63,10 @@
     "groupWriting": "Rédaction & savoir",
     "help": "Aide & vue d'ensemble",
     "setupAi": "Configurer l'IA",
-    "setupGoogle": "Connecter Google"
+    "setupGoogle": "Connecter Google",
+    "schoolCv": "CV",
+    "agenda": "Rendez-vous",
+    "career": "Choix professionnel"
   },
   "tabs": {
     "actions": "Actions",
@@ -194,6 +198,44 @@
         "1": "Date de début confirmée",
         "2": "Autres candidatures en cours informées",
         "3": "Désistements pour d’autres postes préparés"
+      },
+      "school": {
+        "0": "Métier et entreprise découverts",
+        "1": "Possibilité de stage d'essai vérifiée (site / téléphone)",
+        "2": "Parents / enseignant·e informés",
+        "3": "CV avec photo à jour",
+        "4": "Bulletins et résultats de tests prêts",
+        "5": "Personne de contact correctement saluée",
+        "6": "Fait relire (parents / enseignant·e)",
+        "7": "Une demi-page au maximum",
+        "8": "Dossier complet envoyé (lettre, CV, bulletins)",
+        "9": "Relancer après une semaine sans réponse",
+        "10": "Jours de stage confirmés (date, heure, lieu)",
+        "11": "Tenue et matériel clarifiés",
+        "12": "Trajet prévu – être ponctuel·le",
+        "13": "Questions pour l'entreprise notées",
+        "14": "Bilan du stage rempli",
+        "15": "Évaluation de l'entreprise reçue",
+        "16": "E-mail de remerciement envoyé après le stage",
+        "17": "Demandé s'il y a une place d'apprentissage",
+        "18": "Bilan du stage ajouté au profil d'élève",
+        "19": "Demandé ce que je peux améliorer",
+        "20": "Prochaine entreprise choisie",
+        "21": "La place correspond à mes métiers souhaités",
+        "22": "Stage d'essai fait dans ce métier",
+        "23": "Délai de candidature noté",
+        "24": "Rapports de stage joints",
+        "25": "Dossier complet envoyé (lettre, CV, bulletins, tests)",
+        "26": "Rendez-vous confirmé (heure, lieu)",
+        "27": "Préparé « Pourquoi ce métier ? Pourquoi ici ? »",
+        "28": "Mes propres questions préparées",
+        "29": "Parents informés du rendez-vous",
+        "30": "Journées de sélection ou test d'aptitude préparés",
+        "31": "E-mail de remerciement envoyé après l'entretien",
+        "32": "Contrat d'apprentissage lu avec les parents",
+        "33": "Contrat signé renvoyé",
+        "34": "Autres entreprises informées",
+        "35": "Autres places d'apprentissage cherchées"
       }
     }
   },
@@ -463,7 +505,8 @@
       "zertifikat": "Attestations",
       "portfolio": "Portfolio",
       "figma": "Figma",
-      "sonstiges": "Autres"
+      "sonstiges": "Autres",
+      "schultest": "Tests scolaires"
     },
     "extraUrl": "Lien / informations complémentaires",
     "linkBtn": "Lien",
@@ -810,7 +853,10 @@
       "updatedAt": "Mise à jour",
       "jobType": "Taux d'activité",
       "workModel": "Mode",
-      "contractType": "Contrat"
+      "contractType": "Contrat",
+      "apprenticeship": "Métier",
+      "applicationKind": "Type",
+      "interview1School": "Stage / entretien"
     },
     "showArchived": "Archives",
     "columnsBtn": "Colonnes",
@@ -939,6 +985,23 @@
     "humanize": {
       "label": "Style d'écriture naturel (humanisation)",
       "hint": "Demande à l'IA d'écrire de façon humaine dans la langue de correspondance et d'éviter les marqueurs typiques de l'IA — pour les lettres, phrases d'accroche et points forts du CV. N'invente aucun fait et ne modifie pas votre CV principal."
+    },
+    "school": {
+      "infoText": "Tu postules en tant que jeune sortant·e de l'école. L'IA utilise ces informations pour chaque lettre — pour un stage découverte (curieux : « J'aimerais vous découvrir ») ou une place d'apprentissage (convaincu : « J'aimerais apprendre chez vous »). Tu choisis le type pour chaque candidature sous « Détails ».",
+      "structure": {
+        "hint": "Les cinq parties d'une bonne lettre pour un stage découverte ou un apprentissage — une demi-page A4 au maximum."
+      },
+      "values": {
+        "label": "Ma motivation",
+        "hint": "Pourquoi les métiers que tu vises t'intéressent-ils ? Quand l'as-tu remarqué ? Une expérience concrète vaut mieux que « Je m'intéresse à … ».",
+        "placeholder": "p. ex. Menuisier/ère : en cours de travaux manuels, j'ai construit une étagère en bois massif. Voir à la fin un objet réel et utile m'a beaucoup plu."
+      },
+      "strengths": {
+        "label": "Ce que je sais bien faire (force → exemple)",
+        "hint": "Note chaque force avec un exemple qui la montre — pas « je suis fiable », mais quand tu l'as été. Une ligne par force.",
+        "placeholder": "Fiable → Je distribue des journaux chaque mercredi depuis deux ans.\nHabile de mes mains → Je répare moi-même les vélos de ma famille.\nEsprit d'équipe → Au club de foot, j'aide à entraîner les juniors."
+      },
+      "movedToProfile": "Ta motivation, tes expériences et tes forces avec exemples se gèrent dans le profil d'élève — structurées et valables pour chaque lettre."
     }
   },
   "letterDraft": {
@@ -995,7 +1058,12 @@
     "reviewBtnRefresh": "Actualiser la révision",
     "reviewCurrentHintNoVer": "Se réfère au brouillon actuel",
     "humanizeBtn": "Humaniser",
-    "humanizeHint": "Réécrit la lettre actuelle de façon plus humaine (style uniquement, sans changer les faits) et l'enregistre comme nouvelle version"
+    "humanizeHint": "Réécrit la lettre actuelle de façon plus humaine (style uniquement, sans changer les faits) et l'enregistre comme nouvelle version",
+    "school": {
+      "touchpoints": "Lien avec l'entreprise",
+      "valuesMatch": "Pourquoi ce métier",
+      "benefits": "Ce que tu apportes"
+    }
   },
   "rav": {
     "section": "Preuve RAV / ORP",
@@ -1913,7 +1981,9 @@
     "reopen": "Ouvrir l’assistant",
     "aiLocalLmStudio": "ouvre l’app, télécharge un modèle (p. ex. Qwen) et démarre le serveur sous « Developer ».",
     "aiLocalOllama": "ouvre l’app et charge un modèle, p. ex. « ollama pull qwen3 » dans le Terminal.",
-    "aiLocalThen": "Ensuite ici :"
+    "aiLocalThen": "Ensuite ici :",
+    "parentHint": "Cette étape est technique – idéalement, un parent s'en occupe. Tu peux aussi la passer et la faire plus tard dans les réglages.",
+    "schoolTogether": "Astuce : configurez l'app avec tes parents. Ils s'occupent de l'IA et de Google, toi des candidatures."
   },
   "appUpdate": {
     "label": "Version de l’app",
@@ -2292,5 +2362,610 @@
     "noSources": "Aucune source liée.",
     "light": "Clair",
     "dark": "Sombre"
+  },
+  "letterKind": {
+    "kind": "Type de candidature",
+    "kinds": {
+      "job": "Poste",
+      "schnupperlehre": "Stage découverte",
+      "lehrstelle": "Place d'apprentissage",
+      "praktikum": "Stage"
+    },
+    "focus": {
+      "schnupperlehre": "Ton curieux : « J'aimerais vous découvrir. » Conclusion : demander des jours de stage.",
+      "lehrstelle": "Ton assuré : « J'aimerais apprendre chez vous. » Un stage découverte est l'argument le plus fort."
+    },
+    "apprenticeship": "Métier",
+    "apprenticeshipPlaceholder": "p. ex. Menuisier/ère CFC",
+    "salutation": "Formule d'appel dans la lettre",
+    "genderUnknown": "Choisir la formule…",
+    "genderF": "Madame",
+    "genderM": "Monsieur",
+    "genderX": "Neutre (nom complet)",
+    "salutationPick": "Choisis une formule — sinon l'IA décide"
+  },
+  "school": {
+    "title": "Profil d'élève",
+    "intro": "Tu l'écris une fois — l'IA l'utilise pour chaque lettre. Plus tes exemples sont concrets, meilleure est la lettre. Rien n'est inventé : s'il manque quelque chose, l'IA met un espace réservé.",
+    "school": "École & degré",
+    "schoolPlaceholder": "p. ex. Sec. 9e, fin de scolarité 2027",
+    "subjects": "Branches préférées — et pourquoi",
+    "subjectsPlaceholder": "p. ex. Travaux manuels (j'aime construire), Maths (j'aime réfléchir)",
+    "wish": {
+      "title": "Métiers souhaités & motivation",
+      "sub": "Pourquoi ce métier t'intéresse-t-il ? Quand l'as-tu remarqué ? Une expérience concrète vaut mieux que « Je m'intéresse à … ».",
+      "add": "Ajouter un métier",
+      "titlePlaceholder": "Métier, p. ex. Menuisier/ère CFC",
+      "whyPlaceholder": "Qu'est-ce qui t'attire ?",
+      "sincePlaceholder": "Quand l'as-tu remarqué ? p. ex. étagère construite en travaux manuels"
+    },
+    "exp": {
+      "title": "Expériences",
+      "sub": "Projets scolaires, loisirs, clubs, petits boulots et stages découverte déjà faits — c'est ton expérience pratique.",
+      "add": "Ajouter une expérience",
+      "kinds": {
+        "schule": "École / projet",
+        "hobby": "Loisir",
+        "verein": "Club / tâche",
+        "job": "Petit boulot",
+        "schnupper": "Stage découverte",
+        "anderes": "Autre"
+      },
+      "titlePlaceholder": {
+        "schule": "p. ex. étagère en bois massif",
+        "hobby": "p. ex. réparer des vélos",
+        "verein": "p. ex. entraînement des juniors au foot",
+        "job": "p. ex. distribuer des journaux",
+        "schnupper": "p. ex. semaine de stage menuisier",
+        "anderes": "Qu'as-tu fait ?"
+      },
+      "companyPlaceholder": "Entreprise, p. ex. Menuiserie Exemple SA",
+      "whatPlaceholder": "Qu'as-tu fait concrètement ?",
+      "likedPlaceholder": "Qu'est-ce qui t'a plu ou appris ?"
+    },
+    "str": {
+      "title": "Ce que je sais bien faire (force → exemple)",
+      "sub": "Pas « je suis fiable », mais quand tu l'as été. L'IA n'affirme aucune force sans exemple.",
+      "add": "Ajouter une force",
+      "strengthPlaceholder": "Force, p. ex. Fiable",
+      "examplePlaceholder": "Exemple, p. ex. Je distribue des journaux chaque mercredi depuis deux ans",
+      "needsExample": "Quand l'as-tu montré ? Sans exemple, cette force n'entre pas dans la lettre."
+    },
+    "tests": {
+      "title": "Tests scolaires (Stellwerk, Lernpass plus, Multicheck)",
+      "sub": "Ajoute le rapport sous Documents dans la catégorie « Tests scolaires » et lis les valeurs ici — ou saisis-les toi-même. Vérifie les valeurs : la reconnaissance de texte des scans peut se tromper.",
+      "extract": "Lire depuis les documents",
+      "extracting": "Lecture…",
+      "add": "Ajouter un test",
+      "addResult": "Ajouter un domaine",
+      "toDocuments": "Vers les documents",
+      "datePlaceholder": "p. ex. Printemps 2025",
+      "scales": {
+        "stellwerk": "Stellwerk (200–800)",
+        "stanine": "Profil 1–9 (p. ex. Lernpass PSM)",
+        "percent": "Pourcentage (Multicheck, Basic-Check)"
+      },
+      "levels": {
+        "high": "nettement > moy.",
+        "above": "> moyenne",
+        "average": "moyenne",
+        "low": "< moyenne"
+      },
+      "rule": "Seuls les résultats au-dessus de la moyenne entrent dans la lettre — un ou deux au plus, liés au métier. Le profil de personnalité est une auto-évaluation : il montre seulement quelles forces tu peux prouver par un exemple.",
+      "noAi": "Choisis d'abord un modèle d'IA dans les paramètres.",
+      "noDocs": "Aucun document dans la catégorie « Tests scolaires ».",
+      "extracted": "{{count}} test(s) repris",
+      "extractFailed": "Échec de la lecture."
+    },
+    "rav": {
+      "title": "ORP",
+      "sub": "Seulement si tu es inscrit·e à l'ORP – par exemple au semestre de motivation (SeMo) ou dans une solution transitoire.",
+      "label": "Je suis inscrit·e à l'ORP et dois prouver mes recherches – afficher l'export ORP."
+    },
+    "commute": {
+      "title": "Trajet",
+      "sub": "Combien de temps peut durer ton trajet vers l'entreprise en bus et en train ? Les places sont comparées avec ton domicile.",
+      "label": "Au maximum",
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes"
+    }
+  },
+  "schoolLetter": {
+    "profileEmpty": "Ton profil d'élève est encore vide. Métiers souhaités, expériences et forces (avec exemples) rendent la lettre bien plus personnelle.",
+    "knownFrom": "Comment connais-tu l'entreprise ?",
+    "knownFromOptions": {
+      "posting": "Annonce",
+      "website": "Site de l'entreprise",
+      "fair": "Salon des métiers",
+      "family": "Famille / connaissances",
+      "taster": "Journée découverte",
+      "counselling": "Orientation professionnelle"
+    },
+    "knownFromPlaceholder": "p. ex. Mon oncle y a fait son apprentissage",
+    "whyJob": "Pourquoi ce métier ?",
+    "fromProfile": "Depuis le profil : {{job}}",
+    "noticed": "remarqué",
+    "whyJobPlaceholder": "Qu'est-ce qui t'attire ? Une expérience concrète fonctionne le mieux.",
+    "whyCompany": "Pourquoi cette entreprise ?",
+    "whyCompanyPlaceholder": "Qu'est-ce qui te plaît chez {{company}} ? Un projet, un produit, la formation …",
+    "whyCompanyHint": "Astuce : « Proposer » ci-dessous trouve des liens concrets dans l'annonce — choisis-en un.",
+    "bring": "Qu'apportes-tu ? (depuis ton profil)",
+    "bringHint": "Choisis 1–2 points liés au métier — moins, c'est mieux.",
+    "schnupperHere": "As-tu déjà fait un stage découverte chez {{company}} ?",
+    "yes": "Oui",
+    "no": "Non",
+    "schnupperNotesPlaceholder": "Qu'as-tu fait, qu'est-ce qui t'a plu ?",
+    "schnupperHint": "Un stage découverte dans la même entreprise est l'argument le plus fort pour une place d'apprentissage."
+  },
+  "schoolReview": {
+    "criteriaTitle": "Ce que l'entreprise veut voir",
+    "tip": "Astuce",
+    "levels": {
+      "strong": "fort",
+      "ok": "correct",
+      "weak": "faible"
+    },
+    "criteria": {
+      "motivation": "Motivation",
+      "passung": "Adéquation au métier",
+      "zuverlaessigkeit": "Fiabilité",
+      "persoenlichkeit": "Personnalité"
+    },
+    "checklistTitle": "Check-list",
+    "openCount": "{{count}} point(s) ouvert(s)",
+    "allOk": "tout est rempli",
+    "spellingTitle": "Orthographe",
+    "checks": {
+      "salutation": {
+        "ok": "La formule d'appel est correcte",
+        "warn": "La formule d'appel devrait être : « {{expected}} »",
+        "fail": "Formule d'appel incorrecte : « {{found}} »"
+      },
+      "contact": {
+        "ok": "{{name}} est interpellé·e personnellement",
+        "warn": "{{name}} n'est pas nommé·e"
+      },
+      "company": {
+        "ok": "L'entreprise est nommée",
+        "fail": "L'entreprise n'est pas nommée — écris « {{company}} » et pas seulement « votre entreprise »"
+      },
+      "length": {
+        "ok": "Longueur adaptée ({{count}} mots, max. {{limit}} — une demi-page)",
+        "warn": "Vérifie la longueur : {{count}} mots (objectif : une demi-page, env. 100–{{limit}})",
+        "fail": "Trop long : {{count}} mots — au maximum {{limit}} (une demi-page)"
+      },
+      "repetition": {
+        "ok": "Pas de répétitions marquantes",
+        "warn": "Mots répétés : {{words}}"
+      },
+      "ichStarts": {
+        "ok": "Débuts de phrase variés",
+        "warn": "{{count}} phrases commencent par « Je » — reformule-en quelques-unes"
+      },
+      "phrases": {
+        "ok": "Aucune formule toute faite",
+        "fail": "Supprime les formules toutes faites : {{found}}"
+      },
+      "opening": {
+        "ok": "Entrée en matière directe",
+        "fail": "La première phrase commence par « Par la présente … » — mieux : « Je postule pour … »"
+      },
+      "placeholders": {
+        "ok": "Aucun espace réservé ouvert",
+        "fail": "Complète {{count}} espace(s) réservé(s) entre [crochets]"
+      },
+      "closing": {
+        "ok": "Formule de politesse présente",
+        "warn": "Formule de politesse manquante (p. ex. « Meilleures salutations »)"
+      },
+      "swiss": {
+        "ok": "Orthographe suisse (ss)",
+        "warn": "« ß » trouvé — en Suisse on écrit « ss »"
+      },
+      "unique": {
+        "label": "Lettre propre à cette entreprise",
+        "ok": "Lettre propre – pas copiée",
+        "warn": "Identique à {{pct}} % à ta lettre pour {{company}} – réécris l'introduction et « pourquoi cette entreprise »"
+      }
+    }
+  },
+  "schnupperDebrief": {
+    "title": "Bilan du stage d'essai",
+    "intro": "Note comment ça s'est passé tant que tu t'en souviens bien. Ce sera ton meilleur argument pour la place d'apprentissage.",
+    "dates": "Quand ?",
+    "datesPlaceholder": "p. ex. 3–5 mars 2026",
+    "did": "Qu'as-tu fait ?",
+    "didPlaceholder": "p. ex. construit une caisse en bois massif, aidé à monter une cuisine",
+    "liked": "Qu'est-ce qui t'a plu ?",
+    "likedPlaceholder": "p. ex. voir le soir ce qu'on a réalisé",
+    "hard": "Qu'est-ce qui était difficile ?",
+    "hardPlaceholder": "p. ex. se lever tôt, rester debout longtemps",
+    "hardHint": "Rien que pour toi – cela n'apparaît jamais dans une lettre.",
+    "feedback": "Comment l'entreprise t'a-t-elle évalué·e ?",
+    "feedbackOptions": {
+      "good": "Bien",
+      "ok": "Correct",
+      "bad": "Plutôt mal"
+    },
+    "feedbackNotes": "Qu'ont-ils dit ?",
+    "feedbackNotesPlaceholder": "p. ex. « Tu travailles très précisément »",
+    "fit": "Peux-tu t'imaginer faire l'apprentissage chez {{company}} ?",
+    "fitOptions": {
+      "yes": "Oui",
+      "maybe": "Peut-être",
+      "no": "Non"
+    },
+    "toProfile": "Ajouter au profil d'élève",
+    "updateProfile": "Mettre à jour le profil d'élève",
+    "savedToProfile": "Enregistré dans ton profil d'élève.",
+    "needContent": "Remplis d'abord ce que tu as fait ou ce qui t'a plu.",
+    "createLehrstelle": "Créer la candidature d'apprentissage chez {{company}}",
+    "openLehrstelle": "Ouvrir la candidature d'apprentissage",
+    "bridgeHint": "Crée une nouvelle candidature pour l'apprentissage : entreprise, métier et contact sont repris, le stage est ajouté à ton profil d'élève et la lettre sait déjà que tu as fait un stage ici. Ce qui était difficile et une évaluation faible n'apparaissent jamais dans la lettre.",
+    "bridgeFailed": "Impossible de créer la candidature d'apprentissage.",
+    "fromTaster": "Cette candidature vient de ton stage d'essai dans la même entreprise – l'expérience est déjà prévue dans la lettre.",
+    "openTaster": "Ouvrir le stage d'essai"
+  },
+  "similarLetter": {
+    "warning": "Cette lettre est identique à {{pct}} % à ta lettre pour",
+    "more_one": "(et {{count}} autre).",
+    "more_other": "(et {{count}} autres).",
+    "tip": "Les entreprises le remarquent. Réécris l'introduction et « pourquoi cette entreprise »."
+  },
+  "schoolPrep": {
+    "questions": "Questions qu'on peut te poser",
+    "prepare": "Comment te préparer",
+    "examples": "Exemples à raconter",
+    "examplesShort": "Exemples",
+    "prepareShort": "Préparation",
+    "situation": "Que s'est-il passé ?",
+    "task": "Ta tâche",
+    "action": "Ce que tu as fait",
+    "result": "Le résultat"
+  },
+  "schoolResearch": {
+    "overview": "Ce que fait l'entreprise",
+    "culture": "Comment on y travaille",
+    "ideas": "Idées pour « pourquoi cette entreprise »"
+  },
+  "schoolCv": {
+    "title": "CV",
+    "sub": "Créé à partir de ton profil d'élève — en PDF ou Google Doc",
+    "fromProfile": "Les stages, expériences, loisirs et métiers souhaités viennent automatiquement de ton profil d'élève. Ici, tu ajoutes seulement ce dont le CV a besoin en plus.",
+    "toProfile": "Vers le profil →",
+    "photo": "Photo",
+    "photoSub": "Une photo d'identité souriante sur fond calme. Elle reste enregistrée dans ton profil.",
+    "photoPick": "Choisir une photo",
+    "photoRemove": "Retirer la photo",
+    "photoFailed": "L'image n'a pas pu être lue (JPG ou PNG uniquement).",
+    "personal": "Données personnelles",
+    "personalSub": "Le nom, le téléphone et l'e-mail viennent de ton profil.",
+    "street": "Rue et n°",
+    "zipCity": "NPA et localité",
+    "birthDate": "Date de naissance",
+    "nationality": "Nationalité",
+    "nationalityPlaceholder": "p. ex. Suisse",
+    "noContact": "Pas encore de coordonnées dans le profil.",
+    "editContact": "Modifier dans le profil",
+    "schools": "Écoles",
+    "schoolsSub": "Toutes les écoles depuis l'école primaire, avec les années (p. ex. 2016 – 2022).",
+    "addSchool": "Ajouter une école",
+    "schoolName": "École",
+    "place": "Lieu",
+    "from": "de (année)",
+    "to": "à (vide = aujourd'hui)",
+    "languages": "Langues",
+    "addLanguage": "Ajouter une langue",
+    "languageName": "Langue",
+    "levels": {
+      "native": "langue maternelle",
+      "very_good": "très bien",
+      "good": "bien",
+      "basic": "notions"
+    },
+    "itHobbies": "Informatique et loisirs",
+    "it": "Connaissances informatiques",
+    "itPlaceholder": "p. ex. Word, PowerPoint, dactylographie",
+    "hobbies": "Autres loisirs",
+    "hobbiesPlaceholder": "S'ajoute aux loisirs de ton profil",
+    "parents": "Parents",
+    "parentsSub": "Courant en Suisse, mais facultatif.",
+    "addParent": "Ajouter un parent",
+    "parentName": "Nom",
+    "parentJob": "Profession",
+    "phone": "Téléphone",
+    "email": "E-mail",
+    "references": "Références",
+    "referencesSub": "Par exemple ton enseignant·e ou ton entraîneur — demande d'abord si c'est d'accord.",
+    "addReference": "Ajouter une référence",
+    "refName": "Nom",
+    "refRole": "Fonction (p. ex. maîtresse de classe)",
+    "remove": "Retirer",
+    "pdf": "Télécharger le PDF",
+    "doc": "En Google Doc",
+    "openDoc": "Ouvrir",
+    "pdfFailed": "Le PDF n'a pas pu être créé.",
+    "docDone": "Google Doc créé.",
+    "docFailed": "Le Google Doc n'a pas pu être créé.",
+    "checklist": "Liste de contrôle",
+    "openCount_one": "{{count}} point ouvert",
+    "openCount_other": "{{count}} points ouverts",
+    "allOk": "tout est fait",
+    "missing": {
+      "name": "nom",
+      "phone": "téléphone",
+      "email": "e-mail",
+      "address": "adresse"
+    },
+    "checks": {
+      "photo": {
+        "ok": "La photo est là.",
+        "warn": "Pas encore de photo — en Suisse, la plupart des entreprises en attendent une."
+      },
+      "contact": {
+        "ok": "Les coordonnées sont complètes.",
+        "fail": "Il manque encore : {{missing}}."
+      },
+      "birthDate": {
+        "ok": "La date de naissance est saisie.",
+        "fail": "Indique ta date de naissance."
+      },
+      "email": {
+        "ok": "Ton adresse e-mail fait sérieux.",
+        "warn": "L'adresse {{email}} ne fait pas sérieux — utilise plutôt prenom.nom@…"
+      },
+      "schools": {
+        "ok": "Écoles sans lacune, avec les années.",
+        "warn": "Il manque quelque chose entre {{gap}} — ajoute l'école ou une année intermédiaire.",
+        "noDates": "Une école n'a pas d'années.",
+        "fail": "Ajoute au moins ton école actuelle."
+      },
+      "taster": {
+        "ok": "Les stages sont indiqués.",
+        "warn": "Pas encore de stage dans ton profil — il montre ton intérêt pour le métier."
+      },
+      "languages": {
+        "ok": "Les langues sont indiquées.",
+        "warn": "Ajoute tes langues (y compris ta langue maternelle)."
+      },
+      "hobbies": {
+        "ok": "Les loisirs sont là.",
+        "warn": "Pas encore de loisirs — ils montrent qui tu es."
+      },
+      "references": {
+        "ok": "Au moins une référence est indiquée.",
+        "warn": "Pas encore de référence — demande par exemple à ton enseignant·e."
+      },
+      "swiss": {
+        "ok": "Orthographe suisse (ss au lieu de ß).",
+        "warn": "Le texte contient un ß — en Suisse on écrit ss."
+      },
+      "tests": {
+        "ok": "Astuce : joins tes résultats de tests ({{names}}) à la candidature comme document séparé."
+      }
+    }
+  },
+  "agenda": {
+    "title": "Rendez-vous & délais",
+    "sub": "Ce qui arrive — avec rappels",
+    "intro": "Délais de candidature, stages, entretiens et tes propres rendez-vous au même endroit. La cloche montre à quoi penser aujourd'hui.",
+    "empty": "Pas encore de rendez-vous. Indique le délai de candidature ou les jours de stage dans une candidature — ou ajoute ton propre rendez-vous à droite.",
+    "groups": {
+      "overdue": "Manqués",
+      "today": "Aujourd'hui",
+      "soon": "Cette semaine",
+      "later": "Plus tard"
+    },
+    "kinds": {
+      "deadline": "Délai de candidature",
+      "taster": "Stage d'observation",
+      "interview": "Entretien",
+      "followup": "Après le stage",
+      "personal": "Rendez-vous"
+    },
+    "personalKinds": {
+      "test": "Test",
+      "fair": "Salon des métiers",
+      "info": "Séance d'information",
+      "counselling": "Orientation professionnelle",
+      "other": "Rendez-vous"
+    },
+    "placeholders": {
+      "test": "p. ex. Multicheck, Stellwerk",
+      "fair": "p. ex. salon des métiers",
+      "info": "p. ex. soirée d'information",
+      "counselling": "p. ex. entretien à l'orientation",
+      "other": "Qu'est-ce qui est prévu ?"
+    },
+    "followupHint": "Remercie et note ton retour",
+    "running": "en cours",
+    "today": "aujourd'hui",
+    "tomorrow": "demain",
+    "inDays_one": "dans {{count}} jour",
+    "inDays_other": "dans {{count}} jours",
+    "overdue_one": "il y a {{count}} jour",
+    "overdue_other": "il y a {{count}} jours",
+    "reminderToday": "Rappel aujourd'hui",
+    "addGoogle": "Ajouter à Google Agenda",
+    "ics": "Ajouter au calendrier",
+    "fileName": "Rendez-vous",
+    "icsHint": "« Ajouter au calendrier » télécharge un fichier calendrier (.ics) avec rappels — ouvre-le sur ton téléphone ou ton ordinateur et ton calendrier te le rappellera à temps. Télécharge-le à nouveau après avoir ajouté des rendez-vous.",
+    "ownTitle": "Tes propres rendez-vous",
+    "ownSub": "Tests comme Multicheck ou Stellwerk, salons des métiers, soirées d'information, rendez-vous d'orientation.",
+    "kind": "Type",
+    "what": "Quoi",
+    "date": "Date",
+    "time": "Heure",
+    "place": "Lieu",
+    "add": "Ajouter",
+    "remove": "Retirer",
+    "whereDeadlines": "Indique le délai de candidature dans les détails de la candidature (l'import le détecte si possible). Les jours de stage s'indiquent dans la phase « Stage / entretien ».",
+    "applyDeadline": "Délai de candidature",
+    "tasterUntil": "jusqu'au (dernier jour)",
+    "bannerTitle_one": "1 rappel :",
+    "bannerTitle_other": "{{count}} rappels :",
+    "bannerOpen": "Tous les rendez-vous",
+    "bannerDismiss": "Masquer pour aujourd'hui"
+  },
+  "lehrstellenImport": {
+    "hint": "Astuce : les liens vers une place d'apprentissage sur Yousty et orientation.ch (LENA) sont lus directement — entreprise, métier, lieu et personne de contact sont repris.",
+    "listUrl": "C'est une page de recherche ou de liste. Ouvre la place d'apprentissage et copie son lien.",
+    "fetchFailed": "La page n'a pas pu être lue. Copie le texte de l'annonce et colle-le sous « Texte ».",
+    "failed": "La lecture n'a pas fonctionné. Réessaie ou colle le texte.",
+    "structured": {
+      "yousty": "Lu directement sur Yousty",
+      "lena": "Lu directement sur orientation.ch (LENA)",
+      "jsonld": "Données structurées de la page lues"
+    },
+    "start": "Début {{start}}",
+    "positions_one": "{{count}} place libre",
+    "positions_other": "{{count}} places libres"
+  },
+  "region": {
+    "levels": {
+      "same_town": "Dans ta localité",
+      "near": "Près de chez toi",
+      "region": "Dans ta région — vérifie le trajet",
+      "far": "Loin de chez toi",
+      "unknown": "Distance inconnue"
+    },
+    "fromTo": "{{home}} → {{job}}",
+    "noHome": "Ton domicile manque pour comparer la région.",
+    "setHome": "Indique NPA et localité dans ton CV",
+    "check": "Vérifier le trajet en transports publics",
+    "recheck": "Vérifier à nouveau",
+    "privacy": "Envoie seulement les deux noms de localité à transport.opendata.ch (horaire des transports publics suisses).",
+    "minutes_one": "{{count}} minute en transports publics",
+    "minutes_other": "{{count}} minutes en transports publics",
+    "transfers_one": "{{count}} changement",
+    "transfers_other": "{{count}} changements",
+    "tooLong": "plus long que tes {{max}} minutes",
+    "errors": {
+      "no_home": "Indique d'abord ton domicile (CV : NPA et localité).",
+      "no_location": "La place d'apprentissage n'a pas de lieu.",
+      "no_connection": "Aucune connexion trouvée — vérifie les noms de localité.",
+      "transport_failed": "L'horaire n'était pas joignable. Réessaie plus tard."
+    },
+    "needZip": "ajoute les NPA pour comparer"
+  },
+  "career": {
+    "title": "Choix professionnel",
+    "sub": "Des idées de métiers d'apprentissage qui pourraient te convenir",
+    "interestsTitle": "Qu'est-ce qui t'intéresse ?",
+    "interestsIntro": "Indique pour chaque domaine à quel point il t'intéresse. Mieux vaut être honnête que sage — il n'y a pas de mauvaise réponse.",
+    "rated": "{{n}} sur {{total}} répondus",
+    "rating": {
+      "0": "Non",
+      "1": "Un peu",
+      "2": "Beaucoup"
+    },
+    "areas": {
+      "build": {
+        "title": "Construction & artisanat",
+        "hint": "Maisons, bois, atelier, fabriquer de ses mains"
+      },
+      "tech": {
+        "title": "Technique & machines",
+        "hint": "Électricité, mécanique, comprendre comment ça marche"
+      },
+      "vehicles": {
+        "title": "Véhicules",
+        "hint": "Voitures, vélos, camions, machines agricoles"
+      },
+      "it": {
+        "title": "Ordinateurs & informatique",
+        "hint": "Programmer, réseaux, applis, médias"
+      },
+      "nature": {
+        "title": "Nature & animaux",
+        "hint": "Plantes, animaux, agriculture"
+      },
+      "outdoor": {
+        "title": "Travailler dehors",
+        "hint": "Au grand air, par tous les temps"
+      },
+      "care": {
+        "title": "Accompagner des personnes",
+        "hint": "Enfants, personnes âgées, personnes en situation de handicap"
+      },
+      "health": {
+        "title": "Santé",
+        "hint": "Cabinet, hôpital, pharmacie, corps et médecine"
+      },
+      "sales": {
+        "title": "Vendre & conseiller",
+        "hint": "Clientèle, magasin, discussions"
+      },
+      "office": {
+        "title": "Bureau & organisation",
+        "hint": "Planifier, chiffres, téléphone, mettre de l'ordre"
+      },
+      "creative": {
+        "title": "Créer",
+        "hint": "Dessin, couleurs, design, mode, coiffure"
+      },
+      "food": {
+        "title": "Cuisine & alimentation",
+        "hint": "Cuisine, boulangerie, restaurant"
+      },
+      "lab": {
+        "title": "Laboratoire & recherche",
+        "hint": "Expériences, chimie, biologie"
+      },
+      "logistics": {
+        "title": "Ranger & livrer",
+        "hint": "Entrepôt, marchandises, transport, processus"
+      }
+    },
+    "skills": {
+      "math": "les mathématiques",
+      "german": "l'allemand",
+      "languages": "les langues étrangères",
+      "science": "les sciences",
+      "design": "les arts visuels",
+      "crafts": "les activités créatrices",
+      "sport": "le sport",
+      "it": "l'informatique",
+      "food": "l'économie familiale",
+      "spatial": "la représentation spatiale",
+      "logic": "la logique",
+      "technical": "la compréhension technique"
+    },
+    "reasons": {
+      "wish": "Déjà sur ta liste de métiers souhaités",
+      "interestStrong": "Tu as coché « {{area}} » : « Beaucoup »",
+      "interest": "Tu as coché « {{area}} » : « Un peu »",
+      "interestAlso": "Touche aussi à « {{area}} »",
+      "subject": "Ta branche préférée, {{subject}}, est utile ici",
+      "test_high": "{{test}}, {{area}} : nettement au-dessus de la moyenne",
+      "test_above": "{{test}}, {{area}} : au-dessus de la moyenne",
+      "strength": "Ton point fort « {{strength}} » — p. ex. {{example}}"
+    },
+    "fit": {
+      "strong": "Beaucoup de points communs",
+      "good": "Quelques points communs",
+      "possible": "Une idée"
+    },
+    "levels": {
+      "EFZ": "CFC (certificat fédéral)",
+      "EBA": "AFP (attestation fédérale)"
+    },
+    "years_one": "{{count}} an",
+    "years_other": "{{count}} ans",
+    "disclaimer": "Ce sont des idées, pas une décision. Elles montrent seulement ce qui correspond à tes réponses — beaucoup de métiers intéressants manquent ici. Les stages d'orientation et un entretien à l'orientation professionnelle t'aident le plus.",
+    "counselling": "Trouver l'orientation professionnelle",
+    "missing": {
+      "interests": "Réponds à quelques domaines à gauche, des idées apparaîtront.",
+      "subjects": "Ajoute tes branches préférées dans ton profil.",
+      "strengths": "Ajoute des points forts avec un exemple dans ton profil.",
+      "examples": "{{n}} point(s) fort(s) sans exemple ne comptent pas ici — ajoute un exemple dans ton profil."
+    },
+    "toProfile": "Vers le profil",
+    "ideasTitle": "Des idées pour toi",
+    "empty": "Pas encore d'idées. Coche à gauche ce qui t'intéresse.",
+    "onWishList": "Sur ta liste",
+    "addWish": "Ajouter aux métiers souhaités",
+    "info": "Infos sur le métier",
+    "searchHint": "Chercher une place d'apprentissage — y chercher « {{term}} »"
   }
 }

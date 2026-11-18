@@ -31,7 +31,8 @@
     "desiredSalary": "Wunschgehalt (CHF, Jahresbrutto)",
     "desiredSalaryPlaceholder": "z.B. 110000",
     "desiredSalaryHint": "Wird in der Salary-Check-Grafik als Referenzlinie angezeigt",
-    "autosave": "Wird beim Verlassen des Felds gespeichert."
+    "autosave": "Wird beim Verlassen des Felds gespeichert.",
+    "subSchool": "Schülerprofil und persönliche Angaben für alle Bewerbungen"
   },
   "persona": {
     "schulabgaenger": "Schulabgänger",
@@ -62,7 +63,10 @@
     "groupWriting": "Schreiben & Wissen",
     "help": "Hilfe & Übersicht",
     "setupAi": "KI-Modell einrichten",
-    "setupGoogle": "Google verbinden"
+    "setupGoogle": "Google verbinden",
+    "schoolCv": "Lebenslauf",
+    "agenda": "Termine",
+    "career": "Berufswahl"
   },
   "tabs": {
     "actions": "Aktionen",
@@ -194,6 +198,44 @@
         "1": "Startdatum bestätigt",
         "2": "Andere laufende Bewerbungen informiert",
         "3": "Absagen für andere Stellen vorbereitet"
+      },
+      "school": {
+        "0": "Beruf und Betrieb angeschaut",
+        "1": "Schnuppermöglichkeit geklärt (Website / Telefon)",
+        "2": "Eltern / Lehrperson informiert",
+        "3": "Lebenslauf mit Foto aktuell",
+        "4": "Zeugnisse und Testresultate bereit",
+        "5": "Ansprechperson richtig angesprochen",
+        "6": "Gegenlesen lassen (Eltern / Lehrperson)",
+        "7": "Höchstens eine halbe Seite",
+        "8": "Unterlagen vollständig geschickt (Brief, Lebenslauf, Zeugnisse)",
+        "9": "Nach einer Woche nachfragen, falls keine Antwort",
+        "10": "Schnuppertage bestätigt (Datum, Zeit, Ort)",
+        "11": "Kleidung und Material geklärt",
+        "12": "Anreise geplant – pünktlich sein",
+        "13": "Fragen an den Betrieb notiert",
+        "14": "Schnupper-Rückblick ausgefüllt",
+        "15": "Bewertung des Betriebs erhalten",
+        "16": "Dankesmail nach der Schnupperlehre geschickt",
+        "17": "Nach einer freien Lehrstelle gefragt",
+        "18": "Schnupper-Rückblick ins Schülerprofil übernommen",
+        "19": "Rückmeldung erfragt, was ich besser machen kann",
+        "20": "Nächsten Betrieb ausgesucht",
+        "21": "Lehrstelle passt zu meinen Wunschberufen",
+        "22": "In diesem Beruf geschnuppert",
+        "23": "Bewerbungsfrist notiert",
+        "24": "Schnupperberichte beigelegt",
+        "25": "Dossier vollständig geschickt (Brief, Lebenslauf, Zeugnisse, Tests)",
+        "26": "Termin bestätigt (Zeit, Ort)",
+        "27": "„Warum dieser Beruf? Warum hier?“ geübt",
+        "28": "Eigene Fragen vorbereitet",
+        "29": "Eltern über den Termin informiert",
+        "30": "Selektionstage oder Eignungstest vorbereitet",
+        "31": "Dankesmail nach dem Gespräch geschickt",
+        "32": "Lehrvertrag mit den Eltern durchgelesen",
+        "33": "Lehrvertrag unterschrieben zurückgeschickt",
+        "34": "Anderen Betrieben abgesagt",
+        "35": "Weitere Lehrstellen gesucht"
       }
     }
   },
@@ -463,7 +505,8 @@
       "zertifikat": "Zertifikate",
       "portfolio": "Portfolio",
       "figma": "Figma",
-      "sonstiges": "Sonstiges"
+      "sonstiges": "Sonstiges",
+      "schultest": "Schultests"
     },
     "extraUrl": "Link / weitere Informationen",
     "linkBtn": "Link",
@@ -810,7 +853,10 @@
       "updatedAt": "Aktualisiert",
       "jobType": "Pensum",
       "workModel": "Modell",
-      "contractType": "Vertrag"
+      "contractType": "Vertrag",
+      "apprenticeship": "Beruf",
+      "applicationKind": "Art",
+      "interview1School": "Schnuppern / Gespräch"
     },
     "showArchived": "Archiv",
     "columnsBtn": "Spalten",
@@ -939,6 +985,23 @@
     "humanize": {
       "label": "Natürlicher Schreibstil (Vermenschlichung)",
       "hint": "Weist die KI an, in der Korrespondenzsprache menschlich zu schreiben und typische KI-Muster zu vermeiden — bei Anschreiben, Eröffnungssätzen und CV-Highlights. Erfindet keine Fakten und ändert deinen Master-CV nicht."
+    },
+    "school": {
+      "infoText": "Du bewirbst dich als Schulabgänger/in. Diese Angaben nutzt die KI für jedes Anschreiben — für eine Schnupperlehre (neugierig: „Ich möchte Sie kennenlernen“) oder eine Lehrstelle (überzeugt: „Ich möchte bei Ihnen lernen“). Die Art legst du pro Bewerbung unter „Details“ fest.",
+      "structure": {
+        "hint": "Die fünf Teile eines guten Anschreibens für Schnupperlehre oder Lehrstelle — höchstens eine halbe A4-Seite."
+      },
+      "values": {
+        "label": "Meine Motivation",
+        "hint": "Warum interessieren dich deine Wunschberufe? Wann hast du das gemerkt? Ein konkretes Erlebnis ist stärker als „Ich interessiere mich für …“.",
+        "placeholder": "z.B. Schreiner/in: Im Werkunterricht habe ich ein Regal aus Massivholz gebaut. Dass am Schluss etwas Echtes dasteht, das man benutzen kann, hat mir am meisten Spass gemacht."
+      },
+      "strengths": {
+        "label": "Was ich gut kann (Stärke → Beispiel)",
+        "hint": "Schreib jede Stärke mit einem Beispiel auf, das sie zeigt — nicht „ich bin zuverlässig“, sondern wann du es warst. Eine Zeile pro Stärke.",
+        "placeholder": "Zuverlässig → Ich trage seit zwei Jahren jeden Mittwoch Zeitungen aus.\nGeschickt mit den Händen → Ich repariere die Velos meiner Familie selbst.\nTeamfähig → Im Fussballclub helfe ich beim Training der Junioren."
+      },
+      "movedToProfile": "Motivation, Erfahrungen und Stärken mit Beispielen pflegst du im Schülerprofil — dort sind sie strukturiert und gelten für jedes Anschreiben."
     }
   },
   "letterDraft": {
@@ -995,7 +1058,12 @@
     "reviewBtnRefresh": "Review aktualisieren",
     "reviewCurrentHintNoVer": "Bezieht sich auf den aktuellen Entwurf",
     "humanizeBtn": "Vermenschlichen",
-    "humanizeHint": "Schreibt das aktuelle Anschreiben natürlicher/menschlicher um (nur Stil, keine Fakten) und speichert es als neue Version"
+    "humanizeHint": "Schreibt das aktuelle Anschreiben natürlicher/menschlicher um (nur Stil, keine Fakten) und speichert es als neue Version",
+    "school": {
+      "touchpoints": "Bezug zum Betrieb",
+      "valuesMatch": "Warum dieser Beruf",
+      "benefits": "Was du mitbringst"
+    }
   },
   "rav": {
     "section": "RAV-Nachweis",
@@ -1913,7 +1981,9 @@
     "reopen": "Assistent öffnen",
     "aiLocalLmStudio": "App öffnen, ein Modell herunterladen (z. B. Qwen) und unter „Developer“ den Server starten.",
     "aiLocalOllama": "App öffnen und ein Modell laden, z. B. „ollama pull qwen3“ im Terminal.",
-    "aiLocalThen": "Danach hier:"
+    "aiLocalThen": "Danach hier:",
+    "parentHint": "Dieser Schritt ist technisch – am besten erledigt ihn ein Elternteil. Er lässt sich auch überspringen und später in den Einstellungen nachholen.",
+    "schoolTogether": "Tipp: Richtet die App am besten zusammen mit deinen Eltern ein. Die Einstellungen für KI und Google übernehmen sie, die Bewerbungen machst du."
   },
   "appUpdate": {
     "label": "App-Version",
@@ -2292,5 +2362,610 @@
     "noSources": "Keine Quellen verknüpft.",
     "light": "Hell",
     "dark": "Dunkel"
+  },
+  "letterKind": {
+    "kind": "Art der Bewerbung",
+    "kinds": {
+      "job": "Stelle",
+      "schnupperlehre": "Schnupperlehre",
+      "lehrstelle": "Lehrstelle",
+      "praktikum": "Praktikum"
+    },
+    "focus": {
+      "schnupperlehre": "Ton neugierig: „Ich möchte Sie kennenlernen.“ Schluss: Bitte um Schnuppertage.",
+      "lehrstelle": "Ton selbstbewusst: „Ich möchte bei Ihnen lernen.“ Eine Schnupperlehre ist das stärkste Argument."
+    },
+    "apprenticeship": "Lehrberuf",
+    "apprenticeshipPlaceholder": "z.B. Schreiner/in EFZ",
+    "salutation": "Anrede im Anschreiben",
+    "genderUnknown": "Anrede wählen…",
+    "genderF": "Frau",
+    "genderM": "Herr",
+    "genderX": "Neutral (voller Name)",
+    "salutationPick": "Bitte Anrede wählen — sonst entscheidet die KI"
+  },
+  "school": {
+    "title": "Schülerprofil",
+    "intro": "Das schreibst du einmal — die KI nutzt es für jedes Anschreiben. Je konkreter deine Beispiele, desto besser der Brief. Erfunden wird nichts: Fehlt etwas, setzt die KI einen Platzhalter.",
+    "school": "Schule & Stufe",
+    "schoolPlaceholder": "z.B. Sek A, 9. Klasse, Abschluss 2027",
+    "subjects": "Lieblingsfächer — und warum",
+    "subjectsPlaceholder": "z.B. Werken (ich baue gerne Dinge), Mathe (Knobeln macht mir Spass)",
+    "wish": {
+      "title": "Wunschberufe & Motivation",
+      "sub": "Warum interessiert dich dieser Beruf? Wann hast du das gemerkt? Ein konkretes Erlebnis wirkt stärker als „Ich interessiere mich für …“.",
+      "add": "Wunschberuf hinzufügen",
+      "titlePlaceholder": "Beruf, z.B. Schreiner/in EFZ",
+      "whyPlaceholder": "Was reizt dich daran?",
+      "sincePlaceholder": "Wann hast du das gemerkt? z.B. Regal im Werkunterricht gebaut"
+    },
+    "exp": {
+      "title": "Erfahrungen",
+      "sub": "Schulprojekte, Hobbys, Vereine, Ämtli, Taschengeldjobs und bisherige Schnupperlehren — das ist dein Praxisbezug.",
+      "add": "Erfahrung hinzufügen",
+      "kinds": {
+        "schule": "Schule / Projekt",
+        "hobby": "Hobby",
+        "verein": "Verein / Ämtli",
+        "job": "Taschengeldjob",
+        "schnupper": "Schnupperlehre",
+        "anderes": "Sonstiges"
+      },
+      "titlePlaceholder": {
+        "schule": "z.B. Regal aus Massivholz im Werkunterricht",
+        "hobby": "z.B. Velos reparieren",
+        "verein": "z.B. Junioren-Training im Fussballclub",
+        "job": "z.B. Zeitungen austragen",
+        "schnupper": "z.B. Schnupperwoche Schreiner/in",
+        "anderes": "Was hast du gemacht?"
+      },
+      "companyPlaceholder": "Betrieb, z.B. Holzbau Muster AG",
+      "whatPlaceholder": "Was hast du konkret gemacht?",
+      "likedPlaceholder": "Was hat dir gefallen oder was hast du gelernt?"
+    },
+    "str": {
+      "title": "Was ich gut kann (Stärke → Beispiel)",
+      "sub": "Nicht „ich bin zuverlässig“, sondern wann du es warst. Eine Stärke ohne Beispiel behauptet die KI nicht.",
+      "add": "Stärke hinzufügen",
+      "strengthPlaceholder": "Stärke, z.B. Zuverlässig",
+      "examplePlaceholder": "Beispiel, z.B. Seit zwei Jahren trage ich jeden Mittwoch Zeitungen aus",
+      "needsExample": "Wann hast du das gezeigt? Ohne Beispiel kommt die Stärke nicht in den Brief."
+    },
+    "tests": {
+      "title": "Schultests (Stellwerk, Lernpass plus, Multicheck)",
+      "sub": "Lade den Testbericht unter Dokumente in der Kategorie „Schultests“ hoch und lies die Werte hier aus — oder trag sie selbst ein. Prüfe die Werte: Bei Scans kann die Texterkennung Fehler machen.",
+      "extract": "Aus Dokumenten auslesen",
+      "extracting": "Wird ausgelesen…",
+      "add": "Test hinzufügen",
+      "addResult": "Bereich hinzufügen",
+      "toDocuments": "Zu den Dokumenten",
+      "datePlaceholder": "z.B. Frühjahr 2025",
+      "scales": {
+        "stellwerk": "Stellwerk (200–800)",
+        "stanine": "Profil 1–9 (z.B. Lernpass PSM)",
+        "percent": "Prozent (Multicheck, Basic-Check)"
+      },
+      "levels": {
+        "high": "deutlich über Ø",
+        "above": "über Ø",
+        "average": "Durchschnitt",
+        "low": "unter Ø"
+      },
+      "rule": "Nur Ergebnisse über dem Durchschnitt gelangen in Anschreiben — höchstens ein bis zwei, die zum Beruf passen. Das Persönlichkeitsprofil ist eine Selbsteinschätzung: Es zeigt nur, welche Stärken du mit einem Beispiel belegen kannst.",
+      "noAi": "Bitte zuerst ein KI-Modell in den Einstellungen wählen.",
+      "noDocs": "Keine Dokumente in der Kategorie „Schultests“ gefunden.",
+      "extracted": "{{count}} Test(s) übernommen",
+      "extractFailed": "Auslesen fehlgeschlagen."
+    },
+    "rav": {
+      "title": "RAV",
+      "sub": "Nur nötig, wenn du beim RAV angemeldet bist – zum Beispiel im Motivationssemester (SEMO) oder in einem Brückenangebot.",
+      "label": "Ich bin beim RAV angemeldet und muss meine Bewerbungen nachweisen – RAV-Export einblenden."
+    },
+    "commute": {
+      "title": "Arbeitsweg",
+      "sub": "Wie lange darf dein Weg zum Lehrbetrieb mit Bus und Bahn dauern? Lehrstellen werden mit deinem Wohnort verglichen.",
+      "label": "Höchstens",
+      "minutes_one": "{{count}} Minute",
+      "minutes_other": "{{count}} Minuten"
+    }
+  },
+  "schoolLetter": {
+    "profileEmpty": "Dein Schülerprofil ist noch leer. Mit Wunschberufen, Erfahrungen und Stärken (mit Beispielen) wird der Brief viel persönlicher.",
+    "knownFrom": "Woher kennst du den Betrieb?",
+    "knownFromOptions": {
+      "posting": "Stelleninserat",
+      "website": "Website des Betriebs",
+      "fair": "Berufsmesse",
+      "family": "Familie / Bekannte",
+      "taster": "Schnuppertag",
+      "counselling": "Berufsberatung"
+    },
+    "knownFromPlaceholder": "z.B. Mein Onkel hat dort seine Lehre gemacht",
+    "whyJob": "Warum dieser Beruf?",
+    "fromProfile": "Aus Profil: {{job}}",
+    "noticed": "gemerkt",
+    "whyJobPlaceholder": "Was reizt dich daran? Ein konkretes Erlebnis wirkt am stärksten.",
+    "whyCompany": "Warum dieser Betrieb?",
+    "whyCompanyPlaceholder": "Was gefällt dir an {{company}}? Ein Projekt, ein Produkt, wie sie ausbilden …",
+    "whyCompanyHint": "Tipp: „Vorschlagen“ unten liefert konkrete Bezüge aus dem Inserat — wähle einen aus.",
+    "bring": "Was bringst du mit? (aus deinem Profil)",
+    "bringHint": "Wähle 1–2 Punkte, die zum Beruf passen — weniger ist mehr.",
+    "schnupperHere": "Hast du bei {{company}} schon geschnuppert?",
+    "yes": "Ja",
+    "no": "Nein",
+    "schnupperNotesPlaceholder": "Was hast du gemacht, was hat dir gefallen?",
+    "schnupperHint": "Eine Schnupperlehre im selben Betrieb ist das stärkste Argument für eine Lehrstelle."
+  },
+  "schoolReview": {
+    "criteriaTitle": "Was der Betrieb sehen will",
+    "tip": "Tipp",
+    "levels": {
+      "strong": "stark",
+      "ok": "okay",
+      "weak": "schwach"
+    },
+    "criteria": {
+      "motivation": "Motivation",
+      "passung": "Passung zum Beruf",
+      "zuverlaessigkeit": "Zuverlässigkeit",
+      "persoenlichkeit": "Persönlichkeit"
+    },
+    "checklistTitle": "Checkliste",
+    "openCount": "{{count}} Punkt(e) offen",
+    "allOk": "alles erfüllt",
+    "spellingTitle": "Rechtschreibung",
+    "checks": {
+      "salutation": {
+        "ok": "Anrede stimmt",
+        "warn": "Anrede sollte lauten: «{{expected}}»",
+        "fail": "Anrede ist grammatisch falsch: «{{found}}» — richtig ist z.B. «Sehr geehrter Herr …» oder «Sehr geehrte Frau …»"
+      },
+      "contact": {
+        "ok": "Ansprechperson {{name}} wird persönlich angesprochen",
+        "warn": "Ansprechperson {{name}} wird nicht beim Namen genannt"
+      },
+      "company": {
+        "ok": "Betrieb wird beim Namen genannt",
+        "fail": "Betrieb wird nicht beim Namen genannt — schreib «{{company}}» statt nur «Ihr Unternehmen»"
+      },
+      "length": {
+        "ok": "Länge passt ({{count}} Wörter, max. {{limit}} — eine halbe Seite)",
+        "warn": "Länge prüfen: {{count}} Wörter (Ziel: eine halbe Seite, ca. 100–{{limit}})",
+        "fail": "Zu lang: {{count}} Wörter — höchstens {{limit}} (eine halbe Seite)"
+      },
+      "repetition": {
+        "ok": "Keine auffälligen Wortwiederholungen",
+        "warn": "Wörter wiederholen sich: {{words}}"
+      },
+      "ichStarts": {
+        "ok": "Abwechslungsreiche Satzanfänge",
+        "warn": "{{count}} Sätze beginnen mit «Ich» — stell ein paar Sätze um"
+      },
+      "phrases": {
+        "ok": "Keine Floskeln gefunden",
+        "fail": "Floskeln streichen: {{found}}"
+      },
+      "opening": {
+        "ok": "Direkter Einstieg",
+        "fail": "Erster Satz beginnt mit «Hiermit …» — besser direkt: «Ich bewerbe mich um …»"
+      },
+      "placeholders": {
+        "ok": "Keine offenen Platzhalter",
+        "fail": "{{count}} Platzhalter in [eckigen Klammern] noch ausfüllen"
+      },
+      "closing": {
+        "ok": "Grussformel vorhanden",
+        "warn": "Grussformel fehlt (z.B. «Freundliche Grüsse»)"
+      },
+      "swiss": {
+        "ok": "Schweizer Schreibweise (ss)",
+        "warn": "«ß» gefunden — in der Schweiz schreibt man «ss»"
+      },
+      "unique": {
+        "label": "Eigener Brief für diesen Betrieb",
+        "ok": "Eigener Brief – nicht kopiert",
+        "warn": "Zu {{pct}} % gleich wie dein Brief an {{company}} – Einstieg und «Warum dieser Betrieb» neu schreiben"
+      }
+    }
+  },
+  "schnupperDebrief": {
+    "title": "Rückblick auf die Schnupperlehre",
+    "intro": "Halte fest, wie es war – solange du dich gut erinnerst. Daraus wird später dein stärkstes Argument für die Lehrstelle.",
+    "dates": "Wann?",
+    "datesPlaceholder": "z.B. 3.–5. März 2026",
+    "did": "Was hast du gemacht?",
+    "didPlaceholder": "z.B. Eine Kiste aus Massivholz gebaut, beim Montieren einer Küche geholfen",
+    "liked": "Was hat dir gefallen?",
+    "likedPlaceholder": "z.B. Dass man am Abend sieht, was man geschafft hat",
+    "hard": "Was war schwierig?",
+    "hardPlaceholder": "z.B. Früh aufstehen, lange stehen",
+    "hardHint": "Nur für dich – das kommt nie ins Anschreiben.",
+    "feedback": "Wie hat dich der Betrieb bewertet?",
+    "feedbackOptions": {
+      "good": "Gut",
+      "ok": "Okay",
+      "bad": "Eher schlecht"
+    },
+    "feedbackNotes": "Was haben sie gesagt?",
+    "feedbackNotesPlaceholder": "z.B. «Du arbeitest sehr exakt»",
+    "fit": "Kannst du dir die Lehre bei {{company}} vorstellen?",
+    "fitOptions": {
+      "yes": "Ja",
+      "maybe": "Vielleicht",
+      "no": "Nein"
+    },
+    "toProfile": "Ins Schülerprofil übernehmen",
+    "updateProfile": "Im Schülerprofil aktualisieren",
+    "savedToProfile": "Im Schülerprofil gespeichert.",
+    "needContent": "Fülle zuerst aus, was du gemacht hast oder was dir gefallen hat.",
+    "createLehrstelle": "Lehrstelle bei {{company}} anlegen",
+    "openLehrstelle": "Zur Lehrstellen-Bewerbung",
+    "bridgeHint": "Legt eine neue Bewerbung für die Lehrstelle an: Betrieb, Beruf und Ansprechperson werden übernommen, die Schnupperlehre landet im Schülerprofil und im Anschreiben steht schon «hier geschnuppert». Was schwierig war und eine schwache Bewertung kommen nicht ins Anschreiben.",
+    "bridgeFailed": "Die Lehrstelle konnte nicht angelegt werden.",
+    "fromTaster": "Diese Bewerbung stammt aus deiner Schnupperlehre im selben Betrieb – die Erfahrung ist im Anschreiben schon eingeplant.",
+    "openTaster": "Schnupperlehre öffnen"
+  },
+  "similarLetter": {
+    "warning": "Dieser Brief ist zu {{pct}} % gleich wie dein Brief an",
+    "more_one": "(und {{count}} weiteren).",
+    "more_other": "(und {{count}} weiteren).",
+    "tip": "Betriebe merken das. Schreib den Einstieg und «Warum dieser Betrieb» neu."
+  },
+  "schoolPrep": {
+    "questions": "Fragen, die kommen können",
+    "prepare": "So bereitest du dich vor",
+    "examples": "Beispiele zum Erzählen",
+    "examplesShort": "Beispiele",
+    "prepareShort": "Vorbereitung",
+    "situation": "Was war los?",
+    "task": "Deine Aufgabe",
+    "action": "Was du gemacht hast",
+    "result": "Wie es ausging"
+  },
+  "schoolResearch": {
+    "overview": "Was der Betrieb macht",
+    "culture": "So arbeitet man dort",
+    "ideas": "Ideen für «Warum dieser Betrieb»"
+  },
+  "schoolCv": {
+    "title": "Lebenslauf",
+    "sub": "Aus deinem Schülerprofil — als PDF oder Google Doc",
+    "fromProfile": "Schnupperlehren, Erfahrungen, Hobbys und Wunschberufe kommen automatisch aus deinem Schülerprofil. Hier ergänzt du nur, was der Lebenslauf zusätzlich braucht.",
+    "toProfile": "Zum Profil →",
+    "photo": "Foto",
+    "photoSub": "Ein freundliches Passfoto mit ruhigem Hintergrund. Es bleibt in deinem Profil gespeichert.",
+    "photoPick": "Foto wählen",
+    "photoRemove": "Foto entfernen",
+    "photoFailed": "Das Bild konnte nicht gelesen werden (nur JPG oder PNG).",
+    "personal": "Persönliche Angaben",
+    "personalSub": "Name, Telefon und E-Mail kommen aus deinem Profil.",
+    "street": "Strasse und Nr.",
+    "zipCity": "PLZ und Ort",
+    "birthDate": "Geburtsdatum",
+    "nationality": "Nationalität",
+    "nationalityPlaceholder": "z. B. Schweiz",
+    "noContact": "Noch keine Kontaktdaten im Profil.",
+    "editContact": "Im Profil bearbeiten",
+    "schools": "Schulen",
+    "schoolsSub": "Alle Schulen ab der Primarschule, mit Jahren (z. B. 2016 – 2022).",
+    "addSchool": "Schule hinzufügen",
+    "schoolName": "Schule (z. B. Sekundarschule B)",
+    "place": "Ort",
+    "from": "von (Jahr)",
+    "to": "bis (leer = heute)",
+    "languages": "Sprachen",
+    "addLanguage": "Sprache hinzufügen",
+    "languageName": "Sprache",
+    "levels": {
+      "native": "Muttersprache",
+      "very_good": "sehr gut",
+      "good": "gut",
+      "basic": "Grundkenntnisse"
+    },
+    "itHobbies": "Computer und Freizeit",
+    "it": "Computerkenntnisse",
+    "itPlaceholder": "z. B. Word, PowerPoint, 10-Finger-System",
+    "hobbies": "Weitere Hobbys",
+    "hobbiesPlaceholder": "Ergänzt die Hobbys aus deinem Profil",
+    "parents": "Eltern",
+    "parentsSub": "In der Schweiz üblich, aber freiwillig.",
+    "addParent": "Elternteil hinzufügen",
+    "parentName": "Name",
+    "parentJob": "Beruf",
+    "phone": "Telefon",
+    "email": "E-Mail",
+    "references": "Referenzen",
+    "referencesSub": "Zum Beispiel deine Lehrperson oder dein Trainer — frag vorher, ob das in Ordnung ist.",
+    "addReference": "Referenz hinzufügen",
+    "refName": "Name",
+    "refRole": "Funktion (z. B. Klassenlehrerin)",
+    "remove": "Entfernen",
+    "pdf": "PDF herunterladen",
+    "doc": "Als Google Doc",
+    "openDoc": "Öffnen",
+    "pdfFailed": "Das PDF konnte nicht erstellt werden.",
+    "docDone": "Google Doc erstellt.",
+    "docFailed": "Google Doc konnte nicht erstellt werden.",
+    "checklist": "Checkliste",
+    "openCount_one": "{{count}} Punkt offen",
+    "openCount_other": "{{count}} Punkte offen",
+    "allOk": "alles erledigt",
+    "missing": {
+      "name": "Name",
+      "phone": "Telefon",
+      "email": "E-Mail",
+      "address": "Adresse"
+    },
+    "checks": {
+      "photo": {
+        "ok": "Foto ist dabei.",
+        "warn": "Noch kein Foto — in der Schweiz erwarten die meisten Betriebe eines."
+      },
+      "contact": {
+        "ok": "Kontaktdaten sind vollständig.",
+        "fail": "Es fehlt noch: {{missing}}."
+      },
+      "birthDate": {
+        "ok": "Geburtsdatum ist eingetragen.",
+        "fail": "Trag dein Geburtsdatum ein."
+      },
+      "email": {
+        "ok": "Deine E-Mail-Adresse wirkt seriös.",
+        "warn": "Die E-Mail-Adresse {{email}} wirkt nicht seriös — nimm lieber vorname.nachname@…"
+      },
+      "schools": {
+        "ok": "Schulen lückenlos mit Jahren.",
+        "warn": "Zwischen {{gap}} fehlt etwas — trag die Schule oder ein Zwischenjahr ein.",
+        "noDates": "Bei einer Schule fehlen die Jahre.",
+        "fail": "Trag mindestens deine aktuelle Schule ein."
+      },
+      "taster": {
+        "ok": "Schnupperlehren sind aufgeführt.",
+        "warn": "Noch keine Schnupperlehre im Profil — die zeigt dein Interesse am Beruf."
+      },
+      "languages": {
+        "ok": "Sprachen sind aufgeführt.",
+        "warn": "Trag deine Sprachen ein (auch die Muttersprache)."
+      },
+      "hobbies": {
+        "ok": "Hobbys sind dabei.",
+        "warn": "Noch keine Hobbys — sie zeigen, wer du bist."
+      },
+      "references": {
+        "ok": "Mindestens eine Referenz ist dabei.",
+        "warn": "Noch keine Referenz — frag zum Beispiel deine Lehrperson."
+      },
+      "swiss": {
+        "ok": "Schweizer Schreibweise (ss statt ß).",
+        "warn": "Im Text steht ein ß — in der Schweiz schreibt man ss."
+      },
+      "tests": {
+        "ok": "Tipp: Leg deine Testresultate ({{names}}) der Bewerbung als eigenes Dokument bei."
+      }
+    }
+  },
+  "agenda": {
+    "title": "Termine & Fristen",
+    "sub": "Was als Nächstes ansteht — mit Erinnerungen",
+    "intro": "Bewerbungsfristen, Schnuppertage, Gespräche und deine eigenen Termine an einem Ort. Die Glocke zeigt, woran du heute denken solltest.",
+    "empty": "Noch keine Termine. Trag bei einer Bewerbung die Bewerbungsfrist oder die Schnuppertage ein — oder rechts einen eigenen Termin.",
+    "groups": {
+      "overdue": "Verpasst",
+      "today": "Heute",
+      "soon": "Diese Woche",
+      "later": "Später"
+    },
+    "kinds": {
+      "deadline": "Bewerbungsfrist",
+      "taster": "Schnuppertage",
+      "interview": "Gespräch",
+      "followup": "Nach dem Schnuppern",
+      "personal": "Termin"
+    },
+    "personalKinds": {
+      "test": "Test",
+      "fair": "Berufsmesse",
+      "info": "Infoveranstaltung",
+      "counselling": "Berufsberatung",
+      "other": "Termin"
+    },
+    "placeholders": {
+      "test": "z. B. Multicheck, Stellwerk",
+      "fair": "z. B. Berufsmesse Zürich",
+      "info": "z. B. Infoabend Lehrbetrieb",
+      "counselling": "z. B. Gespräch BIZ",
+      "other": "Was steht an?"
+    },
+    "followupHint": "Bedank dich und trag deine Rückmeldung ein",
+    "running": "läuft gerade",
+    "today": "heute",
+    "tomorrow": "morgen",
+    "inDays_one": "in {{count}} Tag",
+    "inDays_other": "in {{count}} Tagen",
+    "overdue_one": "seit {{count}} Tag vorbei",
+    "overdue_other": "seit {{count}} Tagen vorbei",
+    "reminderToday": "Heute erinnern",
+    "addGoogle": "In Google Kalender eintragen",
+    "ics": "In Kalender übernehmen",
+    "fileName": "Termine",
+    "icsHint": "„In Kalender übernehmen“ lädt eine Kalenderdatei (.ics) mit Erinnerungen herunter — öffne sie auf dem Handy oder Computer, dann meldet sich dein Kalender rechtzeitig. Lade sie nach neuen Terminen einfach nochmals.",
+    "ownTitle": "Eigene Termine",
+    "ownSub": "Tests wie Multicheck oder Stellwerk, Berufsmessen, Infoabende, Termine bei der Berufsberatung.",
+    "kind": "Art",
+    "what": "Was",
+    "date": "Datum",
+    "time": "Zeit",
+    "place": "Ort",
+    "add": "Termin hinzufügen",
+    "remove": "Entfernen",
+    "whereDeadlines": "Die Bewerbungsfrist trägst du in der Bewerbung unter Details ein (beim Import wird sie, wenn möglich, erkannt). Schnuppertage trägst du in der Phase „Schnuppern / Gespräch“ ein.",
+    "applyDeadline": "Bewerbungsfrist",
+    "tasterUntil": "bis (letzter Tag)",
+    "bannerTitle_one": "1 Erinnerung:",
+    "bannerTitle_other": "{{count}} Erinnerungen:",
+    "bannerOpen": "Alle Termine",
+    "bannerDismiss": "Für heute ausblenden"
+  },
+  "lehrstellenImport": {
+    "hint": "Tipp: Links zu einzelnen Lehrstellen auf Yousty und berufsberatung.ch (LENA) werden direkt gelesen — Firma, Beruf, Ort und Kontaktperson werden übernommen.",
+    "listUrl": "Das ist eine Such- oder Listenseite. Öffne die einzelne Lehrstelle und kopiere deren Link.",
+    "fetchFailed": "Die Seite liess sich nicht lesen. Kopiere den Text der Ausschreibung und füge ihn unter „Text“ ein.",
+    "failed": "Das Einlesen hat nicht geklappt. Versuch es nochmals oder füge den Text ein.",
+    "structured": {
+      "yousty": "Direkt von Yousty gelesen",
+      "lena": "Direkt von berufsberatung.ch (LENA) gelesen",
+      "jsonld": "Strukturierte Angaben der Seite gelesen"
+    },
+    "start": "Lehrbeginn {{start}}",
+    "positions_one": "{{count}} freie Stelle",
+    "positions_other": "{{count}} freie Stellen"
+  },
+  "region": {
+    "levels": {
+      "same_town": "In deinem Wohnort",
+      "near": "In deiner Nähe",
+      "region": "In deiner Region — Arbeitsweg prüfen",
+      "far": "Weit weg von deinem Wohnort",
+      "unknown": "Entfernung unbekannt"
+    },
+    "fromTo": "{{home}} → {{job}}",
+    "noHome": "Für den Regionsvergleich fehlt dein Wohnort.",
+    "setHome": "PLZ und Ort im Lebenslauf eintragen",
+    "check": "ÖV-Arbeitsweg prüfen",
+    "recheck": "Nochmals prüfen",
+    "privacy": "Schickt nur die zwei Ortsnamen an transport.opendata.ch (ÖV-Fahrplan der Schweiz).",
+    "minutes_one": "{{count}} Minute mit dem ÖV",
+    "minutes_other": "{{count}} Minuten mit dem ÖV",
+    "transfers_one": "{{count}} Umstieg",
+    "transfers_other": "{{count}} Umstiege",
+    "tooLong": "länger als deine {{max}} Minuten",
+    "errors": {
+      "no_home": "Trag zuerst deinen Wohnort ein (Lebenslauf: PLZ und Ort).",
+      "no_location": "Bei der Lehrstelle fehlt der Ort.",
+      "no_connection": "Keine Verbindung gefunden — prüf die Ortsnamen.",
+      "transport_failed": "Der Fahrplan war nicht erreichbar. Versuch es später nochmals."
+    },
+    "needZip": "mit Postleitzahl wird verglichen"
+  },
+  "career": {
+    "title": "Berufswahl",
+    "sub": "Ideen für Lehrberufe, die zu dir passen könnten",
+    "interestsTitle": "Was interessiert dich?",
+    "interestsIntro": "Kreuz bei jedem Bereich an, wie sehr er dich interessiert. Ehrlich ist besser als brav — es gibt keine falschen Antworten.",
+    "rated": "{{n}} von {{total}} beantwortet",
+    "rating": {
+      "0": "Nein",
+      "1": "Etwas",
+      "2": "Sehr"
+    },
+    "areas": {
+      "build": {
+        "title": "Bauen & Handwerk",
+        "hint": "Häuser, Holz, Werkstatt, etwas mit den Händen herstellen"
+      },
+      "tech": {
+        "title": "Technik & Maschinen",
+        "hint": "Elektrik, Mechanik, verstehen wie Dinge funktionieren"
+      },
+      "vehicles": {
+        "title": "Fahrzeuge",
+        "hint": "Autos, Velos, Lastwagen, Landmaschinen"
+      },
+      "it": {
+        "title": "Computer & Informatik",
+        "hint": "Programmieren, Netzwerke, Apps, Medien"
+      },
+      "nature": {
+        "title": "Natur & Tiere",
+        "hint": "Pflanzen, Tiere, Landwirtschaft"
+      },
+      "outdoor": {
+        "title": "Draussen arbeiten",
+        "hint": "Bei jedem Wetter an der frischen Luft"
+      },
+      "care": {
+        "title": "Menschen begleiten",
+        "hint": "Kinder, ältere Menschen, Menschen mit Beeinträchtigung"
+      },
+      "health": {
+        "title": "Gesundheit",
+        "hint": "Praxis, Spital, Apotheke, Körper und Medizin"
+      },
+      "sales": {
+        "title": "Verkaufen & beraten",
+        "hint": "Kundinnen und Kunden, Laden, Gespräche"
+      },
+      "office": {
+        "title": "Büro & Organisation",
+        "hint": "Planen, Zahlen, Telefon, Ordnung schaffen"
+      },
+      "creative": {
+        "title": "Gestalten",
+        "hint": "Zeichnen, Farben, Design, Mode, Frisuren"
+      },
+      "food": {
+        "title": "Essen & Kochen",
+        "hint": "Küche, Bäckerei, Restaurant"
+      },
+      "lab": {
+        "title": "Labor & Forschung",
+        "hint": "Experimente, Chemie, Biologie"
+      },
+      "logistics": {
+        "title": "Ordnen & liefern",
+        "hint": "Lager, Waren, Transport, Abläufe"
+      }
+    },
+    "skills": {
+      "math": "Mathematik",
+      "german": "Deutsch",
+      "languages": "Fremdsprachen",
+      "science": "Natur und Technik",
+      "design": "Bildnerisches Gestalten",
+      "crafts": "Werken / TTG",
+      "sport": "Sport",
+      "it": "Informatik",
+      "food": "Hauswirtschaft",
+      "spatial": "räumliches Vorstellungsvermögen",
+      "logic": "logisches Denken",
+      "technical": "technisches Verständnis"
+    },
+    "reasons": {
+      "wish": "Steht schon auf deiner Wunschliste",
+      "interestStrong": "Du hast „{{area}}“ mit „Sehr“ angekreuzt",
+      "interest": "Du hast „{{area}}“ mit „Etwas“ angekreuzt",
+      "interestAlso": "Hat auch mit „{{area}}“ zu tun",
+      "subject": "Dein Lieblingsfach {{subject}} brauchst du hier",
+      "test_high": "{{test}}, {{area}}: deutlich über dem Durchschnitt",
+      "test_above": "{{test}}, {{area}}: über dem Durchschnitt",
+      "strength": "Deine Stärke „{{strength}}“ — z.B. {{example}}"
+    },
+    "fit": {
+      "strong": "Viele Gemeinsamkeiten",
+      "good": "Einige Gemeinsamkeiten",
+      "possible": "Eine Idee"
+    },
+    "levels": {
+      "EFZ": "EFZ (Fähigkeitszeugnis)",
+      "EBA": "EBA (Berufsattest)"
+    },
+    "years_one": "{{count}} Jahr",
+    "years_other": "{{count}} Jahre",
+    "disclaimer": "Das sind Ideen, keine Entscheidung. Sie zeigen nur, was zu deinen Angaben passt — viele spannende Berufe fehlen hier. Schnuppern und ein Gespräch bei der Berufsberatung (BIZ) helfen dir am meisten.",
+    "counselling": "Berufsberatung finden",
+    "missing": {
+      "interests": "Beantworte links ein paar Bereiche, dann erscheinen Ideen.",
+      "subjects": "Trag im Profil deine Lieblingsfächer ein.",
+      "strengths": "Trag im Profil Stärken mit einem Beispiel ein.",
+      "examples": "{{n}} Stärke(n) ohne Beispiel zählen hier nicht — ergänze ein Beispiel im Profil."
+    },
+    "toProfile": "Zum Profil",
+    "ideasTitle": "Ideen für dich",
+    "empty": "Noch keine Ideen. Kreuz links an, was dich interessiert.",
+    "onWishList": "Auf der Wunschliste",
+    "addWish": "Zu Wunschberufen",
+    "info": "Infos zum Beruf",
+    "searchHint": "Lehrstellen suchen — dort nach „{{term}}“ suchen"
   }
 }

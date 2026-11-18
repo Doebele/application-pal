@@ -76,7 +76,8 @@
   "interview-prep": {
     "label": "Interview-Vorbereitung",
     "tooltip": "Fragen, STAR-Beispiele und Rückfragen generieren",
-    "empty": "Vorbereitung generieren"
+    "empty": "Vorbereitung generieren",
+    "schoolLabel": "Gespräch vorbereiten"
   },
   "salary-tips": {
     "label": "Gehaltsverhandlung",
@@ -103,5 +104,9 @@
     "tooltip": "Google Drive Bewerbungsordner erstellen"
   },
   "generating": "Wird generiert…",
-  "generateFailed": "Generierung fehlgeschlagen"
+  "generateFailed": "Generierung fehlgeschlagen",
+  "email-thanks": {
+    "label": "Dankesmail",
+    "tooltip": "Dankesmail nach Schnupperlehre oder Gespräch formulieren"
+  }
 }

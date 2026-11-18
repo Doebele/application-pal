@@ -11,6 +11,7 @@ import { SetupWizard } from "./components/SetupWizard";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { Rail } from "./components/Rail";
 import { TourProvider } from "./components/Tour";
+import { PersonaStageNames } from "./lib/persona";
 import { BoardPage } from "./pages/BoardPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { TemplatesPage } from "./pages/TemplatesPage";
@@ -21,6 +22,9 @@ import { DocumentsPage } from "./pages/DocumentsPage";
 import { LetterCoachPage } from "./pages/LetterCoachPage";
 import { LinkedInCheckPage } from "./pages/LinkedInCheckPage";
 import { CvCheckPage } from "./pages/CvCheckPage";
+import { SchoolCvPage } from "./pages/SchoolCvPage";
+import { AgendaPage } from "./pages/AgendaPage";
+import { CareerPage } from "./pages/CareerPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 import { TablePage } from "./pages/TablePage";
 import { LoginPage } from "./pages/LoginPage";
@@ -90,6 +94,7 @@ function MainApp() {
     <TourProvider key={user?.id} userId={user?.id ?? ""} persona={persona}>
     <div className="app-shell">
       {user?.id && <SettingsSync key={user.id} userId={user.id} />}
+      <PersonaStageNames />
       <Rail applications={applications} />
       <div className="app-main">
         <Routes>
@@ -102,6 +107,9 @@ function MainApp() {
           <Route path="/profile"   element={<ProfilePage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/cv-check"      element={<CvCheckPage />} />
+          <Route path="/school-cv"     element={<SchoolCvPage />} />
+          <Route path="/dates"         element={<AgendaPage />} />
+          <Route path="/career"        element={<CareerPage />} />
           <Route path="/letter-coach"  element={<LetterCoachPage />} />
           <Route path="/linkedin"      element={<LinkedInCheckPage />} />
           <Route path="/knowledge"     element={<KnowledgeBasePage />} />

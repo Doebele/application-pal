@@ -2,7 +2,7 @@
 // default stage tasks (German, STAGE_TASK_TEMPLATES in backend/src/index.ts) and
 // stage-change activity titles ("Stage → Preparing Letter"). Stored rows stay as they
 // are; only untouched defaults are translated, edited titles are shown verbatim.
-// Keep DEFAULT_TASK_KEYS in sync with STAGE_TASK_TEMPLATES.
+// Keep DEFAULT_TASK_KEYS in sync with STAGE_TASK_TEMPLATES and SCHOOL_STAGE_TASKS.
 import type { TFunction } from "i18next";
 
 const DEFAULT_TASK_KEYS: Record<string, string> = {
@@ -44,6 +44,43 @@ const DEFAULT_TASK_KEYS: Record<string, string> = {
   "Startdatum bestätigt": "accepted.1",
   "Andere laufende Bewerbungen informiert": "accepted.2",
   "Absagen für andere Stellen vorbereitet": "accepted.3",
+  // School kinds (SCHOOL_STAGE_TASKS in backend/src/letter-kinds.ts)
+  "Beruf und Betrieb angeschaut": "school.0",
+  "Schnuppermöglichkeit geklärt (Website / Telefon)": "school.1",
+  "Eltern / Lehrperson informiert": "school.2",
+  "Lebenslauf mit Foto aktuell": "school.3",
+  "Zeugnisse und Testresultate bereit": "school.4",
+  "Ansprechperson richtig angesprochen": "school.5",
+  "Gegenlesen lassen (Eltern / Lehrperson)": "school.6",
+  "Höchstens eine halbe Seite": "school.7",
+  "Unterlagen vollständig geschickt (Brief, Lebenslauf, Zeugnisse)": "school.8",
+  "Nach einer Woche nachfragen, falls keine Antwort": "school.9",
+  "Schnuppertage bestätigt (Datum, Zeit, Ort)": "school.10",
+  "Kleidung und Material geklärt": "school.11",
+  "Anreise geplant – pünktlich sein": "school.12",
+  "Fragen an den Betrieb notiert": "school.13",
+  "Schnupper-Rückblick ausgefüllt": "school.14",
+  "Bewertung des Betriebs erhalten": "school.15",
+  "Dankesmail nach der Schnupperlehre geschickt": "school.16",
+  "Nach einer freien Lehrstelle gefragt": "school.17",
+  "Schnupper-Rückblick ins Schülerprofil übernommen": "school.18",
+  "Rückmeldung erfragt, was ich besser machen kann": "school.19",
+  "Nächsten Betrieb ausgesucht": "school.20",
+  "Lehrstelle passt zu meinen Wunschberufen": "school.21",
+  "In diesem Beruf geschnuppert": "school.22",
+  "Bewerbungsfrist notiert": "school.23",
+  "Schnupperberichte beigelegt": "school.24",
+  "Dossier vollständig geschickt (Brief, Lebenslauf, Zeugnisse, Tests)": "school.25",
+  "Termin bestätigt (Zeit, Ort)": "school.26",
+  "„Warum dieser Beruf? Warum hier?“ geübt": "school.27",
+  "Eigene Fragen vorbereitet": "school.28",
+  "Eltern über den Termin informiert": "school.29",
+  "Selektionstage oder Eignungstest vorbereitet": "school.30",
+  "Dankesmail nach dem Gespräch geschickt": "school.31",
+  "Lehrvertrag mit den Eltern durchgelesen": "school.32",
+  "Lehrvertrag unterschrieben zurückgeschickt": "school.33",
+  "Anderen Betrieben abgesagt": "school.34",
+  "Weitere Lehrstellen gesucht": "school.35",
 };
 
 /** Title of a stage task in the UI language (custom tasks unchanged). */

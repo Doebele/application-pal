@@ -72,6 +72,22 @@ async function copyText(text: string): Promise<void> {
 
 import { STAGE_COLORS, STAGE_ORDER } from "../lib/stages";
 import { taskTitle, activityTitle } from "../lib/stageText";
+import { ApplicationKindFields, SalutationField } from "./LetterKindFields";
+import { SchoolLetterQuestions, type SchoolAnswers } from "./SchoolLetterQuestions";
+import { SchoolReview, type SchoolReviewData } from "./SchoolReview";
+import { SchnupperDebriefPanel, SchnupperSourceNote, DEBRIEF_STAGES } from "./SchnupperDebrief";
+import { SimilarLetterWarning } from "./SimilarLetterWarning";
+import { RegionCheck } from "./RegionBadge";
+import { useProfileBasics, ADULT_ONLY_TILES } from "../lib/persona";
+
+/** School-leaver view: persona Schulabgänger, or a Schnupperlehre / Lehrstelle of any persona. */
+function useSchoolView(app: Application): { school: boolean; ravEnabled: boolean } {
+  const { isSchool, ravEnabled } = useProfileBasics();
+  const kindSchool = app.applicationKind === "schnupperlehre" || app.applicationKind === "lehrstelle";
+  return { school: isSchool || kindSchool, ravEnabled };
+}
+/** Tiles hidden in the school-leaver view (adult job-seeker topics). */
+const hiddenForSchool = (id: string) => ADULT_ONLY_TILES.has(id) || id === "cv-doc" || id === "email-linkedin";
 
 const STAGES = STAGE_ORDER.map((id) => ({ id }));
 
@@ -359,6 +375,7 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
   onSave: (patch: Partial<Application>) => void
 }) {
   const { t } = useTranslation();
+  const { school, ravEnabled } = useSchoolView(app);
   const [company, setCompany]       = useState(app.company);
   const [role, setRole]             = useState(app.role);
   const [contactPerson, setContactPerson] = useState((app as Application & { contactPerson?: string }).contactPerson ?? "");
@@ -369,6 +386,7 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
   const [ravType, setRavType]           = useState((app as Application & { ravApplicationType?: string }).ravApplicationType ?? "");
   const [ravProof, setRavProof]         = useState((app as Application & { ravProof?: string }).ravProof ?? "");
   const [contractType, setContractType] = useState((app as Application & { contractType?: string }).contractType ?? "");
+  const [applyDeadline, setApplyDeadline] = useState(app.applyDeadline ?? "");
   const [tags, setTags]             = useState<string[]>(parseTags(app.tags));
   const [newTag, setNewTag]         = useState("");
   const [saved, setSaved]           = useState(false);
@@ -402,6 +420,12 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
         </div>
       </div>
 
+      {/* Region vs. the pupil's home + optional ÖV commute check (school view) */}
+      {school && (
+        <RegionCheck appId={app.id} location={app.location}
+          commute={(() => { try { return JSON.parse(app.aiResultsCache ?? "{}")?.commute ?? null; } catch { return null; } })()} />
+      )}
+
       {/* Row 2: Rolle + Ansprechpartner */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
         <div className="field">
@@ -414,6 +438,10 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
             placeholder={t("overview.contactPersonPlaceholder")} />
         </div>
       </div>
+
+      {/* Salutation (built in code, never by the model) + school-leaver kind / apprenticeship */}
+      <SalutationField app={{ ...app, contactPerson: contactPerson || null }} onSave={save} />
+      <ApplicationKindFields app={app} onSave={save} />
 
       {/* Row 3: Original URL + Bewerbungsportal */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -437,11 +465,16 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
         </div>
       </div>
 
-      {/* Row 4: Salary + Nächster Schritt */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <div className="field">
+      {/* Row 4: Salary + Bewerbungsfrist + Nächster Schritt */}
+      <div style={{ display: "grid", gridTemplateColumns: school ? "1fr 1fr" : "1fr 1fr 1fr", gap: 12 }}>
+        {!school && <div className="field">
           <label>{t("overview.salary")}</label>
           <input value={salary} onChange={(e) => setSalary(e.target.value)} onBlur={() => save({ salary })} placeholder="e.g. €80–100k" />
+        </div>}
+        <div className="field">
+          <label>{t("agenda.applyDeadline")}</label>
+          <input type="date" value={applyDeadline}
+            onChange={(e) => { setApplyDeadline(e.target.value); save({ applyDeadline: e.target.value || null }); }} />
         </div>
         <div className="field">
           <label>{t("overview.nextStep")}</label>
@@ -449,9 +482,9 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
         </div>
       </div>
 
-      {/* Row 5: Pensum + Work Model + Contract */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
-        <div className="field">
+      {/* Row 5: Pensum + Work Model + Contract (job seekers) · RAV overrides (when the RAV export is on) */}
+      {(!school || ravEnabled) && <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+        {!school && <><div className="field">
           <label>{t("overview.pensum")}</label>
           <PensumField
             value={jobType}
@@ -477,9 +510,9 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
             value={contractType}
             onChange={v => { setContractType(v); save({ contractType: v || null } as Partial<Application>); }}
           />
-        </div>
+        </div></>}
         {/* RAV proof overrides — empty means the export derives the value */}
-        <div className="field">
+        {ravEnabled && <><div className="field">
           <label>{t("rav.type")}</label>
           <select
             value={ravType}
@@ -505,8 +538,8 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
             <option value="linkedin">{t("rav.proofLinkedin")}</option>
             <option value="other">{t("rav.proofOther")}</option>
           </select>
-        </div>
-      </div>
+        </div></>}
+      </div>}
 
       {/* Tags */}
       <div className="field">
@@ -616,7 +649,7 @@ function aiResultSummary(id: string, data: unknown): string {
       const q = (d.rollenFragen as string[] | undefined ?? []).length;
       const s = (d.starBeispiele as unknown[] | undefined ?? []).length;
       const v = (d.vossFragenWhatHow as string[] | undefined ?? []).length;
-      return `${q} Fragen · ${s} STAR · ${v} Voss`;
+      return d.school ? `${q} Fragen · ${s} ${i18n.t("schoolPrep.examplesShort")} · ${v} ${i18n.t("schoolPrep.prepareShort")}` : `${q} Fragen · ${s} STAR · ${v} Voss`;
     }
     case "salary-tips":
       return ((d["markteinschätzung"] as string | undefined) ?? "").slice(0, 80);
@@ -917,13 +950,13 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
   const copyAll = () => {
     const sep = "─".repeat(40);
     const text = [
-      "ROLLENSPEZIFISCHE FRAGEN",
+      (iv.school ? i18n.t("schoolPrep.questions") : "ROLLENSPEZIFISCHE FRAGEN").toUpperCase(),
       sep,
       iv.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"),
-      `\nCHRIS VOSS FRAGEN`,
+      `\n${iv.school ? i18n.t("schoolPrep.prepare").toUpperCase() : "CHRIS VOSS FRAGEN"}`,
       sep,
       iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"),
-      `\nSTAR-BEISPIELE`,
+      `\n${iv.school ? i18n.t("schoolPrep.examples").toUpperCase() : "STAR-BEISPIELE"}`,
       sep,
       iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"),
       `\nMEINE RÜCKFRAGEN`,
@@ -970,7 +1003,7 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
       </div>
 
       {/* Rollenspezifische Fragen */}
-      <Accordion title={i18n.t("ui.roleQuestions")} count={iv.rollenFragen?.length ?? 0} color="#a78bfa"
+      <Accordion title={iv.school ? i18n.t("schoolPrep.questions") : i18n.t("ui.roleQuestions")} count={iv.rollenFragen?.length ?? 0} color="#a78bfa"
         onCopy={() => copyText(iv.rollenFragen.map((q, i) => `${i + 1}. ${q}`).join("\n"))}>
         {iv.rollenFragen?.map((q, i) => (
           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < iv.rollenFragen.length - 1 ? "1px solid var(--border)" : "none" }}>
@@ -985,9 +1018,9 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
       </Accordion>
 
       {/* Chris Voss Fragen */}
-      <Accordion title='Chris Voss "What / How"-Fragen' count={iv.vossFragenWhatHow?.length ?? 0} color="#34d399"
+      <Accordion title={iv.school ? i18n.t("schoolPrep.prepare") : 'Chris Voss "What / How"-Fragen'} count={iv.vossFragenWhatHow?.length ?? 0} color="#34d399"
         onCopy={() => copyText(iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"))}>
-        <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>
+        {!iv.school && <div style={{ fontSize: 11, color: "var(--fg-3)", marginBottom: 8, fontStyle: "italic" }}>Taktische offene Fragen nach "Never Split the Difference"</div>}
         {iv.vossFragenWhatHow?.map((q, i) => (
           <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 12, color: "var(--fg-1)", padding: "5px 0", borderBottom: i < iv.vossFragenWhatHow.length - 1 ? "1px solid var(--border)" : "none" }}>
             <span style={{ color: "#34d399", flexShrink: 0 }}>→</span>
@@ -1001,7 +1034,7 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
       </Accordion>
 
       {/* STAR-Beispiele */}
-      <Accordion title="STAR-Beispiele" count={iv.starBeispiele?.length ?? 0} color="#fbbf24"
+      <Accordion title={iv.school ? i18n.t("schoolPrep.examples") : "STAR-Beispiele"} count={iv.starBeispiele?.length ?? 0} color="#fbbf24"
         onCopy={() => copyText(iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"))}>
         {iv.starBeispiele?.map((s, i) => (
           <div key={i} style={{ position: "relative", marginBottom: 12, padding: "10px 12px", borderRadius: 8, background: "var(--surface)", border: "1px solid var(--border)" }}>
@@ -1011,7 +1044,9 @@ function InterviewPrepDetail({ iv, appId, showToast }: { iv: InterviewPrep; appI
               <IcCopy width={11} height={11} />
             </button>
             <div style={{ fontSize: 12, fontWeight: 700, color: "var(--fg-1)", marginBottom: 6, paddingRight: 20 }}>❓ {s.frage}</div>
-            {([["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]] as [string, string][]).map(([k, v]) => (
+            {(iv.school
+              ? [[i18n.t("schoolPrep.situation"), s.situation], [i18n.t("schoolPrep.task"), s.aufgabe], [i18n.t("schoolPrep.action"), s.aktion], [i18n.t("schoolPrep.result"), s.ergebnis]]
+              : [["S", s.situation], ["T", s.aufgabe], ["A", s.aktion], ["R", s.ergebnis]] as [string, string][]).map(([k, v]) => (
               <div key={k} style={{ fontSize: 11, color: "var(--fg-2)", padding: "2px 0" }}>
                 <span style={{ fontWeight: 700, color: "#fbbf24", marginRight: 6 }}>{k}:</span>{v}
               </div>
@@ -1249,11 +1284,11 @@ function AiResultDetail({ id, data, appId, onUpdate }: {
     const cr = data as CompanyResearch;
     return (
       <>
-        {cr.unternehmensueberblick && <AiSection title={t("aiResult.overview")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmensueberblick}</div></AiSection>}
-        {cr.unternehmenskultur     && <AiSection title={t("aiResult.culture")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmenskultur}</div></AiSection>}
+        {cr.unternehmensueberblick && <AiSection title={cr.school ? t("schoolResearch.overview") : t("aiResult.overview")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmensueberblick}</div></AiSection>}
+        {cr.unternehmenskultur     && <AiSection title={cr.school ? t("schoolResearch.culture") : t("aiResult.culture")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.unternehmenskultur}</div></AiSection>}
         {cr.marktposition          && <AiSection title={t("aiResult.marketPosition")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{cr.marktposition}</div></AiSection>}
         {cr.wettbewerber?.length > 0  && <AiSection title={t("aiResult.competitors")}>{cr.wettbewerber.map((w, i) => <TagBadge key={i} text={w} />)}</AiSection>}
-        {cr.aktuelleThemen?.length > 0 && <AiSection title={t("aiResult.currentTopics")}><BulletList items={cr.aktuelleThemen} /></AiSection>}
+        {cr.aktuelleThemen?.length > 0 && <AiSection title={cr.school ? t("schoolResearch.ideas") : t("aiResult.currentTopics")}><BulletList items={cr.aktuelleThemen} /></AiSection>}
       </>
     );
   }
@@ -1493,7 +1528,7 @@ function renderTileContent(id: string, data: unknown): React.ReactNode {
     const v = (d.vossFragenWhatHow as string[] | undefined ?? []).length;
     return (
       <div style={{ display: "flex", gap: 10 }}>
-        {[{ val: q, label: "Fragen", color: "var(--accent)" }, { val: s, label: "STAR", color: "#34d399" }, { val: v, label: "Voss", color: "#fbbf24" }].map(({ val, label, color }) => (
+        {[{ val: q, label: "Fragen", color: "var(--accent)" }, { val: s, label: d.school ? i18n.t("schoolPrep.examplesShort") : "STAR", color: "#34d399" }, { val: v, label: d.school ? i18n.t("schoolPrep.prepareShort") : "Voss", color: "#fbbf24" }].map(({ val, label, color }) => (
           <div key={label} style={{ textAlign: "center" }}>
             <div style={{ fontSize: 18, fontWeight: 800, color, lineHeight: 1 }}>{val}</div>
             <div style={{ fontSize: 8, color: "var(--fg-4)", marginTop: 2 }}>{label}</div>
@@ -1822,7 +1857,7 @@ function renderTileContentLarge(id: string, data: unknown): React.ReactNode {
     const v = (d.vossFragenWhatHow as string[] | undefined ?? []).length;
     return (
       <div style={{ display: "flex", gap: 16 }}>
-        {[{ val: q, label: "Fragen", color: "var(--accent)" }, { val: s, label: "STAR", color: "#34d399" }, { val: v, label: "Voss", color: "#fbbf24" }].map(({ val, label, color }) => (
+        {[{ val: q, label: "Fragen", color: "var(--accent)" }, { val: s, label: d.school ? i18n.t("schoolPrep.examplesShort") : "STAR", color: "#34d399" }, { val: v, label: d.school ? i18n.t("schoolPrep.prepareShort") : "Voss", color: "#fbbf24" }].map(({ val, label, color }) => (
           <div key={label} style={{ textAlign: "center" }}>
             <div style={{ fontSize: 32, fontWeight: 800, color, lineHeight: 1 }}>{val}</div>
             <div style={{ fontSize: 10, color: "var(--fg-4)", marginTop: 4 }}>{label}</div>
@@ -2044,8 +2079,8 @@ function tileTextContent(id: string, data: unknown): string {
     case "interview-prep": {
       const iv = d as InterviewPrep;
       if (iv.rollenFragen?.length)   lines.push("ROLLENSPEZIFISCHE FRAGEN\n" + iv.rollenFragen.map((q,i) => `${i+1}. ${q}`).join("\n"));
-      if (iv.vossFragenWhatHow?.length) lines.push("CHRIS VOSS FRAGEN\n" + iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"));
-      if (iv.starBeispiele?.length)  lines.push("STAR-BEISPIELE\n" + iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"));
+      if (iv.vossFragenWhatHow?.length) lines.push(`${iv.school ? i18n.t("schoolPrep.prepare").toUpperCase() : "CHRIS VOSS FRAGEN"}\n` + iv.vossFragenWhatHow.map(q => `→ ${q}`).join("\n"));
+      if (iv.starBeispiele?.length)  lines.push(`${iv.school ? i18n.t("schoolPrep.examples").toUpperCase() : "STAR-BEISPIELE"}\n` + iv.starBeispiele.map(s => `${s.frage}\nS: ${s.situation}\nT: ${s.aufgabe}\nA: ${s.aktion}\nR: ${s.ergebnis}`).join("\n\n"));
       if (iv.rueckfragen?.length)    lines.push("RÜCKFRAGEN\n"     + iv.rueckfragen.map(q => `? ${q}`).join("\n"));
       break;
     }
@@ -2649,6 +2684,7 @@ const LIB_CATEGORIES: { value: string; label: string; color: string }[] = [
   { value: "zeugnis",              label: "Zeugnisse",            color: "#3b82f6" },
   { value: "referenz",             label: "Referenzen",           color: "#10b981" },
   { value: "zertifikat",           label: "Zertifikate",          color: "#f59e0b" },
+  { value: "schultest",            label: "Schultests",           color: "#06b6d4" },
   { value: "portfolio",            label: "Portfolio",            color: "#8b5cf6" },
   { value: "figma",                label: "Figma",                color: "#f24e1e" },
   { value: "sonstiges",            label: "Sonstiges",            color: "var(--fg-3)" },
@@ -3366,7 +3402,7 @@ const ACTIVITY_TYPES = [
 
 type Task = { id: string; stage: string; title: string; done: boolean; isDefault: boolean; sortOrder: number; createdAt: string };
 type CvHighlights = { highlights: string[]; keywords: string[]; gaps: string[] };
-type InterviewPrep = { rollenFragen: string[]; starBeispiele: { frage: string; situation: string; aufgabe: string; aktion: string; ergebnis: string }[]; vossFragenWhatHow: string[]; rueckfragen: string[] };
+type InterviewPrep = { rollenFragen: string[]; starBeispiele: { frage: string; situation: string; aufgabe: string; aktion: string; ergebnis: string }[]; vossFragenWhatHow: string[]; rueckfragen: string[]; school?: boolean; kind?: string };
 type EmailDraft = { subject: string; body: string };
 type SalaryTips = { "markteinschätzung": string; taktiken: string[]; formulierungen: string[]; vossAnker: string };
 
@@ -3418,6 +3454,7 @@ type AtsKeywords = {
   tools: string[];
 };
 type CompanyResearch = {
+  school?: boolean;
   unternehmensueberblick: string;
   branche: string;
   marktposition: string;
@@ -3617,6 +3654,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
   onSave?: (patch: Partial<Application>) => void;
   onAiResult?: (id: string, data: unknown) => void;
 }) {
+  const { school } = useSchoolView(app);
   const { ai } = useUiStore();
   const { t } = useTranslation("actions");
   const { t: tc } = useTranslation();
@@ -3810,6 +3848,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
   };
 
   const AiBtn = ({ id, label, icon }: { id: string; label: string; icon: React.ReactNode }) => {
+    if (school && hiddenForSchool(id)) return null;
     const ts = resultTimes[id];
     const tsLabel = ts ? ts.toLocaleString("de-CH", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" }) : undefined;
     const tooltip = t(`${id}.tooltip`, { defaultValue: label });
@@ -3834,6 +3873,9 @@ function StageAiActions({ app, onSave, onAiResult }: {
           setEmailModal(r.data);
         } else if (id === "email-follow") {
           const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "followup" });
+          setEmailModal(r.data);
+        } else if (id === "email-thanks") {
+          const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "thanks" });
           setEmailModal(r.data);
         } else if (id === "email-decline") {
           const r = await api.post<EmailDraft>(`/api/applications/${app.id}/ai/email-draft`, { ...aiBody, type: "decline" });
@@ -3930,6 +3972,7 @@ function StageAiActions({ app, onSave, onAiResult }: {
       {/* Inbox Phase */}
       {showInbox && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: 12 }}>
+          {school && <AiBtn id="company-research" icon={<Building width={12} height={12} />} label={t("company-research.label")} />}
           <AiBtn id="match-score"     icon={<Sparks width={12} height={12} />}   label={t("match-score.label")} />
           <AiBtn id="glassdoor-check" icon={<Building width={12} height={12} />} label={t("glassdoor-check.label")} />
           <AiBtn id="kununu-check"    icon={<Star width={12} height={12} />}     label={t("kununu-check.label")} />
@@ -4002,7 +4045,8 @@ function StageAiActions({ app, onSave, onAiResult }: {
       {showIv && (
         <div style={{ marginBottom: 12 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(88px, 1fr))", gap: 6, marginBottom: interviewPrep ? 8 : 0 }}>
-            <AiBtn id="interview-prep" icon={interviewPrep ? <Refresh width={12} height={12} /> : <Brain width={12} height={12} />} label={interviewPrep ? tc("tileExpand.refresh") : t("interview-prep.label")} />
+            <AiBtn id="interview-prep" icon={interviewPrep ? <Refresh width={12} height={12} /> : <Brain width={12} height={12} />} label={interviewPrep ? tc("tileExpand.refresh") : t(school ? "interview-prep.schoolLabel" : "interview-prep.label")} />
+            {school && <AiBtn id="email-thanks" icon={<SendMail width={12} height={12} />} label={t("email-thanks.label")} />}
             {showSalary && <AiBtn id="salary-tips" icon={<Coins width={12} height={12} />} label={t("salary-tips.label")} />}
             {interviewPrep && <>
               <button className="btn btn-ghost" style={{ fontSize: 11, gap: 5 }}
@@ -4306,6 +4350,7 @@ type InterviewDetails = {
   format?: "onsite" | "video" | "phone";
   location?: string; videoUrl?: string; videoCode?: string; videoProvider?: string;
   interviewer?: string; notes?: string;
+  endDate?: string;   // Schnupperlehre round 1: last taster day (several days)
 };
 const VIDEO_PROVIDERS = ["Zoom", "Microsoft Teams", "Google Meet", "Webex", "Andere"];
 const DURATIONS = [30, 45, 60, 90, 120];
@@ -4375,6 +4420,15 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
             onChange={e => setDetails(d => ({ ...d, time: e.target.value }))}
             onBlur={e => save({ time: e.target.value || undefined })} />
         </div>
+        {/* Taster days usually span several days: "until" replaces the duration */}
+        {round === 1 && app.applicationKind === "schnupperlehre" ? (
+          <div>
+            <div style={lbl}>{t("agenda.tasterUntil")}</div>
+            <input type="date" value={details.endDate ?? ""} min={details.date || undefined} style={inp}
+              onChange={e => setDetails(d => ({ ...d, endDate: e.target.value }))}
+              onBlur={e => save({ endDate: e.target.value || undefined })} />
+          </div>
+        ) : (
         <div>
           <div style={lbl}>{t("interview.duration")}</div>
           <select value={details.duration ?? 60} style={{ ...inp, cursor: "pointer" }}
@@ -4382,6 +4436,7 @@ function InterviewDetailsPanel({ app, round, onSave, expanded, onToggleExpand }:
             {DURATIONS.map(d => <option key={d} value={d}>{t("interview.minutes", { count: d })}</option>)}
           </select>
         </div>
+        )}
       </div>
 
       {/* Format */}
@@ -4463,7 +4518,7 @@ type LetterAngles = {
   werteMatch: { wert: string; bezug: string }[];
   nutzenArgumente: { argument: string; beleg: string }[];
 };
-type LetterInputs = { selectedAngles?: string[]; jobNotes?: string; openingSentence?: string };
+type LetterInputs = { selectedAngles?: string[]; jobNotes?: string; openingSentence?: string; school?: SchoolAnswers };
 type OpeningSentence = { satz: string; ansatz: string; erklaerung: string; empfehlung?: string };
 type LetterVersion = { subject: string; body: string; createdAt: string };
 
@@ -4500,7 +4555,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const review      = reviewEntry?.data as {
     gesamteindruck?: string; staerken?: string[]; verbesserungen?: string[]; cliches?: string[];
     tonalitaet?: string; laenge?: string; personalisierung?: string; promptVorschlaege?: string[];
-  } | undefined;
+  } & SchoolReviewData | undefined;
   const versions    = ((aiResults?.["letter-versions"]?.data as { versions?: LetterVersion[] } | undefined)?.versions) ?? [];
 
   // Which stored version the currently-shown letter matches (for the "Version N / M" label)
@@ -4515,6 +4570,10 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const [selected, setSelected] = useState<Record<string, string>>({});
   const [jobNotes, setJobNotes] = useState("");
   const [openingSentence, setOpeningSentence] = useState("");
+  // School-leaver answers (Schnupperlehre / Lehrstelle / Praktikum); ref so persistInputs sees the latest
+  const isSchool = !!app.applicationKind && app.applicationKind !== "job";
+  const [school, setSchool] = useState<SchoolAnswers>(savedInputs?.school ?? {});
+  const schoolRef = useRef<SchoolAnswers>(savedInputs?.school ?? {});
   const [showAdjust, setShowAdjust] = useState(false);
   const [adjustPrompt, setAdjustPrompt] = useState("");
   const [copied, setCopied] = useState(false);
@@ -4526,11 +4585,13 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   const [letterTemplateMissing, setLetterTemplateMissing] = useState<string | null>(null);
   const hydrated = useRef(false);
 
+  // School leavers: same three groups, school meaning (company link / why this trade / what you bring)
+  const groupLabel = useCallback((k: "touchpoints" | "valuesMatch" | "benefits") => t(isSchool ? `letterDraft.school.${k}` : `letterDraft.${k}`), [t, isSchool]);
   const items = useMemo(() => angles ? [
-    ...angles.beruehrungspunkte.map((it, i) => ({ id: `bp-${i}`, group: t("letterDraft.touchpoints"), text: `${it.titel}: ${it.text}` })),
-    ...angles.werteMatch.map((it, i) => ({ id: `wm-${i}`, group: t("letterDraft.valuesMatch"), text: `${it.wert} – ${it.bezug}` })),
-    ...angles.nutzenArgumente.map((it, i) => ({ id: `na-${i}`, group: t("letterDraft.benefits"), text: `${it.argument} (${it.beleg})` })),
-  ] : [], [angles, t]);
+    ...angles.beruehrungspunkte.map((it, i) => ({ id: `bp-${i}`, group: groupLabel("touchpoints"), text: `${it.titel}: ${it.text}` })),
+    ...angles.werteMatch.map((it, i) => ({ id: `wm-${i}`, group: groupLabel("valuesMatch"), text: `${it.wert} – ${it.bezug}` })),
+    ...angles.nutzenArgumente.map((it, i) => ({ id: `na-${i}`, group: groupLabel("benefits"), text: `${it.argument} (${it.beleg})` })),
+  ] : [], [angles, groupLabel]);
 
   // Hydrate selection + job notes + opening sentence from persisted letter-inputs
   useEffect(() => {
@@ -4539,6 +4600,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     if (savedInputs) {
       setJobNotes(savedInputs.jobNotes ?? "");
       setOpeningSentence(savedInputs.openingSentence ?? "");
+      if (savedInputs.school) { setSchool(savedInputs.school); schoolRef.current = savedInputs.school; }
       if (items.length > 0) {
         const savedTexts = new Set(savedInputs.selectedAngles ?? []);
         const seed: Record<string, string> = {};
@@ -4570,9 +4632,15 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   }, [app.id, jobCoverLetter?.at, jobReview?.at, markAiJobsSeen]);
 
   const persistInputs = (nextSelected: Record<string, string>, nextJobNotes: string, nextOpening: string) => {
-    const body: LetterInputs = { selectedAngles: Object.values(nextSelected), jobNotes: nextJobNotes, openingSentence: nextOpening };
+    const body: LetterInputs = { selectedAngles: Object.values(nextSelected), jobNotes: nextJobNotes, openingSentence: nextOpening, school: schoolRef.current };
     onAiResult?.("letter-inputs", body);
     api.patch(`/api/applications/${app.id}/letter-inputs`, body).catch(() => {});
+  };
+
+  const changeSchool = (patch: Partial<SchoolAnswers>, persist = false) => {
+    const next = { ...schoolRef.current, ...patch };
+    schoolRef.current = next; setSchool(next);
+    if (persist) persistInputs(selected, jobNotes, openingSentence);
   };
 
   const toggle = (id: string, text: string) => {
@@ -4619,7 +4687,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     try {
       const r = await api.post<{ saetze: OpeningSentence[] }>(`/api/applications/${app.id}/ai/opening-sentences`, {
         ai: aiBody(), language: appLang,
-        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined },
+        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined, school: isSchool ? schoolRef.current : undefined },
       });
       onAiResult?.("opening-sentences", r.data); invalidate();
     } catch (e) { setErr(errMsg(e)); } finally { setGeneratingOpenings(false); }
@@ -4634,7 +4702,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
       const r = await api.post<{ subject: string; body: string }>(`/api/applications/${app.id}/ai/cover-letter`, {
         ai: aiBody(), language: appLang,
         ...(hint?.trim() ? { additionalContext: hint.trim() } : {}),
-        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined, openingSentence: openingSentence.trim() || undefined },
+        letterInputs: { angles: Object.values(selected), jobNotes: jobNotes.trim() || undefined, openingSentence: openingSentence.trim() || undefined, school: isSchool ? schoolRef.current : undefined },
       });
       onAiResult?.("cover-letter", r.data);
       setExportUrl(null);
@@ -4726,9 +4794,9 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
   };
 
   const groupIcon: Record<string, React.ReactNode> = {
-    [t("letterDraft.touchpoints")]: <Spark width={11} height={11} />,
-    [t("letterDraft.valuesMatch")]: <Star width={11} height={11} />,
-    [t("letterDraft.benefits")]:    <CheckCircle width={11} height={11} />,
+    [groupLabel("touchpoints")]: <Spark width={11} height={11} />,
+    [groupLabel("valuesMatch")]: <Star width={11} height={11} />,
+    [groupLabel("benefits")]:    <CheckCircle width={11} height={11} />,
   };
   const inputStyle: React.CSSProperties = { width: "100%", resize: "vertical", background: "none", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 8px", fontSize: 12, color: "var(--fg-1)", fontFamily: "var(--font-sans)", lineHeight: 1.5, outline: "none" };
 
@@ -4753,8 +4821,24 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
     </div>
   );
 
+  // Kind / salutation edited right in the workspace: PATCH + refresh the drawer's app
+  const saveAppFields = (patch: Partial<Application>) => {
+    api.patch(`/api/applications/${app.id}`, patch).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["applications"] });
+      queryClient.invalidateQueries({ queryKey: ["application", app.id] });
+    }).catch(() => {});
+  };
+
   const prepTab = (
     <div>
+      <div style={{ marginBottom: 20, display: "grid", gap: 10 }}>
+        <ApplicationKindFields app={app} onSave={saveAppFields} />
+        <SalutationField app={app} onSave={saveAppFields} compact />
+      </div>
+      {isSchool && (
+        <SchoolLetterQuestions app={app} value={school} onChange={changeSchool}
+          onCommit={() => persistInputs(selected, jobNotes, openingSentence)} inputStyle={inputStyle} labelStyle={sectionLabel} />
+      )}
       <div style={{ marginBottom: 20 }}>
         <div style={sectionLabel}>{t("letterDraft.step1")}</div>
         <textarea value={jobNotes} onChange={e => setJobNotes(e.target.value)} onBlur={() => persistInputs(selected, jobNotes, openingSentence)}
@@ -4774,7 +4858,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
           <div style={{ fontSize: 12, color: "var(--fg-3)", lineHeight: 1.5 }}>{t("letterDraft.emptyHint")}</div>
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            {[t("letterDraft.touchpoints"), t("letterDraft.valuesMatch"), t("letterDraft.benefits")].map(group => (
+            {[groupLabel("touchpoints"), groupLabel("valuesMatch"), groupLabel("benefits")].map(group => (
               <div key={group}>
                 <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, fontWeight: 700, color: "var(--fg-4)", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
                   {groupIcon[group]} {group}
@@ -4880,6 +4964,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
       <div style={{ fontSize: 10, color: "var(--fg-4)", marginBottom: 10, display: "flex", alignItems: "center", gap: 4 }}>
         <EditPencil width={9} height={9} /> {t("letterDraft.editHint")}
       </div>
+      {!draftRunning && <SimilarLetterWarning appId={app.id} body={letter.body} />}
       {letterTemplateMissing && (
         <div style={{ marginBottom: 10 }}>
           <MissingTemplateNotice templateId={letterTemplateMissing} appId={app.id} fallbackDocUrl={exportUrl} onRetry={exportLetter} />
@@ -4938,6 +5023,7 @@ function LetterDraftPanel({ app, aiResults, onAiResult, expanded, onToggleExpand
               ? <><Check width={11} height={11} /> {currentVersionIdx >= 0 ? t("letterDraft.reviewCurrentHint", { version: currentVersionIdx + 1 }) : t("letterDraft.reviewCurrentHintNoVer")}</>
               : <><WarningTriangle width={11} height={11} /> {t("letterDraft.reviewStaleHint")}</>}
           </div>
+          {(review.kriterien || review.checks?.length) && <SchoolReview data={review} labelStyle={sectionLabel} />}
           {review.gesamteindruck && <AiSection title={t("aiResult.overallImpression")}><div style={{ fontSize: 11, color: "var(--fg-2)", lineHeight: 1.6 }}>{review.gesamteindruck}</div></AiSection>}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             {(review.staerken?.length ?? 0) > 0 && <AiSection title={t("aiResult.relevantStrengths")}><BulletList items={review.staerken!} accent="#34d399" /></AiSection>}
@@ -5046,6 +5132,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
 }) {
   const { t } = useTranslation();
   const { t: tStagesAct } = useTranslation("stages");
+  const { school, ravEnabled } = useSchoolView(app);
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const { data: activities = [], refetch } = useQuery<ApplicationActivity[]>({
@@ -5093,7 +5180,10 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
       </div>
 
       {/* RAV proof sheet — available in every stage, the sheet tracks pre-application states too */}
-      <RavExportBtn app={app} />
+      {ravEnabled && <RavExportBtn app={app} />}
+
+      {/* Lehrstelle created from a Schnupperlehre → link back */}
+      {app.applicationKind === "lehrstelle" && <SchnupperSourceNote app={app} />}
 
       {/* 1. Prozess-spezifische Inhalte (Interview-Termin) */}
       {(app.stage === "interview_1" || app.stage === "interview_2") && onSave && (
@@ -5107,6 +5197,9 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
           />
         </div>
       )}
+
+      {/* Schnupperlehre: debrief after the taster days + bridge to a Lehrstelle */}
+      {app.applicationKind === "schnupperlehre" && DEBRIEF_STAGES.has(app.stage) && <SchnupperDebriefPanel key={app.id} app={app} />}
 
       {/* 1b. Letter-Draft-Assistent (Anschreiben-Phase) */}
       {app.stage === "preparing_letter" && (
@@ -5123,7 +5216,7 @@ function ProcessTab({ app, onSave, onAiResult, aiResults }: {
 
       {/* Phase KI-Kacheln */}
       {(() => {
-        const stageTileIds = STAGE_TILES[app.stage] ?? [];
+        const stageTileIds = (STAGE_TILES[app.stage] ?? []).filter(id => !(school && hiddenForSchool(id)));
         if (stageTileIds.length === 0) return null;
         return (
           <>
@@ -5282,6 +5375,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
   onAiResultUpdate?: (id: string, data: unknown) => void;
 }) {
   const { t } = useTranslation();
+  const { school } = useSchoolView(app);
   const { ai } = useUiStore();
   const queryClient = useQueryClient();
   const [running, setRunning] = useState(false);
@@ -5361,7 +5455,7 @@ function KiInhalteTab({ app, aiResults, onAiResultUpdate }: {
 
       {/* Alle KI-Auswertungen — match-score tile is first */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(100px, 1fr))", gap: 6 }}>
-        {ALL_TILE_IDS.map(id => {
+        {ALL_TILE_IDS.filter(id => !(school && hiddenForSchool(id))).map(id => {
           // match-score uses the local runAnalysis (has AgentStep animation)
           const runHandler = id === "match-score"
             ? runAnalysis

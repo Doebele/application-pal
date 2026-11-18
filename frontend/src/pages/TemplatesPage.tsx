@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useProfileBasics } from "../lib/persona";
 import {
   OpenNewWindow, Trash, Plus, RefreshCircle, Check, Calendar, WarningTriangle, Link,
   ChatBubbleCheck, PageEdit, SendMail, Coins, Search, HandCash, TaskList,
@@ -521,8 +522,12 @@ function ContentTypeSection({
 }
 
 // ─── Main TemplatesPage ───────────────────────────────────────
+/** Template types without a school-leaver counterpart (salary, negotiation, onboarding). */
+const SCHOOL_HIDDEN_TYPES = new Set<string>(["salary-check", "ackermann-script", "onboarding"]);
+
 export function TemplatesPage() {
   const { t } = useTranslation();
+  const { isSchool } = useProfileBasics();
   const { config, isLoading, setActive, addTemplate, removeTemplate } = useDocTemplates();
   const queryClient = useQueryClient();
   const [pickerOpen, setPickerOpen] = useState<{ type: ContentTypeId; lang: Lang } | null>(null);
@@ -661,7 +666,7 @@ export function TemplatesPage() {
             {t("templates.loading")}
           </div>
         ) : (
-          CONTENT_TYPES.map(ct => (
+          CONTENT_TYPES.filter(ct => !(isSchool && SCHOOL_HIDDEN_TYPES.has(ct.id))).map(ct => (
             <ContentTypeSection
               key={ct.id}
               contentType={ct}

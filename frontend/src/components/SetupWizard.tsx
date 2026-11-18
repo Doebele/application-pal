@@ -92,9 +92,16 @@ export function SetupWizard({ onClose }: { onClose: () => void }) {
                 </button>
               ))}
             </div>
+            {persona === "schulabgaenger" && <p className="wizard-hint" style={{ marginTop: 12 }}>{t("wizard.schoolTogether")}</p>}
           </>
         )}
 
+        {/* School leavers: the technical steps are meant for a parent */}
+        {(step === "ai" || step === "google") && persona === "schulabgaenger" && (
+          <p className="wizard-hint" style={{ padding: "8px 12px", borderRadius: 8, background: "var(--accent-08)", border: "1px solid var(--accent-15)", color: "var(--fg-2)", marginBottom: 12 }}>
+            {t("wizard.parentHint")}
+          </p>
+        )}
         {step === "ai" && <AiStep onReady={setAiOk} />}
         {step === "google" && <GoogleStep onConnected={setGoogleOk} />}
 

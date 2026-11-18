@@ -31,7 +31,8 @@
     "desiredSalary": "Desired salary (CHF, annual gross)",
     "desiredSalaryPlaceholder": "e.g. 110000",
     "desiredSalaryHint": "Shown as a reference line in the Salary Check chart",
-    "autosave": "Changes are saved when leaving a field."
+    "autosave": "Changes are saved when leaving a field.",
+    "subSchool": "Pupil profile and personal details for all applications"
   },
   "persona": {
     "schulabgaenger": "School leaver",
@@ -62,7 +63,10 @@
     "groupWriting": "Writing & knowledge",
     "help": "Help & overview",
     "setupAi": "Set up AI model",
-    "setupGoogle": "Connect Google"
+    "setupGoogle": "Connect Google",
+    "schoolCv": "CV",
+    "agenda": "Dates",
+    "career": "Career choice"
   },
   "tabs": {
     "actions": "Actions",
@@ -194,6 +198,44 @@
         "1": "Start date confirmed",
         "2": "Other ongoing applications informed",
         "3": "Withdrawals for other positions prepared"
+      },
+      "school": {
+        "0": "Looked into the trade and the company",
+        "1": "Checked how to get a taster (website / phone)",
+        "2": "Parents / teacher informed",
+        "3": "CV with photo up to date",
+        "4": "School reports and test results ready",
+        "5": "Contact person addressed correctly",
+        "6": "Had it proofread (parents / teacher)",
+        "7": "At most half a page",
+        "8": "Sent everything (letter, CV, school reports)",
+        "9": "Follow up after a week if there is no answer",
+        "10": "Taster days confirmed (date, time, place)",
+        "11": "Clothing and materials clarified",
+        "12": "Journey planned – be on time",
+        "13": "Questions for the company noted",
+        "14": "Taster debrief filled in",
+        "15": "Got the company's assessment",
+        "16": "Thank-you email sent after the taster",
+        "17": "Asked about an open apprenticeship",
+        "18": "Taster debrief added to the pupil profile",
+        "19": "Asked for feedback on what to improve",
+        "20": "Picked the next company",
+        "21": "Apprenticeship fits my dream jobs",
+        "22": "Did a taster in this trade",
+        "23": "Application deadline noted",
+        "24": "Taster reports attached",
+        "25": "Full dossier sent (letter, CV, reports, tests)",
+        "26": "Appointment confirmed (time, place)",
+        "27": "Practised “Why this trade? Why here?”",
+        "28": "Own questions prepared",
+        "29": "Parents told about the appointment",
+        "30": "Prepared for selection days or aptitude test",
+        "31": "Thank-you email sent after the interview",
+        "32": "Read the apprenticeship contract with parents",
+        "33": "Signed contract sent back",
+        "34": "Told the other companies",
+        "35": "Looked for more apprenticeships"
       }
     }
   },
@@ -463,7 +505,8 @@
       "zertifikat": "Certificates",
       "portfolio": "Portfolio",
       "figma": "Figma",
-      "sonstiges": "Other"
+      "sonstiges": "Other",
+      "schultest": "School tests"
     },
     "extraUrl": "Link / additional information",
     "linkBtn": "Link",
@@ -810,7 +853,10 @@
       "updatedAt": "Updated",
       "jobType": "Pensum",
       "workModel": "Model",
-      "contractType": "Contract"
+      "contractType": "Contract",
+      "apprenticeship": "Trade",
+      "applicationKind": "Kind",
+      "interview1School": "Taster / interview"
     },
     "showArchived": "Archive",
     "columnsBtn": "Columns",
@@ -939,6 +985,23 @@
     "humanize": {
       "label": "Natural writing style (humanizer)",
       "hint": "Tells the AI to write like a human in the correspondence language and avoid typical AI patterns — for cover letters, opening sentences, and CV highlights. Never invents facts and does not change your Master CV."
+    },
+    "school": {
+      "infoText": "You are applying as a school leaver. The AI uses these details for every letter — for a taster apprenticeship (curious: “I'd like to get to know you”) or an apprenticeship (convinced: “I'd like to learn with you”). Set the kind per application under “Details”.",
+      "structure": {
+        "hint": "The five parts of a good letter for a taster or an apprenticeship — at most half an A4 page."
+      },
+      "values": {
+        "label": "My motivation",
+        "hint": "Why are you interested in the trades you want to learn? When did you notice it? A concrete experience is stronger than “I am interested in …”.",
+        "placeholder": "e.g. Carpenter: in woodwork class I built a shelf from solid wood. Seeing something real that people can use was what I enjoyed most."
+      },
+      "strengths": {
+        "label": "What I'm good at (strength → example)",
+        "hint": "Write each strength with an example that shows it — not “I am reliable” but when you were. One line per strength.",
+        "placeholder": "Reliable → I have delivered newspapers every Wednesday for two years.\nGood with my hands → I repair my family's bikes myself.\nTeam player → At my football club I help train the juniors."
+      },
+      "movedToProfile": "Keep your motivation, experience and strengths with examples in the pupil profile — they are structured there and apply to every letter."
     }
   },
   "letterDraft": {
@@ -995,7 +1058,12 @@
     "reviewBtnRefresh": "Refresh review",
     "reviewCurrentHintNoVer": "Refers to the current draft",
     "humanizeBtn": "Humanize",
-    "humanizeHint": "Rewrites the current letter to sound more human (style only, no facts changed) and saves it as a new version"
+    "humanizeHint": "Rewrites the current letter to sound more human (style only, no facts changed) and saves it as a new version",
+    "school": {
+      "touchpoints": "Link to the company",
+      "valuesMatch": "Why this trade",
+      "benefits": "What you bring"
+    }
   },
   "rav": {
     "section": "RAV proof sheet",
@@ -1913,7 +1981,9 @@
     "reopen": "Open wizard",
     "aiLocalLmStudio": "open the app, download a model (e.g. Qwen) and start the server under “Developer”.",
     "aiLocalOllama": "open the app and pull a model, e.g. “ollama pull qwen3” in the Terminal.",
-    "aiLocalThen": "Then here:"
+    "aiLocalThen": "Then here:",
+    "parentHint": "This step is technical – ideally a parent does it. You can also skip it and do it later in Settings.",
+    "schoolTogether": "Tip: set up the app together with your parents. They take care of the AI and Google settings, you do the applications."
   },
   "appUpdate": {
     "label": "App version",
@@ -2292,5 +2362,610 @@
     "noSources": "No sources linked.",
     "light": "Light",
     "dark": "Dark"
+  },
+  "letterKind": {
+    "kind": "Type of application",
+    "kinds": {
+      "job": "Job",
+      "schnupperlehre": "Taster apprenticeship",
+      "lehrstelle": "Apprenticeship",
+      "praktikum": "Internship"
+    },
+    "focus": {
+      "schnupperlehre": "Curious tone: “I'd like to get to know you.” Close: ask for taster days.",
+      "lehrstelle": "Confident tone: “I'd like to learn with you.” A taster apprenticeship is the strongest argument."
+    },
+    "apprenticeship": "Trade",
+    "apprenticeshipPlaceholder": "e.g. Carpenter EFZ",
+    "salutation": "Salutation in the letter",
+    "genderUnknown": "Choose salutation…",
+    "genderF": "Ms",
+    "genderM": "Mr",
+    "genderX": "Neutral (full name)",
+    "salutationPick": "Choose a salutation — otherwise the AI decides"
+  },
+  "school": {
+    "title": "Pupil profile",
+    "intro": "Write this once — the AI uses it for every cover letter. The more concrete your examples, the better the letter. Nothing is invented: if something is missing, the AI leaves a placeholder.",
+    "school": "School & year",
+    "schoolPlaceholder": "e.g. Secondary A, year 9, leaving 2027",
+    "subjects": "Favourite subjects — and why",
+    "subjectsPlaceholder": "e.g. Woodwork (I like building things), Maths (I enjoy puzzles)",
+    "wish": {
+      "title": "Dream jobs & motivation",
+      "sub": "Why does this trade interest you? When did you notice? A concrete experience is stronger than “I am interested in …”.",
+      "add": "Add dream job",
+      "titlePlaceholder": "Trade, e.g. Carpenter EFZ",
+      "whyPlaceholder": "What attracts you to it?",
+      "sincePlaceholder": "When did you notice? e.g. built a shelf in woodwork class"
+    },
+    "exp": {
+      "title": "Experience",
+      "sub": "School projects, hobbies, clubs, chores, small jobs and taster apprenticeships so far — this is your practical background.",
+      "add": "Add experience",
+      "kinds": {
+        "schule": "School / project",
+        "hobby": "Hobby",
+        "verein": "Club / duty",
+        "job": "Small job",
+        "schnupper": "Taster apprenticeship",
+        "anderes": "Other"
+      },
+      "titlePlaceholder": {
+        "schule": "e.g. solid-wood shelf in woodwork class",
+        "hobby": "e.g. repairing bikes",
+        "verein": "e.g. junior training at the football club",
+        "job": "e.g. delivering newspapers",
+        "schnupper": "e.g. taster week carpenter",
+        "anderes": "What did you do?"
+      },
+      "companyPlaceholder": "Company, e.g. Muster Woodworks Ltd",
+      "whatPlaceholder": "What exactly did you do?",
+      "likedPlaceholder": "What did you like or learn?"
+    },
+    "str": {
+      "title": "What I'm good at (strength → example)",
+      "sub": "Not “I am reliable” but when you were. The AI won't claim a strength without an example.",
+      "add": "Add strength",
+      "strengthPlaceholder": "Strength, e.g. Reliable",
+      "examplePlaceholder": "Example, e.g. I have delivered newspapers every Wednesday for two years",
+      "needsExample": "When did you show this? Without an example the strength stays out of the letter."
+    },
+    "tests": {
+      "title": "School tests (Stellwerk, Lernpass plus, Multicheck)",
+      "sub": "Upload the test report under Documents in the category “School tests” and read the values here — or enter them yourself. Check the values: text recognition on scans can make mistakes.",
+      "extract": "Read from documents",
+      "extracting": "Reading…",
+      "add": "Add test",
+      "addResult": "Add area",
+      "toDocuments": "Go to documents",
+      "datePlaceholder": "e.g. Spring 2025",
+      "scales": {
+        "stellwerk": "Stellwerk (200–800)",
+        "stanine": "Profile 1–9 (e.g. Lernpass PSM)",
+        "percent": "Percent (Multicheck, Basic-Check)"
+      },
+      "levels": {
+        "high": "well above avg.",
+        "above": "above avg.",
+        "average": "average",
+        "low": "below avg."
+      },
+      "rule": "Only above-average results reach a cover letter — one or two at most, matching the trade. The personality profile is a self-assessment: it only shows which strengths you can prove with an example.",
+      "noAi": "Choose an AI model in Settings first.",
+      "noDocs": "No documents in the category “School tests”.",
+      "extracted": "{{count}} test(s) imported",
+      "extractFailed": "Reading failed."
+    },
+    "rav": {
+      "title": "RAV (unemployment office)",
+      "sub": "Only needed if you are registered with the RAV – for example in a motivation semester (SEMO) or a bridge-year programme.",
+      "label": "I'm registered with the RAV and must prove my applications – show the RAV export."
+    },
+    "commute": {
+      "title": "Commute",
+      "sub": "How long may your trip to the company take by bus and train? Apprenticeships are compared with your home town.",
+      "label": "At most",
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes"
+    }
+  },
+  "schoolLetter": {
+    "profileEmpty": "Your pupil profile is still empty. Dream jobs, experience and strengths (with examples) make the letter far more personal.",
+    "knownFrom": "How do you know the company?",
+    "knownFromOptions": {
+      "posting": "Job posting",
+      "website": "Company website",
+      "fair": "Careers fair",
+      "family": "Family / friends",
+      "taster": "Taster day",
+      "counselling": "Careers advice"
+    },
+    "knownFromPlaceholder": "e.g. My uncle did his apprenticeship there",
+    "whyJob": "Why this trade?",
+    "fromProfile": "From profile: {{job}}",
+    "noticed": "noticed",
+    "whyJobPlaceholder": "What attracts you? A concrete experience works best.",
+    "whyCompany": "Why this company?",
+    "whyCompanyPlaceholder": "What do you like about {{company}}? A project, a product, how they train …",
+    "whyCompanyHint": "Tip: “Suggest” below finds concrete links in the posting — pick one.",
+    "bring": "What do you bring? (from your profile)",
+    "bringHint": "Pick 1–2 points that fit the trade — less is more.",
+    "schnupperHere": "Have you done a taster at {{company}}?",
+    "yes": "Yes",
+    "no": "No",
+    "schnupperNotesPlaceholder": "What did you do, what did you like?",
+    "schnupperHint": "A taster apprenticeship at the same company is the strongest argument for an apprenticeship."
+  },
+  "schoolReview": {
+    "criteriaTitle": "What the company wants to see",
+    "tip": "Tip",
+    "levels": {
+      "strong": "strong",
+      "ok": "okay",
+      "weak": "weak"
+    },
+    "criteria": {
+      "motivation": "Motivation",
+      "passung": "Fit with the trade",
+      "zuverlaessigkeit": "Reliability",
+      "persoenlichkeit": "Personality"
+    },
+    "checklistTitle": "Checklist",
+    "openCount": "{{count}} point(s) open",
+    "allOk": "all met",
+    "spellingTitle": "Spelling",
+    "checks": {
+      "salutation": {
+        "ok": "Salutation is right",
+        "warn": "Salutation should read: “{{expected}}”",
+        "fail": "Salutation is grammatically wrong: “{{found}}”"
+      },
+      "contact": {
+        "ok": "Contact {{name}} is addressed personally",
+        "warn": "Contact {{name}} is not addressed by name"
+      },
+      "company": {
+        "ok": "Company is named",
+        "fail": "Company is not named — write “{{company}}”, not just “your company”"
+      },
+      "length": {
+        "ok": "Length fits ({{count}} words, max. {{limit}} — half a page)",
+        "warn": "Check the length: {{count}} words (target: half a page, about 100–{{limit}})",
+        "fail": "Too long: {{count}} words — at most {{limit}} (half a page)"
+      },
+      "repetition": {
+        "ok": "No noticeable repeated words",
+        "warn": "Repeated words: {{words}}"
+      },
+      "ichStarts": {
+        "ok": "Varied sentence openings",
+        "warn": "{{count}} sentences start with “I” — rephrase a few"
+      },
+      "phrases": {
+        "ok": "No clichés found",
+        "fail": "Remove clichés: {{found}}"
+      },
+      "opening": {
+        "ok": "Direct opening",
+        "fail": "The first sentence starts with “Herewith …” — better: “I am applying for …”"
+      },
+      "placeholders": {
+        "ok": "No open placeholders",
+        "fail": "Fill in {{count}} placeholder(s) in [square brackets]"
+      },
+      "closing": {
+        "ok": "Closing present",
+        "warn": "Closing missing (e.g. “Kind regards”)"
+      },
+      "swiss": {
+        "ok": "Swiss spelling (ss)",
+        "warn": "“ß” found — Swiss German uses “ss”"
+      },
+      "unique": {
+        "label": "Own letter for this company",
+        "ok": "Own letter – not copied",
+        "warn": "{{pct}}% the same as your letter to {{company}} – rewrite the opening and “why this company”"
+      }
+    }
+  },
+  "schnupperDebrief": {
+    "title": "Taster debrief",
+    "intro": "Write down how it went while you still remember it well. It becomes your strongest argument for the apprenticeship.",
+    "dates": "When?",
+    "datesPlaceholder": "e.g. 3–5 March 2026",
+    "did": "What did you do?",
+    "didPlaceholder": "e.g. built a box from solid wood, helped fit a kitchen",
+    "liked": "What did you like?",
+    "likedPlaceholder": "e.g. seeing in the evening what you have made",
+    "hard": "What was hard?",
+    "hardPlaceholder": "e.g. getting up early, standing for long",
+    "hardHint": "Just for you – this never goes into a letter.",
+    "feedback": "How did the company rate you?",
+    "feedbackOptions": {
+      "good": "Good",
+      "ok": "Okay",
+      "bad": "Rather poor"
+    },
+    "feedbackNotes": "What did they say?",
+    "feedbackNotesPlaceholder": "e.g. “You work very precisely”",
+    "fit": "Can you see yourself doing the apprenticeship at {{company}}?",
+    "fitOptions": {
+      "yes": "Yes",
+      "maybe": "Maybe",
+      "no": "No"
+    },
+    "toProfile": "Add to pupil profile",
+    "updateProfile": "Update in pupil profile",
+    "savedToProfile": "Saved to your pupil profile.",
+    "needContent": "First fill in what you did or what you liked.",
+    "createLehrstelle": "Create apprenticeship application at {{company}}",
+    "openLehrstelle": "Open apprenticeship application",
+    "bridgeHint": "Creates a new application for the apprenticeship: company, trade and contact are copied, the taster goes into your pupil profile and the letter already knows you did a taster here. What was hard and a weak rating never go into the letter.",
+    "bridgeFailed": "The apprenticeship application could not be created.",
+    "fromTaster": "This application comes from your taster at the same company – the experience is already planned into the letter.",
+    "openTaster": "Open taster"
+  },
+  "similarLetter": {
+    "warning": "This letter is {{pct}}% the same as your letter to",
+    "more_one": "(and {{count}} more).",
+    "more_other": "(and {{count}} more).",
+    "tip": "Companies notice that. Rewrite the opening and “why this company”."
+  },
+  "schoolPrep": {
+    "questions": "Questions you may be asked",
+    "prepare": "How to prepare",
+    "examples": "Examples to tell",
+    "examplesShort": "Examples",
+    "prepareShort": "Prep",
+    "situation": "What happened?",
+    "task": "Your task",
+    "action": "What you did",
+    "result": "How it turned out"
+  },
+  "schoolResearch": {
+    "overview": "What the company does",
+    "culture": "What working there is like",
+    "ideas": "Ideas for “why this company”"
+  },
+  "schoolCv": {
+    "title": "CV",
+    "sub": "Built from your pupil profile — as PDF or Google Doc",
+    "fromProfile": "Taster days, experiences, hobbies and wish jobs come from your pupil profile automatically. Here you only add what the CV needs on top.",
+    "toProfile": "Go to profile →",
+    "photo": "Photo",
+    "photoSub": "A friendly passport-style photo with a calm background. It stays saved in your profile.",
+    "photoPick": "Choose photo",
+    "photoRemove": "Remove photo",
+    "photoFailed": "The image could not be read (JPG or PNG only).",
+    "personal": "Personal details",
+    "personalSub": "Name, phone and email come from your profile.",
+    "street": "Street and no.",
+    "zipCity": "Postcode and town",
+    "birthDate": "Date of birth",
+    "nationality": "Nationality",
+    "nationalityPlaceholder": "e.g. Switzerland",
+    "noContact": "No contact details in your profile yet.",
+    "editContact": "Edit in profile",
+    "schools": "Schools",
+    "schoolsSub": "Every school from primary school on, with years (e.g. 2016 – 2022).",
+    "addSchool": "Add school",
+    "schoolName": "School",
+    "place": "Town",
+    "from": "from (year)",
+    "to": "to (empty = today)",
+    "languages": "Languages",
+    "addLanguage": "Add language",
+    "languageName": "Language",
+    "levels": {
+      "native": "native",
+      "very_good": "very good",
+      "good": "good",
+      "basic": "basic"
+    },
+    "itHobbies": "Computer and free time",
+    "it": "Computer skills",
+    "itPlaceholder": "e.g. Word, PowerPoint, touch typing",
+    "hobbies": "More hobbies",
+    "hobbiesPlaceholder": "Adds to the hobbies from your profile",
+    "parents": "Parents",
+    "parentsSub": "Common in Switzerland, but optional.",
+    "addParent": "Add parent",
+    "parentName": "Name",
+    "parentJob": "Job",
+    "phone": "Phone",
+    "email": "Email",
+    "references": "References",
+    "referencesSub": "For example your teacher or coach — ask first whether that is okay.",
+    "addReference": "Add reference",
+    "refName": "Name",
+    "refRole": "Role (e.g. class teacher)",
+    "remove": "Remove",
+    "pdf": "Download PDF",
+    "doc": "As Google Doc",
+    "openDoc": "Open",
+    "pdfFailed": "The PDF could not be created.",
+    "docDone": "Google Doc created.",
+    "docFailed": "The Google Doc could not be created.",
+    "checklist": "Checklist",
+    "openCount_one": "{{count}} item open",
+    "openCount_other": "{{count}} items open",
+    "allOk": "all done",
+    "missing": {
+      "name": "name",
+      "phone": "phone",
+      "email": "email",
+      "address": "address"
+    },
+    "checks": {
+      "photo": {
+        "ok": "Photo included.",
+        "warn": "No photo yet — most Swiss companies expect one."
+      },
+      "contact": {
+        "ok": "Contact details are complete.",
+        "fail": "Still missing: {{missing}}."
+      },
+      "birthDate": {
+        "ok": "Date of birth is filled in.",
+        "fail": "Add your date of birth."
+      },
+      "email": {
+        "ok": "Your email address looks serious.",
+        "warn": "The address {{email}} doesn't look serious — better use firstname.lastname@…"
+      },
+      "schools": {
+        "ok": "Schools listed without gaps, with years.",
+        "warn": "Something is missing between {{gap}} — add the school or a bridge year.",
+        "noDates": "One school has no years.",
+        "fail": "Add at least your current school."
+      },
+      "taster": {
+        "ok": "Taster days are listed.",
+        "warn": "No taster days in your profile yet — they show your interest in the trade."
+      },
+      "languages": {
+        "ok": "Languages are listed.",
+        "warn": "Add your languages (including your first language)."
+      },
+      "hobbies": {
+        "ok": "Hobbies are included.",
+        "warn": "No hobbies yet — they show who you are."
+      },
+      "references": {
+        "ok": "At least one reference is included.",
+        "warn": "No reference yet — ask your teacher, for example."
+      },
+      "swiss": {
+        "ok": "Swiss spelling (ss instead of ß).",
+        "warn": "The text contains ß — in Switzerland you write ss."
+      },
+      "tests": {
+        "ok": "Tip: attach your test results ({{names}}) to the application as a separate document."
+      }
+    }
+  },
+  "agenda": {
+    "title": "Dates & deadlines",
+    "sub": "What's coming up — with reminders",
+    "intro": "Application deadlines, taster days, interviews and your own dates in one place. The bell shows what to think of today.",
+    "empty": "No dates yet. Add the application deadline or taster days to an application — or your own date on the right.",
+    "groups": {
+      "overdue": "Missed",
+      "today": "Today",
+      "soon": "This week",
+      "later": "Later"
+    },
+    "kinds": {
+      "deadline": "Application deadline",
+      "taster": "Taster days",
+      "interview": "Interview",
+      "followup": "After the taster days",
+      "personal": "Appointment"
+    },
+    "personalKinds": {
+      "test": "Test",
+      "fair": "Career fair",
+      "info": "Information event",
+      "counselling": "Career counselling",
+      "other": "Appointment"
+    },
+    "placeholders": {
+      "test": "e.g. Multicheck, Stellwerk",
+      "fair": "e.g. career fair Zurich",
+      "info": "e.g. company open evening",
+      "counselling": "e.g. meeting at the careers centre",
+      "other": "What's on?"
+    },
+    "followupHint": "Say thank you and note your feedback",
+    "running": "happening now",
+    "today": "today",
+    "tomorrow": "tomorrow",
+    "inDays_one": "in {{count}} day",
+    "inDays_other": "in {{count}} days",
+    "overdue_one": "{{count}} day ago",
+    "overdue_other": "{{count}} days ago",
+    "reminderToday": "Reminder today",
+    "addGoogle": "Add to Google Calendar",
+    "ics": "Add to calendar",
+    "fileName": "Dates",
+    "icsHint": "“Add to calendar” downloads a calendar file (.ics) with reminders — open it on your phone or computer and your calendar will remind you in time. Download it again after adding new dates.",
+    "ownTitle": "Your own dates",
+    "ownSub": "Tests like Multicheck or Stellwerk, career fairs, open evenings, career counselling appointments.",
+    "kind": "Type",
+    "what": "What",
+    "date": "Date",
+    "time": "Time",
+    "place": "Place",
+    "add": "Add date",
+    "remove": "Remove",
+    "whereDeadlines": "Add the application deadline in the application's details (an import detects it where possible). Add taster days in the “Taster / interview” stage.",
+    "applyDeadline": "Application deadline",
+    "tasterUntil": "until (last day)",
+    "bannerTitle_one": "1 reminder:",
+    "bannerTitle_other": "{{count}} reminders:",
+    "bannerOpen": "All dates",
+    "bannerDismiss": "Hide for today"
+  },
+  "lehrstellenImport": {
+    "hint": "Tip: links to single apprenticeships on Yousty and berufsberatung.ch (LENA) are read directly — company, trade, place and contact person are taken over.",
+    "listUrl": "That's a search or list page. Open the single apprenticeship and copy its link.",
+    "fetchFailed": "The page could not be read. Copy the posting text and paste it under “Text”.",
+    "failed": "Reading the posting didn't work. Try again or paste the text.",
+    "structured": {
+      "yousty": "Read directly from Yousty",
+      "lena": "Read directly from berufsberatung.ch (LENA)",
+      "jsonld": "Read the page's structured data"
+    },
+    "start": "Start {{start}}",
+    "positions_one": "{{count}} open place",
+    "positions_other": "{{count}} open places"
+  },
+  "region": {
+    "levels": {
+      "same_town": "In your home town",
+      "near": "Near you",
+      "region": "In your region — check the commute",
+      "far": "Far from your home",
+      "unknown": "Distance unknown"
+    },
+    "fromTo": "{{home}} → {{job}}",
+    "noHome": "Your home town is missing for the region check.",
+    "setHome": "Add postcode and town in your CV",
+    "check": "Check public-transport commute",
+    "recheck": "Check again",
+    "privacy": "Sends only the two town names to transport.opendata.ch (Swiss public transport timetable).",
+    "minutes_one": "{{count}} minute by public transport",
+    "minutes_other": "{{count}} minutes by public transport",
+    "transfers_one": "{{count}} change",
+    "transfers_other": "{{count}} changes",
+    "tooLong": "longer than your {{max}} minutes",
+    "errors": {
+      "no_home": "Add your home town first (CV: postcode and town).",
+      "no_location": "The apprenticeship has no place.",
+      "no_connection": "No connection found — check the town names.",
+      "transport_failed": "The timetable could not be reached. Try again later."
+    },
+    "needZip": "add postcodes to compare"
+  },
+  "career": {
+    "title": "Career choice",
+    "sub": "Ideas for apprenticeships that could suit you",
+    "interestsTitle": "What are you interested in?",
+    "interestsIntro": "Tick how much each area interests you. Honest beats polite — there are no wrong answers.",
+    "rated": "{{n}} of {{total}} answered",
+    "rating": {
+      "0": "No",
+      "1": "A bit",
+      "2": "A lot"
+    },
+    "areas": {
+      "build": {
+        "title": "Building & crafts",
+        "hint": "Houses, wood, workshop, making things by hand"
+      },
+      "tech": {
+        "title": "Technology & machines",
+        "hint": "Electrics, mechanics, how things work"
+      },
+      "vehicles": {
+        "title": "Vehicles",
+        "hint": "Cars, bikes, trucks, farm machinery"
+      },
+      "it": {
+        "title": "Computers & IT",
+        "hint": "Coding, networks, apps, media"
+      },
+      "nature": {
+        "title": "Nature & animals",
+        "hint": "Plants, animals, farming"
+      },
+      "outdoor": {
+        "title": "Working outdoors",
+        "hint": "Out in the fresh air, in any weather"
+      },
+      "care": {
+        "title": "Supporting people",
+        "hint": "Children, elderly people, people with disabilities"
+      },
+      "health": {
+        "title": "Health",
+        "hint": "Practice, hospital, pharmacy, body and medicine"
+      },
+      "sales": {
+        "title": "Selling & advising",
+        "hint": "Customers, shop, conversations"
+      },
+      "office": {
+        "title": "Office & organising",
+        "hint": "Planning, numbers, phone, keeping things in order"
+      },
+      "creative": {
+        "title": "Design & creating",
+        "hint": "Drawing, colours, design, fashion, hair"
+      },
+      "food": {
+        "title": "Food & cooking",
+        "hint": "Kitchen, bakery, restaurant"
+      },
+      "lab": {
+        "title": "Lab & research",
+        "hint": "Experiments, chemistry, biology"
+      },
+      "logistics": {
+        "title": "Sorting & delivering",
+        "hint": "Warehouse, goods, transport, processes"
+      }
+    },
+    "skills": {
+      "math": "maths",
+      "german": "German",
+      "languages": "foreign languages",
+      "science": "science",
+      "design": "art",
+      "crafts": "crafts",
+      "sport": "PE",
+      "it": "computing",
+      "food": "home economics",
+      "spatial": "spatial reasoning",
+      "logic": "logical thinking",
+      "technical": "technical understanding"
+    },
+    "reasons": {
+      "wish": "Already on your wish list",
+      "interestStrong": "You ticked “{{area}}” as “A lot”",
+      "interest": "You ticked “{{area}}” as “A bit”",
+      "interestAlso": "Also involves “{{area}}”",
+      "subject": "Your favourite subject {{subject}} is useful here",
+      "test_high": "{{test}}, {{area}}: well above average",
+      "test_above": "{{test}}, {{area}}: above average",
+      "strength": "Your strength “{{strength}}” — e.g. {{example}}"
+    },
+    "fit": {
+      "strong": "Lots in common",
+      "good": "Some things in common",
+      "possible": "An idea"
+    },
+    "levels": {
+      "EFZ": "EFZ (federal certificate)",
+      "EBA": "EBA (federal attestation)"
+    },
+    "years_one": "{{count}} year",
+    "years_other": "{{count}} years",
+    "disclaimer": "These are ideas, not a decision. They only show what fits what you entered — many interesting trades are missing here. Taster days and a talk with a careers adviser (BIZ) help you most.",
+    "counselling": "Find careers advice",
+    "missing": {
+      "interests": "Answer a few areas on the left and ideas will appear.",
+      "subjects": "Add your favourite subjects in your profile.",
+      "strengths": "Add strengths with an example in your profile.",
+      "examples": "{{n}} strength(s) without an example don't count here — add an example in your profile."
+    },
+    "toProfile": "Go to profile",
+    "ideasTitle": "Ideas for you",
+    "empty": "No ideas yet. Tick on the left what interests you.",
+    "onWishList": "On your wish list",
+    "addWish": "Add to wish jobs",
+    "info": "About this trade",
+    "searchHint": "Search apprenticeships — look for “{{term}}” there"
   }
 }

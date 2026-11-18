@@ -3,7 +3,8 @@ import { createPortal } from "react-dom";
 import {
   DashboardDots, Calendar, List, MultiplePages, Settings, Table2Columns,
   SidebarCollapse, SunLight, HalfMoon, DashboardSpeed, Sofa, ProfileCircle, Folder, Database, Archive,
-  LogOut, SwitchOff, WarningCircle, Globe, SendMail, PageSearch, Linkedin, HelpCircle,
+  LogOut, SwitchOff, WarningCircle, Globe, SendMail, PageSearch, Linkedin, HelpCircle, Bell,
+  Compass,
 } from "iconoir-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -493,12 +494,19 @@ export function Rail({ applications }: Props) {
       { to: "/",           label: t("nav.board"),     icon: <DashboardDots  width={15} height={15} />, count: applications.filter(a => a.stage !== undefined).length },
       { to: "/table",      label: t("nav.list"),      icon: <Table2Columns  width={15} height={15} /> },
       { to: "/calendar",   label: t("nav.calendar"),  icon: <Calendar       width={15} height={15} /> },
+      // Deadlines, taster days, tests with reminders — school leavers juggle many fixed dates
+      ...(persona === "schulabgaenger" ? [{ to: "/dates", label: t("nav.agenda"), icon: <Bell width={15} height={15} /> }] : []),
       { to: "/timeline",   label: t("nav.timeline"),  icon: <List           width={15} height={15} /> },
     ] },
     { label: t("nav.groupMe"), items: [
       { to: "/profile",    label: t("nav.profile"),   icon: <ProfileCircle  width={15} height={15} /> },
       { to: "/documents",  label: t("nav.documents"), icon: <Folder         width={15} height={15} /> },
-      { to: "/cv-check",   label: t("nav.cvCheck"),   icon: <PageSearch     width={15} height={15} /> },
+      // CV-Check scores adult CVs (impact, numbers) — not for school leavers (their CV comes from the pupil profile)
+      ...(persona !== "schulabgaenger"
+        ? [{ to: "/cv-check", label: t("nav.cvCheck"), icon: <PageSearch width={15} height={15} /> }]
+        : [{ to: "/school-cv", label: t("nav.schoolCv"), icon: <PageSearch width={15} height={15} /> },
+           // Career-choice ideas from interests, subjects, strengths and strong test results
+           { to: "/career", label: t("nav.career"), icon: <Compass width={15} height={15} /> }]),
       // LinkedIn-Check: Berufsumsteiger (check + build) and Berufseinsteiger (build first); hidden for Schulabgänger / no persona
       ...(persona === "berufsumsteiger" || persona === "berufseinsteiger"
         ? [{ to: "/linkedin", label: t("nav.linkedinCheck"), icon: <Linkedin width={15} height={15} /> }] : []),

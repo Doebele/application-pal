@@ -1,0 +1,1 @@
+ALTER TABLE "applications" ADD COLUMN "apply_deadline" text;

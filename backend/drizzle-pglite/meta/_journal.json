@@ -15,6 +15,27 @@
       "when": 1794425500066,
       "tag": "0001_m1_profiles_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794929247746,
+      "tag": "0002_application_kind",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794930296456,
+      "tag": "0003_school_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794949077004,
+      "tag": "0004_apply_deadline",
+      "breakpoints": true
     }
   ]
 }

@@ -102,6 +102,10 @@ export const applications = pgTable("applications", {
   language: text("language"),         // 'de' | 'en' — application language (default 'de')
   ravApplicationType: text("rav_application_type"), // RAV proof: 'online' | 'recruiter' | 'meeting_confirmed' | 'meeting_unconfirmed' — null = derive
   ravProof: text("rav_proof"),                     // RAV proof: 'email' | 'linkedin' | 'other' — null = derive
+  applicationKind: text("application_kind"),       // 'job' | 'schnupperlehre' | 'lehrstelle' | 'praktikum' — null = job
+  apprenticeship: text("apprenticeship"),           // Lehrberuf, e.g. 'Schreiner/in EFZ'
+  contactGender: text("contact_gender"),            // salutation of contactPerson: 'f' | 'm' | 'x' (neutral) — null = unknown
+  applyDeadline: text("apply_deadline"),            // application deadline 'YYYY-MM-DD' (Bewerbungsfrist) — null = none
   appliedAt: timestamp("applied_at", { withTimezone: true }),
   userId: uuid("user_id"),                          // FK → users.id (multi-user isolation)
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -132,6 +136,7 @@ export const userProfile = pgTable("user_profile", {
   docTemplates: text("doc_templates"),                             // JSON: DocTemplateConfig per content type
   letterConfig: text("letter_config"),                             // JSON: LetterConfig — persistent cover-letter guidance (structure/values/strengths/phrases/styleRules/noGos/referenceLetter)
   persona: text("persona"),                                        // 'schulabgaenger' | 'berufseinsteiger' | 'berufsumsteiger'
+  schoolProfile: text("school_profile"),                            // JSON SchoolProfile (persona schulabgaenger), see backend/src/letter-kinds.ts
   sessionTimeout: text("session_timeout").default("15m"),
   uiLanguage: text("ui_language").default("de"),    // "de" | "en" — UI display language
   uiSettings: text("ui_settings"),                  // JSON UiSettings — per-user UI + AI-provider settings (no secrets), synced from the client store
@@ -333,7 +338,7 @@ export const invites = pgTable("invites", {
 export const userDocumentSelectSchema = createSelectSchema(userDocuments);
 export const userDocumentInsertSchema = createInsertSchema(userDocuments, {
   name: z.string().trim().min(1),
-  category: z.enum(["lebenslauf", "motivationsschreiben", "zeugnis", "referenz", "zertifikat", "figma", "portfolio", "sonstiges"]).default("sonstiges"),
+  category: z.enum(["lebenslauf", "motivationsschreiben", "zeugnis", "referenz", "zertifikat", "schultest", "figma", "portfolio", "sonstiges"]).default("sonstiges"),
   fileType: z.enum(["pdf", "link", "figma", "image", "gdoc"]).default("link"),
 }).omit({ id: true, createdAt: true, updatedAt: true, userId: true, contentSummary: true, summarizedAt: true });
 export const userDocumentPatchSchema = userDocumentInsertSchema.partial();
