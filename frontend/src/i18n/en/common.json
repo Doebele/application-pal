@@ -2974,6 +2974,17 @@
     "onWishList": "On your wish list",
     "addWish": "Add to wish jobs",
     "info": "About this trade",
-    "searchHint": "Search apprenticeships — look for “{{term}}” there"
+    "searchHint": "Search apprenticeships — look for “{{term}}” there",
+    "sortLabel": "Sort",
+    "sort": {
+      "fit": "Things in common",
+      "az": "A–Z",
+      "short": "Shortest apprenticeship"
+    },
+    "filterLabel": "Filter by area",
+    "filterAll": "All",
+    "filterWish": "Wish list",
+    "showMore": "Show {{n}} more ideas",
+    "showLess": "Show fewer"
   }
 }

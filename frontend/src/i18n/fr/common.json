@@ -2974,6 +2974,17 @@
     "onWishList": "Sur ta liste",
     "addWish": "Ajouter aux métiers souhaités",
     "info": "Infos sur le métier",
-    "searchHint": "Chercher une place d'apprentissage — y chercher « {{term}} »"
+    "searchHint": "Chercher une place d'apprentissage — y chercher « {{term}} »",
+    "sortLabel": "Trier",
+    "sort": {
+      "fit": "Points communs",
+      "az": "A–Z",
+      "short": "Apprentissage le plus court"
+    },
+    "filterLabel": "Filtrer par domaine",
+    "filterAll": "Tous",
+    "filterWish": "Liste de souhaits",
+    "showMore": "Afficher {{n}} autres idées",
+    "showLess": "Afficher moins"
   }
 }

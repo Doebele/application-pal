@@ -2974,6 +2974,17 @@
     "onWishList": "Auf der Wunschliste",
     "addWish": "Zu Wunschberufen",
     "info": "Infos zum Beruf",
-    "searchHint": "Lehrstellen suchen — dort nach „{{term}}“ suchen"
+    "searchHint": "Lehrstellen suchen — dort nach „{{term}}“ suchen",
+    "sortLabel": "Sortieren",
+    "sort": {
+      "fit": "Gemeinsamkeiten",
+      "az": "A–Z",
+      "short": "Kürzeste Lehre"
+    },
+    "filterLabel": "Nach Bereich filtern",
+    "filterAll": "Alle",
+    "filterWish": "Wunschliste",
+    "showMore": "{{n}} weitere Ideen anzeigen",
+    "showLess": "Weniger anzeigen"
   }
 }
