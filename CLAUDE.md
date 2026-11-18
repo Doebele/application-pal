@@ -54,6 +54,8 @@ Engine: `frontend/src/components/Tour.tsx` (`TourProvider` wraps the shell in `A
 
 **Docker working directory**: Always `cd /Users/clausmedvesek/Developer/projects/application-pal` before any Docker command. The CWD persists between Bash calls and may drift to a worktree. Building from a worktree compiles the wrong source with no error.
 
+**User-supplied URLs (SSRF)**: never `fetch(userUrl)` directly. Use `fetchPublicBytes(url, { maxBytes, timeoutMs })` (redirects followed by hand, every hop through `assertPublicHost`, size cap), `fetchWebsiteText()` or `fetchPostingHtml()` (same guard + cookie jar). Covered: job import, KB URL ingest, document PDF links, both `upload-pdf-from-url` routes (an unguarded one would copy internal content into the user's Drive). Exceptions by design: local AI provider URLs (LM Studio / Ollama, `resolveHostUrl`) and fixed Google / transport.opendata.ch endpoints.
+
 **Schema changes**: Edit `shared/src/schema.ts` → `npm run build --workspace shared` → then typecheck passes. DB migrations must be applied manually (no auto-migration on container start).
 
 **TypeScript errors block Docker**: `tsc -b` runs inside the Dockerfile. Always run `npm run typecheck` before rebuilding.

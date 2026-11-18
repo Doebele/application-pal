@@ -1811,12 +1811,14 @@ function parseListLimit(value: string | undefined): number {
 
 app.post("/api/kb/ingest/url", zValidator("json", kbIngestUrlRequestSchema), async (c) => {
   const payload = c.req.valid("json");
-  const response = await fetch(payload.url, { signal: AbortSignal.timeout(30_000) });
-  if (!response.ok) {
-    return c.json({ error: "Source URL could not be fetched." }, 502);
+  let html: string;
+  try {
+    const r = await fetchPublicBytes(payload.url);
+    if (!r.ok) return c.json({ error: "Source URL could not be fetched." }, 502);
+    html = r.buf.toString("utf8");
+  } catch (err) {
+    return c.json({ error: `Source URL could not be fetched: ${err instanceof Error ? err.message : String(err)}` }, 400);
   }
-
-  const html = await response.text();
   const rawText = extractTextFromHtml(html);
   if (!rawText) return c.json({ error: "Source URL did not contain readable text." }, 422);
 
@@ -2322,6 +2324,28 @@ async function fetchWebsiteText(url: string): Promise<string | null> {
   return null; // images and other binary content
 }
 
+// Download of a user-supplied URL: every redirect hop is checked by assertPublicHost (no loopback,
+// private or link-local targets) and the body is capped. Use this — never a plain fetch(userUrl) —
+// for anything a user or a stored link points at.
+async function fetchPublicBytes(url: string, opts: { timeoutMs?: number; maxBytes?: number; headers?: Record<string, string> } = {}) {
+  const { timeoutMs = 30_000, maxBytes = WEBSITE_MAX_BYTES, headers = {} } = opts;
+  let res: Response | null = null;
+  for (let hop = 0; hop < 5; hop++) {
+    if (!/^https?:\/\//i.test(url)) throw new Error("Nur http(s)-Links werden gelesen");
+    await assertPublicHost(url);
+    res = await fetch(url, { headers, redirect: "manual", signal: AbortSignal.timeout(timeoutMs) });
+    const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!next) break;
+    url = new URL(next, url).toString();
+    res = null;
+  }
+  if (!res) throw new Error("Zu viele Weiterleitungen");
+  if (Number(res.headers.get("content-length") ?? 0) > maxBytes) throw new Error("Datei zu gross");
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > maxBytes) throw new Error("Datei zu gross");
+  return { ok: res.ok, status: res.status, headers: res.headers, buf, finalUrl: url };
+}
+
 // Posting page for the import: like fetchWebsiteText (every hop checked by assertPublicHost,
 // 5 MB cap) but keeps cookies across redirects and returns the raw HTML for sourceHints().
 async function fetchPostingHtml(url: string): Promise<{ html: string; finalUrl: string }> {
@@ -2393,8 +2417,9 @@ async function fetchDocumentText(doc: UserDocument, userId: string): Promise<str
     if (!res.ok) throw new Error(`Drive Download: HTTP ${res.status}`);
     if (isGDoc) return (await res.text()).trim();
   } else {
-    res = await fetch(doc.url, { signal: AbortSignal.timeout(60_000) });
-    if (!res.ok) throw new Error(`Download: HTTP ${res.status}`);
+    const r = await fetchPublicBytes(doc.url, { timeoutMs: 60_000, maxBytes: 25 * 1024 * 1024 });
+    if (!r.ok) throw new Error(`Download: HTTP ${r.status}`);
+    res = new Response(r.buf, { status: r.status, headers: r.headers });
   }
   const parser = new PDFParse({ data: Buffer.from(await res.arrayBuffer()) });
   try { return (await parser.getText()).text.trim(); } finally { await parser.destroy(); }
@@ -5457,9 +5482,10 @@ app.post("/api/applications/:id/drive/upload-pdf-from-url", async (c) => {
       if (!fetchRes.ok) return c.json({ error: `Drive Download: HTTP ${fetchRes.status}` }, 502);
       fileBuffer = await fetchRes.arrayBuffer();
     } else {
-      const fetchRes = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-      if (!fetchRes.ok) return c.json({ error: `Datei nicht erreichbar: HTTP ${fetchRes.status}` }, 502);
-      fileBuffer = await fetchRes.arrayBuffer();
+      // Guarded: an internal URL here would copy internal content into the user's Drive
+      const r = await fetchPublicBytes(url, { maxBytes: 25 * 1024 * 1024 });
+      if (!r.ok) return c.json({ error: `Datei nicht erreichbar: HTTP ${r.status}` }, 502);
+      fileBuffer = r.buf.buffer.slice(r.buf.byteOffset, r.buf.byteOffset + r.buf.byteLength) as ArrayBuffer;
     }
   } catch {
     return c.json({ error: "Datei-URL nicht erreichbar" }, 502);
@@ -7489,10 +7515,10 @@ app.post("/api/drive/upload-pdf-from-url", async (c) => {
       if (!fetchRes.ok) return c.json({ error: `Drive Download: HTTP ${fetchRes.status}` }, 502);
       fileBuffer = await fetchRes.arrayBuffer();
     } else {
-      // Regular URL — fetch directly
-      const fetchRes = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-      if (!fetchRes.ok) return c.json({ error: `Datei konnte nicht geladen werden: HTTP ${fetchRes.status}` }, 502);
-      fileBuffer = await fetchRes.arrayBuffer();
+      // Regular URL — guarded: an internal URL here would copy internal content into the user's Drive
+      const r = await fetchPublicBytes(url, { maxBytes: 25 * 1024 * 1024 });
+      if (!r.ok) return c.json({ error: `Datei konnte nicht geladen werden: HTTP ${r.status}` }, 502);
+      fileBuffer = r.buf.buffer.slice(r.buf.byteOffset, r.buf.byteOffset + r.buf.byteLength) as ArrayBuffer;
     }
   } catch {
     return c.json({ error: "Datei-URL nicht erreichbar" }, 502);
