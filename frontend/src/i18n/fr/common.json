@@ -942,7 +942,15 @@
   },
   "knowledge": {
     "companiesCount_one": "{{count}} entreprise",
-    "companiesCount_other": "{{count}} entreprises"
+    "companiesCount_other": "{{count}} entreprises",
+    "tabGuide": "Guide & liens",
+    "tabCompanies": "Entreprises & postes",
+    "guideSub": "Adresses utiles pour l’apprentissage, le choix professionnel, l’ORP et la recherche d’emploi",
+    "guideSearch": "Rechercher dans les liens …",
+    "showAll": "Afficher tous les thèmes",
+    "guideNote": "Sites suisses officiels et connus, vérifiés en novembre 2026. Les liens s’ouvrent dans le navigateur ; l’app n’envoie rien.",
+    "noMatch": "Aucun lien correspondant.",
+    "inApp": "Dans l’app"
   },
   "of": "sur",
   "letterCoach": {

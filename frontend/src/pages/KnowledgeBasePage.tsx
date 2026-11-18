@@ -2,13 +2,16 @@ import { useEffect, useState } from "react";
 import i18n from "../i18n";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import {
   Bag, Building, Database, OpenNewWindow, Page,
-  RefreshCircle, Plus, Search, Upload, Xmark
+  RefreshCircle, Plus, Search, Upload, Xmark, ArrowRight
 } from "iconoir-react";
 import type { KbCompany, KbRole, KbSource } from "@application-pal/shared";
 import { Topbar } from "../components/Topbar";
 import { api } from "../lib/api";
+import { useProfileBasics } from "../lib/persona";
+import { guideUrl, topicsFor, type GuideLang, type GuideLink } from "../lib/knowledgeGuide";
 
 type CompaniesResponse = { data: KbCompany[]; limit: number };
 type CompanyDetail = KbCompany & { roles: KbRole[]; sources: KbSource[] };
@@ -185,7 +188,93 @@ function RoleDrawer({ roleId, onClose }: { roleId: string; onClose: () => void }
   );
 }
 
+// ─── Ratgeber & Links (curated, static — lib/knowledgeGuide.ts) ─────────────
+
+const fold = (s: string) => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+function GuideCard({ link, lang }: { link: GuideLink; lang: GuideLang }) {
+  const { t } = useTranslation();
+  const url = guideUrl(link, lang);
+  const internal = url.startsWith("/");
+  const body = (
+    <>
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+        <strong style={{ flex: 1, fontSize: 13.5, lineHeight: 1.3 }}>{link.title[lang]}</strong>
+        {internal ? <ArrowRight width={13} height={13} style={{ color: "var(--accent)", flexShrink: 0, marginTop: 2 }} />
+          : <OpenNewWindow width={13} height={13} style={{ color: "var(--fg-3)", flexShrink: 0, marginTop: 2 }} />}
+      </div>
+      <div style={{ fontSize: 12, color: "var(--fg-2)", lineHeight: 1.45, marginTop: 4 }}>{link.desc[lang]}</div>
+      <div className="mono" style={{ fontSize: 10.5, color: internal ? "var(--accent)" : "var(--fg-3)", marginTop: 8 }}>
+        {internal ? t("knowledge.inApp") : link.source}
+      </div>
+    </>
+  );
+  const style: React.CSSProperties = {
+    display: "block", textDecoration: "none", color: "var(--fg-1)", border: "1px solid var(--border)",
+    background: "var(--surface)", borderRadius: 12, padding: 12, fontFamily: "var(--font-sans)",
+  };
+  return internal
+    ? <Link to={url} style={style} className="kb-guide-card">{body}</Link>
+    : <a href={url} target="_blank" rel="noreferrer" style={style} className="kb-guide-card">{body}</a>;
+}
+
+function GuideView() {
+  const { t, i18n: inst } = useTranslation();
+  const lang = (["de", "en", "fr"].includes(inst.language?.slice(0, 2)) ? inst.language.slice(0, 2) : "de") as GuideLang;
+  const { isSchool, ravEnabled } = useProfileBasics();
+  const [showAll, setShowAll] = useState(false);
+  const [q, setQ] = useState("");
+  const needle = fold(q.trim());
+  const topics = topicsFor({ isSchool, ravEnabled, showAll: showAll || !!needle })
+    .map(tp => ({ ...tp, links: needle ? tp.links.filter(l => fold(`${l.title[lang]} ${l.desc[lang]} ${l.source} ${tp.title[lang]}`).includes(needle)) : tp.links }))
+    .filter(tp => tp.links.length);
+
+  return (
+    <main style={{ flex: 1, minHeight: 0, overflowY: "auto", padding: "18px 24px 40px" }}>
+      <div style={{ maxWidth: 1100 }}>
+        <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap", marginBottom: 6 }}>
+          <div className="input-line-wrap" style={{ flex: "1 1 260px", maxWidth: 380 }}>
+            <Search width={13} height={13} className="input-line-icon" />
+            <input className="input-line" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("knowledge.guideSearch")} />
+          </div>
+          <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--fg-2)", cursor: "pointer" }}>
+            <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} /> {t("knowledge.showAll")}
+          </label>
+        </div>
+        <div style={{ fontSize: 11.5, color: "var(--fg-3)", marginBottom: 18 }}>{t("knowledge.guideNote")}</div>
+        {!topics.length && <div style={{ color: "var(--fg-3)", fontSize: 13 }}>{t("knowledge.noMatch")}</div>}
+        {topics.map(tp => (
+          <section key={tp.id} style={{ marginBottom: 26 }}>
+            <h2 style={{ margin: "0 0 4px", fontSize: 17 }}>{tp.title[lang]}</h2>
+            <div style={{ fontSize: 12.5, color: "var(--fg-2)", lineHeight: 1.5, marginBottom: 10, maxWidth: 760 }}>{tp.intro[lang]}</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: 10 }}>
+              {tp.links.map(l => <GuideCard key={l.id} link={l} lang={lang} />)}
+            </div>
+          </section>
+        ))}
+      </div>
+    </main>
+  );
+}
+
 export function KnowledgeBasePage() {
+  const { t } = useTranslation();
+  const [tab, setTab] = useState<"guide" | "companies">(() => {
+    try { return localStorage.getItem("kb-tab") === "companies" ? "companies" : "guide"; } catch { return "guide"; }
+  });
+  const pick = (v: "guide" | "companies") => { setTab(v); try { localStorage.setItem("kb-tab", v); } catch { /* ignore */ } };
+  const tabs = (
+    <div className="tabs" style={{ padding: "0 24px", flexShrink: 0 }}>
+      <button className={`tab${tab === "guide" ? " active" : ""}`} onClick={() => pick("guide")}>{t("knowledge.tabGuide")}</button>
+      <button className={`tab${tab === "companies" ? " active" : ""}`} onClick={() => pick("companies")}>{t("knowledge.tabCompanies")}</button>
+    </div>
+  );
+  return tab === "guide"
+    ? <><Topbar title={t("nav.knowledge")} sub={t("knowledge.guideSub")} />{tabs}<GuideView /></>
+    : <CompaniesView tabs={tabs} />;
+}
+
+function CompaniesView({ tabs }: { tabs: React.ReactNode }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [q, setQ] = useState("");
@@ -217,7 +306,8 @@ export function KnowledgeBasePage() {
 
   return (
     <>
-      <Topbar title="Knowledge Base" sub={t("knowledge.companiesCount", { count: companies.length })} actions={addButton} />
+      <Topbar title={t("nav.knowledge")} sub={t("knowledge.companiesCount", { count: companies.length })} actions={addButton} />
+      {tabs}
       <main style={{ flex: 1, minHeight: 0, display: "grid", gridTemplateColumns: "360px 1fr", gap: 0 }}>
         <section style={{ borderRight: "1px solid var(--border)", padding: 18, overflowY: "auto" }}>
           <div className="input-line-wrap" style={{ marginBottom: 14 }}>

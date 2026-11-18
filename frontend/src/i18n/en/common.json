@@ -942,7 +942,15 @@
   },
   "knowledge": {
     "companiesCount_one": "{{count}} company",
-    "companiesCount_other": "{{count}} companies"
+    "companiesCount_other": "{{count}} companies",
+    "tabGuide": "Guide & links",
+    "tabCompanies": "Companies & roles",
+    "guideSub": "Key addresses for apprenticeships, career choice, RAV and job search",
+    "guideSearch": "Search links …",
+    "showAll": "Show all topics",
+    "guideNote": "Official and well-known Swiss sites, checked in November 2026. Links open in your browser; the app sends nothing along.",
+    "noMatch": "No matching links.",
+    "inApp": "In the app"
   },
   "of": "of",
   "letterCoach": {

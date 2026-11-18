@@ -942,7 +942,15 @@
   },
   "knowledge": {
     "companiesCount_one": "{{count}} Firma",
-    "companiesCount_other": "{{count}} Firmen"
+    "companiesCount_other": "{{count}} Firmen",
+    "tabGuide": "Ratgeber & Links",
+    "tabCompanies": "Firmen & Stellen",
+    "guideSub": "Wichtige Adressen für Lehrstellensuche, Berufswahl, RAV und Stellensuche",
+    "guideSearch": "Links durchsuchen …",
+    "showAll": "Alle Themen zeigen",
+    "guideNote": "Offizielle und bekannte Schweizer Seiten, geprüft im November 2026. Die Links öffnen sich im Browser; die App schickt dabei nichts mit.",
+    "noMatch": "Keine passenden Links.",
+    "inApp": "In der App"
   },
   "of": "von",
   "letterCoach": {
