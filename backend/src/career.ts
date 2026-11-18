@@ -171,6 +171,8 @@ export type Suggestion = {
   years: number;
   /** Trade name without EFZ/EBA and gender forms, for search links. */
   searchTerm: { de: string; fr: string };
+  /** Main areas first, then side areas — for the page's area filter. */
+  areas: InterestArea[];
   fit: "strong" | "good" | "possible";
   score: number;
   reasons: Reason[];
@@ -262,6 +264,7 @@ export function suggestTrades(p: SchoolProfile & { interests?: Interests }, opts
 
     suggestions.push({
       id: tr.id, name: tr.name, level: tr.level, years: tr.years, score, searchTerm: { de: tradeSearchTerm(tr.name.de), fr: tradeSearchTerm(tr.name.fr) },
+      areas: [...tr.primary, ...tr.secondary],
       fit: score >= 15 ? "strong" : score >= 9 ? "good" : "possible",
       reasons, isWish: !!wish,
     });

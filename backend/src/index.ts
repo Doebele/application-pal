@@ -3389,7 +3389,8 @@ async function schoolCvPhoto(profile: ProfileIn, photoUrl: string | null | undef
 app.get("/api/career/suggestions", async (c) => {
   const userId = getUserId(c);
   const [row] = await db.select({ schoolProfile: userProfile.schoolProfile }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
-  return c.json(suggestTrades(parseSchoolProfile(row?.schoolProfile)));
+  // Every match: the page shows the top ten and filters the rest by area.
+  return c.json(suggestTrades(parseSchoolProfile(row?.schoolProfile), { limit: 200 }));
 });
 
 // CV model (sections) + deterministic checklist, for the preview

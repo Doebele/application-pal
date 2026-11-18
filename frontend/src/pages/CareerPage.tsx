@@ -3,6 +3,7 @@
 // subjects, strengths WITH an example and strong test results only — weak results never count.
 // Ideas, never a verdict: every card shows its reasons, and the page points to the Berufsberatung.
 // Interests are stored in school_profile.interests (merge-save via PATCH /api/profile).
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -23,7 +24,11 @@ type Reason =
 type Suggestion = {
   id: string; name: { de: string; fr: string; en: string }; level: "EFZ" | "EBA"; years: number;
   searchTerm: { de: string; fr: string }; fit: "strong" | "good" | "possible"; score: number; reasons: Reason[]; isWish: boolean;
+  areas: Area[];
 };
+type Filter = "all" | "wish" | Area;
+type Sort = "fit" | "az" | "short";
+const TOP = 10;
 type CareerResult = { suggestions: Suggestion[]; missing: ("interests" | "subjects" | "strengths" | "examples")[]; strengthsWithoutExample: number };
 type Profile = { schoolProfile?: string | null };
 
@@ -84,7 +89,25 @@ export function CareerPage() {
     ? `https://www.orientation.ch/fr/recherche?searchTerm=${encodeURIComponent(s.searchTerm.fr)}`
     : `https://www.berufsberatung.ch/de/suche?searchTerm=${encodeURIComponent(s.searchTerm.de)}`;
 
-  const suggestions = data?.suggestions ?? [];
+  const [filter, setFilter] = useState<Filter>("all");
+  const [sort, setSort] = useState<Sort>("fit");
+  const [showAll, setShowAll] = useState(false);
+
+  const all = data?.suggestions ?? [];
+  // Area chips: only areas that occur in the ideas; the pupil's "a lot" areas first, then by count.
+  const areaCounts = AREAS.map(a => ({ a, n: all.filter(s => (s.areas ?? []).includes(a)).length })).filter(x => x.n > 0)
+    .sort((x, y) => (interests[y.a] ?? 0) - (interests[x.a] ?? 0) || y.n - x.n);
+  const wishCount = all.filter(s => s.isWish).length;
+  const activeFilter: Filter = filter === "all" || (filter === "wish" ? wishCount > 0 : areaCounts.some(x => x.a === filter)) ? filter : "all";
+  const filtered = all.filter(s => activeFilter === "all" || (activeFilter === "wish" ? s.isWish : (s.areas ?? []).includes(activeFilter)));
+  const name = (s: Suggestion) => s.name[lang] ?? s.name.de;
+  const sorted = [...filtered].sort((a, b) =>
+    sort === "az" ? name(a).localeCompare(name(b), lang)
+    : sort === "short" ? a.years - b.years || b.score - a.score
+    : b.score - a.score);
+  // "All" shows the top ten by default; a chosen area or the wish list shows every match.
+  const capped = activeFilter === "all" && !showAll && sorted.length > TOP;
+  const suggestions = capped ? sorted.slice(0, TOP) : sorted;
   const rated = AREAS.filter(a => (interests[a] ?? -1) >= 0).length;
 
   return (
@@ -141,9 +164,38 @@ export function CareerPage() {
             </div>
           )}
 
-          <div className="eyebrow" style={{ marginBottom: 8 }}>{t("career.ideasTitle")}</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
+            <div className="eyebrow">{t("career.ideasTitle")}{all.length > 0 && <span style={{ color: "var(--fg-4)", marginLeft: 6 }}>{filtered.length}</span>}</div>
+            {all.length > 1 && (
+              <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11.5, color: "var(--fg-3)" }}>
+                {t("career.sortLabel")}
+                <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}
+                  style={{ fontSize: 11.5, padding: "2px 6px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--surface-2)", color: "var(--fg-1)", fontFamily: "var(--font-sans)" }}>
+                  <option value="fit">{t("career.sort.fit")}</option>
+                  <option value="az">{t("career.sort.az")}</option>
+                  <option value="short">{t("career.sort.short")}</option>
+                </select>
+              </label>
+            )}
+          </div>
+          {all.length > 1 && (
+            <div role="tablist" aria-label={t("career.filterLabel")} style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+              {([["all", t("career.filterAll"), all.length], ...(wishCount ? [["wish", t("career.filterWish"), wishCount]] : []),
+                ...areaCounts.map(x => [x.a, t(`career.areas.${x.a}.title`), x.n])] as [Filter, string, number][]).map(([key, label, n]) => {
+                const on = activeFilter === key;
+                return (
+                  <button key={key} role="tab" aria-selected={on} onClick={() => { setFilter(key); setShowAll(false); }}
+                    style={{ fontSize: 11.5, padding: "3px 9px", borderRadius: 999, cursor: "pointer", fontFamily: "var(--font-sans)",
+                      border: `1px solid ${on ? "var(--accent)" : "var(--border)"}`, background: on ? "var(--accent-08)" : "transparent",
+                      color: on ? "var(--accent)" : "var(--fg-2)", fontWeight: on ? 700 : 500 }}>
+                    {label} <span style={{ opacity: 0.7 }}>{n}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
           {isLoading && <div style={{ fontSize: 12, color: "var(--fg-3)" }}>…</div>}
-          {!isLoading && !suggestions.length && (
+          {!isLoading && !all.length && (
             <div style={{ border: "1px dashed var(--border)", borderRadius: 10, padding: 20, fontSize: 13, color: "var(--fg-3)", textAlign: "center" }}>
               <Compass width={18} height={18} style={{ marginBottom: 6 }} /><br />{t("career.empty")}
             </div>
@@ -185,6 +237,11 @@ export function CareerPage() {
               );
             })}
           </div>
+          {(capped || (activeFilter === "all" && showAll && sorted.length > TOP)) && (
+            <button className="btn btn-ghost" style={{ fontSize: 12, marginTop: 10 }} onClick={() => setShowAll(v => !v)}>
+              {capped ? t("career.showMore", { n: sorted.length - TOP }) : t("career.showLess")}
+            </button>
+          )}
         </div>
       </div>
     </>

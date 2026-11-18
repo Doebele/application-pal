@@ -52,6 +52,8 @@ const koch = wish.suggestions.find(s => s.id === "koch")!;
 assert.ok(koch && koch.isWish && koch.reasons[0].type === "wish");
 assert.ok(wish.suggestions[0].id.startsWith("informatiker") || wish.suggestions[0].id === "automatiker" || wish.suggestions[0].id === "elektroniker" || wish.suggestions[0].id === "interactive-media" || wish.suggestions[0].id === "mediamatiker" || wish.suggestions[0].id === "ict-fachmann");
 
+assert.deepEqual(w.suggestions.find(s => s.id === "schreiner")!.areas, ["build", "creative", "tech"], "areas: main first, then side");
+
 // Limit keeps wish jobs past the cut.
 const many = suggestTrades({ interests: Object.fromEntries(INTEREST_AREAS.map(a => [a, 2])), wishJobs: [{ title: "Fleischfachmann" }] }, { limit: 3 });
 assert.ok(many.suggestions.length === 3 || many.suggestions.some(s => s.id === "fleischfachmann"));
