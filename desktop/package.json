@@ -1,6 +1,6 @@
 {
   "name": "@application-pal/desktop",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "Desktop-Hülle (Tauri) für Application-Pal, Produktname Apply-Pal — M0-Spike, Projektcode d2603",
   "scripts": {
