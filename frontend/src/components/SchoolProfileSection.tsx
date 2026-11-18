@@ -22,6 +22,8 @@ export type SchoolProfile = {
   tests?: SchoolTest[];
   /** Registered with the RAV (SEMO, bridge year): shows the RAV export again (lib/persona.tsx). */
   ravRegistered?: boolean;
+  /** Longest acceptable public-transport commute in minutes (region check, RegionBadge.tsx). */
+  maxCommuteMin?: number;
 };
 
 export const EXPERIENCE_KINDS: ExperienceKind[] = ["schule", "hobby", "verein", "job", "schnupper", "anderes"];
@@ -262,6 +264,16 @@ export function SchoolProfileSection({ value, onSave }: { value: SchoolProfile; 
             <StatsReport width={12} height={12} style={{ flexShrink: 0, marginTop: 2 }} /> {t("school.tests.rule")}
           </div>
         )}
+      </Block>
+
+      <Block title={t("school.commute.title")} sub={t("school.commute.sub")}>
+        <label style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 12.5, color: "var(--fg-1)" }}>
+          {t("school.commute.label")}
+          <select style={{ ...inp, width: "auto" }} value={p.maxCommuteMin ?? 60}
+            onChange={e => change({ maxCommuteMin: Number(e.target.value) })}>
+            {[30, 45, 60, 75, 90, 120].map(n => <option key={n} value={n}>{t("school.commute.minutes", { count: n })}</option>)}
+          </select>
+        </label>
       </Block>
 
       <Block title={t("school.rav.title")} sub={t("school.rav.sub")}>

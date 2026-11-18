@@ -140,6 +140,7 @@ export type SchoolProfile = {
   ravRegistered?: boolean;                                           // registered with the RAV (SEMO, bridge year) → RAV export visible
   cv?: SchoolCvData;                                                 // CV-only fields (school-cv.ts)
   dates?: PersonalDate[];                                            // Multicheck, Stellwerk, Berufsmesse … (school-dates.ts)
+  maxCommuteMin?: number;                                            // longest acceptable ÖV commute (region check, job-sources.ts)
 };
 
 /** Scale of a school test: stellwerk = 200–800 (norm mean 500), stanine = 1–9 (Lernpass plus PSM), percent = 0–100. */
@@ -183,6 +184,7 @@ export function parseSchoolProfile(raw: string | null | undefined): SchoolProfil
     ...(j.ravRegistered === true ? { ravRegistered: true } : {}),
     ...(j.cv && typeof j.cv === "object" ? { cv: normalizeCvData(j.cv) } : {}),
     ...(Array.isArray(j.dates) ? { dates: normalizePersonalDates(j.dates) } : {}),
+    ...(typeof j.maxCommuteMin === "number" && j.maxCommuteMin >= 10 && j.maxCommuteMin <= 240 ? { maxCommuteMin: Math.round(j.maxCommuteMin) } : {}),
   };
 }
 

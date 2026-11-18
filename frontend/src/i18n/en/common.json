@@ -2460,6 +2460,13 @@
       "title": "RAV (unemployment office)",
       "sub": "Only needed if you are registered with the RAV – for example in a motivation semester (SEMO) or a bridge-year programme.",
       "label": "I'm registered with the RAV and must prove my applications – show the RAV export."
+    },
+    "commute": {
+      "title": "Commute",
+      "sub": "How long may your trip to the company take by bus and train? Apprenticeships are compared with your home town.",
+      "label": "At most",
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes"
     }
   },
   "schoolLetter": {
@@ -2798,5 +2805,46 @@
     "bannerTitle_other": "{{count}} reminders:",
     "bannerOpen": "All dates",
     "bannerDismiss": "Hide for today"
+  },
+  "lehrstellenImport": {
+    "hint": "Tip: links to single apprenticeships on Yousty and berufsberatung.ch (LENA) are read directly — company, trade, place and contact person are taken over.",
+    "listUrl": "That's a search or list page. Open the single apprenticeship and copy its link.",
+    "fetchFailed": "The page could not be read. Copy the posting text and paste it under “Text”.",
+    "failed": "Reading the posting didn't work. Try again or paste the text.",
+    "structured": {
+      "yousty": "Read directly from Yousty",
+      "lena": "Read directly from berufsberatung.ch (LENA)",
+      "jsonld": "Read the page's structured data"
+    },
+    "start": "Start {{start}}",
+    "positions_one": "{{count}} open place",
+    "positions_other": "{{count}} open places"
+  },
+  "region": {
+    "levels": {
+      "same_town": "In your home town",
+      "near": "Near you",
+      "region": "In your region — check the commute",
+      "far": "Far from your home",
+      "unknown": "Distance unknown"
+    },
+    "fromTo": "{{home}} → {{job}}",
+    "noHome": "Your home town is missing for the region check.",
+    "setHome": "Add postcode and town in your CV",
+    "check": "Check public-transport commute",
+    "recheck": "Check again",
+    "privacy": "Sends only the two town names to transport.opendata.ch (Swiss public transport timetable).",
+    "minutes_one": "{{count}} minute by public transport",
+    "minutes_other": "{{count}} minutes by public transport",
+    "transfers_one": "{{count}} change",
+    "transfers_other": "{{count}} changes",
+    "tooLong": "longer than your {{max}} minutes",
+    "errors": {
+      "no_home": "Add your home town first (CV: postcode and town).",
+      "no_location": "The apprenticeship has no place.",
+      "no_connection": "No connection found — check the town names.",
+      "transport_failed": "The timetable could not be reached. Try again later."
+    },
+    "needZip": "add postcodes to compare"
   }
 }

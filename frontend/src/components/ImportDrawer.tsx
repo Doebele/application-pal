@@ -6,6 +6,7 @@ import { api } from "../lib/api";
 import { useUiStore } from "../lib/store";
 import { useTranslation } from "react-i18next";
 import { usePersona } from "./LetterKindFields";
+import { RegionBadge, type RegionInfo } from "./RegionBadge";
 
 type ExtractionPhase = "idle" | "reading" | "extracting" | "done";
 
@@ -142,6 +143,11 @@ type ExtractedRaw = {
   workModel?: string | null;
   contractType?: string | null;
   applyDeadline?: string | null;
+  contactGender?: "f" | "m" | null;
+  region?: RegionInfo;
+  structured?: "yousty" | "lena" | "jsonld" | null;
+  startDate?: string;
+  positions?: number;
   applicationKind?: string | null;
   apprenticeship?: string | null;
 };
@@ -240,6 +246,9 @@ export function ImportDrawer({ onClose }: Props) {
   // Only school leavers get the kind applied: an adult posting that mentions "Lernende" must not switch the letter rules
   const persona = usePersona();
   const [kindInfo, setKindInfo] = useState<{ applicationKind: string | null; apprenticeship: string | null }>({ applicationKind: null, apprenticeship: null });
+  // Read from the page's structure (Yousty / LENA / JSON-LD): salutation, region, start, open places
+  const [meta, setMeta] = useState<Pick<ExtractedRaw, "contactGender" | "region" | "structured" | "startDate" | "positions">>({});
+  const [importError, setImportError] = useState("");
 
   const [form, setForm] = useState<FormState>({
     company: "", role: "", contactPerson: "", location: "", salary: "", description: "", tags: [], source: "",
@@ -278,6 +287,7 @@ export function ImportDrawer({ onClose }: Props) {
         workModel:    form.workModel    || null,
         contractType: form.contractType || null,
         applyDeadline: form.applyDeadline || null,
+        contactGender: form.contactPerson && meta.contactGender ? meta.contactGender : null,
         applicationKind: persona === "schulabgaenger" ? kindInfo.applicationKind : null,
         apprenticeship: persona === "schulabgaenger" ? kindInfo.apprenticeship : null,
       }).then((r) => r.data),
@@ -285,7 +295,7 @@ export function ImportDrawer({ onClose }: Props) {
   });
 
   const runExtraction = async () => {
-    setPhase("reading"); setStep(0); setLogoUrl(null); setLogoOk(false); setDescExpanded(false);
+    setPhase("reading"); setStep(0); setLogoUrl(null); setLogoOk(false); setDescExpanded(false); setImportError(""); setMeta({});
     setForm({ company: "", role: "", contactPerson: "", location: "", salary: "", description: "", tags: [], source: "", jobType: "", workModel: "", contractType: "", applyDeadline: "" });
     const advance = (n: number, p: ExtractionPhase) => setTimeout(() => { setStep(n); setPhase(p); }, n * 600);
     advance(1, "reading"); advance(2, "extracting"); advance(3, "extracting");
@@ -295,6 +305,7 @@ export function ImportDrawer({ onClose }: Props) {
         setStep(4); setPhase("done");
         setLogoUrl(result.logoUrl ?? null); setLogoOk(false);
         setKindInfo({ applicationKind: result.applicationKind ?? null, apprenticeship: result.apprenticeship ?? null });
+        setMeta({ contactGender: result.contactGender ?? null, region: result.region, structured: result.structured ?? null, startDate: result.startDate, positions: result.positions });
         setForm({
           company:      result.company      ?? "",
           role:         result.role         ?? "",
@@ -310,7 +321,12 @@ export function ImportDrawer({ onClose }: Props) {
           applyDeadline: result.applyDeadline ?? "",
         });
       }, 2400);
-    } catch { setPhase("idle"); }
+    } catch (e) {
+      // list_url = a search page instead of one posting; fetch_failed = page unreadable (JS-only, blocked)
+      const code = (e as { response?: { data?: { error?: string } } })?.response?.data?.error;
+      setImportError(code === "list_url" ? i18n.t("lehrstellenImport.listUrl") : code === "fetch_failed" ? i18n.t("lehrstellenImport.fetchFailed") : i18n.t("lehrstellenImport.failed"));
+      setPhase("idle");
+    }
   };
 
   const addTag    = (t: string) => { const tag = t.trim(); if (tag && !form.tags.includes(tag)) patch("tags", [...form.tags, tag]); setNewTag(""); };
@@ -398,6 +414,9 @@ export function ImportDrawer({ onClose }: Props) {
                 placeholder="https://…"
                 onKeyDown={(e) => e.key === "Enter" && url && runExtraction()}
               />
+              {persona === "schulabgaenger" && !importError && (
+                <div style={{ fontSize: 11, color: "var(--fg-3)", marginTop: 6, lineHeight: 1.45 }}>{i18n.t("lehrstellenImport.hint")}</div>
+              )}
             </div>
           ) : (
             <AutoResizeTextarea
@@ -405,6 +424,8 @@ export function ImportDrawer({ onClose }: Props) {
               placeholder={i18n.t("ui.pasteJobDescription")} minRows={4}
             />
           )}
+
+          {importError && <div role="alert" style={{ fontSize: 12, color: "var(--score-low)", lineHeight: 1.45 }}>{importError}</div>}
 
           {/* Extract button */}
           <button
@@ -468,6 +489,21 @@ export function ImportDrawer({ onClose }: Props) {
                 </div>
               ))}
             </div>
+
+            {/* Read from the page structure + region vs. the pupil's home */}
+            {ready && (meta.structured || meta.region) && (
+              <div style={{ display: "grid", gap: 4, marginBottom: 10 }}>
+                {meta.structured && (
+                  <div style={{ fontSize: 11.5, color: "var(--fg-3)", display: "flex", alignItems: "center", gap: 5 }}>
+                    <Check width={11} height={11} style={{ color: "var(--score-high)" }} />
+                    {i18n.t(`lehrstellenImport.structured.${meta.structured}`)}
+                    {meta.startDate ? ` · ${i18n.t("lehrstellenImport.start", { start: meta.startDate.length === 4 ? meta.startDate : new Date(`${meta.startDate}T12:00:00`).toLocaleDateString(i18n.language, { month: "long", year: "numeric" }) })}` : ""}
+                    {meta.positions && meta.positions > 1 ? ` · ${i18n.t("lehrstellenImport.positions", { count: meta.positions })}` : ""}
+                  </div>
+                )}
+                {meta.region && persona === "schulabgaenger" && <RegionBadge region={meta.region} />}
+              </div>
+            )}
 
             {/* Job Type + Work Model + Contract */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0 12px", marginBottom: 10 }}>

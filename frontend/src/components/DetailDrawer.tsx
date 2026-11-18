@@ -77,6 +77,7 @@ import { SchoolLetterQuestions, type SchoolAnswers } from "./SchoolLetterQuestio
 import { SchoolReview, type SchoolReviewData } from "./SchoolReview";
 import { SchnupperDebriefPanel, SchnupperSourceNote, DEBRIEF_STAGES } from "./SchnupperDebrief";
 import { SimilarLetterWarning } from "./SimilarLetterWarning";
+import { RegionCheck } from "./RegionBadge";
 import { useProfileBasics, ADULT_ONLY_TILES } from "../lib/persona";
 
 /** School-leaver view: persona Schulabgänger, or a Schnupperlehre / Lehrstelle of any persona. */
@@ -418,6 +419,12 @@ function OverviewTab({ app, stage, url, onUrlChange, onSave }: {
           <input value={location} onChange={(e) => setLocation(e.target.value)} onBlur={() => save({ location })} />
         </div>
       </div>
+
+      {/* Region vs. the pupil's home + optional ÖV commute check (school view) */}
+      {school && (
+        <RegionCheck appId={app.id} location={app.location}
+          commute={(() => { try { return JSON.parse(app.aiResultsCache ?? "{}")?.commute ?? null; } catch { return null; } })()} />
+      )}
 
       {/* Row 2: Rolle + Ansprechpartner */}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>

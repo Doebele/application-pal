@@ -2460,6 +2460,13 @@
       "title": "RAV",
       "sub": "Nur nötig, wenn du beim RAV angemeldet bist – zum Beispiel im Motivationssemester (SEMO) oder in einem Brückenangebot.",
       "label": "Ich bin beim RAV angemeldet und muss meine Bewerbungen nachweisen – RAV-Export einblenden."
+    },
+    "commute": {
+      "title": "Arbeitsweg",
+      "sub": "Wie lange darf dein Weg zum Lehrbetrieb mit Bus und Bahn dauern? Lehrstellen werden mit deinem Wohnort verglichen.",
+      "label": "Höchstens",
+      "minutes_one": "{{count}} Minute",
+      "minutes_other": "{{count}} Minuten"
     }
   },
   "schoolLetter": {
@@ -2798,5 +2805,46 @@
     "bannerTitle_other": "{{count}} Erinnerungen:",
     "bannerOpen": "Alle Termine",
     "bannerDismiss": "Für heute ausblenden"
+  },
+  "lehrstellenImport": {
+    "hint": "Tipp: Links zu einzelnen Lehrstellen auf Yousty und berufsberatung.ch (LENA) werden direkt gelesen — Firma, Beruf, Ort und Kontaktperson werden übernommen.",
+    "listUrl": "Das ist eine Such- oder Listenseite. Öffne die einzelne Lehrstelle und kopiere deren Link.",
+    "fetchFailed": "Die Seite liess sich nicht lesen. Kopiere den Text der Ausschreibung und füge ihn unter „Text“ ein.",
+    "failed": "Das Einlesen hat nicht geklappt. Versuch es nochmals oder füge den Text ein.",
+    "structured": {
+      "yousty": "Direkt von Yousty gelesen",
+      "lena": "Direkt von berufsberatung.ch (LENA) gelesen",
+      "jsonld": "Strukturierte Angaben der Seite gelesen"
+    },
+    "start": "Lehrbeginn {{start}}",
+    "positions_one": "{{count}} freie Stelle",
+    "positions_other": "{{count}} freie Stellen"
+  },
+  "region": {
+    "levels": {
+      "same_town": "In deinem Wohnort",
+      "near": "In deiner Nähe",
+      "region": "In deiner Region — Arbeitsweg prüfen",
+      "far": "Weit weg von deinem Wohnort",
+      "unknown": "Entfernung unbekannt"
+    },
+    "fromTo": "{{home}} → {{job}}",
+    "noHome": "Für den Regionsvergleich fehlt dein Wohnort.",
+    "setHome": "PLZ und Ort im Lebenslauf eintragen",
+    "check": "ÖV-Arbeitsweg prüfen",
+    "recheck": "Nochmals prüfen",
+    "privacy": "Schickt nur die zwei Ortsnamen an transport.opendata.ch (ÖV-Fahrplan der Schweiz).",
+    "minutes_one": "{{count}} Minute mit dem ÖV",
+    "minutes_other": "{{count}} Minuten mit dem ÖV",
+    "transfers_one": "{{count}} Umstieg",
+    "transfers_other": "{{count}} Umstiege",
+    "tooLong": "länger als deine {{max}} Minuten",
+    "errors": {
+      "no_home": "Trag zuerst deinen Wohnort ein (Lebenslauf: PLZ und Ort).",
+      "no_location": "Bei der Lehrstelle fehlt der Ort.",
+      "no_connection": "Keine Verbindung gefunden — prüf die Ortsnamen.",
+      "transport_failed": "Der Fahrplan war nicht erreichbar. Versuch es später nochmals."
+    },
+    "needZip": "mit Postleitzahl wird verglichen"
   }
 }

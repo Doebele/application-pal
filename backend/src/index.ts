@@ -2,6 +2,7 @@ import "./sidecar-polyfill.js";
 import { buildSchoolCv, normalizeCvData, schoolCvChecks, schoolCvText, type CvLang, type ProfileIn } from "./school-cv.js";
 import { schoolCvPdf } from "./school-cv-pdf.js";
 import { agendaIcs, buildAgenda, detectDeadline, isIsoDate, type AgendaApp } from "./school-dates.js";
+import { durationMinutes, isListUrl, parsePlace, regionMatch, sourceHints, type Place, type SourceHints } from "./job-sources.js";
 import { normalizeKind, isSchoolKind, detectApplicationKind, detectApprenticeship, salutationPrompt, schoolLeaverRules, schoolLeaverReviewNote, parseSchoolProfile, formatSchoolProfile, formatSchoolAnswers, schoolAnglesTask, normalizeTest, schoolLetterChecks, checksForPrompt, SCHOOL_TEST_EXTRACT_PROMPT, stageTasksFor, SCHOOL_STAGE_TASKS, normalizeDebrief, debriefNotes, upsertTasterExperience, letterSimilarity, SIMILAR_LETTER_THRESHOLD, type SchoolAnswers, type SchoolTest } from "./letter-kinds.js";
 import { parseModelJson, ModelJsonError } from "./ai-json.js";
 import { serve } from "@hono/node-server";
@@ -1691,23 +1692,52 @@ async function resolveCompanyLogo(companyName: string | null): Promise<string | 
 }
 
 app.post("/api/applications/import", zValidator("json", applicationImportRequestSchema), async (c) => {
-  const _userId = getUserId(c);
+  const userId = getUserId(c);
   const payload = c.req.valid("json");
   let text = payload.text ?? "";
+  let hints: SourceHints | null = null;
+  let fetchError: string | null = null;
 
   if (payload.url) {
+    // A search / list page is not one posting — ask for the posting itself
+    if (isListUrl(payload.url) && !payload.text) return c.json({ error: "list_url" }, 400);
     try {
-      const response = await fetch(payload.url);
-      if (response.ok) {
-        const html = await response.text();
-        text = `${text} ${extractTextFromHtml(html)}`.trim();
-      }
+      // Every hop is checked against internal addresses; cookies are kept across redirects
+      // (berufsberatung.ch sets a session cookie on its first redirect and refuses without it).
+      const { html, finalUrl } = await fetchPostingHtml(payload.url);
+      hints = sourceHints(finalUrl, html);
+      const pageText = hints?.text || extractTextFromHtml(html);
+      text = `${text} ${pageText}`.trim();
     } catch (error) {
-      console.warn("Import URL fetch failed", error);
+      fetchError = error instanceof Error ? error.message : String(error);
+      console.warn("Import URL fetch failed", fetchError);
     }
   }
 
   const normalized = text.trim();
+  if (!normalized) return c.json({ error: "fetch_failed", detail: fetchError }, 422);
+
+  // Facts read from the page's structure beat the model and the regex guesses
+  const home = await loadHomePlace(userId);
+  const withHints = <T extends Record<string, unknown>>(r: T) => {
+    const out: Record<string, unknown> = { ...r };
+    if (hints) {
+      for (const k of ["company", "location", "contactPerson", "contactGender", "applicationKind", "apprenticeship"] as const)
+        if (hints[k]) out[k] = hints[k];
+      if (hints.role) out.role = hints.role;
+      if (hints.sourceLabel) out.source = hints.sourceLabel;
+      if (hints.source === "lena") {
+        // LENA has no free text: keep the labelled summary plus how to reach the company
+        out.description = [hints.text, hints.email && `E-Mail: ${hints.email}`, hints.phone && `Telefon: ${hints.phone}`].filter(Boolean).join("\n");
+      }
+      if (hints.startDate) out.startDate = hints.startDate;
+      if (hints.positions) out.positions = hints.positions;
+    }
+    const job = parsePlace(String(out.location ?? ""));
+    out.region = { level: regionMatch(home, job), home: [home.zip, home.town].filter(Boolean).join(" "), job: [job.zip, job.town, job.canton].filter(Boolean).join(" ") };
+    out.structured = hints?.source ?? null;
+    return out;
+  };
 
   // Detect work-type tags from raw text (runs for both AI and regex paths)
   const workTags = pickWorkTags(normalized);
@@ -1725,7 +1755,7 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
       if (llm) {
         const allTags = mergeTags(llm.tags);
         const logoUrl = await resolveCompanyLogo(llm.company);
-        return c.json({
+        return c.json(withHints({
           company:      llm.company,
           role:         llm.role,
           contactPerson: llm.contactPerson,
@@ -1741,7 +1771,7 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
           applicationKind: detectApplicationKind(normalized),
           apprenticeship: detectApprenticeship(normalized),
           applyDeadline: detectDeadline(normalized, new Date().toISOString().slice(0, 10)),
-        });
+        }));
       }
     } catch (error) {
       console.warn("LLM extraction failed, falling back to regex:", error);
@@ -1751,7 +1781,7 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
   // Regex fallback
   const company = pickCompany(normalized);
   const logoUrl = await resolveCompanyLogo(company);
-  return c.json({
+  return c.json(withHints({
     company,
     role:         pickRole(normalized),
     contactPerson: null,
@@ -1767,7 +1797,7 @@ app.post("/api/applications/import", zValidator("json", applicationImportRequest
     applicationKind: detectApplicationKind(normalized),
     apprenticeship: detectApprenticeship(normalized),
     applyDeadline: detectDeadline(normalized, new Date().toISOString().slice(0, 10)),
-  });
+  }));
 });
 
 // ─────────────────────────────────────────────────────────────────
@@ -2290,6 +2320,57 @@ async function fetchWebsiteText(url: string): Promise<string | null> {
   }
   if (type.startsWith("text/")) return buf.toString("utf8").trim() || null;
   return null; // images and other binary content
+}
+
+// Posting page for the import: like fetchWebsiteText (every hop checked by assertPublicHost,
+// 5 MB cap) but keeps cookies across redirects and returns the raw HTML for sourceHints().
+async function fetchPostingHtml(url: string): Promise<{ html: string; finalUrl: string }> {
+  const jar = new Map<string, Map<string, string>>();   // host → cookie name → value
+  let res: Response | null = null;
+  for (let hop = 0; hop < 6; hop++) {
+    await assertPublicHost(url);
+    const host = hostOf(url);
+    const cookies = [...(jar.get(host) ?? new Map()).entries()].map(([k, v]) => `${k}=${v}`).join("; ");
+    res = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; ApplicationPal/1.0)",
+        Accept: "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+        "Accept-Language": "de-CH,de;q=0.9,fr;q=0.6,en;q=0.5",
+        ...(cookies ? { Cookie: cookies } : {}),
+      },
+      redirect: "manual", signal: AbortSignal.timeout(20_000),
+    });
+    for (const sc of res.headers.getSetCookie?.() ?? []) {
+      const [pair] = sc.split(";");
+      const eq = pair.indexOf("=");
+      if (eq > 0) {
+        const m = jar.get(host) ?? new Map<string, string>();
+        m.set(pair.slice(0, eq).trim(), pair.slice(eq + 1).trim());
+        jar.set(host, m);
+      }
+    }
+    const next = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!next) break;
+    url = new URL(next, url).toString();
+    if (!/^https?:\/\//i.test(url)) throw new Error("Ungültige Weiterleitung");
+    res = null;
+  }
+  if (!res) throw new Error("Zu viele Weiterleitungen");
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (Number(res.headers.get("content-length") ?? 0) > WEBSITE_MAX_BYTES) throw new Error("Seite zu gross");
+  const buf = Buffer.from(await res.arrayBuffer());
+  if (buf.length > WEBSITE_MAX_BYTES) throw new Error("Seite zu gross");
+  const html = buf.toString("utf8");
+  if (/CookieCheckError|Cookie not accepted/i.test(url + html.slice(0, 2000))) throw new Error("Cookie-Sperre");
+  return { html, finalUrl: url };
+}
+
+/** The pupil's home for the region check: postcode + town from the CV fields, else the profile location. */
+async function loadHomePlace(userId: string): Promise<Place> {
+  const [p] = await db.select({ location: userProfile.location, schoolProfile: userProfile.schoolProfile }).from(userProfile).where(eq(userProfile.userId, userId)).limit(1);
+  const cv = parseSchoolProfile(p?.schoolProfile).cv;
+  const fromCv = parsePlace(cv?.zipCity);
+  return fromCv.zip || fromCv.town ? fromCv : parsePlace(p?.location);
 }
 
 // Reads the document's content as plain text: a Drive PDF, a Google Doc, or a public web
@@ -3309,6 +3390,53 @@ app.post("/api/school-cv/export-doc", async (c) => {
     console.error("school-cv export-doc error:", err);
     return c.json({ error: "Google Doc Erstellung fehlgeschlagen" }, 502);
   }
+});
+
+// ─── Commute by public transport (phase 5d, region check) ─────
+// On demand only: sends the home town and the workplace town (no street, no name) to
+// transport.opendata.ch and stores the fastest weekday-morning connection in aiResultsCache["commute"].
+function nextWeekdayMorning(): string {
+  const d = new Date();
+  do d.setDate(d.getDate() + 1); while (d.getDay() === 0 || d.getDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+
+app.post("/api/applications/:id/commute", async (c) => {
+  const userId = getUserId(c);
+  const [app_] = await db.select().from(applications).where(and(eq(applications.id, c.req.param("id")), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Not found" }, 404);
+  const home = await loadHomePlace(userId);
+  const job = parsePlace(app_.location);
+  // Station lookup works on "Town" / "Town KT" — a postcode makes it match street names instead
+  const from = [home.town, home.canton].filter(Boolean).join(" ");
+  const to = [job.town, job.canton].filter(Boolean).join(" ");
+  if (!from) return c.json({ error: "no_home" }, 400);
+  if (!to) return c.json({ error: "no_location" }, 400);
+  const q = new URLSearchParams({ from, to, date: nextWeekdayMorning(), time: "07:00", limit: "4" });
+  try {
+    const r = await fetch(`https://transport.opendata.ch/v1/connections?${q}`, { signal: AbortSignal.timeout(15_000), headers: { Accept: "application/json" } });
+    if (!r.ok) return c.json({ error: "transport_failed" }, 502);
+    const j = await r.json() as { connections?: { duration?: string; transfers?: number }[]; from?: { name?: string }; to?: { name?: string } };
+    const options = (j.connections ?? []).map(x => ({ minutes: durationMinutes(x.duration), transfers: x.transfers ?? 0 })).filter(x => x.minutes != null) as { minutes: number; transfers: number }[];
+    if (!options.length) return c.json({ error: "no_connection" }, 404);
+    const best = options.sort((a, b) => a.minutes - b.minutes)[0];
+    const result = { minutes: best.minutes, transfers: best.transfers, from: j.from?.name ?? from, to: j.to?.name ?? to, region: regionMatch(home, job) };
+    await persistAiResult(app_.id, "commute", result);
+    return c.json(result);
+  } catch (err) {
+    console.error("commute error:", err);
+    return c.json({ error: "transport_failed" }, 502);
+  }
+});
+
+// Region level for one application (no external call) — drives the badge in the drawer
+app.get("/api/applications/:id/region", async (c) => {
+  const userId = getUserId(c);
+  const [app_] = await db.select({ location: applications.location }).from(applications).where(and(eq(applications.id, c.req.param("id")), eq(applications.userId, userId))).limit(1);
+  if (!app_) return c.json({ error: "Not found" }, 404);
+  const home = await loadHomePlace(userId);
+  const job = parsePlace(app_.location);
+  return c.json({ level: regionMatch(home, job), home: [home.zip, home.town].filter(Boolean).join(" "), job: [job.zip, job.town, job.canton].filter(Boolean).join(" ") });
 });
 
 // ─── Dates & reminders (deadlines, taster days, interviews, personal dates) ───

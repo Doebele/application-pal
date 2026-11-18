@@ -2460,6 +2460,13 @@
       "title": "ORP",
       "sub": "Seulement si tu es inscrit·e à l'ORP – par exemple au semestre de motivation (SeMo) ou dans une solution transitoire.",
       "label": "Je suis inscrit·e à l'ORP et dois prouver mes recherches – afficher l'export ORP."
+    },
+    "commute": {
+      "title": "Trajet",
+      "sub": "Combien de temps peut durer ton trajet vers l'entreprise en bus et en train ? Les places sont comparées avec ton domicile.",
+      "label": "Au maximum",
+      "minutes_one": "{{count}} minute",
+      "minutes_other": "{{count}} minutes"
     }
   },
   "schoolLetter": {
@@ -2798,5 +2805,46 @@
     "bannerTitle_other": "{{count}} rappels :",
     "bannerOpen": "Tous les rendez-vous",
     "bannerDismiss": "Masquer pour aujourd'hui"
+  },
+  "lehrstellenImport": {
+    "hint": "Astuce : les liens vers une place d'apprentissage sur Yousty et orientation.ch (LENA) sont lus directement — entreprise, métier, lieu et personne de contact sont repris.",
+    "listUrl": "C'est une page de recherche ou de liste. Ouvre la place d'apprentissage et copie son lien.",
+    "fetchFailed": "La page n'a pas pu être lue. Copie le texte de l'annonce et colle-le sous « Texte ».",
+    "failed": "La lecture n'a pas fonctionné. Réessaie ou colle le texte.",
+    "structured": {
+      "yousty": "Lu directement sur Yousty",
+      "lena": "Lu directement sur orientation.ch (LENA)",
+      "jsonld": "Données structurées de la page lues"
+    },
+    "start": "Début {{start}}",
+    "positions_one": "{{count}} place libre",
+    "positions_other": "{{count}} places libres"
+  },
+  "region": {
+    "levels": {
+      "same_town": "Dans ta localité",
+      "near": "Près de chez toi",
+      "region": "Dans ta région — vérifie le trajet",
+      "far": "Loin de chez toi",
+      "unknown": "Distance inconnue"
+    },
+    "fromTo": "{{home}} → {{job}}",
+    "noHome": "Ton domicile manque pour comparer la région.",
+    "setHome": "Indique NPA et localité dans ton CV",
+    "check": "Vérifier le trajet en transports publics",
+    "recheck": "Vérifier à nouveau",
+    "privacy": "Envoie seulement les deux noms de localité à transport.opendata.ch (horaire des transports publics suisses).",
+    "minutes_one": "{{count}} minute en transports publics",
+    "minutes_other": "{{count}} minutes en transports publics",
+    "transfers_one": "{{count}} changement",
+    "transfers_other": "{{count}} changements",
+    "tooLong": "plus long que tes {{max}} minutes",
+    "errors": {
+      "no_home": "Indique d'abord ton domicile (CV : NPA et localité).",
+      "no_location": "La place d'apprentissage n'a pas de lieu.",
+      "no_connection": "Aucune connexion trouvée — vérifie les noms de localité.",
+      "transport_failed": "L'horaire n'était pas joignable. Réessaie plus tard."
+    },
+    "needZip": "ajoute les NPA pour comparer"
   }
 }
